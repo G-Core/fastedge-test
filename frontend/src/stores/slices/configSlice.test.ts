@@ -494,6 +494,7 @@ describe('ConfigSlice', () => {
       const config = result.current.exportConfig();
 
       expect(config).toEqual({
+        appType: 'proxy-wasm',
         request: {
           method: 'PUT',
           url: 'https://test.com',
@@ -646,9 +647,8 @@ describe('ConfigSlice', () => {
         result.current.loadFromConfig(config);
       });
 
-      // Request method should remain unchanged
-      // (loadFromConfig only updates config slice properties)
-      expect(result.current.method).toBe('PATCH');
+      // Request method is restored from config (loadFromConfig restores full state)
+      expect(result.current.method).toBe('GET');
     });
   });
 });
