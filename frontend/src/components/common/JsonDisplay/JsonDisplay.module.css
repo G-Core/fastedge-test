@@ -1,0 +1,44 @@
+.container {
+  background: #1e1e1e;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin: 0;
+  overflow: auto;
+}
+
+.title {
+  color: #e0e0e0;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.content {
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: #d4d4d4;
+}
+
+.diffLine {
+  display: block;
+  padding-left: 8px;
+  padding-right: 8px;
+  margin: 0;
+}
+
+.diffLineAdded {
+  color: #b5cea8;
+  background-color: rgba(57, 185, 89, 0.15);
+}
+
+.diffLineRemoved {
+  color: #f48771;
+  background-color: rgba(248, 135, 113, 0.15);
+}
+
+.diffPrefix {
+  opacity: 0.5;
+  margin-right: 8px;
+  user-select: none;
+}

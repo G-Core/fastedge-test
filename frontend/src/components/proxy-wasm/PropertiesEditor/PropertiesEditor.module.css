@@ -1,0 +1,16 @@
+.countryPresets {
+  margin-bottom: 12px;
+  display: flex;
+  gap: 16px;
+}
+
+.countryLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.flag {
+  font-size: 20px;
+}

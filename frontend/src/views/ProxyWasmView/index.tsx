@@ -1,0 +1,1 @@
+export { ProxyWasmView } from "./ProxyWasmView";

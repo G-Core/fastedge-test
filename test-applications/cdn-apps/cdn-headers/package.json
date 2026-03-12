@@ -1,0 +1,18 @@
+{
+  "name": "cdn_headers",
+  "version": "0.0.1",
+  "description": "FastEdge CDN application for integration tests - headers manipulation",
+  "type": "module",
+  "scripts": {
+    "build": "npm-run-all -s clean build:all copy:all clean",
+    "build:all": "npm-run-all -p build:headers-change",
+    "build:headers-change": "asc assembly/headers-change.ts --target release --outFile build/headers-change.wasm --textFile build/headers-change.wat --sourceMap --optimize",
+    "copy:all": "npm-run-all -p copy:headers-change",
+    "copy:headers-change": "npx cross-env NAME=headers-change npm run mv:file",
+    "mv:file": "mv build/$NAME.wasm ../../../wasm/cdn-apps/headers/$NAME.wasm",
+    "clean": "rm -rf build && mkdir -p build"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "license": "ISC"
+}

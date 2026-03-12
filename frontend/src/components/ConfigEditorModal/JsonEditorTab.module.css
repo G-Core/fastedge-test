@@ -1,0 +1,30 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor {
+  flex: 1;
+  min-height: 400px;
+  max-height: 600px;
+  padding: 16px;
+  background: #1e1e1e;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 13px;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  line-height: 1.6;
+  resize: none;
+  tab-size: 2;
+  white-space: pre;
+  overflow-x: auto;
+  overflow-y: auto;
+  cursor: default;
+}
+
+.editor:focus {
+  outline: none;
+  border-color: #3d3d3d;
+}

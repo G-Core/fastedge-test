@@ -1,0 +1,16 @@
+{
+  "name": "as_utils",
+  "version": "0.0.1",
+  "description": "FastEdge CDN application basic utility functions",
+  "exports": {
+    ".": {
+      "import": "./assembly/index.ts"
+    },
+    "./headers": {
+      "import": "./assembly/headers.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {},
+  "devDependencies": {}
+}

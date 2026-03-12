@@ -1,0 +1,144 @@
+.requestBar {
+  padding: 16px 20px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.urlInputContainer {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  background: #1e1e1e;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.urlInputContainer:focus-within {
+  border-color: #ff6c37;
+  box-shadow: 0 0 0 1px #ff6c37;
+}
+
+.urlPrefix {
+  padding: 8px 0 8px 12px;
+  color: #808080;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.methodSelect {
+  padding: 8px 12px;
+  background: #2d2d2d;
+  color: #e0e0e0;
+  border: none;
+  border-right: 1px solid #3d3d3d;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  width: auto;
+  flex-shrink: 0;
+}
+
+.methodSelect:focus {
+  outline: none;
+  box-shadow: none;
+  border: none;
+  border-right: 1px solid #3d3d3d;
+  border-color: transparent;
+}
+
+.methodSelect:hover {
+  background: #3d3d3d;
+}
+
+.urlInput {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  color: #e0e0e0;
+  border: none !important;
+  border-radius: 0;
+  font-size: 13px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  outline: none;
+  box-shadow: none !important;
+}
+
+.urlInput:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-color: transparent !important;
+}
+
+/* When urlPrefix is present, remove left padding from input */
+.urlPrefix + .urlInput {
+  padding-left: 0 !important;
+  border-left: none !important;
+}
+
+.urlInput::placeholder {
+  color: #6d6d6d;
+}
+
+.sendButton {
+  min-width: 100px;
+  flex-shrink: 0;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background-color: #ff6c37;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sendButton:hover:not(:disabled) {
+  background-color: #ff8555;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 108, 55, 0.3);
+}
+
+.sendButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.sendButton:disabled {
+  background-color: #555;
+  color: #888;
+  cursor: not-allowed;
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

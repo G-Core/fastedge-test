@@ -1,0 +1,27 @@
+.toggleContainer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.toggleContainerRight {
+  display: flex;
+  align-items: center;
+  padding-top: 2px; /* Fine-tune vertical alignment */
+}
+
+.activeIndicator {
+  color: #4ade80;
+  font-size: 12px;
+}
+
+.dotenvNotice {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #166534;
+}

@@ -1,0 +1,28 @@
+{
+  "name": "http_basic_examples",
+  "version": "0.0.1",
+  "description": "FastEdge HTTP applications for integration tests - basic functionality",
+  "scripts": {
+    "build": "npm-run-all -s clean build:all copy:wasm clean",
+    "build:all": "npm-run-all -p build:basic build:downstream-fetch build:headers build:http-responder build:variables-and-secrets",
+    "build:basic": "npx fastedge-build ./src/basic.ts ./build/basic.wasm",
+    "build:downstream-fetch": "npx fastedge-build ./src/downstream-fetch.ts ./build/downstream-fetch.wasm",
+    "build:http-responder": "npx fastedge-build ./src/http-responder.ts ./build/http-responder.wasm",
+    "build:headers": "npx fastedge-build ./src/headers.ts ./build/headers.wasm",
+    "build:variables-and-secrets": "npx fastedge-build ./src/variables-and-secrets.ts ./build/variables-and-secrets.wasm",
+    "copy:wasm": "npm-run-all -p copy:basic copy:downstream-fetch copy:headers copy:http-responder copy:variables-and-secrets",
+    "copy:basic": "npx cross-env NAME=basic npm run mv:file",
+    "copy:downstream-fetch": "npx cross-env NAME=downstream-fetch npm run mv:file",
+    "copy:headers": "npx cross-env NAME=headers npm run mv:file",
+    "copy:http-responder": "npx cross-env NAME=http-responder npm run mv:file",
+    "copy:variables-and-secrets": "npx cross-env NAME=variables-and-secrets npm run mv:file",
+    "lint": "eslint src/",
+    "mv:file": "mv build/$NAME.wasm ../../../wasm/http-apps/basic-examples/$NAME.wasm",
+    "clean": "rm -rf build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@gcoredev/fastedge-sdk-js": "*"
+  },
+  "license": "ISC"
+}

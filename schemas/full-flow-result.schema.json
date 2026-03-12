@@ -1,0 +1,187 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FullFlowResult",
+  "definitions": {
+    "FullFlowResult": {
+      "type": "object",
+      "properties": {
+        "hookResults": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/HookResult"
+          }
+        },
+        "finalResponse": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "number"
+            },
+            "statusText": {
+              "type": "string"
+            },
+            "headers": {
+              "$ref": "#/definitions/HeaderMap"
+            },
+            "body": {
+              "type": "string"
+            },
+            "contentType": {
+              "type": "string"
+            },
+            "isBase64": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "status",
+            "statusText",
+            "headers",
+            "body",
+            "contentType"
+          ]
+        },
+        "calculatedProperties": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "hookResults",
+        "finalResponse"
+      ]
+    },
+    "HookResult": {
+      "type": "object",
+      "properties": {
+        "returnCode": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "logs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": {
+                "type": "number"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "level",
+              "message"
+            ]
+          }
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "object",
+              "properties": {
+                "headers": {
+                  "$ref": "#/definitions/HeaderMap"
+                },
+                "body": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "headers",
+                "body"
+              ]
+            },
+            "response": {
+              "type": "object",
+              "properties": {
+                "headers": {
+                  "$ref": "#/definitions/HeaderMap"
+                },
+                "body": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "headers",
+                "body"
+              ]
+            },
+            "properties": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "request",
+            "response"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "type": "object",
+              "properties": {
+                "headers": {
+                  "$ref": "#/definitions/HeaderMap"
+                },
+                "body": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "headers",
+                "body"
+              ]
+            },
+            "response": {
+              "type": "object",
+              "properties": {
+                "headers": {
+                  "$ref": "#/definitions/HeaderMap"
+                },
+                "body": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "headers",
+                "body"
+              ]
+            },
+            "properties": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "request",
+            "response"
+          ]
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "returnCode",
+        "logs",
+        "input",
+        "output",
+        "properties"
+      ]
+    },
+    "HeaderMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

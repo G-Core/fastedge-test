@@ -1,0 +1,1 @@
+export { DictionaryInput } from "./DictionaryInput";

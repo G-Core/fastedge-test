@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "outDir": "./dist/lib",
+    "rootDir": "./server",
+    "declaration": true,
+    "declarationDir": "./dist/lib",
+    "noEmit": false,
+    "types": ["node"]
+  },
+  "include": [
+    "server/runner/**/*.ts",
+    "server/schemas/**/*.ts",
+    "server/fastedge-host/**/*.ts",
+    "server/utils/**/*.ts",
+    "server/test-framework/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts",
+    "**/__tests__/**",
+    "server/websocket/**",
+    "server/server.ts"
+  ]
+}

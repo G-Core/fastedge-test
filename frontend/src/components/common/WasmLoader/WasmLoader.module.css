@@ -1,0 +1,275 @@
+.wasmLoader {
+  padding: 16px 20px 16px 20px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header h2 {
+  color: #e0e0e0;
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.secondaryButton {
+  background: #3d3d3d;
+  color: #e0e0e0;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: #4d4d4d;
+}
+
+.wasmLoader input[type="file"] {
+  color: #e0e0e0;
+  font-size: 13px;
+}
+
+.loadingIndicator {
+  margin-left: 10px;
+  color: #ff6c37;
+}
+
+.pathInputGroup {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pathInput {
+  flex: 1;
+  padding: 8px 12px;
+  background: #1e1e1e;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  color: #e0e0e0;
+  font-size: 13px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.pathInput:focus {
+  outline: none;
+  border-color: #ff6c37;
+  background: #2d2d2d;
+}
+
+.pathInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pathInput::placeholder {
+  color: #666;
+}
+
+.pathButton {
+  padding: 8px 16px;
+  background: #ff6c37;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.pathButton:hover:not(:disabled) {
+  background: #ff7c47;
+}
+
+.pathButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.tabButtons {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: transparent;
+  color: #b0b0b0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+  position: relative;
+  bottom: -1px;
+}
+
+.tab:hover:not(:disabled) {
+  color: #e0e0e0;
+  background: rgba(255, 108, 55, 0.1);
+}
+
+.tabActive {
+  color: #ff6c37 !important;
+  border-bottom-color: #ff6c37 !important;
+  font-weight: 600;
+}
+
+.tab.tabActive:hover:not(:disabled) {
+  color: #1a1a1a !important;
+  background: rgba(255, 108, 55, 0.85);
+}
+
+.tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tabIcon {
+  font-size: 14px;
+}
+
+.tabContent {
+  margin-top: 12px;
+}
+
+.pathPanel,
+.uploadPanel {
+  padding: 16px;
+  background: #252525;
+  border-radius: 4px;
+  border: 1px solid #3d3d3d;
+}
+
+.panelDescription {
+  font-size: 12px;
+  color: #b0b0b0;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+/* Custom file input wrapper - horizontal layout */
+.fileInputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background: #1e1e1e;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+}
+
+/* Custom "Choose File" button */
+.chooseFileButton {
+  background: #ff6c37;
+  color: #ffffff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.chooseFileButton:hover:not(:disabled) {
+  background: #ff7c47;
+}
+
+.chooseFileButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Hidden native file input */
+.hiddenFileInput {
+  display: none;
+}
+
+/* "No file chosen" text */
+.noFileChosen {
+  color: #888;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* Selected file display (inline, next to button) */
+.selectedFile {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.selectedFileIcon {
+  color: #4caf50;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.selectedFileName {
+  color: #e0e0e0;
+  font-size: 13px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.selectedFileSize {
+  color: #b0b0b0;
+  font-size: 12px;
+}
+
+/* Tab info display (far right in tabs bar) */
+.tabInfo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #b0b0b0;
+  padding: 0 12px 8px 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tabInfoIcon {
+  font-size: 13px;
+}
+
+.tabInfoText {
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.tabInfoTime {
+  color: #b0b0b0;
+}
+
+.tabInfoSize {
+  color: #b0b0b0;
+}

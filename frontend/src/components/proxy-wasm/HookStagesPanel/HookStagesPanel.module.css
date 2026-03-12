@@ -1,0 +1,207 @@
+.hookStagesPanel {
+  display: flex;
+  flex-direction: column;
+  background: #252525;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.stagesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+  padding-right: 20px;
+}
+
+.tabs {
+  display: flex;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+  padding: 0;
+  gap: 4px;
+  flex: 1;
+}
+
+.tab {
+  padding: 10px 16px;
+  background: transparent;
+  color: #b0b0b0;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #e0e0e0;
+  background: #333;
+}
+
+.tab.active {
+  color: #ff6c37;
+  border-bottom-color: #ff6c37;
+}
+
+.tab.active:hover {
+  color: #1a1a1a;
+  background: rgba(255, 108, 55, 0.85);
+}
+
+.logLevelSelector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.logLevelSelector label {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.logLevelSelector select {
+  width: 150px;
+}
+
+.subViewTabs {
+  display: flex;
+  background: #272727;
+  border-bottom: 1px solid #3d3d3d;
+  padding: 0 20px;
+  gap: 2px;
+}
+
+.subTab {
+  padding: 8px 16px;
+  background: transparent;
+  color: #888;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.subTab:hover {
+  color: #b0b0b0;
+  background: #2d2d2d;
+}
+
+.subTab.active {
+  color: #e0e0e0;
+  border-bottom-color: #e0e0e0;
+}
+
+.stageContent {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.hookInputs,
+.hookLogs,
+.hookOutputs {
+  max-width: 1200px;
+}
+
+.metadata {
+  color: #b0b0b0;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.section {
+  margin-bottom: 20px;
+}
+
+.noData {
+  color: #666;
+  font-style: italic;
+  padding: 20px;
+}
+
+.error {
+  background: #3d1f1f;
+  color: #ff6b6b;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  border: 1px solid #5d2f2f;
+  font-size: 13px;
+}
+
+.returnValue {
+  margin-bottom: 12px;
+  color: #b0b0b0;
+  font-size: 13px;
+}
+
+.outputHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.outputTitle {
+  color: #e0e0e0;
+  font-size: 13px;
+  margin: 0;
+}
+
+.filterInfo {
+  color: #888;
+  font-size: 11px;
+}
+
+.logsContainer {
+  background: #1e1e1e;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  max-height: 400px;
+  overflow: auto;
+}
+
+.logEntry {
+  margin-bottom: 4px;
+}
+
+.logLevel {
+  color: #666;
+  margin-right: 8px;
+}
+
+.noLogs {
+  color: #888;
+  font-style: italic;
+}
+
+/* Property access violation styling */
+.accessViolation {
+  background: #3d1f1f;
+  border-left: 3px solid #ff6b6b;
+  padding: 8px 12px;
+  margin: 6px 0;
+  border-radius: 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.accessViolation .logLevel {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+.violationIcon {
+  font-size: 16px;
+  flex-shrink: 0;
+  line-height: 1;
+}

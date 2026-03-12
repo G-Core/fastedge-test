@@ -1,0 +1,72 @@
+.requestInfoTabs {
+  display: flex;
+  flex-direction: column;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  background-color: transparent;
+  color: #b0b0b0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #e0e0e0;
+  background-color: #2d2d2d;
+}
+
+.tab.active {
+  color: #ff6c37;
+  border-bottom-color: #ff6c37;
+}
+
+.tab.active:hover {
+  color: #1a1a1a;
+  background: rgba(255, 108, 55, 0.85);
+}
+
+.tabContent {
+  padding: 1rem 0;
+}
+
+.headersTab,
+.bodyTab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.headersTab label,
+.bodyTab label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.bodyTextarea {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.bodyTextarea:focus {
+  outline: none;
+  border-color: #ff6c37;
+}

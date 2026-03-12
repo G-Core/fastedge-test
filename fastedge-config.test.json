@@ -1,0 +1,24 @@
+{
+  "$schema": "./schemas/fastedge-config.test.schema.json",
+  "description": "Test configuration for proxy-wasm debugging",
+  "wasm": {
+    "path": "wasm/cdn_header_change.wasm",
+    "description": "Current loaded WASM binary"
+  },
+  "request": {
+    "method": "POST",
+    "url": "https://www.godronus.xyz/200",
+    "headers": {},
+    "body": "{\"message\": \"Hello\"}"
+  },
+  "properties": {
+    "request.country": "LU",
+    "request.city": "Luxembourg",
+    "request.region": "LU",
+    "request.geo.lat": "49.6116",
+    "request.geo.long": "6.1319",
+    "request.continent": "Europe",
+    "request.country.name": "Luxembourg"
+  },
+  "logLevel": 0
+}

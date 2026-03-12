@@ -1,0 +1,1 @@
+export { WasmLoader } from "./WasmLoader";

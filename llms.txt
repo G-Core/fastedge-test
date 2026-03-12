@@ -1,0 +1,169 @@
+# @gcoredev/fastedge-test
+
+Test FastEdge WASM binaries programmatically — no server required. Supports CDN (proxy-wasm) and HTTP-WASM (component model) binaries. WASM type is detected automatically.
+
+Repository: https://github.com/G-Core/fastedge-debugger
+
+## Installation
+
+```
+npm install @gcoredev/fastedge-test
+```
+
+Requires Node.js 18+.
+
+## Entry Points
+
+- `@gcoredev/fastedge-test` — low-level runner (createRunner, createRunnerFromBuffer)
+- `@gcoredev/fastedge-test/test` — high-level test framework (defineTestSuite, runTestSuite, runAndExit, runFlow, all assertion helpers)
+
+## Key Exports: @gcoredev/fastedge-test/test
+
+- `defineTestSuite(config)` — validates and returns a typed TestSuite; config has `wasmPath` OR `wasmBuffer`, optional `runnerConfig`, and `tests` array
+- `runTestSuite(suite)` → `SuiteResult` — runs all tests sequentially, each with a fresh runner; returns `{ passed, failed, total, durationMs, results }`
+- `runAndExit(suite)` — runs suite, prints summary, exits 0 (all pass) or 1 (any fail); use in CI scripts
+- `runFlow(runner, options)` → `FullFlowResult` — CDN full flow helper; options: `{ url, method?, requestHeaders?, requestBody?, responseStatus?, responseHeaders?, responseBody?, properties?, enforceProductionPropertyRules? }`
+- `loadConfigFile(path)` → `TestConfig` — loads and validates a fastedge-config.test.json file
+
+## Key Exports: @gcoredev/fastedge-test (low-level)
+
+- `createRunner(wasmPath: string)` → runner — loads WASM from file path
+- `createRunnerFromBuffer(buffer: Buffer)` → runner — loads WASM from buffer
+- runner methods: `callFullFlow(url, method, reqHeaders, reqBody, resHeaders, resBody, resStatus, resStatusText, properties, enforceRules)`, `execute({ path, method, headers, body? })`, `cleanup()`
+
+## Assertion Helpers (all from @gcoredev/fastedge-test/test)
+
+Throw descriptive Error on failure. Compatible with any test framework or plain try/catch.
+
+### CDN Request Headers
+- `assertRequestHeader(hookResult, name, value?)` — header exists, optionally matches value
+- `assertNoRequestHeader(hookResult, name)` — header is absent
+
+### CDN Response Headers
+- `assertResponseHeader(hookResult, name, value?)`
+- `assertNoResponseHeader(hookResult, name)`
+
+### CDN Final Response (FullFlowResult)
+- `assertFinalStatus(fullFlowResult, statusCode)`
+- `assertFinalHeader(fullFlowResult, name, value)`
+
+### Hook Return Code
+- `assertReturnCode(hookResult, code)` — 0 = Ok, 1 = Pause
+
+### Logs
+- `assertLog(hookResult, substring)` — at least one log contains substring
+- `assertNoLog(hookResult, substring)` — no log contains substring
+- `logsContain(hookResult, substring)` → boolean
+
+### CDN Property Access
+- `assertPropertyAllowed(hookResult, propertyName)`
+- `assertPropertyDenied(hookResult, propertyName)`
+- `hasPropertyAccessViolation(hookResult)` → boolean
+
+## Types
+
+```typescript
+type TestSuite =
+  | { wasmPath: string;   runnerConfig?: RunnerConfig; tests: TestCase[] }
+  | { wasmBuffer: Buffer; runnerConfig?: RunnerConfig; tests: TestCase[] }
+
+interface RunnerConfig {
+  dotenvEnabled?: boolean;                  // default: false
+  enforceProductionPropertyRules?: boolean; // default: true
+}
+
+interface TestCase {
+  name: string;
+  run: (runner: IWasmRunner) => Promise<void>;
+}
+
+interface SuiteResult {
+  passed: number;
+  failed: number;
+  total: number;
+  durationMs: number;
+  results: TestResult[];
+}
+
+interface FullFlowResult {
+  hookResults: Record<string, HookResult>;
+  finalResponse: { status: number; statusText: string; headers: Record<string, string>; body: string; contentType: string; isBase64?: boolean };
+  calculatedProperties?: Record<string, unknown>;
+}
+
+interface HookResult {
+  returnCode: number | null;
+  logs: { level: number; message: string }[];
+  input: { request: { headers: Record<string, string>; body: string }; response: { headers: Record<string, string>; body: string } };
+  output: { request: { headers: Record<string, string>; body: string }; response: { headers: Record<string, string>; body: string } };
+  properties: Record<string, unknown>;
+}
+```
+
+hookResults keys for CDN proxy-wasm: `onRequestHeaders`, `onRequestBody`, `onResponseHeaders`, `onResponseBody`
+
+## CDN Quick Example
+
+```typescript
+import { defineTestSuite, runAndExit, runFlow } from '@gcoredev/fastedge-test/test';
+import { assertRequestHeader, assertFinalStatus } from '@gcoredev/fastedge-test/test';
+
+await runAndExit(defineTestSuite({
+  wasmPath: './build/app.wasm',
+  tests: [
+    {
+      name: 'injects x-custom header',
+      run: async (runner) => {
+        const result = await runFlow(runner, {
+          url: 'https://example.com/page',
+          method: 'GET',
+          requestHeaders: { 'user-agent': 'Mozilla/5.0' },
+        });
+        assertRequestHeader(result.hookResults.onRequestHeaders, 'x-custom', 'expected-value');
+      },
+    },
+    {
+      name: 'blocks admin with 403',
+      run: async (runner) => {
+        assertFinalStatus(await runFlow(runner, { url: 'https://example.com/admin' }), 403);
+      },
+    },
+  ],
+}));
+```
+
+## HTTP-WASM Quick Example
+
+```typescript
+import { defineTestSuite, runAndExit } from '@gcoredev/fastedge-test/test';
+
+await runAndExit(defineTestSuite({
+  wasmPath: './build/app.wasm',
+  tests: [
+    {
+      name: 'GET /hello returns 200',
+      run: async (runner) => {
+        const res = await runner.execute({ path: '/hello', method: 'GET', headers: {} });
+        if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
+      },
+    },
+  ],
+}));
+```
+
+## JSON Schemas
+
+Schemas for fastedge-config.test.json and API bodies ship in the package under `schemas/`.
+Import path: `@gcoredev/fastedge-test/schemas/test-config.schema.json`
+
+Use in fastedge-config.test.json for IDE autocomplete:
+```json
+{ "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/test-config.schema.json" }
+```
+
+## Full Documentation
+
+- README.md — Quick start, all API sections
+- docs/TEST_FRAMEWORK.md — Complete test framework reference
+- docs/API.md — REST API reference (for server-based / UI testing)
+- docs/HYBRID_LOADING.md — Path vs buffer loading performance tradeoffs

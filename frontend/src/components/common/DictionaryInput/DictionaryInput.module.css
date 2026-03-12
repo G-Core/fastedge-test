@@ -1,0 +1,124 @@
+.container {
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  background: #1e1e1e;
+  overflow: hidden;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: 32px 1fr 1fr 40px;
+  gap: 1px;
+  background: #3d3d3d;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #b0b0b0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.headerEnabled,
+.headerKey,
+.headerValue {
+  color: #808080;
+}
+
+.headerActions {
+  width: 40px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 32px 1fr 1fr 40px;
+  gap: 1px;
+  background: #3d3d3d;
+  border-top: 1px solid #3d3d3d;
+}
+
+.row.noDelete {
+  grid-template-columns: 32px 1fr 1fr;
+}
+
+.row:first-child {
+  border-top: none;
+}
+
+.enabled {
+  background: #252525;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.enabled input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: #ff6c37;
+}
+
+.enabled input[type="checkbox"]:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.key,
+.value {
+  background: #252525;
+  border: none;
+  padding: 8px 12px;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.key:focus,
+.value:focus {
+  background: #2a2a2a;
+  outline: 1px solid #ff6c37;
+  outline-offset: -1px;
+}
+
+.key:read-only,
+.value:read-only {
+  cursor: default;
+  pointer-events: none;
+}
+
+.key:read-only:focus,
+.value:read-only:focus {
+  background: #252525;
+  outline: none;
+}
+
+.key::placeholder,
+.value::placeholder {
+  color: #666;
+  font-style: italic;
+}
+
+.deleteButton {
+  background: #252525;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 8px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: #ff6c37;
+  color: #fff;
+}
+
+.deleteButton:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}

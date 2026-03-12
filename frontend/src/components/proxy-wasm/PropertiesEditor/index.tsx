@@ -1,0 +1,1 @@
+export { PropertiesEditor } from "./PropertiesEditor";

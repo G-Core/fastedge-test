@@ -1,0 +1,54 @@
+.panel {
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #252525;
+}
+
+.header {
+  cursor: pointer;
+  padding: 12px 20px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titleContainer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 60px; /* Gap between toggle and arrow */
+}
+
+.arrow {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid #b0b0b0;
+  border-bottom: 2px solid #b0b0b0;
+  transform: rotate(45deg);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.arrow.expanded {
+  transform: rotate(-135deg);
+}
+
+.content {
+  padding: 1rem 1.25rem;
+  background: #252525;
+}

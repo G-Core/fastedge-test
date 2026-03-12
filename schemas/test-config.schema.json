@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "wasm": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "default": "GET",
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "headers": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "method",
+        "url",
+        "headers",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "headers": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "headers",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "properties": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "dotenvEnabled": {
+      "default": true,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "request",
+    "properties",
+    "dotenvEnabled"
+  ],
+  "additionalProperties": false
+}

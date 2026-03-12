@@ -1,0 +1,190 @@
+.responsePanel {
+  border-top: 2px solid #3d3d3d;
+  background: #252525;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 200px;
+}
+
+.responseEmpty {
+  padding: 40px 20px;
+  text-align: center;
+  color: #666;
+  font-style: italic;
+}
+
+.responseStatus {
+  display: flex;
+  align-items: center;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+  padding: 0 20px;
+  gap: 4px;
+}
+
+.tabButtons {
+  display: flex;
+  gap: 4px;
+}
+
+.previewToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.toolbarButton {
+  padding: 4px 10px;
+  background: transparent;
+  color: #888;
+  border: 1px solid #444;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.toolbarButton:hover:not(:disabled) {
+  color: #e0e0e0;
+  border-color: #666;
+  background: #333;
+}
+
+.toolbarButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.toolbarButtonActive {
+  color: #ff6c37;
+  border-color: #ff6c37;
+  background: rgba(255, 108, 55, 0.1);
+}
+
+.toolbarButtonActive:hover:not(:disabled) {
+  color: #ff6c37;
+  border-color: #ff6c37;
+  background: rgba(255, 108, 55, 0.18);
+}
+
+.tab {
+  padding: 10px 16px;
+  background: transparent;
+  color: #b0b0b0;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #e0e0e0;
+  background: #333;
+}
+
+.tab.active {
+  color: #ff6c37;
+  border-bottom-color: #ff6c37;
+}
+
+.tab.active:hover {
+  color: #1a1a1a;
+  background: rgba(255, 108, 55, 0.85);
+}
+
+.responseContent {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.responseBody,
+.responsePreview,
+.responseHeaders {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+.responseBody {
+  background: #1e1e1e;
+  padding: 16px;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 12px;
+  color: #b0b0b0;
+}
+
+.responsePreview {
+  background: #1e1e1e;
+  overflow-y: auto;
+}
+
+.imagePreview {
+  padding: 20px;
+  text-align: center;
+  background: #f5f5f5;
+}
+
+.previewImage {
+  max-width: 100%;
+  height: auto;
+}
+
+.htmlPreview {
+  width: 100%;
+  height: 600px;
+  border: none;
+  background: white;
+  display: block;
+}
+
+.binaryNotice {
+  padding: 20px;
+  color: #b0b0b0;
+}
+
+.headersList {
+  padding: 16px 20px;
+}
+
+.headerItem {
+  padding: 8px 0;
+  border-bottom: 1px solid #2d2d2d;
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+}
+
+.headerItem:last-child {
+  border-bottom: none;
+}
+
+.headerKey {
+  color: #ff6c37;
+  font-weight: 600;
+  min-width: 200px;
+  flex-shrink: 0;
+}
+
+.headerValue {
+  color: #b0b0b0;
+  word-break: break-all;
+}
+
+.noHeaders {
+  color: #666;
+  font-style: italic;
+  padding: 20px;
+}

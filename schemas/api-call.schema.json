@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "hook": {
+      "type": "string",
+      "enum": [
+        "onRequestHeaders",
+        "onRequestBody",
+        "onResponseHeaders",
+        "onResponseBody"
+      ]
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "headers": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "headers",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "headers": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "headers",
+        "body"
+      ],
+      "additionalProperties": false
+    },
+    "properties": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    }
+  },
+  "required": [
+    "hook",
+    "properties"
+  ],
+  "additionalProperties": false
+}

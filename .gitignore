@@ -1,0 +1,31 @@
+# Ignore build artifacts and dependencies
+coverage/
+node_modules/
+.DS_Store
+bin/
+dist/
+lib/
+*.a
+yarn-error.log
+fastedge-run/
+
+.vscode/
+
+# Internal Rust code
+rust_host/
+
+# Internal Dev code
+configs/
+
+# Test applications (ignore built binaries, track directory structure)
+wasm/**/*.wasm
+wasm/**/*.wat
+wasm/**/*.wasm.map
+
+# DotEnv files
+.env
+.env.secrets
+.env.variables
+
+# Using pnpm
+package-lock.json

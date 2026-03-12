@@ -1,0 +1,50 @@
+name: "Setup FastEdge Run CLI"
+description: "Downloads and sets up the Linux x64 fastedge-run binary for build and test steps."
+
+inputs:
+  cli_version:
+    description: "FastEdge CLI version tag (e.g. v0.5.0) or 'latest'"
+    required: false
+    default: "latest"
+  github_token:
+    description: "GitHub token for authenticated API requests (avoids rate limiting)"
+    required: false
+    default: ""
+
+outputs:
+  cli_version:
+    description: "The resolved CLI version that was downloaded"
+    value: ${{ steps.download.outputs.cli_version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download fastedge-run CLI (Linux x64)
+      id: download
+      shell: bash
+      env:
+        CLI_VERSION_INPUT: ${{ inputs.cli_version }}
+        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        if [ "$CLI_VERSION_INPUT" == "latest" ] || [ -z "$CLI_VERSION_INPUT" ]; then
+          echo "Fetching latest release version..."
+          CURL_ARGS=(-fsSL)
+          [ -n "$GH_TOKEN" ] && CURL_ARGS+=(-H "Authorization: Bearer $GH_TOKEN")
+          CLI_VERSION=$(curl "${CURL_ARGS[@]}" \
+            https://api.github.com/repos/G-Core/FastEdge-lib/releases/latest | jq -r .tag_name)
+        else
+          CLI_VERSION="$CLI_VERSION_INPUT"
+        fi
+
+        echo "Downloading fastedge-run $CLI_VERSION"
+        curl --fail-with-body -sSL -o fastedge.tar.gz \
+          "https://github.com/G-Core/FastEdge-lib/releases/download/$CLI_VERSION/fastedge-run-$CLI_VERSION-x86_64-unknown-linux-gnu.tar.gz"
+        tar -xzf fastedge.tar.gz
+        mkdir -p fastedge-run
+        cp "fastedge-run-$CLI_VERSION-x86_64-unknown-linux-gnu/fastedge-run" fastedge-run/fastedge-run-linux-x64
+        chmod +x fastedge-run/fastedge-run-linux-x64
+        echo "✅ fastedge-run $CLI_VERSION installed at fastedge-run/fastedge-run-linux-x64"
+        fastedge-run/fastedge-run-linux-x64 --help > /dev/null
+        echo "✅ Binary is executable"
+
+        echo "cli_version=$CLI_VERSION" >> $GITHUB_OUTPUT

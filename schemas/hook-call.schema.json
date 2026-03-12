@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/HookCall",
+  "definitions": {
+    "HookCall": {
+      "type": "object",
+      "properties": {
+        "hook": {
+          "type": "string"
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "headers": {
+              "$ref": "#/definitions/HeaderMap"
+            },
+            "body": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "scheme": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "headers",
+            "body"
+          ]
+        },
+        "response": {
+          "type": "object",
+          "properties": {
+            "headers": {
+              "$ref": "#/definitions/HeaderMap"
+            },
+            "body": {
+              "type": "string"
+            },
+            "status": {
+              "type": "number"
+            },
+            "statusText": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "headers",
+            "body"
+          ]
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "dotenvEnabled": {
+          "type": "boolean"
+        },
+        "enforceProductionPropertyRules": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "hook",
+        "request",
+        "response",
+        "properties"
+      ]
+    },
+    "HeaderMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}
