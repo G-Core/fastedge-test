@@ -48,6 +48,7 @@ This index helps you discover relevant documentation without reading thousands o
 - `CDN_VARIABLES_AND_SECRETS.md` (~120 lines) - ✅ CDN env var/secret integration test (7 tests); requires proxy-wasm-sdk-as@^1.2.2
 - `DOTENV_TOGGLE_IMPLEMENTATION.md` (294 lines) - UI toggle for .env variables
 - `LOG_FILTERING.md` (147 lines) - Log filtering and display
+- `HYBRID_LOADING.md` (~550 lines) - WASM path vs buffer loading: performance benchmarks, Runner internals, temp file handling, migration guide
 - `PROPERTY_TESTING.md` (285 lines) - Property system testing patterns
 
 ### 🧪 Development (read when implementing/testing)
@@ -84,8 +85,9 @@ This index helps you discover relevant documentation without reading thousands o
 **When to read**: Updating the npm package API, adding new public exports, or checking what's documented for users
 
 - `docs/TEST_FRAMEWORK.md` — User guide for `@gcoredev/fastedge-test`: test suites, runner API, assertions, CI usage
-- `docs/API.md` — REST API reference for server-based testing
-- `docs/HYBRID_LOADING.md` — WASM path vs buffer loading tradeoffs
+- `docs/LOCAL_SERVER.md` — Local debugger server: launch, UI, REST endpoints summary
+- `docs/TEST_CONFIG.md` — `fastedge-config.test.json` schema, dotenv runtime secrets, CDN and HTTP-WASM examples
+- `docs/API.md` — Full REST API reference (custom tooling / CI use cases)
 
 ### 🗄️ Legacy/Archived (rarely needed)
 
@@ -318,4 +320,4 @@ Time: 5-7 minutes of reading
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: March 2026
