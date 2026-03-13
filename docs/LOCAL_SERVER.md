@@ -43,6 +43,7 @@ Once running, open `http://localhost:5179` in your browser:
 - **Save/load test config** — persist test cases to `fastedge-config.test.json`
 
 Both FastEdge binary types are supported and auto-detected:
+
 - **CDN (proxy-wasm)** — request/response filter binaries
 - **HTTP-WASM** — component model HTTP handler binaries
 
@@ -53,7 +54,7 @@ Both FastEdge binary types are supported and auto-detected:
 If you want to start the server from your own script or test setup:
 
 ```typescript
-import { startServer } from '@gcoredev/fastedge-test/server';
+import { startServer } from "@gcoredev/fastedge-test/server";
 
 // Start on default port (5179) or override via PORT env var
 await startServer();
@@ -69,18 +70,22 @@ await startServer(8080);
 ### Example: Start server in a script, run tests, shut down
 
 ```typescript
-import { startServer } from '@gcoredev/fastedge-test/server';
-import { defineTestSuite, runAndExit } from '@gcoredev/fastedge-test/test';
+import { startServer } from "@gcoredev/fastedge-test/server";
+import { defineTestSuite, runAndExit } from "@gcoredev/fastedge-test/test";
 
 // Start the visual server alongside headless tests
 await startServer(5179);
-console.log('Debugger running at http://localhost:5179');
+console.log("Debugger running at http://localhost:5179");
 
 // Also run automated tests in the same process
-await runAndExit(defineTestSuite({
-  wasmPath: './build/app.wasm',
-  tests: [ /* ... */ ],
-}));
+await runAndExit(
+  defineTestSuite({
+    wasmPath: "./build/app.wasm",
+    tests: [
+      /* ... */
+    ],
+  }),
+);
 ```
 
 ---
@@ -89,16 +94,16 @@ await runAndExit(defineTestSuite({
 
 The server exposes a REST API that the browser UI uses internally. You can also call it directly from scripts, agents, or other tools.
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Check server is running |
-| `POST` | `/api/load` | Load a WASM binary (base64 or file path) |
-| `POST` | `/api/execute` | Execute a request against the loaded WASM |
-| `POST` | `/api/send` | Run a full CDN flow (proxy-wasm) |
-| `POST` | `/api/call` | Invoke a specific proxy-wasm hook |
-| `GET` | `/api/config` | Get current test configuration |
-| `POST` | `/api/config` | Save test configuration |
-| `GET` | `/api/schema/:name` | Fetch a JSON Schema for request validation |
+| Method | Endpoint            | Description                                |
+| ------ | ------------------- | ------------------------------------------ |
+| `GET`  | `/health`           | Check server is running                    |
+| `POST` | `/api/load`         | Load a WASM binary (base64 or file path)   |
+| `POST` | `/api/execute`      | Execute a request against the loaded WASM  |
+| `POST` | `/api/send`         | Run a full CDN flow (proxy-wasm)           |
+| `POST` | `/api/call`         | Invoke a specific proxy-wasm hook          |
+| `GET`  | `/api/config`       | Get current test configuration             |
+| `POST` | `/api/config`       | Save test configuration                    |
+| `GET`  | `/api/schema/:name` | Fetch a JSON Schema for request validation |
 
 See **[API.md](./API.md)** for full endpoint documentation, request/response shapes, and examples.
 
@@ -127,7 +132,7 @@ curl -s -X POST http://localhost:5179/api/execute \
 Logs emitted by your WASM binary are streamed in real time over WebSocket:
 
 ```javascript
-const ws = new WebSocket('ws://localhost:5179/ws');
+const ws = new WebSocket("ws://localhost:5179/ws");
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
   console.log(msg); // { type: 'log', level: 'info', message: '...' }
