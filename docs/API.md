@@ -6,9 +6,7 @@ The FastEdge Debugger provides a comprehensive REST API for programmatic testing
 
 **Base URL**: `http://localhost:5179`
 
-**Default Ports**:
-- REST API & Web UI: `5179`
-- WebSocket (logs): `5178`
+**Default Port**: `5179` (REST API, Web UI, and WebSocket at `/ws`)
 
 ## Authentication
 
@@ -25,7 +23,8 @@ Check if the debugger server is running and healthy.
 **Response**:
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "service": "fastedge-debugger"
 }
 ```
 
@@ -309,7 +308,7 @@ curl -X POST http://localhost:5179/api/config \
 
 The debugger provides real-time log streaming via WebSocket.
 
-**Endpoint**: `ws://localhost:5178/ws` (or port specified by `WS_PORT` env var)
+**Endpoint**: `ws://localhost:5179/ws`
 
 **Events**:
 
@@ -399,7 +398,7 @@ The debugger provides real-time log streaming via WebSocket.
 ```javascript
 import WebSocket from 'ws';
 
-const ws = new WebSocket('ws://localhost:5178/ws');
+const ws = new WebSocket('ws://localhost:5179/ws');
 
 ws.on('open', () => {
   console.log('Connected to debugger WebSocket');
@@ -547,12 +546,11 @@ Currently, no rate limiting is enforced. The debugger is designed for local deve
 Configure the debugger server:
 
 - `PORT` - HTTP server port (default: 5179)
-- `WS_PORT` - WebSocket port (default: 5178)
 - `PROXY_RUNNER_DEBUG` - Enable debug logging (set to "1")
 
 Example:
 ```bash
-PORT=3000 WS_PORT=3001 npm start
+PORT=3000 npm start
 ```
 
 ---

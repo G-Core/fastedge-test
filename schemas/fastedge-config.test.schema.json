@@ -91,6 +91,13 @@
     "dotenvEnabled": {
       "default": true,
       "type": "boolean"
+    },
+    "logLevel": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4,
+      "default": 0,
+      "description": "Log verbosity: 0=trace, 1=debug, 2=info, 3=warn, 4=error"
     }
   },
   "required": [
