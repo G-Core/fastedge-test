@@ -86,7 +86,7 @@ describe('WasmSlice', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true, undefined);
       expect(mockUploadWasm).toHaveBeenCalledTimes(1);
       expect(result.current.wasmPath).toBe(mockPath);
       expect(result.current.wasmBuffer).toBe(mockArrayBuffer);
@@ -111,7 +111,7 @@ describe('WasmSlice', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false, undefined);
       expect(result.current.wasmFile).toBe(mockFile);
       expect(result.current.error).toBe(null);
     });
@@ -262,7 +262,7 @@ describe('WasmSlice', () => {
 
       // uploadWasm succeeds, but arrayBuffer() fails, so error is caught
       expect(result.current.error).toBe(errorMessage);
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true, undefined);
     });
 
     it('should set loading to false even when upload fails', async () => {
@@ -320,7 +320,7 @@ describe('WasmSlice', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false, undefined);
 
       // Reset mock to verify reloadWasm call
       mockUploadWasm.mockClear();
@@ -335,7 +335,7 @@ describe('WasmSlice', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true, undefined);
       expect(mockUploadWasm).toHaveBeenCalledTimes(1);
       expect(result.current.error).toBe(null);
     });
@@ -369,7 +369,7 @@ describe('WasmSlice', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false, undefined);
       expect(result.current.error).toBe(null);
     });
 
@@ -460,7 +460,7 @@ describe('WasmSlice', () => {
       });
 
       // Verify the same file instance was used
-      expect(mockUploadWasm).toHaveBeenCalledWith(storedFile, true);
+      expect(mockUploadWasm).toHaveBeenCalledWith(storedFile, true, undefined);
       expect(result.current.wasmFile).toBe(storedFile);
     });
   });

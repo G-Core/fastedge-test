@@ -30,10 +30,12 @@ export function ProxyWasmView() {
     // Config state
     properties,
     dotenvEnabled,
+    dotenvPath,
     logLevel,
     setProperties,
     mergeProperties,
     setDotenvEnabled,
+    setDotenvPath,
     setLogLevel,
 
     // WASM state
@@ -172,7 +174,15 @@ export function ProxyWasmView() {
           setDotenvEnabled(enabled);
           if (wasmPath !== null) {
             const { applyDotenv } = await import("../../api");
-            await applyDotenv(enabled);
+            await applyDotenv(enabled, dotenvPath);
+          }
+        }}
+        dotenvPath={dotenvPath}
+        onDotenvPathChange={async (path) => {
+          setDotenvPath(path);
+          if (wasmPath !== null && dotenvEnabled) {
+            const { applyDotenv } = await import("../../api");
+            await applyDotenv(dotenvEnabled, path);
           }
         }}
       />

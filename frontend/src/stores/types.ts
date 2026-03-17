@@ -76,6 +76,7 @@ export type ResultsSlice = ResultsState & ResultsActions;
 export interface ConfigState {
   properties: Record<string, string>;
   dotenvEnabled: boolean;
+  dotenvPath: string | null;
   logLevel: number;
   autoSave: boolean;
   lastSaved: number | null;
@@ -88,6 +89,7 @@ export interface ConfigActions {
   removeProperty: (key: string) => void;
   mergeProperties: (properties: Record<string, string>) => void;
   setDotenvEnabled: (enabled: boolean) => void;
+  setDotenvPath: (path: string | null) => void;
   setLogLevel: (level: number) => void;
   setAutoSave: (enabled: boolean) => void;
   markDirty: () => void;
@@ -191,6 +193,7 @@ export interface TestConfig {
   properties: Record<string, string>;
   logLevel: number;
   dotenvEnabled?: boolean;
+  dotenvPath?: string;
 }
 
 export interface PersistConfig {

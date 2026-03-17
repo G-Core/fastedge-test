@@ -50,6 +50,18 @@ describe('ApiLoadBodySchema', () => {
       expect(result.success).toBe(true);
       if (result.success) expect(result.data.dotenvEnabled).toBe(false);
     });
+
+    it('should accept dotenvPath', () => {
+      const result = ApiLoadBodySchema.safeParse({ wasmPath: '/wasm/app.wasm', dotenvPath: '/app/fixtures' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.dotenvPath).toBe('/app/fixtures');
+    });
+
+    it('should default dotenvPath to undefined when omitted', () => {
+      const result = ApiLoadBodySchema.safeParse({ wasmPath: '/wasm/app.wasm' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.dotenvPath).toBeUndefined();
+    });
   });
 });
 

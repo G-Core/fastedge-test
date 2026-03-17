@@ -86,15 +86,19 @@ export interface RunnerConfig {
 The on/off toggle. This is the user-facing setting:
 - Controlled by the debugger UI toggle (`ServerPropertiesPanel`)
 - Persisted in `fastedge-config.test.json`
-- Sent via `POST /api/load` request body
+- Sent via `POST /api/load` and `PATCH /api/dotenv` request bodies
 - Defaults to `true` in the server, `false` in integration tests
 
 ### `dotenvPath`
 
-Optional directory path override. Most users never need this:
+Optional directory path override. Available both in the UI and programmatically:
+- **UI (VSCode)**: Browse button in the `.env directory` row → native OS folder dialog via `openFolderPicker` message → extension returns absolute path
+- **UI (standalone browser)**: Text input — user types/pastes the path
 - **npm package users**: Leave unset. `fastedge-run` uses CWD = your project root, where `.env` files naturally live.
 - **Integration tests within this repo**: Set to the fixture directory so test dotenv files are isolated from the repo root.
 - **Non-standard layouts**: Monorepos or CI environments where `.env` files aren't at the project root.
+
+Precedence (server-side): client-provided value → `WORKSPACE_PATH` env var (VSCode) → undefined (CWD).
 
 ```typescript
 // Typical npm user — .env files in project root
@@ -144,10 +148,21 @@ All scaffold is in place but blocked on `proxy-wasm-sdk-as` publishing `getEnv()
 - Integration test: `server/__tests__/integration/cdn-apps/variables-and-secrets/`
 - See `context/features/CDN_VARIABLES_AND_SECRETS.md` for full status and how to complete
 
+### ✅ Completed (March 2026) — `dotenvPath` UI in `ServerPropertiesPanel`
+
+- `dotenvPath` promoted from programmatic-only to a first-class UI setting
+- New `.env directory` row below the dotenv notice, visible when dotenvEnabled is true
+- VSCode: Browse button → `openFolderPicker` postMessage → extension `showOpenDialog({ canSelectFolders: true })` → absolute path returned via `folderPickerResult`
+- Standalone browser: text input (browser APIs cannot return absolute paths from a folder picker)
+- `dotenvPath` added to `ConfigState`, `configSlice`, `TestConfig`, all API call sites, and all JSON schemas
+- `wasmSlice.loadWasm` reads `dotenvPath` from store via `get()` — no signature change to `loadWasm`
+- Path change fires `applyDotenv` immediately when WASM loaded; toggle change continues to do a full reload
+- Server precedence: client value → `WORKSPACE_PATH` → CWD
+
 ### 📝 Notes
 
 - `dotenvEnabled` is the UI/API toggle — it's what the user controls
-- `dotenvPath` is a programmatic override — only for tests and advanced layouts
+- `dotenvPath` is now both a UI setting and a programmatic override
 - The two fields are intentionally separate: `dotenvEnabled` can be `true` without a path (defaults to CWD)
 - For `HttpWasmRunner`, dotenv loading happens inside `fastedge-run` (Rust), not Node.js
 - For `ProxyWasmRunner`, dotenv loading happens in Node.js via `dotenv-loader.ts`
@@ -207,8 +222,21 @@ For both runner types, CLI args/direct config takes priority over dotenv files:
 
 ## Architecture Reference
 
-- `server/runner/HttpWasmRunner.ts` — builds `--dotenv [path]` args, `dotenvPath` field
 - `server/runner/IWasmRunner.ts` — `RunnerConfig` interface with `dotenvEnabled` and `dotenvPath`
+- `server/runner/HttpWasmRunner.ts` — builds `--dotenv [path]` args, `dotenvPath` field
+- `server/runner/ProxyWasmRunner.ts` — `loadDotenvIfEnabled()` uses `this.dotenvPath`
 - `server/utils/dotenv-loader.ts` — Node.js dotenv parser (ProxyWasmRunner only)
+- `server/schemas/api.ts` — `dotenvPath` in `ApiLoadBodySchema`
+- `server/schemas/config.ts` — `dotenvPath` in `TestConfigSchema`
+- `server/server.ts` — precedence logic: client → `WORKSPACE_PATH` → CWD
+- `frontend/src/stores/types.ts` — `dotenvPath` in `ConfigState`, `ConfigActions`, `TestConfig`
+- `frontend/src/stores/slices/configSlice.ts` — `setDotenvPath`, restore/export
+- `frontend/src/stores/slices/wasmSlice.ts` — reads `dotenvPath` from store via `get()`
+- `frontend/src/api/index.ts` — `dotenvPath` forwarded in all relevant API calls
+- `frontend/src/components/proxy-wasm/ServerPropertiesPanel/` — Browse button (VSCode) / text input (browser)
+- `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts` — `openFolderPicker` / `folderPickerResult` handler
+- `schemas/fastedge-config.test.schema.json` — IDE intellisense for config files
+- `schemas/api-load.schema.json` — `POST /api/load` request body schema
+- `schemas/api-config.schema.json` — `POST /api/config` config object schema
 - `rust_host/fastedge-run/src/dotenv.rs` — Rust `DotEnvInjector` (HttpWasmRunner, via fastedge-run)
 - `server/__tests__/integration/utils/http-wasm-helpers.ts` — `createHttpWasmRunnerWithDotenv()`

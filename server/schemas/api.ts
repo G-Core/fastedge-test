@@ -5,6 +5,7 @@ export const ApiLoadBodySchema = z.object({
   wasmBase64: z.string().optional(),
   wasmPath: z.string().optional(),
   dotenvEnabled: z.boolean().optional().default(true),
+  dotenvPath: z.string().optional(),
 }).refine(d => d.wasmBase64 || d.wasmPath, {
   message: 'Either wasmBase64 or wasmPath must be provided',
 }).refine(d => !(d.wasmBase64 && d.wasmPath), {

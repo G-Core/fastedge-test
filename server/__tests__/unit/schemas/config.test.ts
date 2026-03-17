@@ -107,6 +107,12 @@ describe('TestConfigSchema', () => {
       expect(result.success).toBe(true);
       if (result.success) expect(result.data.properties).toEqual({});
     });
+
+    it('should default dotenvPath to undefined when omitted', () => {
+      const result = TestConfigSchema.safeParse({ request: minimalValidRequest });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.dotenvPath).toBeUndefined();
+    });
   });
 
   describe('optional fields', () => {
@@ -124,6 +130,15 @@ describe('TestConfigSchema', () => {
         wasm: { path: '/wasm/app.wasm' },
       });
       expect(result.success).toBe(true);
+    });
+
+    it('should accept dotenvPath', () => {
+      const result = TestConfigSchema.safeParse({
+        request: minimalValidRequest,
+        dotenvPath: '/app/fixtures',
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.dotenvPath).toBe('/app/fixtures');
     });
 
     it('should accept properties with mixed value types', () => {

@@ -94,6 +94,10 @@
         "dotenvEnabled": {
           "default": true,
           "type": "boolean"
+        },
+        "dotenvPath": {
+          "type": "string",
+          "description": "Directory path to load .env files from. Defaults to workspace root when omitted."
         }
       },
       "required": [

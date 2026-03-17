@@ -4,6 +4,7 @@ import { AppStore, ConfigSlice, ConfigState, TestConfig } from '../types';
 const DEFAULT_CONFIG_STATE: ConfigState = {
   properties: {},
   dotenvEnabled: true,
+  dotenvPath: null,
   logLevel: 2,
   autoSave: true,
   lastSaved: null,
@@ -48,6 +49,12 @@ export const createConfigSlice: StateCreator<
       state.isDirty = true;
     }),
 
+  setDotenvPath: (path) =>
+    set((state) => {
+      state.dotenvPath = path;
+      state.isDirty = true;
+    }),
+
   setLogLevel: (level) =>
     set((state) => {
       state.logLevel = level;
@@ -75,6 +82,7 @@ export const createConfigSlice: StateCreator<
       state.properties = { ...config.properties };
       state.logLevel = config.logLevel;
       state.dotenvEnabled = config.dotenvEnabled ?? true;
+      state.dotenvPath = config.dotenvPath ?? null;
       state.isDirty = false;
       state.lastSaved = Date.now();
 
@@ -111,6 +119,7 @@ export const createConfigSlice: StateCreator<
       properties: { ...state.properties },
       logLevel: state.logLevel,
       dotenvEnabled: state.dotenvEnabled,
+      ...(state.dotenvPath ? { dotenvPath: state.dotenvPath } : {}),
     };
 
     // CDN apps have a configurable mock response; HTTP apps don't

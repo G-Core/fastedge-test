@@ -62,13 +62,15 @@ export const createWasmSlice: StateCreator<
       let result;
       let file: File | null = null;
 
+      const dotenvPath = get().dotenvPath ?? undefined;
+
       // Handle string path (direct path loading)
       if (typeof fileOrPath === 'string') {
-        result = await uploadWasmFromPath(fileOrPath, dotenvEnabled);
+        result = await uploadWasmFromPath(fileOrPath, dotenvEnabled, dotenvPath);
       } else {
         // Handle File object (hybrid loading)
         file = fileOrPath;
-        result = await uploadWasm(file, dotenvEnabled);
+        result = await uploadWasm(file, dotenvEnabled, dotenvPath);
       }
 
       const { path, wasmType, loadingMode, loadTime, fileSize } = result;

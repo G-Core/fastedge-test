@@ -127,7 +127,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
-  const { wasmBase64, wasmPath, dotenvEnabled } = parsed.data;
+  const { wasmBase64, wasmPath, dotenvEnabled, dotenvPath: clientDotenvPath } = parsed.data;
 
   try {
     let bufferOrPath: Buffer | string;
@@ -204,10 +204,10 @@ app.post("/api/load", async (req: Request, res: Response) => {
     currentRunner = runnerFactory.createRunner(wasmType, dotenvEnabled);
     currentRunner.setStateManager(stateManager);
 
-    // When running inside VSCode, the server's CWD is the extension's dist/debugger/
-    // directory — not the user's workspace. Use WORKSPACE_PATH so both runners
-    // (ProxyWasmRunner and HttpWasmRunner) look for .env/.secrets in the right place.
-    const dotenvPath = process.env.WORKSPACE_PATH || undefined;
+    // Precedence: client-provided path → WORKSPACE_PATH (VSCode) → undefined (CWD).
+    // When running inside VSCode the server CWD is the extension's dist/debugger/
+    // directory, so WORKSPACE_PATH is the fallback. A client-provided path wins.
+    const dotenvPath = clientDotenvPath || process.env.WORKSPACE_PATH || undefined;
 
     // Load WASM (accepts either Buffer or string path)
     await currentRunner.load(bufferOrPath, { dotenvEnabled, dotenvPath });
@@ -232,7 +232,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
 });
 
 app.patch("/api/dotenv", async (req: Request, res: Response) => {
-  const { enabled } = req.body ?? {};
+  const { enabled, dotenvPath: clientDotenvPath } = req.body ?? {};
   if (typeof enabled !== "boolean") {
     res.status(400).json({ ok: false, error: "enabled must be a boolean" });
     return;
@@ -244,7 +244,9 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
   }
 
   try {
-    const dotenvPath = process.env.WORKSPACE_PATH || undefined;
+    const dotenvPath = (typeof clientDotenvPath === 'string' ? clientDotenvPath : undefined)
+      || process.env.WORKSPACE_PATH
+      || undefined;
     await currentRunner.applyDotenv(enabled, dotenvPath);
     res.json({ ok: true });
   } catch (error) {

@@ -48,6 +48,7 @@ function App() {
 
     // Config state
     dotenvEnabled,
+    dotenvPath,
     loadFromConfig,
 
     // UI state

@@ -1,5 +1,91 @@
 # Proxy-WASM Runner - Changelog
 
+## March 17, 2026 - dotenvPath UI: directory picker in ServerPropertiesPanel
+
+### Overview
+Exposed `dotenvPath` in the debugger UI so users can point the runner at a custom `.env` directory instead of only using the default workspace root. Previously `dotenvPath` was a programmatic-only config (integration tests, advanced npm usage). Now it's a first-class UI setting with the same picker pattern as Load/Save Config.
+
+### 🎯 What Was Completed
+
+#### 1. Backend — accept `dotenvPath` from client
+- `server/schemas/api.ts`: added `dotenvPath?: string` to `ApiLoadBodySchema`
+- `server/schemas/config.ts`: added `dotenvPath?: string` to `TestConfigSchema`
+- `server/server.ts` `POST /api/load`: extracts `dotenvPath` from request body; precedence → client value → `WORKSPACE_PATH` → undefined (CWD)
+- `server/server.ts` `PATCH /api/dotenv`: same precedence logic
+
+**Files Modified:**
+- `server/schemas/api.ts`
+- `server/schemas/config.ts`
+- `server/server.ts`
+
+#### 2. Frontend store — `dotenvPath` state
+- `frontend/src/stores/types.ts`: added `dotenvPath: string | null` to `ConfigState`; added `setDotenvPath` to `ConfigActions`; added `dotenvPath?: string` to `TestConfig` interface
+- `frontend/src/stores/slices/configSlice.ts`: default `null`, `setDotenvPath` action, restored in `loadFromConfig`, included in `exportConfig` (omitted when null)
+
+**Files Modified:**
+- `frontend/src/stores/types.ts`
+- `frontend/src/stores/slices/configSlice.ts`
+
+#### 3. Frontend API layer
+- `uploadWasm`, `uploadWasmFromPath`: accept optional `dotenvPath`, forwarded in request body
+- `applyDotenv`: accepts optional `dotenvPath`, forwarded in request body
+
+**Files Modified:**
+- `frontend/src/api/index.ts`
+
+#### 4. VSCode extension — `openFolderPicker` message handler
+- Added handler for `openFolderPicker` in `DebuggerWebviewProvider.ts`
+- Uses `vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false })`
+- Returns `folderPickerResult` with `folderPath` or `canceled: true`
+
+**Files Modified:**
+- `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts`
+
+#### 5. UI — dotenv path row in `ServerPropertiesPanel`
+- New props: `dotenvPath: string | null`, `onDotenvPathChange`
+- Rendered below the dotenv notice when `dotenvEnabled` is true
+- **VSCode mode**: Browse button → `postMessage({ command: 'openFolderPicker' })` → listens for `folderPickerResult`; clear button resets to workspace root
+- **Standalone browser**: text input with placeholder `"Default: workspace root"` + clear button
+- Mode detection: `window !== window.top`
+
+**Files Modified:**
+- `frontend/src/components/proxy-wasm/ServerPropertiesPanel/ServerPropertiesPanel.tsx`
+- `frontend/src/components/proxy-wasm/ServerPropertiesPanel/ServerPropertiesPanel.module.css`
+
+#### 6. Wiring — store → UI → API
+- `wasmSlice.ts` `loadWasm`: reads `dotenvPath` from store via `get()`, passes to `uploadWasm`/`uploadWasmFromPath` — no signature change
+- `ProxyWasmView.tsx`: destructures `dotenvPath`/`setDotenvPath` from store, passes to `ServerPropertiesPanel`; `onDotenvPathChange` calls `applyDotenv` immediately if WASM is loaded
+- `App.tsx`: destructures `dotenvPath` from store (available for future effects)
+
+**Files Modified:**
+- `frontend/src/stores/slices/wasmSlice.ts`
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx`
+- `frontend/src/App.tsx`
+
+#### 7. JSON schemas — `dotenvPath` field
+- Added to `schemas/fastedge-config.test.schema.json` (IDE intellisense for config files)
+- Added to `schemas/api-load.schema.json` (POST /api/load request body)
+- Added to `schemas/api-config.schema.json` (POST /api/config config object)
+
+**Files Modified:**
+- `schemas/fastedge-config.test.schema.json`
+- `schemas/api-load.schema.json`
+- `schemas/api-config.schema.json`
+
+#### 8. Tests
+- `server/__tests__/unit/schemas/api.test.ts`: added `dotenvPath` acceptance and default-undefined tests
+- `server/__tests__/unit/schemas/config.test.ts`: added `dotenvPath` acceptance and default-undefined tests
+- `frontend/src/stores/slices/wasmSlice.test.ts`: updated 6 `toHaveBeenCalledWith` assertions to include third `undefined` arg
+
+### 📝 Notes
+- `dotenvPath` precedence: client-provided → `WORKSPACE_PATH` env var (VSCode) → undefined (CWD)
+- In VSCode the Browse button opens a native OS folder dialog via the extension; in standalone browser it's a text input (browser APIs cannot return an absolute filesystem path from a folder picker)
+- `dotenvPath` change fires `applyDotenv` immediately if WASM is already loaded — no reload required
+- `dotenvEnabled` toggle change continues to trigger a full WASM reload (existing behaviour unchanged)
+- `hook-call.schema.json` intentionally not changed — `dotenvPath` is a runner concern, not a per-hook-call concern
+
+---
+
 ## March 11, 2026 - ConfigEditorModal Simplification + HTTP Config Export/Load Fix
 
 ### Overview
