@@ -3,8 +3,10 @@ import { AppStore, ConfigSlice, ConfigState, TestConfig } from '../types';
 
 const DEFAULT_CONFIG_STATE: ConfigState = {
   properties: {},
-  dotenvEnabled: true,
-  dotenvPath: null,
+  dotenv: {
+    enabled: true,
+    path: null,
+  },
   logLevel: 2,
 };
 
@@ -38,23 +40,23 @@ export const createConfigSlice: StateCreator<
 
   setDotenvEnabled: async (enabled) => {
     set((state) => {
-      state.dotenvEnabled = enabled;
+      state.dotenv.enabled = enabled;
     });
-    const { wasmPath, dotenvPath } = get();
+    const { wasmPath, dotenv } = get();
     if (wasmPath !== null) {
       const { applyDotenv } = await import('../../api');
-      await applyDotenv(enabled, dotenvPath);
+      await applyDotenv(enabled, dotenv.path);
     }
   },
 
   setDotenvPath: async (path) => {
     set((state) => {
-      state.dotenvPath = path;
+      state.dotenv.path = path;
     });
-    const { wasmPath, dotenvEnabled } = get();
-    if (wasmPath !== null && dotenvEnabled) {
+    const { wasmPath, dotenv } = get();
+    if (wasmPath !== null && dotenv.enabled) {
       const { applyDotenv } = await import('../../api');
-      await applyDotenv(dotenvEnabled, path);
+      await applyDotenv(dotenv.enabled, path);
     }
   },
 
@@ -67,8 +69,10 @@ export const createConfigSlice: StateCreator<
     set((state) => {
       state.properties = { ...config.properties };
       state.logLevel = config.logLevel;
-      state.dotenvEnabled = config.dotenvEnabled ?? true;
-      state.dotenvPath = config.dotenvPath ?? null;
+      state.dotenv = {
+        enabled: config.dotenv?.enabled ?? true,
+        path: config.dotenv?.path ?? null,
+      };
 
       // Restore request fields into the correct slice based on app type
       if (config.appType === 'http-wasm') {
@@ -102,8 +106,10 @@ export const createConfigSlice: StateCreator<
       },
       properties: { ...state.properties },
       logLevel: state.logLevel,
-      dotenvEnabled: state.dotenvEnabled,
-      ...(state.dotenvPath ? { dotenvPath: state.dotenvPath } : {}),
+      dotenv: {
+        enabled: state.dotenv.enabled,
+        ...(state.dotenv.path ? { path: state.dotenv.path } : {}),
+      },
     };
 
     // CDN apps have a configurable mock response; HTTP apps don't

@@ -8,16 +8,28 @@
     "wasmPath": {
       "type": "string"
     },
-    "dotenvEnabled": {
-      "default": true,
-      "type": "boolean"
-    },
-    "dotenvPath": {
-      "type": "string"
+    "dotenv": {
+      "default": {
+        "enabled": true
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [
-    "dotenvEnabled"
+    "dotenv"
   ],
   "additionalProperties": false
 }

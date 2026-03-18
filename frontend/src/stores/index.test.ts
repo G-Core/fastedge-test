@@ -30,7 +30,7 @@ describe('Store Composition (index.ts)', () => {
 
       // Config slice
       expect(result.current.properties).toBeDefined();
-      expect(result.current.dotenvEnabled).toBeDefined();
+      expect(result.current.dotenv).toBeDefined();
       expect(result.current.setProperties).toBeDefined();
 
       // UI slice
@@ -103,7 +103,7 @@ describe('Store Composition (index.ts)', () => {
 
       expect(parsedData.state.config.properties).toEqual({ key: 'value' });
       expect(parsedData.state.config.logLevel).toBe(5);
-      expect(parsedData.state.config.dotenvEnabled).toBe(false);
+      expect(parsedData.state.config.dotenv.enabled).toBe(false);
     });
 
     it('should persist UI expandedPanels only', async () => {
@@ -461,7 +461,7 @@ describe('Store Composition (index.ts)', () => {
           },
           properties: { env: 'test' },
           logLevel: 4,
-          dotenvEnabled: true,
+          dotenv: { enabled: true },
         });
       });
 

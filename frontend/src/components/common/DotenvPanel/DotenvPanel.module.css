@@ -60,7 +60,7 @@
 
 .pathRow {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
   flex-wrap: wrap;
 }
@@ -78,6 +78,11 @@
   color: #e0e0e0;
   word-break: break-all;
   flex: 1;
+}
+
+.defaultPath {
+  color: #707070;
+  font-style: italic;
 }
 
 .pathInput {

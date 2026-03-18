@@ -119,10 +119,10 @@ Loads WASM binary into memory and recreates runner with dotenv settings:
 
 ```typescript
 app.post("/api/load", async (req, res) => {
-  const { wasmBase64, dotenvEnabled = true } = req.body;
+  const { wasmBase64, dotenv } = req.body;
 
-  // Recreate runner with dotenvEnabled setting
-  runner = new ProxyWasmRunner(undefined, dotenvEnabled);
+  // Recreate runner with dotenv.enabled setting
+  runner = new ProxyWasmRunner(undefined, dotenv?.enabled ?? true);
   runner.setStateManager(stateManager);
 
   const buffer = Buffer.from(wasmBase64, "base64");
@@ -137,12 +137,13 @@ app.post("/api/load", async (req, res) => {
 
 **Parameters:**
 - `wasmBase64` (required): Base64-encoded WASM binary
-- `dotenvEnabled` (optional, default: `true`): Enable/disable dotenv file loading
+- `dotenv.enabled` (optional, default: `true`): Enable/disable dotenv file loading
+- `dotenv.path` (optional): Directory to load `.env*` files from (defaults to CWD)
 
 **Behavior:**
-- Creates new `ProxyWasmRunner` instance with `dotenvEnabled` flag
-- When `dotenvEnabled=true`, loads secrets/dictionary from `.env*` files
-- When `dotenvEnabled=false`, uses only programmatically-provided FastEdge config
+- Creates new `ProxyWasmRunner` instance with `dotenv.enabled` flag
+- When `dotenv.enabled=true`, loads secrets/dictionary from `.env*` files
+- When `dotenv.enabled=false`, uses only programmatically-provided FastEdge config
 - WASM reload required when toggling dotenv flag
 
 #### POST /api/call

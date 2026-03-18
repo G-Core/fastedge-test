@@ -43,7 +43,7 @@ defineTestSuite({
 ```
 
 `RunnerConfig` fields:
-- `dotenvEnabled?: boolean` — load `.env.variables` / `.env.secrets`
+- `dotenv?: { enabled?: boolean; path?: string }` — load `.env.variables` / `.env.secrets`
 - `enforceProductionPropertyRules?: boolean` — enforce CDN property access rules
 - `runnerType?: 'http-wasm' | 'proxy-wasm'` — override auto-detection
 
@@ -96,7 +96,7 @@ IWasmRunner (interface)
 **Required parameters**:
 - `wasmBase64`: Base64-encoded WASM binary
 - `wasmType`: `"http-wasm"` or `"proxy-wasm"` (explicit, required)
-- `dotenvEnabled`: Boolean (optional, default: true)
+- `dotenv`: Object (optional) — `{ enabled?: boolean, path?: string }`, default enabled: true
 
 **Example**:
 ```bash
@@ -105,7 +105,7 @@ curl -X POST http://localhost:5179/api/load \
   -d '{
     "wasmBase64": "...",
     "wasmType": "http-wasm",
-    "dotenvEnabled": true
+    "dotenv": { "enabled": true }
   }'
 ```
 

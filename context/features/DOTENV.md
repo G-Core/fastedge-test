@@ -69,28 +69,30 @@ API_KEY=sk_test_12345
 
 ---
 
-## RunnerConfig: dotenvEnabled and dotenvPath
+## RunnerConfig: dotenv
 
-Both fields are on `RunnerConfig` (passed to `runner.load()`):
+The `dotenv` object on `RunnerConfig` (passed to `runner.load()`) nests the toggle and path together:
 
 ```typescript
 export interface RunnerConfig {
-  dotenvEnabled?: boolean;   // Toggle — mirrors the UI toggle, persisted in fastedge-config.test.json
-  dotenvPath?: string;       // Directory override — only needed when .env files are not in CWD
+  dotenv?: {
+    enabled?: boolean;  // Toggle — mirrors the UI toggle, persisted in fastedge-config.test.json
+    path?: string;      // Directory override — only needed when .env files are not in CWD
+  };
   // ...
 }
 ```
 
-### `dotenvEnabled`
+### `dotenv.enabled`
 
 The on/off toggle. This is the user-facing setting:
 - Controlled by the standalone `DotenvPanel` component (shared by both CDN and HTTP views)
 - `setDotenvEnabled` in the store is async — it updates state and calls `PATCH /api/dotenv` immediately if a WASM is loaded
-- Persisted in `fastedge-config.test.json`
+- Persisted in `fastedge-config.test.json` under the `dotenv` object
 - Sent via `POST /api/load` and `PATCH /api/dotenv` request bodies
 - Defaults to `true` in the server, `false` in integration tests
 
-### `dotenvPath`
+### `dotenv.path`
 
 Optional directory path override. Available both in the UI and programmatically:
 - **UI (VSCode)**: Browse button in the `.env directory` row → native OS folder dialog via `openFolderPicker` message → extension returns absolute path
@@ -103,12 +105,14 @@ Precedence (server-side): client-provided value → `WORKSPACE_PATH` env var (VS
 
 ```typescript
 // Typical npm user — .env files in project root
-await runner.load('./my-app.wasm', { dotenvEnabled: true });
+await runner.load('./my-app.wasm', { dotenv: { enabled: true } });
 
 // Integration test — isolated fixture files
 await runner.load(wasmPath, {
-  dotenvEnabled: true,
-  dotenvPath: join(process.cwd(), 'server/__tests__/integration/http-apps/my-suite/fixtures'),
+  dotenv: {
+    enabled: true,
+    path: join(process.cwd(), 'server/__tests__/integration/http-apps/my-suite/fixtures'),
+  },
 });
 ```
 
@@ -181,6 +185,15 @@ All scaffold is in place but blocked on `proxy-wasm-sdk-as` publishing `getEnv()
 - `ServerPropertiesPanel` is now properties-only (toggle and path UI fully removed)
 - HTTP view now has full dotenv support — previously absent; uses simple store setters (dotenv is a CLI arg to `fastedge-run`, takes effect on next process start)
 - Component lives at `frontend/src/components/common/DotenvPanel/` following the standard folder pattern
+
+### ✅ Completed (March 18, 2026) — DotenvPanel: show resolved app root as default path label
+
+- Default display was showing hardcoded `"workspace root (default)"` — misleading, since the real default is the app root (nearest `fastedge-config.test.json`, or `package.json`/`Cargo.toml`)
+- `DotenvPanel` now sends a `getAppRoot` message to the extension on mount and stores the response as `resolvedRoot`
+- When `path` is null, displays `resolvedRoot` (dimmed via `.defaultPath` style), falling back to `"app root (default)"` until the response arrives
+- All `"workspace root"` references updated to `"app root"` (display text, tooltips, non-VSCode placeholder)
+- Fixed vertical alignment issue: `.pathRow` changed from `align-items: center` to `align-items: baseline`
+- Added `.defaultPath` CSS class (color `#707070`) to distinguish default from user-set path
 
 ### 📝 Notes
 
@@ -257,7 +270,7 @@ For both runner types, CLI args/direct config takes priority over dotenv files:
 - `frontend/src/stores/slices/wasmSlice.ts` — reads `dotenvPath` from store via `get()`
 - `frontend/src/api/index.ts` — `dotenvPath` forwarded in all relevant API calls
 - `frontend/src/components/common/DotenvPanel/` — shared toggle + path selector (VSCode browse / browser text input); used in both CDN and HTTP views
-- `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts` — `openFolderPicker` / `folderPickerResult` handler
+- `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts` — `openFolderPicker` / `folderPickerResult` handler; `getAppRoot` / `appRootResult` handler for default path display
 - `schemas/fastedge-config.test.schema.json` — IDE intellisense for config files
 - `schemas/api-load.schema.json` — `POST /api/load` request body schema
 - `schemas/api-config.schema.json` — `POST /api/config` config object schema

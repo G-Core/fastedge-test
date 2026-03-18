@@ -234,7 +234,7 @@ const App = () => {
     setHookResults, setFinalResponse,
 
     // Config state
-    properties, dotenvEnabled, logLevel,
+    properties, dotenv, logLevel,
     setProperties, setDotenvEnabled, setLogLevel,
     loadFromConfig, exportConfig,
 
@@ -247,7 +247,7 @@ const App = () => {
 
   return (
     <div className="container">
-      <WasmLoader onFileLoad={(file) => loadWasm(file, dotenvEnabled)} />
+      <WasmLoader onFileLoad={(file) => loadWasm(file, dotenv.enabled)} />
       <RequestBar
         method={method}
         url={url}

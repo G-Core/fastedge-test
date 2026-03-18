@@ -86,7 +86,7 @@ curl -X POST http://localhost:5179/api/load \
   -H "X-Source: ai_agent" \
   -d '{
     "wasmBase64": "...",
-    "dotenvEnabled": true
+    "dotenv": { "enabled": true }
   }'
 ```
 
@@ -98,7 +98,7 @@ curl -X POST http://localhost:5179/api/load \
   -H "X-Source: ai_agent" \
   -d '{
     "wasmBase64": "...",
-    "dotenvEnabled": false
+    "dotenv": { "enabled": false }
   }'
 ```
 
@@ -227,12 +227,12 @@ const apiUrl = Host.getProperty("dictionary.API_URL");
 # With dotenv enabled
 curl -X POST http://localhost:5179/api/load \
   -H "Content-Type: application/json" \
-  -d '{"wasmBase64":"...", "dotenvEnabled":true}'
+  -d '{"wasmBase64":"...", "dotenv":{"enabled":true}}'
 
 # With dotenv disabled
 curl -X POST http://localhost:5179/api/load \
   -H "Content-Type: application/json" \
-  -d '{"wasmBase64":"...", "dotenvEnabled":false}'
+  -d '{"wasmBase64":"...", "dotenv":{"enabled":false}}'
 ```
 
 ## Benefits

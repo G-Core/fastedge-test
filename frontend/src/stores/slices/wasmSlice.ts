@@ -60,7 +60,7 @@ export const createWasmSlice: StateCreator<
       let result;
       let file: File | null = null;
 
-      const dotenvPath = get().dotenvPath ?? undefined;
+      const dotenvPath = get().dotenv.path ?? undefined;
 
       // Handle string path (direct path loading)
       if (typeof fileOrPath === 'string') {

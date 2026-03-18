@@ -97,7 +97,7 @@ FASTEDGE_VAR_SECRET_PASSWORD=test-secret
 **Test** uses `createHttpWasmRunnerWithDotenv()` + passes `dotenvPath` to `load()`:
 ```typescript
 runner = createHttpWasmRunnerWithDotenv();
-await runner.load(WASM_PATH, { dotenvPath: FIXTURES_DIR });
+await runner.load(WASM_PATH, { dotenv: { path: FIXTURES_DIR } });
 ```
 
 ### HTTP WASM Test Helpers (`utils/http-wasm-helpers.ts`)
@@ -109,7 +109,7 @@ Creates a runner with dotenv **disabled**. Use for all tests that don't need dot
 Creates a runner with dotenv **enabled**. Pass the fixture directory path via `load()`:
 ```typescript
 const runner = createHttpWasmRunnerWithDotenv();
-await runner.load(wasmPath, { dotenvPath: '/abs/path/to/fixtures' });
+await runner.load(wasmPath, { dotenv: { path: '/abs/path/to/fixtures' } });
 ```
 
 #### `isSuccessResponse(response)` / `hasContentType(response, type)`
@@ -124,7 +124,7 @@ Log inspection helpers.
 2. Build with `pnpm run build:test-apps` → output to `wasm/http-apps/basic-examples/`
 3. Create a `fixtures/` directory next to your test file
 4. Add a `.env` file using `FASTEDGE_VAR_ENV_<KEY>` and `FASTEDGE_VAR_SECRET_<KEY>` prefixes
-5. Use `createHttpWasmRunnerWithDotenv()` and pass `dotenvPath` to `load()`
+5. Use `createHttpWasmRunnerWithDotenv()` and pass `dotenv.path` to `load()`
 
 ```typescript
 const FIXTURES_DIR = join(process.cwd(), 'server/__tests__/integration/http-apps/my-suite/fixtures');
@@ -132,13 +132,13 @@ const WASM_PATH = join(process.cwd(), 'wasm/http-apps/basic-examples/my-app.wasm
 
 beforeAll(async () => {
   runner = createHttpWasmRunnerWithDotenv();
-  await runner.load(WASM_PATH, { dotenvPath: FIXTURES_DIR });
+  await runner.load(WASM_PATH, { dotenv: { path: FIXTURES_DIR } });
 }, 30000);
 ```
 
-**Why `dotenvPath`?** Tests run from `fastedge-test/` as CWD. Without a path, `fastedge-run --dotenv` reads from the repo root — polluting it and sharing state between suites. Each suite's fixture dir keeps dotenv files isolated.
+**Why `dotenv.path`?** Tests run from `fastedge-test/` as CWD. Without a path, `fastedge-run --dotenv` reads from the repo root — polluting it and sharing state between suites. Each suite's fixture dir keeps dotenv files isolated.
 
-**Why not `dotenvEnabled` alone?** `dotenvEnabled` is the UI toggle (user-facing, in `fastedge-config.test.json`). `dotenvPath` is the programmatic override for non-CWD locations. See `context/features/DOTENV.md` for full design rationale.
+**Why not `dotenv.enabled` alone?** `dotenv.enabled` is the UI toggle (user-facing, in `fastedge-config.test.json`). `dotenv.path` is the programmatic override for non-CWD locations. See `context/features/DOTENV.md` for full design rationale.
 
 ---
 

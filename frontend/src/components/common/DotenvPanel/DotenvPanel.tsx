@@ -18,12 +18,32 @@ export function DotenvPanel({
   onPathChange,
 }: DotenvPanelProps) {
   const [isExpanded, setIsExpanded] = useState(enabled);
+  const [resolvedRoot, setResolvedRoot] = useState<string | null>(null);
   const listenerRef = useRef<((e: MessageEvent) => void) | null>(null);
 
   // Sync expand state with toggle: on → expand, off → collapse
   useEffect(() => {
     setIsExpanded(enabled);
   }, [enabled]);
+
+  // Request the resolved app root from the extension on mount
+  useEffect(() => {
+    if (!isVSCode()) return;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.command !== "appRootResult") return;
+      window.removeEventListener("message", handler);
+      const appRoot = event.data.appRoot ?? null;
+      setResolvedRoot(appRoot);
+      // If no explicit path is set, use the resolved root as the effective path
+      // so it is captured when saving config (and the runner uses the correct --dotenv arg)
+      if (appRoot && !path) {
+        onPathChange(appRoot);
+      }
+    };
+    window.addEventListener("message", handler);
+    window.parent.postMessage({ command: "getAppRoot" }, "*");
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
   // Clean up message listener on unmount
   useEffect(() => {
@@ -79,7 +99,7 @@ export function DotenvPanel({
             {isVSCode() ? (
               <>
                 <span className={styles.pathValue}>
-                  {path ?? <em>workspace root (default)</em>}
+                  {path ?? <em className={styles.defaultPath}>{resolvedRoot ?? "app root (default)"}</em>}
                 </span>
                 <button
                   className={styles.browseButton}
@@ -93,7 +113,7 @@ export function DotenvPanel({
                     className={styles.clearButton}
                     onClick={() => onPathChange(null)}
                     type="button"
-                    title="Reset to workspace root"
+                    title="Reset to app root"
                   >
                     ✕
                   </button>
@@ -106,7 +126,7 @@ export function DotenvPanel({
                   type="text"
                   value={path ?? ""}
                   onChange={(e) => onPathChange(e.target.value || null)}
-                  placeholder="workspace root (default)"
+                  placeholder="app root (default)"
                   spellCheck={false}
                 />
                 {path && (
@@ -114,7 +134,7 @@ export function DotenvPanel({
                     className={styles.clearButton}
                     onClick={() => onPathChange(null)}
                     type="button"
-                    title="Reset to workspace root"
+                    title="Reset to app root"
                   >
                     ✕
                   </button>

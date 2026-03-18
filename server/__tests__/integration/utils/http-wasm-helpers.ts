@@ -26,7 +26,7 @@ export function createHttpWasmRunner(): IWasmRunner {
  * Use this for tests that need env vars or secrets loaded from dotenv files.
  *
  * Pass the fixture directory via load():
- *   await runner.load(wasmPath, { dotenvPath: '/abs/path/to/fixtures' })
+ *   await runner.load(wasmPath, { dotenv: { path: '/abs/path/to/fixtures' } })
  *
  * @returns A configured HttpWasmRunner instance with dotenv enabled
  */

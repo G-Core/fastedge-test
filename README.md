@@ -340,7 +340,7 @@ Reference from `fastedge-config.test.json` for VS Code autocomplete:
 
 ```json
 {
-  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/test-config.schema.json",
+  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
   "envVars": {},
   "secrets": {},
   "properties": {}

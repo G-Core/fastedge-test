@@ -29,7 +29,7 @@ describe('ConfigSlice', () => {
       });
 
       expect(result.current.properties).toEqual({});
-      expect(result.current.dotenvEnabled).toBe(true);
+      expect(result.current.dotenv.enabled).toBe(true);
       expect(result.current.logLevel).toBe(2);
     });
   });
@@ -186,7 +186,7 @@ describe('ConfigSlice', () => {
         result.current.setDotenvEnabled(true);
       });
 
-      expect(result.current.dotenvEnabled).toBe(true);
+      expect(result.current.dotenv.enabled).toBe(true);
     });
 
     it('should disable dotenv', () => {
@@ -196,7 +196,7 @@ describe('ConfigSlice', () => {
         result.current.setDotenvEnabled(false);
       });
 
-      expect(result.current.dotenvEnabled).toBe(false);
+      expect(result.current.dotenv.enabled).toBe(false);
     });
 
   });
@@ -241,7 +241,7 @@ describe('ConfigSlice', () => {
         },
         properties: { key1: 'value1', key2: 'value2' },
         logLevel: 5,
-        dotenvEnabled: false,
+        dotenv: { enabled: false },
       };
 
       act(() => {
@@ -250,10 +250,10 @@ describe('ConfigSlice', () => {
 
       expect(result.current.properties).toEqual(config.properties);
       expect(result.current.logLevel).toBe(5);
-      expect(result.current.dotenvEnabled).toBe(false);
+      expect(result.current.dotenv.enabled).toBe(false);
     });
 
-    it('should default dotenvEnabled to true if not provided', () => {
+    it('should default dotenv.enabled to true if not provided', () => {
       const { result } = renderHook(() => useAppStore());
       const config: TestConfig = {
         request: {
@@ -270,7 +270,7 @@ describe('ConfigSlice', () => {
         result.current.loadFromConfig(config);
       });
 
-      expect(result.current.dotenvEnabled).toBe(true);
+      expect(result.current.dotenv.enabled).toBe(true);
     });
 
     it('should create a copy of properties, not reference', () => {
@@ -329,7 +329,7 @@ describe('ConfigSlice', () => {
         },
         properties: { prop1: 'value1' },
         logLevel: 5,
-        dotenvEnabled: false,
+        dotenv: { enabled: false },
       });
     });
 
@@ -355,7 +355,7 @@ describe('ConfigSlice', () => {
       expect(config.request.method).toBe('POST');
       expect(config.properties).toEqual({});
       expect(config.logLevel).toBe(2);
-      expect(config.dotenvEnabled).toBe(true);
+      expect(config.dotenv?.enabled).toBe(true);
     });
   });
 
@@ -371,7 +371,7 @@ describe('ConfigSlice', () => {
       });
 
       expect(result.current.properties).toEqual({});
-      expect(result.current.dotenvEnabled).toBe(true);
+      expect(result.current.dotenv.enabled).toBe(true);
       expect(result.current.logLevel).toBe(2);
     });
   });

@@ -91,18 +91,30 @@
           },
           "additionalProperties": {}
         },
-        "dotenvEnabled": {
-          "default": true,
-          "type": "boolean"
-        },
-        "dotenvPath": {
-          "type": "string"
+        "dotenv": {
+          "default": {
+            "enabled": true
+          },
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
         "request",
         "properties",
-        "dotenvEnabled"
+        "dotenv"
       ],
       "additionalProperties": false
     }

@@ -33,7 +33,7 @@ describe('HTTP WASM Runner - Variables and Secrets', () => {
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     runner = createHttpWasmRunnerWithDotenv();
-    await runner.load(WASM_PATH, { dotenvPath: FIXTURES_DIR });
+    await runner.load(WASM_PATH, { dotenv: { path: FIXTURES_DIR } });
   }, 30000);
 
   afterAll(async () => {

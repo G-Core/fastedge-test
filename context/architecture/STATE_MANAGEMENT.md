@@ -274,7 +274,7 @@ clearResults();
 ```typescript
 interface ConfigState {
   properties: Record<string, string>;  // Server properties (key-value pairs)
-  dotenvEnabled: boolean;              // Enable .env file loading
+  dotenv: { enabled: boolean; path: string | null };  // Dotenv config
   logLevel: number;                    // Log filtering level (0-5)
   autoSave: boolean;                   // Auto-save enabled
   lastSaved: number | null;            // Timestamp of last save
@@ -298,13 +298,13 @@ exportConfig(): TestConfig                                 // Export to fastedge
 resetConfig(): void                                        // Reset to defaults
 ```
 
-**Persistence:** PARTIAL (properties, dotenvEnabled, logLevel, autoSave are persisted; isDirty and lastSaved are ephemeral)
+**Persistence:** PARTIAL (properties, dotenv, logLevel, autoSave are persisted; isDirty and lastSaved are ephemeral)
 
 **markDirty() Calls:** All mutating actions except `markClean()` call `markDirty()`
 
 **Example Usage:**
 ```typescript
-const { properties, dotenvEnabled, logLevel, mergeProperties, setLogLevel } = useAppStore();
+const { properties, dotenv, logLevel, mergeProperties, setLogLevel } = useAppStore();
 
 // Merge calculated properties from server
 mergeProperties({ 'request.id': '12345', 'request.timestamp': Date.now().toString() });
@@ -739,7 +739,7 @@ partialize: (state): PersistConfig => ({
   // Application configuration (excluding meta-state)
   config: {
     properties: state.properties,
-    dotenvEnabled: state.dotenvEnabled,
+    dotenv: state.dotenv,
     logLevel: state.logLevel,
     autoSave: state.autoSave,
     // Excluded: isDirty, lastSaved
@@ -1154,7 +1154,7 @@ Add your new state to the appropriate slice interface:
 // Example: Adding responseTimeout to Config Slice
 export interface ConfigState {
   properties: Record<string, string>;
-  dotenvEnabled: boolean;
+  dotenv: { enabled: boolean; path: string | null };
   logLevel: number;
   autoSave: boolean;
   lastSaved: number | null;
@@ -1202,7 +1202,7 @@ partialize: (state): PersistConfig => ({
   // ...
   config: {
     properties: state.properties,
-    dotenvEnabled: state.dotenvEnabled,
+    dotenv: state.dotenv,
     logLevel: state.logLevel,
     autoSave: state.autoSave,
     responseTimeout: state.responseTimeout,  // ← Add to persisted config
@@ -1388,7 +1388,7 @@ function App() {
   const [results, setResults] = useState({});
   const [finalResponse, setFinalResponse] = useState(null);
   const [properties, setProperties] = useState({});
-  const [dotenvEnabled, setDotenvEnabled] = useState(true);
+  const [dotenv, setDotenv] = useState({ enabled: true, path: null });
   const [logLevel, setLogLevel] = useState(3);
 
   // Prop drilling to child components
@@ -1403,7 +1403,7 @@ function App() {
       <ServerPropertiesPanel
         properties={properties}
         onPropertiesChange={setProperties}
-        dotenvEnabled={dotenvEnabled}
+        dotenv={dotenv}
         onDotenvToggle={setDotenvEnabled}
       />
       {/* More prop drilling... */}
@@ -1433,7 +1433,7 @@ function App() {
     wasmPath, loadWasm, reloadWasm,
     hookResults, setHookResults,
     properties, mergeProperties,
-    dotenvEnabled, setDotenvEnabled,
+    dotenv, setDotenvEnabled,
     logLevel, setLogLevel,
     wsStatus, setWsStatus,
   } = useAppStore();

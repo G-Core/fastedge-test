@@ -24,7 +24,7 @@ export function createTestRunner(
  * Use this for tests that need env vars or secrets loaded from dotenv files.
  *
  * Pass the fixture directory via load():
- *   await runner.load(wasmBuffer, { dotenvPath: '/abs/path/to/fixtures' })
+ *   await runner.load(wasmBuffer, { dotenv: { path: '/abs/path/to/fixtures' } })
  *
  * @returns A configured ProxyWasmRunner instance with dotenv enabled
  */

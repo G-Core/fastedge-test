@@ -127,7 +127,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
-  const { wasmBase64, wasmPath, dotenvEnabled, dotenvPath: clientDotenvPath } = parsed.data;
+  const { wasmBase64, wasmPath, dotenv } = parsed.data;
 
   try {
     let bufferOrPath: Buffer | string;
@@ -201,16 +201,16 @@ app.post("/api/load", async (req: Request, res: Response) => {
     }
 
     // Create appropriate runner based on detected type
-    currentRunner = runnerFactory.createRunner(wasmType, dotenvEnabled);
+    currentRunner = runnerFactory.createRunner(wasmType, dotenv.enabled ?? true);
     currentRunner.setStateManager(stateManager);
 
     // Precedence: client-provided path → WORKSPACE_PATH (VSCode) → undefined (CWD).
     // When running inside VSCode the server CWD is the extension's dist/debugger/
     // directory, so WORKSPACE_PATH is the fallback. A client-provided path wins.
-    const dotenvPath = clientDotenvPath || process.env.WORKSPACE_PATH || undefined;
+    const dotenvPath = dotenv.path || process.env.WORKSPACE_PATH || undefined;
 
     // Load WASM (accepts either Buffer or string path)
-    await currentRunner.load(bufferOrPath, { dotenvEnabled, dotenvPath });
+    await currentRunner.load(bufferOrPath, { dotenv: { enabled: dotenv.enabled ?? true, path: dotenvPath } });
 
     // Emit WASM loaded event — include runner port for HTTP WASM so the
     // frontend can build the live preview URL without a separate API call
@@ -232,9 +232,9 @@ app.post("/api/load", async (req: Request, res: Response) => {
 });
 
 app.patch("/api/dotenv", async (req: Request, res: Response) => {
-  const { enabled, dotenvPath: clientDotenvPath } = req.body ?? {};
-  if (typeof enabled !== "boolean") {
-    res.status(400).json({ ok: false, error: "enabled must be a boolean" });
+  const { dotenv } = req.body ?? {};
+  if (!dotenv || typeof dotenv.enabled !== "boolean") {
+    res.status(400).json({ ok: false, error: "dotenv.enabled must be a boolean" });
     return;
   }
 
@@ -244,10 +244,10 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
   }
 
   try {
-    const dotenvPath = (typeof clientDotenvPath === 'string' ? clientDotenvPath : undefined)
+    const dotenvPath = (typeof dotenv.path === 'string' ? dotenv.path : undefined)
       || process.env.WORKSPACE_PATH
       || undefined;
-    await currentRunner.applyDotenv(enabled, dotenvPath);
+    await currentRunner.applyDotenv(dotenv.enabled, dotenvPath);
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ ok: false, error: String(error) });

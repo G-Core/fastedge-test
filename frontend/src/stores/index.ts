@@ -42,8 +42,7 @@ export const useAppStore = create<AppStore>()(
             },
             config: {
               properties: state.properties,
-              dotenvEnabled: state.dotenvEnabled,
-              dotenvPath: state.dotenvPath,
+              dotenv: state.dotenv,
               logLevel: state.logLevel,
             },
             ui: {

@@ -88,26 +88,30 @@
       },
       "additionalProperties": {}
     },
-    "dotenvEnabled": {
-      "default": true,
-      "type": "boolean"
-    },
-    "dotenvPath": {
-      "type": "string",
-      "description": "Directory path to load .env files from. Defaults to workspace root when omitted."
-    },
-    "logLevel": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 4,
-      "default": 0,
-      "description": "Log verbosity: 0=trace, 1=debug, 2=info, 3=warn, 4=error"
+    "dotenv": {
+      "default": {
+        "enabled": true
+      },
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [
     "request",
     "properties",
-    "dotenvEnabled"
+    "dotenv"
   ],
   "additionalProperties": false
 }

@@ -45,8 +45,8 @@ export interface WasmState {
 }
 
 export interface WasmActions {
-  loadWasm: (fileOrPath: File | string, dotenvEnabled: boolean) => Promise<void>;
-  reloadWasm: (dotenvEnabled: boolean) => Promise<void>;
+  loadWasm: (fileOrPath: File | string, dotenvEnabled: boolean, dotenvPath?: string | null) => Promise<void>;
+  reloadWasm: (dotenvEnabled: boolean, dotenvPath?: string | null) => Promise<void>;
   clearWasm: () => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -75,8 +75,10 @@ export type ResultsSlice = ResultsState & ResultsActions;
 // Config Store
 export interface ConfigState {
   properties: Record<string, string>;
-  dotenvEnabled: boolean;
-  dotenvPath: string | null;
+  dotenv: {
+    enabled: boolean;
+    path: string | null;
+  };
   logLevel: number;
 }
 
@@ -186,8 +188,10 @@ export interface TestConfig {
   };
   properties: Record<string, string>;
   logLevel: number;
-  dotenvEnabled?: boolean;
-  dotenvPath?: string;
+  dotenv?: {
+    enabled?: boolean;
+    path?: string;
+  };
 }
 
 export interface PersistConfig {

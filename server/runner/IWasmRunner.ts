@@ -10,12 +10,14 @@ import type { HookCall, HookResult, FullFlowResult } from "./types.js";
 export type WasmType = "http-wasm" | "proxy-wasm";
 
 export interface RunnerConfig {
-  dotenvEnabled?: boolean;
-  /** Directory path to load dotenv files from. Passes --dotenv <path> to fastedge-run.
-   *  When omitted, fastedge-run uses process CWD (correct for npm package users whose
-   *  .env files live at their project root). Use this only when dotenv files are not in CWD,
-   *  e.g. test fixture directories or non-standard project layouts. */
-  dotenvPath?: string;
+  dotenv?: {
+    enabled?: boolean;
+    /** Directory path to load dotenv files from. Passes --dotenv <path> to fastedge-run.
+     *  When omitted, fastedge-run uses process CWD (correct for npm package users whose
+     *  .env files live at their project root). Use this only when dotenv files are not in CWD,
+     *  e.g. test fixture directories or non-standard project layouts. */
+    path?: string;
+  };
   enforceProductionPropertyRules?: boolean;
   /** Override automatic WASM type detection. Use when detection produces wrong results. */
   runnerType?: WasmType;
@@ -101,9 +103,9 @@ export interface IWasmRunner {
    * For ProxyWasmRunner: resets stores and re-loads dotenv files in-place.
    * For HttpWasmRunner: restarts the fastedge-run process with updated flags.
    * @param enabled Whether dotenv loading should be enabled
-   * @param dotenvPath Optional directory to load dotenv files from
+   * @param path Optional directory to load dotenv files from
    */
-  applyDotenv(enabled: boolean, dotenvPath?: string): Promise<void>;
+  applyDotenv(enabled: boolean, path?: string): Promise<void>;
 
   /**
    * Clean up resources (processes, temp files, etc.)

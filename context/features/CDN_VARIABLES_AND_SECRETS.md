@@ -9,15 +9,15 @@ paralleling the existing HTTP app integration test at `sdk-variables-and-secrets
 
 ## What Was Done
 
-### 1. ProxyWasmRunner — `dotenvPath` support added ✅
+### 1. ProxyWasmRunner — `dotenv.path` support added ✅
 
-`server/runner/ProxyWasmRunner.ts` was updated to respect `dotenvPath` from `RunnerConfig`.
+`server/runner/ProxyWasmRunner.ts` was updated to respect `dotenv.path` from `RunnerConfig`.
 Previously `loadDotenvIfEnabled()` hardcoded `"."` (CWD). Now it uses `this.dotenvPath`, which
-is set from `config.dotenvPath` in `load()`.
+is set from `config.dotenv?.path` in `load()`.
 
 ```typescript
 // runner now respects:
-await runner.load(buffer, { dotenvPath: FIXTURES_DIR });
+await runner.load(buffer, { dotenv: { path: FIXTURES_DIR } });
 ```
 
 ### 2. `createTestRunnerWithDotenv()` helper added ✅
@@ -200,4 +200,4 @@ fixtures/.env
 
 HTTP apps use `fastedge-run` (Rust) for dotenv loading — the runner passes `--dotenv <path>` as
 a CLI flag. CDN apps use Node.js `dotenv-loader.ts` which populates `Dictionary` and `SecretStore`
-directly in the runner. Both use the same `RunnerConfig.dotenvPath` API surface.
+directly in the runner. Both use the same `RunnerConfig.dotenv` API surface.

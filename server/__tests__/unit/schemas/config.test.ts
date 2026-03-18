@@ -96,10 +96,10 @@ describe('TestConfigSchema', () => {
   });
 
   describe('defaults', () => {
-    it('should default dotenvEnabled to true', () => {
+    it('should default dotenv.enabled to true', () => {
       const result = TestConfigSchema.safeParse({ request: minimalValidRequest });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.dotenvEnabled).toBe(true);
+      if (result.success) expect(result.data.dotenv.enabled).toBe(true);
     });
 
     it('should default properties to {}', () => {
@@ -108,10 +108,10 @@ describe('TestConfigSchema', () => {
       if (result.success) expect(result.data.properties).toEqual({});
     });
 
-    it('should default dotenvPath to undefined when omitted', () => {
+    it('should default dotenv.path to undefined when omitted', () => {
       const result = TestConfigSchema.safeParse({ request: minimalValidRequest });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.dotenvPath).toBeUndefined();
+      if (result.success) expect(result.data.dotenv.path).toBeUndefined();
     });
   });
 
@@ -119,7 +119,7 @@ describe('TestConfigSchema', () => {
     it('should accept $schema string', () => {
       const result = TestConfigSchema.safeParse({
         request: minimalValidRequest,
-        $schema: './schemas/test-config.schema.json',
+        $schema: './schemas/fastedge-config.test.schema.json',
       });
       expect(result.success).toBe(true);
     });
@@ -132,13 +132,13 @@ describe('TestConfigSchema', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should accept dotenvPath', () => {
+    it('should accept dotenv.path', () => {
       const result = TestConfigSchema.safeParse({
         request: minimalValidRequest,
-        dotenvPath: '/app/fixtures',
+        dotenv: { path: '/app/fixtures' },
       });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.dotenvPath).toBe('/app/fixtures');
+      if (result.success) expect(result.data.dotenv.path).toBe('/app/fixtures');
     });
 
     it('should accept properties with mixed value types', () => {
