@@ -12,7 +12,7 @@ import type { AppStore, PersistConfig } from './types';
 
 // Create debounced localStorage
 const debouncedStorage = createDebouncedJSONStorage(localStorage, {
-  delay: 500, // 500ms debounce
+  debounceTime: 500, // 500ms debounce
 });
 
 export const useAppStore = create<AppStore>()(
@@ -43,8 +43,8 @@ export const useAppStore = create<AppStore>()(
             config: {
               properties: state.properties,
               dotenvEnabled: state.dotenvEnabled,
+              dotenvPath: state.dotenvPath,
               logLevel: state.logLevel,
-              autoSave: state.autoSave,
             },
             ui: {
               expandedPanels: state.expandedPanels,

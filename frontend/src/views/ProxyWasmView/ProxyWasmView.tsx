@@ -1,3 +1,4 @@
+import { DotenvPanel } from "../../components/common/DotenvPanel";
 import { RequestPanel } from "../../components/common/RequestPanel";
 import { ServerPropertiesPanel } from "../../components/proxy-wasm/ServerPropertiesPanel";
 import { HookStagesPanel } from "../../components/proxy-wasm/HookStagesPanel";
@@ -166,25 +167,16 @@ export function ProxyWasmView() {
         headerValuePlaceholder="Header value"
       />
 
+      <DotenvPanel
+        enabled={dotenvEnabled}
+        onToggle={setDotenvEnabled}
+        path={dotenvPath}
+        onPathChange={setDotenvPath}
+      />
+
       <ServerPropertiesPanel
         properties={properties}
         onPropertiesChange={setProperties}
-        dotenvEnabled={dotenvEnabled}
-        onDotenvToggle={async (enabled) => {
-          setDotenvEnabled(enabled);
-          if (wasmPath !== null) {
-            const { applyDotenv } = await import("../../api");
-            await applyDotenv(enabled, dotenvPath);
-          }
-        }}
-        dotenvPath={dotenvPath}
-        onDotenvPathChange={async (path) => {
-          setDotenvPath(path);
-          if (wasmPath !== null && dotenvEnabled) {
-            const { applyDotenv } = await import("../../api");
-            await applyDotenv(dotenvEnabled, path);
-          }
-        }}
       />
 
       <HookStagesPanel

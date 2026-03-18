@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeJsonDiff, isPlainObject, type DiffLine } from "./diff";
+import { computeJsonDiff, isPlainObject } from "./diff";
 
 describe("isPlainObject", () => {
   it("should return true for plain objects", () => {

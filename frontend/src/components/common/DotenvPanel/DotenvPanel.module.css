@@ -1,0 +1,131 @@
+.panel {
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #252525;
+}
+
+.header {
+  cursor: pointer;
+  padding: 12px 20px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #3d3d3d;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 60px;
+}
+
+.arrow {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid #b0b0b0;
+  border-bottom: 2px solid #b0b0b0;
+  transform: rotate(45deg);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.arrow.expanded {
+  transform: rotate(-135deg);
+}
+
+.content {
+  padding: 1rem 1.25rem;
+  background: #252525;
+}
+
+.description {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #a0a0a0;
+}
+
+.description code {
+  font-family: monospace;
+  color: #c0c0c0;
+}
+
+.pathRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pathLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c0c0c0;
+  white-space: nowrap;
+}
+
+.pathValue {
+  font-family: monospace;
+  font-size: 12px;
+  color: #e0e0e0;
+  word-break: break-all;
+  flex: 1;
+}
+
+.pathInput {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  font-family: monospace;
+  font-size: 12px;
+  border: 1px solid #3d3d3d;
+  border-radius: 3px;
+  background: #1e1e1e;
+  color: #e0e0e0;
+}
+
+.pathInput:focus {
+  outline: none;
+  border-color: #5a5a5a;
+}
+
+.browseButton {
+  padding: 2px 8px;
+  font-size: 12px;
+  background: #2d2d2d;
+  border: 1px solid #5a5a5a;
+  border-radius: 3px;
+  color: #c0c0c0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.browseButton:hover {
+  background: #3d3d3d;
+  color: #e0e0e0;
+}
+
+.clearButton {
+  padding: 2px 6px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid #5a5a5a;
+  border-radius: 3px;
+  color: #c0c0c0;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.clearButton:hover {
+  background: #3d1a1a;
+  border-color: #7a3a3a;
+  color: #ff8080;
+}

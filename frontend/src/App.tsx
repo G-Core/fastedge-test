@@ -14,7 +14,7 @@ import "./App.css";
 
 function App() {
   // Environment detection state
-  const [environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
+  const [_environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
 
   // Get state and actions from stores
   const {
@@ -48,7 +48,6 @@ function App() {
 
     // Config state
     dotenvEnabled,
-    dotenvPath,
     loadFromConfig,
 
     // UI state
@@ -258,8 +257,7 @@ function App() {
           await loadWasm(config.wasm.path, dotenvEnabled);
           alert(`✅ Configuration loaded from ${file.name}\n🚀 WASM auto-loaded: ${config.wasm.path}`);
         } catch (wasmError) {
-          const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
-          alert(`✅ Configuration loaded from ${file.name}\n⚠️ WASM path not found. Please load WASM manually.`);
+            alert(`✅ Configuration loaded from ${file.name}\n⚠️ WASM path not found. Please load WASM manually.`);
         }
       } else {
         alert(`✅ Configuration loaded from ${file.name}!`);

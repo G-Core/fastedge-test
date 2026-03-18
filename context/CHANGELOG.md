@@ -1,5 +1,79 @@
 # Proxy-WASM Runner - Changelog
 
+## March 18, 2026 - DotenvPanel refactor, bug fixes, dead state removal
+
+### Overview
+Refactored dotenv UI from `ServerPropertiesPanel` into a standalone `DotenvPanel` shared by both CDN and HTTP views. Fixed three bugs introduced on March 17: HTTP toggle not calling the server, VSCode Browse button silently broken, and misleading description text. Consolidated applyDotenv side-effect into the store. Removed dead state (`autoSave`, `isDirty`, `lastSaved`, `markDirty`, `markClean`).
+
+### 🎯 What Was Completed
+
+#### 1. Standalone `DotenvPanel` component
+- Extracted dotenv toggle + path UI from `ServerPropertiesPanel` into `frontend/src/components/common/DotenvPanel/DotenvPanel.tsx`
+- Used in both `ProxyWasmView` and `HttpWasmView` — single source of truth for dotenv UI
+- `ServerPropertiesPanel` now only handles server properties (no dotenv props)
+- Panel expands/collapses in sync with the toggle state
+- Description text: `"Load runtime variables from dotenv path when enabled:"` (generic, not file-format-specific)
+- Label: `"Dotenv path:"` with `"workspace root (default)"` placeholder/display
+
+**Files Modified:**
+- `frontend/src/components/common/DotenvPanel/DotenvPanel.tsx` (new)
+- `frontend/src/components/common/DotenvPanel/DotenvPanel.module.css` (new)
+- `frontend/src/components/proxy-wasm/ServerPropertiesPanel/ServerPropertiesPanel.tsx` (stripped of dotenv)
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx`
+- `frontend/src/views/HttpWasmView/HttpWasmView.tsx`
+
+#### 2. Bug fix: HTTP toggle did not call `applyDotenv`
+- `HttpWasmView` wired `onToggle={setDotenvEnabled}` — only updated React state, never called the server
+- Fixed by consolidating the side-effect into the store (see §3)
+
+#### 3. Store consolidation: `setDotenvEnabled` and `setDotenvPath` are now async
+- Both actions in `configSlice` now: update state synchronously, then call `applyDotenv` if `wasmPath !== null`
+- Both views now pass store actions directly: `onToggle={setDotenvEnabled}`, `onPathChange={setDotenvPath}`
+- No more duplicated inline async wrappers in views
+
+**Files Modified:**
+- `frontend/src/stores/slices/configSlice.ts`
+- `frontend/src/stores/types.ts` (return types updated to `Promise<void>`)
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx`
+- `frontend/src/views/HttpWasmView/HttpWasmView.tsx`
+
+#### 4. Bug fix: VSCode Browse button did nothing
+- The webview wrapper script in `DebuggerWebviewProvider.ts` was missing two message bridge handlers
+- `openFolderPicker`: outbound from iframe → extension host (never forwarded → dialog never opened)
+- `folderPickerResult`: inbound from extension host → iframe (never forwarded → result never received)
+- Same pattern as the existing `openFilePicker`/`filePickerResult` pair
+
+**Files Modified:**
+- `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts`
+
+#### 5. Dead state removal: `autoSave`, `isDirty`, `lastSaved`, `markDirty`, `markClean`
+- All five were scaffolding for a "save config to file" feature that was never built
+- Nothing outside the store ever read `isDirty`, `lastSaved`, or `autoSave`
+- `markDirty`/`markClean` were never called from UI code
+- Removed from `ConfigState`, `ConfigActions`, all slice setters, and `PersistConfig`
+- `autoSave` was also missing from `partialize` (a pre-existing bug — fixed then removed)
+- 30 tests deleted (they only tested the removed behaviour)
+
+**Files Modified:**
+- `frontend/src/stores/slices/configSlice.ts`
+- `frontend/src/stores/slices/requestSlice.ts`
+- `frontend/src/stores/slices/uiSlice.ts`
+- `frontend/src/stores/types.ts`
+- `frontend/src/stores/index.ts`
+- `frontend/src/stores/slices/configSlice.test.ts`
+- `frontend/src/stores/slices/requestSlice.test.ts`
+- `frontend/src/stores/slices/uiSlice.test.ts`
+- `frontend/src/stores/index.test.ts`
+
+### 🧪 Testing
+- All tests pass: 333 frontend + 66 backend + 25 integration (363 → 333 frontend due to deleted dead-state tests)
+
+### 📝 Notes
+- `isVSCode()` detection in `DotenvPanel` uses `window !== window.top` — VSCode webviews run as iframes so this is correct
+- The async `setDotenvEnabled`/`setDotenvPath` are safe to call from sync `act()` in tests because `wasmPath` is always `null` in tests, so the API branch never executes
+
+---
+
 ## March 17, 2026 - dotenvPath UI: directory picker in ServerPropertiesPanel
 
 ### Overview

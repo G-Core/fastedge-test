@@ -165,7 +165,7 @@ describe("applyDefaultContentType", () => {
       const body = '{"test": true}';
       applyDefaultContentType(headers, body);
 
-      expect(headers["content-type"]).toBeUndefined();
+      expect((headers as Record<string, string>)["content-type"]).toBeUndefined();
     });
 
     it("should handle content-type with different casing", () => {

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAppStore } from '../index';
 import * as api from '../../api';
+import type { UploadWasmResult } from '../../api';
 
 // Mock the API module
 vi.mock('../../api', () => ({
@@ -120,8 +121,8 @@ describe('WasmSlice', () => {
       const mockArrayBuffer = new ArrayBuffer(8);
       const mockFile = createMockFile('wasm content', 'test.wasm', mockArrayBuffer);
 
-      let resolveUpload: (value: string) => void;
-      const uploadPromise = new Promise<string>((resolve) => {
+      let resolveUpload: (value: UploadWasmResult) => void;
+      const uploadPromise = new Promise<UploadWasmResult>((resolve) => {
         resolveUpload = resolve;
       });
       mockUploadWasm.mockReturnValue(uploadPromise);
@@ -137,7 +138,7 @@ describe('WasmSlice', () => {
 
       // Resolve the upload
       await act(async () => {
-        resolveUpload!('test.wasm');
+        resolveUpload!({ path: 'test.wasm', wasmType: 'proxy-wasm', loadingMode: 'buffer', loadTime: 0, fileSize: 0 });
         await uploadPromise;
       });
 

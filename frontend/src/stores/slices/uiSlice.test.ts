@@ -26,7 +26,6 @@ describe('UISlice', () => {
           result.current.togglePanel(panel);
         }
       });
-      result.current.markClean();
     });
   });
 
@@ -55,17 +54,6 @@ describe('UISlice', () => {
       });
 
       expect(result.current.activeHookTab).toBe('response_headers');
-    });
-
-    it('should NOT mark dirty when tab is changed (ephemeral)', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setActiveHookTab('request_body');
-      });
-
-      expect(result.current.isDirty).toBe(false);
     });
 
     it('should handle various hook names', () => {
@@ -116,17 +104,6 @@ describe('UISlice', () => {
       });
 
       expect(result.current.activeSubView).toBe('outputs');
-    });
-
-    it('should NOT mark dirty when sub-view is changed (ephemeral)', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setActiveSubView('inputs');
-      });
-
-      expect(result.current.isDirty).toBe(false);
     });
 
     it('should switch between all sub-views', () => {
@@ -191,17 +168,6 @@ describe('UISlice', () => {
         result.current.togglePanel('testPanel');
       });
       expect(result.current.expandedPanels['testPanel']).toBe(true);
-    });
-
-    it('should mark dirty when panel is toggled (persisted)', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.togglePanel('testPanel');
-      });
-
-      expect(result.current.isDirty).toBe(true);
     });
 
     it('should handle multiple independent panels', () => {
@@ -316,22 +282,6 @@ describe('UISlice', () => {
       expect(result.current.wsStatus.clientCount).toBe(42);
     });
 
-    it('should NOT mark dirty when ws status is changed (ephemeral)', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setWsStatus({
-          connected: true,
-          reconnecting: false,
-          clientCount: 1,
-          error: null,
-        });
-      });
-
-      expect(result.current.isDirty).toBe(false);
-    });
-
     it('should handle status transitions', () => {
       const { result } = renderHook(() => useAppStore());
 
@@ -389,37 +339,6 @@ describe('UISlice', () => {
       expect(result.current.expandedPanels).not.toBe(firstPanels);
       expect(result.current.expandedPanels['immutable_test_panel1']).toBe(true);
       expect(result.current.expandedPanels['immutable_test_panel2']).toBe(true);
-    });
-  });
-
-  describe('persistence behavior', () => {
-    it('should only mark dirty for persisted state (expandedPanels)', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-      });
-
-      // These should NOT mark dirty (ephemeral)
-      act(() => {
-        result.current.setActiveHookTab('response_body');
-        result.current.setActiveSubView('inputs');
-        result.current.setWsStatus({
-          connected: true,
-          reconnecting: false,
-          clientCount: 1,
-          error: null,
-        });
-      });
-
-      expect(result.current.isDirty).toBe(false);
-
-      // This SHOULD mark dirty (persisted)
-      act(() => {
-        result.current.togglePanel('testPanel');
-      });
-
-      expect(result.current.isDirty).toBe(true);
     });
   });
 

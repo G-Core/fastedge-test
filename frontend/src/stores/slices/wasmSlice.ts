@@ -53,9 +53,7 @@ export const createWasmSlice: StateCreator<
         // Clear http-wasm results
         state.httpResponse = null;
         state.httpLogs = [];
-      },
-      false,
-      'wasm/loadWasm/start'
+      }
     );
 
     try {
@@ -94,9 +92,7 @@ export const createWasmSlice: StateCreator<
           state.fileSize = fileSize; // Track file size
           state.loading = false;
           state.error = null;
-        },
-        false,
-        'wasm/loadWasm/success'
+        }
       );
     } catch (err) {
       // Handle errors
@@ -105,9 +101,7 @@ export const createWasmSlice: StateCreator<
         (state) => {
           state.error = errorMessage;
           state.loading = false;
-        },
-        false,
-        'wasm/loadWasm/error'
+        }
       );
     }
   },
@@ -124,9 +118,7 @@ export const createWasmSlice: StateCreator<
       set(
         (state) => {
           state.error = 'No WASM file loaded to reload';
-        },
-        false,
-        'wasm/reloadWasm/error'
+        }
       );
       return;
     }
@@ -151,9 +143,7 @@ export const createWasmSlice: StateCreator<
         state.loadingMode = null;
         state.loadTime = null;
         state.fileSize = null;
-      },
-      false,
-      'wasm/clearWasm'
+      }
     );
   },
 
@@ -177,9 +167,7 @@ export const createWasmSlice: StateCreator<
         // Clear http-wasm results
         state.httpResponse = null;
         state.httpLogs = [];
-      },
-      false,
-      'wasm/setWasmLoaded'
+      }
     );
   },
 
@@ -191,9 +179,7 @@ export const createWasmSlice: StateCreator<
     set(
       (state) => {
         state.loading = loading;
-      },
-      false,
-      'wasm/setLoading'
+      }
     );
   },
 
@@ -205,9 +191,7 @@ export const createWasmSlice: StateCreator<
     set(
       (state) => {
         state.error = error;
-      },
-      false,
-      'wasm/setError'
+      }
     );
   },
 });

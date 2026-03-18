@@ -46,8 +46,6 @@ export const createUISlice: StateCreator<
     set((state) => {
       // Flip the boolean value for the given panel key
       state.expandedPanels[panel] = !state.expandedPanels[panel];
-      // Mark as dirty since expandedPanels is persisted
-      state.isDirty = true;
     }),
 
   // Set WebSocket status (ephemeral - not persisted)

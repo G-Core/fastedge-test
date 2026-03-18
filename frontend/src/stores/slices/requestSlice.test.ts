@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useAppStore } from '../index';
 
@@ -50,17 +50,6 @@ describe('RequestSlice', () => {
       expect(result.current.method).toBe('GET');
     });
 
-    it('should mark dirty when method is updated', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setMethod('PUT');
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
-
     it('should handle various HTTP methods', () => {
       const { result } = renderHook(() => useAppStore());
       const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'];
@@ -86,17 +75,6 @@ describe('RequestSlice', () => {
       expect(result.current.url).toBe(newUrl);
     });
 
-    it('should mark dirty when URL is updated', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setUrl('https://test.com');
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
-
     it('should handle empty URL', () => {
       const { result } = renderHook(() => useAppStore());
 
@@ -118,17 +96,6 @@ describe('RequestSlice', () => {
       });
 
       expect(result.current.requestHeaders).toEqual(headers);
-    });
-
-    it('should mark dirty when request headers are set', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setRequestHeaders({ 'X-Custom': 'value' });
-      });
-
-      expect(result.current.isDirty).toBe(true);
     });
 
     it('should handle empty headers object', () => {
@@ -155,17 +122,6 @@ describe('RequestSlice', () => {
       expect(result.current.requestBody).toBe(body);
     });
 
-    it('should mark dirty when request body is updated', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setRequestBody('new body');
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
-
     it('should handle empty body', () => {
       const { result } = renderHook(() => useAppStore());
 
@@ -189,16 +145,6 @@ describe('RequestSlice', () => {
       expect(result.current.responseHeaders).toEqual(headers);
     });
 
-    it('should mark dirty when response headers are set', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setResponseHeaders({ 'X-Response': 'header' });
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
   });
 
   describe('setResponseBody', () => {
@@ -213,16 +159,6 @@ describe('RequestSlice', () => {
       expect(result.current.responseBody).toBe(body);
     });
 
-    it('should mark dirty when response body is updated', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setResponseBody('updated response');
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
   });
 
   describe('updateRequestHeader', () => {
@@ -245,17 +181,6 @@ describe('RequestSlice', () => {
       });
 
       expect(result.current.requestHeaders['Content-Type']).toBe('text/plain');
-    });
-
-    it('should mark dirty when header is updated', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.updateRequestHeader('X-Test', 'value');
-      });
-
-      expect(result.current.isDirty).toBe(true);
     });
 
     it('should preserve other headers when updating', () => {
@@ -285,18 +210,6 @@ describe('RequestSlice', () => {
 
       expect(result.current.requestHeaders['X-Remove']).toBeUndefined();
       expect(result.current.requestHeaders['X-Keep']).toBe('value');
-    });
-
-    it('should mark dirty when header is removed', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.setRequestHeaders({ 'X-Test': 'value' });
-        result.current.markClean();
-        result.current.removeRequestHeader('X-Test');
-      });
-
-      expect(result.current.isDirty).toBe(true);
     });
 
     it('should handle removing non-existent header', () => {
@@ -333,16 +246,6 @@ describe('RequestSlice', () => {
       expect(result.current.responseHeaders['Content-Type']).toBe('text/html');
     });
 
-    it('should mark dirty when header is updated', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.updateResponseHeader('X-Response', 'header');
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
   });
 
   describe('removeResponseHeader', () => {
@@ -358,17 +261,6 @@ describe('RequestSlice', () => {
       expect(result.current.responseHeaders['X-Keep']).toBe('value');
     });
 
-    it('should mark dirty when header is removed', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.setResponseHeaders({ 'X-Test': 'value' });
-        result.current.markClean();
-        result.current.removeResponseHeader('X-Test');
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
   });
 
   describe('resetRequest', () => {
@@ -393,16 +285,6 @@ describe('RequestSlice', () => {
       expect(result.current.responseBody).toBe('{"response": "OK"}');
     });
 
-    it('should mark dirty when reset', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.resetRequest();
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
   });
 
   describe('Immer mutations', () => {

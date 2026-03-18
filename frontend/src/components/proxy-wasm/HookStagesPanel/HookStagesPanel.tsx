@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HookCall, HookResult, LogEntry } from "../../types";
+import { HookCall, HookResult, LogEntry } from "../../../types";
 import { CollapsiblePanel } from "../../common/CollapsiblePanel";
 import { LogLevelSelector } from "../../common/LogLevelSelector";
 import { JsonDisplay } from "../../common/JsonDisplay";

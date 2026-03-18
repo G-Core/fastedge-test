@@ -78,9 +78,6 @@ export interface ConfigState {
   dotenvEnabled: boolean;
   dotenvPath: string | null;
   logLevel: number;
-  autoSave: boolean;
-  lastSaved: number | null;
-  isDirty: boolean;
 }
 
 export interface ConfigActions {
@@ -88,12 +85,9 @@ export interface ConfigActions {
   updateProperty: (key: string, value: string) => void;
   removeProperty: (key: string) => void;
   mergeProperties: (properties: Record<string, string>) => void;
-  setDotenvEnabled: (enabled: boolean) => void;
-  setDotenvPath: (path: string | null) => void;
+  setDotenvEnabled: (enabled: boolean) => Promise<void>;
+  setDotenvPath: (path: string | null) => Promise<void>;
   setLogLevel: (level: number) => void;
-  setAutoSave: (enabled: boolean) => void;
-  markDirty: () => void;
-  markClean: () => void;
   loadFromConfig: (config: TestConfig) => void;
   exportConfig: () => TestConfig;
   resetConfig: () => void;
@@ -198,6 +192,6 @@ export interface TestConfig {
 
 export interface PersistConfig {
   request: RequestState;
-  config: Omit<ConfigState, 'isDirty' | 'lastSaved' | 'autoSave'>;
+  config: ConfigState;
   ui: Pick<UIState, 'expandedPanels'>;
 }

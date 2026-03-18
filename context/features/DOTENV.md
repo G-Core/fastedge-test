@@ -84,7 +84,8 @@ export interface RunnerConfig {
 ### `dotenvEnabled`
 
 The on/off toggle. This is the user-facing setting:
-- Controlled by the debugger UI toggle (`ServerPropertiesPanel`)
+- Controlled by the standalone `DotenvPanel` component (shared by both CDN and HTTP views)
+- `setDotenvEnabled` in the store is async — it updates state and calls `PATCH /api/dotenv` immediately if a WASM is loaded
 - Persisted in `fastedge-config.test.json`
 - Sent via `POST /api/load` and `PATCH /api/dotenv` request bodies
 - Defaults to `true` in the server, `false` in integration tests
@@ -157,7 +158,29 @@ All scaffold is in place but blocked on `proxy-wasm-sdk-as` publishing `getEnv()
 - `dotenvPath` added to `ConfigState`, `configSlice`, `TestConfig`, all API call sites, and all JSON schemas
 - `wasmSlice.loadWasm` reads `dotenvPath` from store via `get()` — no signature change to `loadWasm`
 - Path change fires `applyDotenv` immediately when WASM loaded; toggle change continues to do a full reload
+
+### ✅ Completed (March 18, 2026) — DotenvPanel standalone component + bug fixes
+
+- Dotenv UI extracted from `ServerPropertiesPanel` into `frontend/src/components/common/DotenvPanel/`
+- Used by both `ProxyWasmView` (CDN) and `HttpWasmView` (HTTP) — HTTP was previously missing server sync entirely
+- `setDotenvEnabled` and `setDotenvPath` made async in `configSlice`: call `applyDotenv` internally when `wasmPath !== null`
+- Views now pass store actions directly — no more duplicated inline wrappers
+- Fixed VSCode Browse button: `openFolderPicker` and `folderPickerResult` were missing from the webview wrapper script in `DebuggerWebviewProvider.ts`
+- Description text updated to `"Load runtime variables from dotenv path when enabled:"` (generic — covers all `.env*` file formats)
+- Dead state removed: `autoSave`, `isDirty`, `lastSaved`, `markDirty`, `markClean` (unbuilt save-config feature scaffolding)
 - Server precedence: client value → `WORKSPACE_PATH` → CWD
+
+### ✅ Completed (March 2026) — `DotenvPanel` shared component (refactor)
+
+- Dotenv toggle and path UI extracted from `ServerPropertiesPanel` into a new top-level `DotenvPanel` component
+- `DotenvPanel` is shared — sits below the `Request` panel in **both CDN and HTTP debugger views**
+- CDN (`ProxyWasmView`): `DotenvPanel` → `ServerPropertiesPanel` → `HookStagesPanel`
+- HTTP (`HttpWasmView`): `DotenvPanel` → Logging panel → Response panel
+- Toggle in `DotenvPanel` header (right-aligned); expanding the panel reveals the path selector
+- Auto-expand when toggled on; auto-collapse when toggled off; user can manually override collapsed state between syncs
+- `ServerPropertiesPanel` is now properties-only (toggle and path UI fully removed)
+- HTTP view now has full dotenv support — previously absent; uses simple store setters (dotenv is a CLI arg to `fastedge-run`, takes effect on next process start)
+- Component lives at `frontend/src/components/common/DotenvPanel/` following the standard folder pattern
 
 ### 📝 Notes
 
@@ -233,7 +256,7 @@ For both runner types, CLI args/direct config takes priority over dotenv files:
 - `frontend/src/stores/slices/configSlice.ts` — `setDotenvPath`, restore/export
 - `frontend/src/stores/slices/wasmSlice.ts` — reads `dotenvPath` from store via `get()`
 - `frontend/src/api/index.ts` — `dotenvPath` forwarded in all relevant API calls
-- `frontend/src/components/proxy-wasm/ServerPropertiesPanel/` — Browse button (VSCode) / text input (browser)
+- `frontend/src/components/common/DotenvPanel/` — shared toggle + path selector (VSCode browse / browser text input); used in both CDN and HTTP views
 - `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts` — `openFolderPicker` / `folderPickerResult` handler
 - `schemas/fastedge-config.test.schema.json` — IDE intellisense for config files
 - `schemas/api-load.schema.json` — `POST /api/load` request body schema

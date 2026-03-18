@@ -6,9 +6,6 @@ const DEFAULT_CONFIG_STATE: ConfigState = {
   dotenvEnabled: true,
   dotenvPath: null,
   logLevel: 2,
-  autoSave: true,
-  lastSaved: null,
-  isDirty: false,
 };
 
 export const createConfigSlice: StateCreator<
@@ -22,59 +19,48 @@ export const createConfigSlice: StateCreator<
   setProperties: (properties) =>
     set((state) => {
       state.properties = properties;
-      state.isDirty = true;
     }),
 
   updateProperty: (key, value) =>
     set((state) => {
       state.properties[key] = value;
-      state.isDirty = true;
     }),
 
   removeProperty: (key) =>
     set((state) => {
       delete state.properties[key];
-      state.isDirty = true;
     }),
 
   mergeProperties: (properties) =>
     set((state) => {
       Object.assign(state.properties, properties);
-      state.isDirty = true;
     }),
 
-  setDotenvEnabled: (enabled) =>
+  setDotenvEnabled: async (enabled) => {
     set((state) => {
       state.dotenvEnabled = enabled;
-      state.isDirty = true;
-    }),
+    });
+    const { wasmPath, dotenvPath } = get();
+    if (wasmPath !== null) {
+      const { applyDotenv } = await import('../../api');
+      await applyDotenv(enabled, dotenvPath);
+    }
+  },
 
-  setDotenvPath: (path) =>
+  setDotenvPath: async (path) => {
     set((state) => {
       state.dotenvPath = path;
-      state.isDirty = true;
-    }),
+    });
+    const { wasmPath, dotenvEnabled } = get();
+    if (wasmPath !== null && dotenvEnabled) {
+      const { applyDotenv } = await import('../../api');
+      await applyDotenv(dotenvEnabled, path);
+    }
+  },
 
   setLogLevel: (level) =>
     set((state) => {
       state.logLevel = level;
-      state.isDirty = true;
-    }),
-
-  setAutoSave: (enabled) =>
-    set((state) => {
-      state.autoSave = enabled;
-    }),
-
-  markDirty: () =>
-    set((state) => {
-      state.isDirty = true;
-    }),
-
-  markClean: () =>
-    set((state) => {
-      state.isDirty = false;
-      state.lastSaved = Date.now();
     }),
 
   loadFromConfig: (config) =>
@@ -83,8 +69,6 @@ export const createConfigSlice: StateCreator<
       state.logLevel = config.logLevel;
       state.dotenvEnabled = config.dotenvEnabled ?? true;
       state.dotenvPath = config.dotenvPath ?? null;
-      state.isDirty = false;
-      state.lastSaved = Date.now();
 
       // Restore request fields into the correct slice based on app type
       if (config.appType === 'http-wasm') {
@@ -143,6 +127,5 @@ export const createConfigSlice: StateCreator<
   resetConfig: () =>
     set((state) => {
       Object.assign(state, DEFAULT_CONFIG_STATE);
-      state.isDirty = true;
     }),
 });

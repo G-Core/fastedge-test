@@ -1,3 +1,5 @@
+export type { WebSocketStatus } from "../hooks/useWebSocket";
+
 export interface HookCall {
   request_headers?: Record<string, string>;
   request_body?: string;
@@ -27,6 +29,7 @@ export interface HookResult {
       headers: Record<string, string>;
       body: string;
     };
+    properties?: Record<string, unknown>;
   };
   output?: {
     request: {
@@ -37,6 +40,7 @@ export interface HookResult {
       headers: Record<string, string>;
       body: string;
     };
+    properties?: Record<string, unknown>;
   };
   properties?: Record<string, unknown>;
 }

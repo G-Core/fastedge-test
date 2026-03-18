@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { CollapsiblePanel } from "../../components/common/CollapsiblePanel";
+import { DotenvPanel } from "../../components/common/DotenvPanel";
 import { RequestPanel } from "../../components/common/RequestPanel";
 import { ResponsePanel } from "../../components/common/ResponsePanel";
 import { LogsViewer } from "../../components/common/LogsViewer";
@@ -32,11 +33,15 @@ export function HttpWasmView() {
     httpResponse,
     httpLogs,
     wasmPath,
+    dotenvEnabled,
+    dotenvPath,
     setHttpMethod,
     setHttpUrl,
     setHttpRequestHeaders,
     setHttpRequestBody,
     setHttpLogs,
+    setDotenvEnabled,
+    setDotenvPath,
     executeHttpRequest,
   } = useAppStore();
 
@@ -80,6 +85,14 @@ export function HttpWasmView() {
               <div className={styles.hint}>Load a WASM file first</div>
             ) : undefined
           }
+        />
+
+        {/* Dotenv Panel */}
+        <DotenvPanel
+          enabled={dotenvEnabled}
+          onToggle={setDotenvEnabled}
+          path={dotenvPath}
+          onPathChange={setDotenvPath}
         />
 
         {/* Logging Panel */}

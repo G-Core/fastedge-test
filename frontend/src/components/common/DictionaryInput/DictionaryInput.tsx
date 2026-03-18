@@ -97,6 +97,8 @@ export function DictionaryInput({
           key: "",
           value: "",
           enabled: true,
+          placeholder: undefined,
+          readOnly: false,
         });
       }
       return newRows;
