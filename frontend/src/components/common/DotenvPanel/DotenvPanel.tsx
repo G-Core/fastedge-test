@@ -7,6 +7,8 @@ interface DotenvPanelProps {
   onToggle: (enabled: boolean) => void | Promise<void>;
   path: string | null;
   onPathChange: (path: string | null) => void | Promise<void>;
+  isExpanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
 }
 
 const isVSCode = () => window !== window.top;
@@ -16,8 +18,9 @@ export function DotenvPanel({
   onToggle,
   path,
   onPathChange,
+  isExpanded,
+  onExpandedChange,
 }: DotenvPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [resolvedRoot, setResolvedRoot] = useState<string | null>(null);
   const listenerRef = useRef<((e: MessageEvent) => void) | null>(null);
   const pathRef = useRef(path);
@@ -30,7 +33,7 @@ export function DotenvPanel({
   const handleToggle = async (newEnabled: boolean) => {
     try {
       await onToggle(newEnabled);
-      setIsExpanded(newEnabled);
+      // expansion is driven by setDotenvEnabled via expandedPanels in the store
     } catch (error) {
       // Prevent unhandled promise rejections if onToggle is async and rejects
       console.error("Failed to toggle dotenv configuration:", error);
@@ -95,7 +98,7 @@ export function DotenvPanel({
     <div className={styles.panel}>
       <div
         className={styles.header}
-        onClick={() => setIsExpanded((prev) => !prev)}
+        onClick={() => onExpandedChange(!isExpanded)}
       >
         <h3 className={styles.title}>Dotenv</h3>
         <div className={styles.headerRight}>

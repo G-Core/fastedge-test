@@ -42,6 +42,8 @@ export function HttpWasmView() {
     setDotenvEnabled,
     setDotenvPath,
     executeHttpRequest,
+    expandedPanels,
+    setPanelExpanded,
   } = useAppStore();
 
   const handleUrlChange = (newPath: string) => {
@@ -92,6 +94,8 @@ export function HttpWasmView() {
           onToggle={setDotenvEnabled}
           path={dotenv.path}
           onPathChange={setDotenvPath}
+          isExpanded={expandedPanels['dotenv'] ?? false}
+          onExpandedChange={(expanded) => setPanelExpanded('dotenv', expanded)}
         />
 
         {/* Logging Panel */}

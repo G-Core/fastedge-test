@@ -44,8 +44,13 @@ export const createUISlice: StateCreator<
   // Toggle panel expanded state (persisted)
   togglePanel: (panel) =>
     set((state) => {
-      // Flip the boolean value for the given panel key
       state.expandedPanels[panel] = !state.expandedPanels[panel];
+    }),
+
+  // Explicitly set panel expanded state
+  setPanelExpanded: (panel, expanded) =>
+    set((state) => {
+      state.expandedPanels[panel] = expanded;
     }),
 
   // Set WebSocket status (ephemeral - not persisted)

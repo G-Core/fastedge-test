@@ -120,6 +120,7 @@ export interface UIActions {
   setActiveHookTab: (tab: string) => void;
   setActiveSubView: (view: "logs" | "inputs" | "outputs") => void;
   togglePanel: (panel: string) => void;
+  setPanelExpanded: (panel: string, expanded: boolean) => void;
   setWsStatus: (status: WebSocketStatus) => void;
 }
 
