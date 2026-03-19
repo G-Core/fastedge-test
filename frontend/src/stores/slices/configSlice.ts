@@ -41,6 +41,11 @@ export const createConfigSlice: StateCreator<
   setDotenvEnabled: (enabled) => {
     set((state) => {
       state.dotenv.enabled = enabled;
+      if (enabled) {
+        state.expandedPanels['dotenv'] = true;
+      } else {
+        delete state.expandedPanels['dotenv'];
+      }
     });
     // No applyDotenv here — App.tsx reloads WASM when this changes,
     // which re-uploads with the new dotenv state. Calling applyDotenv

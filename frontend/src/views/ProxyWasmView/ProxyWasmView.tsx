@@ -37,6 +37,8 @@ export function ProxyWasmView() {
     setDotenvEnabled,
     setDotenvPath,
     setLogLevel,
+    expandedPanels,
+    setPanelExpanded,
 
     // WASM state
     wasmPath,
@@ -171,6 +173,8 @@ export function ProxyWasmView() {
         onToggle={setDotenvEnabled}
         path={dotenv.path}
         onPathChange={setDotenvPath}
+        isExpanded={expandedPanels['dotenv'] ?? false}
+        onExpandedChange={(expanded) => setPanelExpanded('dotenv', expanded)}
       />
 
       <ServerPropertiesPanel
