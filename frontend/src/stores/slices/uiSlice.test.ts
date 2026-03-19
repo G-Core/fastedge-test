@@ -201,6 +201,100 @@ describe('UISlice', () => {
     });
   });
 
+  describe('setPanelExpanded', () => {
+    it('should expand a collapsed panel when set to true', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      expect(result.current.expandedPanels['dotenv']).toBeFalsy();
+
+      act(() => {
+        result.current.setPanelExpanded('dotenv', true);
+      });
+
+      expect(result.current.expandedPanels['dotenv']).toBe(true);
+    });
+
+    it('should collapse an expanded panel when set to false', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      act(() => {
+        result.current.setPanelExpanded('dotenv', true);
+      });
+      expect(result.current.expandedPanels['dotenv']).toBe(true);
+
+      act(() => {
+        result.current.setPanelExpanded('dotenv', false);
+      });
+
+      expect(result.current.expandedPanels['dotenv']).toBe(false);
+    });
+
+    it('should be idempotent — setting true twice stays true', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      act(() => {
+        result.current.setPanelExpanded('dotenv', true);
+        result.current.setPanelExpanded('dotenv', true);
+      });
+
+      expect(result.current.expandedPanels['dotenv']).toBe(true);
+    });
+
+    it('should be idempotent — setting false on already-collapsed panel stays false', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      act(() => {
+        result.current.setPanelExpanded('dotenv', false);
+      });
+
+      expect(result.current.expandedPanels['dotenv']).toBe(false);
+    });
+
+    it('should not affect other panels', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      act(() => {
+        result.current.togglePanel('otherPanel');
+        result.current.setPanelExpanded('dotenv', true);
+      });
+
+      expect(result.current.expandedPanels['dotenv']).toBe(true);
+      expect(result.current.expandedPanels['otherPanel']).toBe(true);
+
+      act(() => {
+        result.current.setPanelExpanded('dotenv', false);
+      });
+
+      expect(result.current.expandedPanels['dotenv']).toBe(false);
+      expect(result.current.expandedPanels['otherPanel']).toBe(true);
+    });
+
+    it('should produce a new state reference (Immer immutability)', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      const before = result.current.expandedPanels;
+
+      act(() => {
+        result.current.setPanelExpanded('dotenv', true);
+      });
+
+      expect(result.current.expandedPanels).not.toBe(before);
+      expect(result.current.expandedPanels['dotenv']).toBe(true);
+    });
+
+    it('should be independent from togglePanel — explicit set overrides a toggle', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      act(() => {
+        result.current.togglePanel('dotenv'); // true
+        result.current.togglePanel('dotenv'); // false
+        result.current.setPanelExpanded('dotenv', true); // explicit true
+      });
+
+      expect(result.current.expandedPanels['dotenv']).toBe(true);
+    });
+  });
+
   describe('setWsStatus', () => {
     it('should update WebSocket status to connected', () => {
       const { result } = renderHook(() => useAppStore());

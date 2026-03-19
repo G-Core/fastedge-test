@@ -199,6 +199,54 @@ describe('ConfigSlice', () => {
       expect(result.current.dotenv.enabled).toBe(false);
     });
 
+    it('should set expandedPanels["dotenv"] to true when enabling', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      act(() => {
+        result.current.setDotenvEnabled(true);
+      });
+
+      expect(result.current.expandedPanels['dotenv']).toBe(true);
+    });
+
+    it('should remove expandedPanels["dotenv"] when disabling', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      act(() => {
+        result.current.setDotenvEnabled(true);
+        result.current.setDotenvEnabled(false);
+      });
+
+      expect(result.current.expandedPanels['dotenv']).toBeUndefined();
+    });
+
+    it('should not set expandedPanels["dotenv"] when disabling from default state', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      act(() => {
+        result.current.setDotenvEnabled(false);
+      });
+
+      expect(result.current.expandedPanels['dotenv']).toBeUndefined();
+    });
+
+    it('should not affect other expanded panels', () => {
+      const { result } = renderHook(() => useAppStore());
+
+      act(() => {
+        result.current.togglePanel('otherPanel');
+        result.current.setDotenvEnabled(true);
+      });
+
+      expect(result.current.expandedPanels['otherPanel']).toBe(true);
+
+      act(() => {
+        result.current.setDotenvEnabled(false);
+      });
+
+      expect(result.current.expandedPanels['otherPanel']).toBe(true);
+    });
+
   });
 
   describe('setLogLevel', () => {
@@ -251,6 +299,23 @@ describe('ConfigSlice', () => {
       expect(result.current.properties).toEqual(config.properties);
       expect(result.current.logLevel).toBe(5);
       expect(result.current.dotenv.enabled).toBe(false);
+    });
+
+    it('should not expand the dotenv panel even when dotenv.enabled is true in config', () => {
+      const { result } = renderHook(() => useAppStore());
+      const config: TestConfig = {
+        request: { method: 'GET', url: 'https://example.com', headers: {}, body: '' },
+        properties: {},
+        logLevel: 2,
+        dotenv: { enabled: true },
+      };
+
+      act(() => {
+        result.current.loadFromConfig(config);
+      });
+
+      expect(result.current.dotenv.enabled).toBe(true);
+      expect(result.current.expandedPanels['dotenv']).toBeFalsy();
     });
 
     it('should default dotenv.enabled to false if not provided', () => {
