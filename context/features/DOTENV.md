@@ -90,7 +90,9 @@ The on/off toggle. This is the user-facing setting:
 - `setDotenvEnabled` in the store is async — it updates state and calls `PATCH /api/dotenv` immediately if a WASM is loaded
 - Persisted in `fastedge-config.test.json` under the `dotenv` object
 - Sent via `POST /api/load` and `PATCH /api/dotenv` request bodies
-- Defaults to `true` in the server, `false` in integration tests
+- UI store default: `false` (users must opt in; panel starts collapsed)
+- Server-side API default (`POST /api/load`): `true` when `dotenv.enabled` is omitted from the request body
+- Integration tests: explicitly set `false` (unchanged)
 
 ### `dotenv.path`
 
@@ -181,7 +183,9 @@ All scaffold is in place but blocked on `proxy-wasm-sdk-as` publishing `getEnv()
 - CDN (`ProxyWasmView`): `DotenvPanel` → `ServerPropertiesPanel` → `HookStagesPanel`
 - HTTP (`HttpWasmView`): `DotenvPanel` → Logging panel → Response panel
 - Toggle in `DotenvPanel` header (right-aligned); expanding the panel reveals the path selector
-- Auto-expand when toggled on; auto-collapse when toggled off; user can manually override collapsed state between syncs
+- Panel always starts collapsed regardless of persisted `enabled` value
+- **Only user interactions change expand state**: clicking the header bar toggles expand/collapse; toggling the switch ON expands, toggling OFF collapses
+- Config loads (`loadFromConfig`) update the toggle visual state but do NOT expand or collapse the panel
 - `ServerPropertiesPanel` is now properties-only (toggle and path UI fully removed)
 - HTTP view now has full dotenv support — previously absent; uses simple store setters (dotenv is a CLI arg to `fastedge-run`, takes effect on next process start)
 - Component lives at `frontend/src/components/common/DotenvPanel/` following the standard folder pattern

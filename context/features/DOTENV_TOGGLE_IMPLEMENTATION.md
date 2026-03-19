@@ -5,20 +5,22 @@
 
 ## Overview
 
-Added a prominent toggle in the Server Properties panel header to enable/disable dotenv file loading. The toggle is ON by default and controls whether `.env`, `.env.secrets`, and `.env.variables` files are loaded when WASM binaries are loaded.
+Added a toggle to enable/disable dotenv file loading. The toggle is OFF by default (users must opt in) and controls whether `.env`, `.env.secrets`, and `.env.variables` files are loaded when WASM binaries are loaded.
+
+> **Note (March 2026)**: The toggle was originally in the `ServerPropertiesPanel` header. It was extracted into a standalone `DotenvPanel` component shared by both CDN and HTTP views. `ServerPropertiesPanel` no longer contains any dotenv UI. See `DOTENV.md` for the current architecture.
 
 ## Features
 
 ### UI Toggle
 
-- **Location**: Server Properties panel header (right side)
-- **Default**: ON (enabled by default)
+- **Location**: `DotenvPanel` header (right side) — shared by both CDN and HTTP views
+- **Default**: OFF (disabled by default — users must opt in)
 - **Visual Indicator**: Green dot (●) when enabled
 - **Behavior**: Click to toggle, doesn't collapse panel when clicked
 
 ### Backend Support
 
-- **dotenvEnabled Parameter**: Added to ProxyWasmRunner constructor (default: `true`)
+- **dotenvEnabled Parameter**: Added to ProxyWasmRunner constructor (default: `true` in the server/runner; UI store default is `false`)
 - **Dotenv Loader**: New utility at `server/utils/dotenv-loader.ts`
 - **File Support**: Loads `.env` (with prefixes), `.env.secrets`, `.env.variables`
 - **Merging**: Dotenv values merge with existing FastEdge config (dotenv takes precedence)
@@ -46,7 +48,7 @@ frontend/
         Toggle.tsx            # Component implementation
         Toggle.module.css     # CSS Module styles
         index.tsx             # Barrel export
-      ServerPropertiesPanel.tsx  # MODIFIED: Add toggle in header
+      DotenvPanel/               # Toggle now lives here (extracted March 2026)
     hooks/
       useWasm.ts              # MODIFIED: Pass dotenvEnabled to uploadWasm
     api/
@@ -63,10 +65,10 @@ frontend/
 ### For Developers (UI)
 
 1. Open the application
-2. Look at Server Properties panel header
+2. Look at the Dotenv panel (below the Request panel in both CDN and HTTP views)
 3. Toggle "Load .env files" checkbox
-   - ✅ ON (default): Dotenv files loaded when WASM loads
-   - ❌ OFF: Dotenv files ignored
+   - ✅ ON: Dotenv files loaded when WASM loads
+   - ❌ OFF (default): Dotenv files ignored
 4. Load your WASM binary
 5. Dotenv values automatically available via `proxy_get_secret` and `proxy_dictionary_get`
 
@@ -202,7 +204,7 @@ LOG_LEVEL=debug
 ```
 
 3. Start server and open UI
-4. Verify toggle is ON by default (green dot visible)
+4. Verify toggle is OFF by default (no green dot); enable it manually
 5. Load WASM binary
 6. Check server logs for:
 
@@ -239,7 +241,7 @@ curl -X POST http://localhost:5179/api/load \
 
 1. **Developer Control**: Easy toggle to enable/disable dotenv without code changes
 2. **Visual Feedback**: Green dot and info box show current state clearly
-3. **Default ON**: Sensible default for local development
+3. **Default OFF**: Opt-in — users without `.env` files aren't surprised by unexpected behaviour
 4. **AI Agent Support**: Programmatic control via API flag
 5. **Prominent Placement**: Toggle in panel header makes it easy to find
 6. **Production Parity**: Matches FastEdge runtime dotenv behavior

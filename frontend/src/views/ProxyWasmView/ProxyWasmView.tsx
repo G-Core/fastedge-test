@@ -30,8 +30,7 @@ export function ProxyWasmView() {
 
     // Config state
     properties,
-    dotenvEnabled,
-    dotenvPath,
+    dotenv,
     logLevel,
     setProperties,
     mergeProperties,
@@ -168,9 +167,9 @@ export function ProxyWasmView() {
       />
 
       <DotenvPanel
-        enabled={dotenvEnabled}
+        enabled={dotenv.enabled}
         onToggle={setDotenvEnabled}
-        path={dotenvPath}
+        path={dotenv.path}
         onPathChange={setDotenvPath}
       />
 

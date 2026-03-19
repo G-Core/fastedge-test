@@ -33,8 +33,7 @@ export function HttpWasmView() {
     httpResponse,
     httpLogs,
     wasmPath,
-    dotenvEnabled,
-    dotenvPath,
+    dotenv,
     setHttpMethod,
     setHttpUrl,
     setHttpRequestHeaders,
@@ -89,9 +88,9 @@ export function HttpWasmView() {
 
         {/* Dotenv Panel */}
         <DotenvPanel
-          enabled={dotenvEnabled}
+          enabled={dotenv.enabled}
           onToggle={setDotenvEnabled}
-          path={dotenvPath}
+          path={dotenv.path}
           onPathChange={setDotenvPath}
         />
 

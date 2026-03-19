@@ -5,7 +5,7 @@ import type { TestConfig } from '../../../api';
 import styles from './ConfigButtons.module.css';
 
 export function ConfigButtons() {
-  const { loadFromConfig, exportConfig, loadWasm, dotenvEnabled } = useAppStore();
+  const { loadFromConfig, exportConfig, loadWasm, dotenv } = useAppStore();
   const [showConfigEditor, setShowConfigEditor] = useState(false);
   const [configEditorInitial, setConfigEditorInitial] = useState<TestConfig | null>(null);
 
@@ -28,7 +28,7 @@ export function ConfigButtons() {
           loadFromConfig(config);
 
           if (config.wasm?.path) {
-            loadWasm(config.wasm.path, dotenvEnabled)
+            loadWasm(config.wasm.path, dotenv.enabled)
               .then(() => alert(`✅ Configuration loaded from ${event.data.fileName}\n🚀 WASM auto-loaded: ${config.wasm.path}`))
               .catch((wasmError: unknown) => {
                 const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
@@ -71,7 +71,7 @@ export function ConfigButtons() {
         // Auto-load WASM if path is specified
         if (config.wasm?.path) {
           try {
-            await loadWasm(config.wasm.path, dotenvEnabled);
+            await loadWasm(config.wasm.path, dotenv.enabled);
             alert(`✅ Configuration loaded from ${file.name}\n🚀 WASM auto-loaded: ${config.wasm.path}`);
           } catch (wasmError) {
             const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';

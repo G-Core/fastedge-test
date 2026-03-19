@@ -1,5 +1,54 @@
 # Proxy-WASM Runner - Changelog
 
+## March 19, 2026 - DotenvPanel: default OFF, panel always starts collapsed, config-load no longer expands
+
+### Overview
+Changed `dotenv.enabled` default from `true` to `false` — users must explicitly opt in. Fixed the toggle being stuck in the "off" state and non-functional (root cause: views were destructuring non-existent flat keys `dotenvEnabled`/`dotenvPath` from the store instead of the nested `dotenv` object). Separated panel expand/collapse from store state updates so config loads no longer auto-expand the panel.
+
+### 🎯 What Was Completed
+
+#### 1. Default `dotenv.enabled` changed to `false`
+- `configSlice.ts` `DEFAULT_CONFIG_STATE`: `enabled: true` → `enabled: false`
+- `loadFromConfig` fallback: `config.dotenv?.enabled ?? true` → `config.dotenv?.enabled ?? false`
+- Rationale: dotenv loading should be an explicit opt-in, not automatic — users who don't have `.env` files shouldn't see unexpected behaviour
+- Server-side API default (`POST /api/load`) remains `true` for backwards compatibility
+
+**Files Modified:**
+- `frontend/src/stores/slices/configSlice.ts`
+- `frontend/src/stores/slices/configSlice.test.ts` (4 assertions updated)
+
+#### 2. Bug fix: toggle stuck "off" and non-functional
+- Root cause: `App.tsx`, `HttpWasmView.tsx`, `ProxyWasmView.tsx`, and `ConfigButtons.tsx` all destructured `dotenvEnabled` and `dotenvPath` directly from `useAppStore()` — these flat keys don't exist on the store
+- The store has `dotenv: { enabled, path }` as a nested object; the flat names were always `undefined`
+- Result: toggle always rendered "off" (undefined → falsy), and `setDotenvEnabled(true)` updated the store but the component never re-rendered visually since `dotenvEnabled` stayed `undefined`
+- Fix: changed all four files to destructure `dotenv` and access `dotenv.enabled` / `dotenv.path`
+
+**Files Modified:**
+- `frontend/src/App.tsx`
+- `frontend/src/views/HttpWasmView/HttpWasmView.tsx`
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx`
+- `frontend/src/components/common/ConfigButtons/ConfigButtons.tsx`
+
+#### 3. Panel expand/collapse decoupled from store state
+- Previously: `useEffect(() => setIsExpanded(enabled), [enabled])` — any change to `dotenv.enabled` (including config loads) would expand/collapse the panel
+- Problem: loading a config file with `dotenv.enabled: true` auto-expanded the panel against the user's expectation
+- Fix: removed the `useEffect`. Added `handleToggle` that calls `onToggle(newEnabled)` AND `setIsExpanded(newEnabled)` — only user toggle clicks affect expand state
+- Panel now always starts collapsed regardless of stored `enabled` value
+- Header click still toggles expand/collapse independently
+- Config loads update the toggle visual state (`checked` prop) without touching `isExpanded`
+
+**Files Modified:**
+- `frontend/src/components/common/DotenvPanel/DotenvPanel.tsx`
+
+### 🧪 Testing
+- All tests pass: 333 frontend + 66 backend + 25 integration
+
+### 📝 Notes
+- The server-side API default (`dotenv.enabled ?? true` in `server.ts`) is intentionally unchanged — this only affects headless API callers (AI agents, npm package users), not the UI
+- Panel expand state is now fully local to the component and only changes on user interaction
+
+---
+
 ## March 18, 2026 - DotenvPanel refactor, bug fixes, dead state removal
 
 ### Overview

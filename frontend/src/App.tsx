@@ -47,7 +47,7 @@ function App() {
     setHttpRunnerPort,
 
     // Config state
-    dotenvEnabled,
+    dotenv,
     loadFromConfig,
 
     // UI state
@@ -100,11 +100,11 @@ function App() {
 
     if (wasmFile) {
       console.log(
-        `[App] Dotenv toggle changed to ${dotenvEnabled}, reloading WASM...`,
+        `[App] Dotenv toggle changed to ${dotenv.enabled}, reloading WASM...`,
       );
-      reloadWasm(dotenvEnabled);
+      reloadWasm(dotenv.enabled);
     }
-  }, [dotenvEnabled, wasmFile, reloadWasm]);
+  }, [dotenv.enabled, wasmFile, reloadWasm]);
 
   /**
    * Handle WebSocket events from server
@@ -208,7 +208,7 @@ function App() {
       case "reload_workspace_wasm":
         // Reload workspace WASM (VSCode only, triggered by F5 rebuild)
         console.log(`[App] Reloading workspace WASM: ${event.data.path}`);
-        loadWasm(event.data.path, dotenvEnabled);
+        loadWasm(event.data.path, dotenv.enabled);
         break;
 
       case "connection_status":
@@ -223,7 +223,7 @@ function App() {
    */
   const handleWasmDrop = async (fileOrPath: File | string) => {
     try {
-      await loadWasm(fileOrPath, dotenvEnabled);
+      await loadWasm(fileOrPath, dotenv.enabled);
       const fileName = typeof fileOrPath === 'string'
         ? fileOrPath.split('/').pop() || fileOrPath
         : fileOrPath.name;
@@ -254,7 +254,7 @@ function App() {
       // Auto-load WASM if path is specified
       if (config.wasm?.path) {
         try {
-          await loadWasm(config.wasm.path, dotenvEnabled);
+          await loadWasm(config.wasm.path, dotenv.enabled);
           alert(`✅ Configuration loaded from ${file.name}\n🚀 WASM auto-loaded: ${config.wasm.path}`);
         } catch (wasmError) {
             alert(`✅ Configuration loaded from ${file.name}\n⚠️ WASM path not found. Please load WASM manually.`);
@@ -283,8 +283,8 @@ function App() {
         {error && <div className="error">{error}</div>}
 
         <WasmLoader
-          onFileLoad={(file) => loadWasm(file, dotenvEnabled)}
-          onPathLoad={(path) => loadWasm(path, dotenvEnabled)}
+          onFileLoad={(file) => loadWasm(file, dotenv.enabled)}
+          onPathLoad={(path) => loadWasm(path, dotenv.enabled)}
           loading={loading}
           wasmPath={wasmPath}
           loadingMode={loadingMode}

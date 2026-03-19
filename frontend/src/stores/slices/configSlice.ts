@@ -4,7 +4,7 @@ import { AppStore, ConfigSlice, ConfigState, TestConfig } from '../types';
 const DEFAULT_CONFIG_STATE: ConfigState = {
   properties: {},
   dotenv: {
-    enabled: true,
+    enabled: false,
     path: null,
   },
   logLevel: 2,
@@ -70,7 +70,7 @@ export const createConfigSlice: StateCreator<
       state.properties = { ...config.properties };
       state.logLevel = config.logLevel;
       state.dotenv = {
-        enabled: config.dotenv?.enabled ?? true,
+        enabled: config.dotenv?.enabled ?? false,
         path: config.dotenv?.path ?? null,
       };
 

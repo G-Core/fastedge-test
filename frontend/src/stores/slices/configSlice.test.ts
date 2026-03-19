@@ -29,7 +29,7 @@ describe('ConfigSlice', () => {
       });
 
       expect(result.current.properties).toEqual({});
-      expect(result.current.dotenv.enabled).toBe(true);
+      expect(result.current.dotenv.enabled).toBe(false);
       expect(result.current.logLevel).toBe(2);
     });
   });
@@ -253,7 +253,7 @@ describe('ConfigSlice', () => {
       expect(result.current.dotenv.enabled).toBe(false);
     });
 
-    it('should default dotenv.enabled to true if not provided', () => {
+    it('should default dotenv.enabled to false if not provided', () => {
       const { result } = renderHook(() => useAppStore());
       const config: TestConfig = {
         request: {
@@ -270,7 +270,7 @@ describe('ConfigSlice', () => {
         result.current.loadFromConfig(config);
       });
 
-      expect(result.current.dotenv.enabled).toBe(true);
+      expect(result.current.dotenv.enabled).toBe(false);
     });
 
     it('should create a copy of properties, not reference', () => {
@@ -355,7 +355,7 @@ describe('ConfigSlice', () => {
       expect(config.request.method).toBe('POST');
       expect(config.properties).toEqual({});
       expect(config.logLevel).toBe(2);
-      expect(config.dotenv?.enabled).toBe(true);
+      expect(config.dotenv?.enabled).toBe(false);
     });
   });
 
@@ -371,7 +371,7 @@ describe('ConfigSlice', () => {
       });
 
       expect(result.current.properties).toEqual({});
-      expect(result.current.dotenv.enabled).toBe(true);
+      expect(result.current.dotenv.enabled).toBe(false);
       expect(result.current.logLevel).toBe(2);
     });
   });

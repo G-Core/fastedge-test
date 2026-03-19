@@ -17,14 +17,14 @@ export function DotenvPanel({
   path,
   onPathChange,
 }: DotenvPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(enabled);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [resolvedRoot, setResolvedRoot] = useState<string | null>(null);
   const listenerRef = useRef<((e: MessageEvent) => void) | null>(null);
 
-  // Sync expand state with toggle: on → expand, off → collapse
-  useEffect(() => {
-    setIsExpanded(enabled);
-  }, [enabled]);
+  const handleToggle = (newEnabled: boolean) => {
+    onToggle(newEnabled);
+    setIsExpanded(newEnabled);
+  };
 
   // Request the resolved app root from the extension on mount
   useEffect(() => {
@@ -83,7 +83,7 @@ export function DotenvPanel({
         <h3 className={styles.title}>Dotenv</h3>
         <div className={styles.headerRight}>
           <div onClick={(e) => e.stopPropagation()}>
-            <Toggle checked={enabled} onChange={onToggle} compact={true} />
+            <Toggle checked={enabled} onChange={handleToggle} compact={true} />
           </div>
           <div className={arrowClass} />
         </div>
