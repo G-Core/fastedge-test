@@ -98,13 +98,13 @@ function App() {
       return;
     }
 
-    if (wasmFile) {
+    if (wasmFile || wasmPath) {
       console.log(
         `[App] Dotenv toggle changed to ${dotenv.enabled}, reloading WASM...`,
       );
       reloadWasm(dotenv.enabled);
     }
-  }, [dotenv.enabled, wasmFile, reloadWasm]);
+  }, [dotenv.enabled, wasmFile, wasmPath, reloadWasm]);
 
   /**
    * Handle WebSocket events from server
@@ -224,7 +224,7 @@ function App() {
   const handleWasmDrop = async (fileOrPath: File | string) => {
     try {
       await loadWasm(fileOrPath, dotenv.enabled);
-      const fileName = typeof fileOrPath === 'string'
+      const fileName = typeof fileOrPath === "string"
         ? fileOrPath.split('/').pop() || fileOrPath
         : fileOrPath.name;
       console.log(`✅ WASM loaded via drag & drop: ${fileName}`);

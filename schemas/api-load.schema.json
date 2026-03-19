@@ -9,27 +9,17 @@
       "type": "string"
     },
     "dotenv": {
-      "default": {
-        "enabled": true
-      },
       "type": "object",
       "properties": {
         "enabled": {
-          "default": true,
           "type": "boolean"
         },
         "path": {
           "type": "string"
         }
       },
-      "required": [
-        "enabled"
-      ],
       "additionalProperties": false
     }
   },
-  "required": [
-    "dotenv"
-  ],
   "additionalProperties": false
 }

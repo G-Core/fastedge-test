@@ -38,15 +38,13 @@ export const createConfigSlice: StateCreator<
       Object.assign(state.properties, properties);
     }),
 
-  setDotenvEnabled: async (enabled) => {
+  setDotenvEnabled: (enabled) => {
     set((state) => {
       state.dotenv.enabled = enabled;
     });
-    const { wasmPath, dotenv } = get();
-    if (wasmPath !== null) {
-      const { applyDotenv } = await import('../../api');
-      await applyDotenv(enabled, dotenv.path);
-    }
+    // No applyDotenv here — App.tsx reloads WASM when this changes,
+    // which re-uploads with the new dotenv state. Calling applyDotenv
+    // concurrently would race with the reload and cause redundant server work.
   },
 
   setDotenvPath: async (path) => {

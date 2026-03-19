@@ -4,9 +4,9 @@ import styles from "./DotenvPanel.module.css";
 
 interface DotenvPanelProps {
   enabled: boolean;
-  onToggle: (enabled: boolean) => void;
+  onToggle: (enabled: boolean) => void | Promise<void>;
   path: string | null;
-  onPathChange: (path: string | null) => void;
+  onPathChange: (path: string | null) => void | Promise<void>;
 }
 
 const isVSCode = () => window !== window.top;
@@ -20,10 +20,21 @@ export function DotenvPanel({
   const [isExpanded, setIsExpanded] = useState(false);
   const [resolvedRoot, setResolvedRoot] = useState<string | null>(null);
   const listenerRef = useRef<((e: MessageEvent) => void) | null>(null);
+  const pathRef = useRef(path);
+  const onPathChangeRef = useRef(onPathChange);
+  useEffect(() => {
+    pathRef.current = path;
+    onPathChangeRef.current = onPathChange;
+  });
 
-  const handleToggle = (newEnabled: boolean) => {
-    onToggle(newEnabled);
-    setIsExpanded(newEnabled);
+  const handleToggle = async (newEnabled: boolean) => {
+    try {
+      await onToggle(newEnabled);
+      setIsExpanded(newEnabled);
+    } catch (error) {
+      // Prevent unhandled promise rejections if onToggle is async and rejects
+      console.error("Failed to toggle dotenv configuration:", error);
+    }
   };
 
   // Request the resolved app root from the extension on mount
@@ -35,9 +46,15 @@ export function DotenvPanel({
       const appRoot = event.data.appRoot ?? null;
       setResolvedRoot(appRoot);
       // If no explicit path is set, use the resolved root as the effective path
-      // so it is captured when saving config (and the runner uses the correct --dotenv arg)
-      if (appRoot && !path) {
-        onPathChange(appRoot);
+      // so it is captured when saving config (and the runner uses the correct --dotenv arg).
+      // Use refs to read the current path/callback, not the stale closure values.
+      if (appRoot && !pathRef.current) {
+        Promise
+          .resolve(onPathChangeRef.current(appRoot))
+          .catch((error) => {
+            // Prevent unhandled promise rejections if onPathChange is async and rejects
+            console.error("Failed to set dotenv path from app root:", error);
+          });
       }
     };
     window.addEventListener("message", handler);
@@ -108,10 +125,10 @@ export function DotenvPanel({
                 >
                   Browse…
                 </button>
-                {path && (
+                {path && path !== resolvedRoot && (
                   <button
                     className={styles.clearButton}
-                    onClick={() => onPathChange(null)}
+                    onClick={() => onPathChange(resolvedRoot)}
                     type="button"
                     title="Reset to app root"
                   >

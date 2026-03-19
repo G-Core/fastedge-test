@@ -40,7 +40,7 @@ export const createWasmSlice: StateCreator<
    * Accepts either a File object or a string path
    * Uses optimal loading strategy and automatically detects type
    */
-  loadWasm: async (fileOrPath: File | string, dotenvEnabled: boolean) => {
+  loadWasm: async (fileOrPath: File | string, dotenvEnabled: boolean, dotenvPath?: string | null) => {
     // Set loading state and reset previous results
     set(
       (state) => {
@@ -60,15 +60,15 @@ export const createWasmSlice: StateCreator<
       let result;
       let file: File | null = null;
 
-      const dotenvPath = get().dotenv.path ?? undefined;
+      const resolvedDotenvPath = (dotenvPath !== undefined ? dotenvPath : get().dotenv.path) ?? undefined;
 
       // Handle string path (direct path loading)
       if (typeof fileOrPath === 'string') {
-        result = await uploadWasmFromPath(fileOrPath, dotenvEnabled, dotenvPath);
+        result = await uploadWasmFromPath(fileOrPath, dotenvEnabled, resolvedDotenvPath);
       } else {
         // Handle File object (hybrid loading)
         file = fileOrPath;
-        result = await uploadWasm(file, dotenvEnabled, dotenvPath);
+        result = await uploadWasm(file, dotenvEnabled, resolvedDotenvPath);
       }
 
       const { path, wasmType, loadingMode, loadTime, fileSize } = result;
@@ -110,21 +110,21 @@ export const createWasmSlice: StateCreator<
    * Reload the currently loaded WASM file
    * Useful when .env changes or server needs to reload
    */
-  reloadWasm: async (dotenvEnabled: boolean) => {
-    const { wasmFile, loadWasm } = get();
-
-    // Check if there's a file to reload
-    if (!wasmFile) {
-      set(
-        (state) => {
-          state.error = 'No WASM file loaded to reload';
-        }
-      );
-      return;
-    }
+  reloadWasm: async (dotenvEnabled: boolean, dotenvPath?: string | null) => {
+    const { wasmFile, wasmPath, loadWasm } = get();
 
     // Reuse loadWasm logic (type will be auto-detected)
-    await loadWasm(wasmFile, dotenvEnabled);
+    if (wasmFile) {
+      await loadWasm(wasmFile, dotenvEnabled, dotenvPath);
+    } else if (wasmPath) {
+      await loadWasm(wasmPath, dotenvEnabled, dotenvPath);
+    } else {
+      set(
+        (state) => {
+          state.error = 'No WASM loaded to reload';
+        }
+      );
+    }
   },
 
   /**

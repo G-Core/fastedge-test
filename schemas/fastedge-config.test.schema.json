@@ -89,29 +89,21 @@
       "additionalProperties": {}
     },
     "dotenv": {
-      "default": {
-        "enabled": true
-      },
       "type": "object",
       "properties": {
         "enabled": {
-          "default": true,
           "type": "boolean"
         },
         "path": {
           "type": "string"
         }
       },
-      "required": [
-        "enabled"
-      ],
       "additionalProperties": false
     }
   },
   "required": [
     "request",
-    "properties",
-    "dotenv"
+    "properties"
   ],
   "additionalProperties": false
 }

@@ -39,10 +39,10 @@ describe('ApiLoadBodySchema', () => {
   });
 
   describe('defaults', () => {
-    it('should default dotenv.enabled to true', () => {
+    it('should leave dotenv undefined when omitted (server defaults enabled to false)', () => {
       const result = ApiLoadBodySchema.safeParse({ wasmPath: '/wasm/app.wasm' });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.dotenv.enabled).toBe(true);
+      if (result.success) expect(result.data.dotenv).toBeUndefined();
     });
 
     it('should accept explicit dotenv.enabled false', () => {
@@ -57,10 +57,10 @@ describe('ApiLoadBodySchema', () => {
       if (result.success) expect(result.data.dotenv.path).toBe('/app/fixtures');
     });
 
-    it('should default dotenv.path to undefined when omitted', () => {
-      const result = ApiLoadBodySchema.safeParse({ wasmPath: '/wasm/app.wasm' });
+    it('should leave dotenv.path undefined when dotenv is provided without path', () => {
+      const result = ApiLoadBodySchema.safeParse({ wasmPath: '/wasm/app.wasm', dotenv: { enabled: true } });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.dotenv.path).toBeUndefined();
+      if (result.success) expect(result.data.dotenv?.path).toBeUndefined();
     });
   });
 });

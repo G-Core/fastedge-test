@@ -96,10 +96,10 @@ describe('TestConfigSchema', () => {
   });
 
   describe('defaults', () => {
-    it('should default dotenv.enabled to true', () => {
+    it('should leave dotenv undefined when omitted (consuming code defaults enabled to false)', () => {
       const result = TestConfigSchema.safeParse({ request: minimalValidRequest });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.dotenv.enabled).toBe(true);
+      if (result.success) expect(result.data.dotenv).toBeUndefined();
     });
 
     it('should default properties to {}', () => {
@@ -108,10 +108,10 @@ describe('TestConfigSchema', () => {
       if (result.success) expect(result.data.properties).toEqual({});
     });
 
-    it('should default dotenv.path to undefined when omitted', () => {
-      const result = TestConfigSchema.safeParse({ request: minimalValidRequest });
+    it('should leave dotenv.path undefined when dotenv is provided without path', () => {
+      const result = TestConfigSchema.safeParse({ request: minimalValidRequest, dotenv: { enabled: true } });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.dotenv.path).toBeUndefined();
+      if (result.success) expect(result.data.dotenv?.path).toBeUndefined();
     });
   });
 

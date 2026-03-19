@@ -87,11 +87,11 @@ export interface RunnerConfig {
 
 The on/off toggle. This is the user-facing setting:
 - Controlled by the standalone `DotenvPanel` component (shared by both CDN and HTTP views)
-- `setDotenvEnabled` in the store is async — it updates state and calls `PATCH /api/dotenv` immediately if a WASM is loaded
+- `setDotenvEnabled` in the store is synchronous — it updates state only; `App.tsx` triggers a WASM reload when this changes, which re-uploads with the new dotenv state
 - Persisted in `fastedge-config.test.json` under the `dotenv` object
 - Sent via `POST /api/load` and `PATCH /api/dotenv` request bodies
 - UI store default: `false` (users must opt in; panel starts collapsed)
-- Server-side API default (`POST /api/load`): `true` when `dotenv.enabled` is omitted from the request body
+- Server-side API default (`POST /api/load`): `false` when `dotenv.enabled` is omitted from the request body (opt-in)
 - Integration tests: explicitly set `false` (unchanged)
 
 ### `dotenv.path`

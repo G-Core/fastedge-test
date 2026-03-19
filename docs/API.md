@@ -50,7 +50,7 @@ Load a WebAssembly module into the debugger. This must be called before executin
   "wasmBase64": "string",      // Base64-encoded WASM binary (provide this OR wasmPath)
   "wasmPath": "string",        // Absolute path to WASM file on disk (provide this OR wasmBase64)
   "dotenv": {                  // Dotenv configuration (optional)
-    "enabled": boolean,        //   Whether to load .env files (default: true)
+    "enabled": boolean,        //   Whether to load .env files (default: false)
     "path": "string"           //   Directory to load .env files from (optional, default: CWD)
   }
 }

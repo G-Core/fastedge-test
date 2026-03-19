@@ -381,7 +381,7 @@ describe('WasmSlice', () => {
         await result.current.reloadWasm(true);
       });
 
-      expect(result.current.error).toBe('No WASM file loaded to reload');
+      expect(result.current.error).toBe('No WASM loaded to reload');
       expect(mockUploadWasm).not.toHaveBeenCalled();
     });
 
@@ -393,7 +393,7 @@ describe('WasmSlice', () => {
       });
 
       expect(mockUploadWasm).not.toHaveBeenCalled();
-      expect(result.current.error).toBe('No WASM file loaded to reload');
+      expect(result.current.error).toBe('No WASM loaded to reload');
     });
 
     it('should handle reload errors gracefully', async () => {
