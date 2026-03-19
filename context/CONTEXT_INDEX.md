@@ -34,6 +34,7 @@ This index helps you discover relevant documentation without reading thousands o
 
 **When to read**: Implementing, debugging, or modifying a specific feature
 
+- `features/CROSS_PLATFORM.md` (~100 lines) - ⚠️ **READ BEFORE writing any process, path, signal, or shell code** — platform rules for linux-x64 / darwin-arm64 / win32, what's already handled, known limitations
 - `features/HTTP_CALL_IMPLEMENTATION.md` (~200 lines) - ✅ proxy_http_call PAUSE/resume loop, binary header format, Rust SDK init order (NEW)
 - `features/NPM_PACKAGE_PLAN.md` (~250 lines) - ✅ Full 5-phase plan for @gcoredev/fastedge-test npm package (Phases 1-4 complete)
 - `features/HTTP_WASM_IMPLEMENTATION.md` (~400 lines) - ✅ HTTP WASM runner support, FastEdge-run CLI integration, process management; detection + `runnerType` override section is current (Mar 2026); API section is outdated
@@ -171,6 +172,13 @@ Applies when: tests fail because HTTP apps are run as proxy-wasm (or vice versa)
 2. **Override via `RunnerConfig`**: Add `runnerType: 'http-wasm'` or `runnerType: 'proxy-wasm'` to bypass detection entirely.
 3. **Two runner types**: `"http-wasm"` spawns `fastedge-run http` process; `"proxy-wasm"` uses Node WebAssembly API directly.
 4. Grep `CHANGELOG.md` for `"WASM Type Detection"` for full fix history (March 5, 2026).
+
+### Writing Process, Path, Signal, or Shell Code
+
+**Triggers**: spawning child processes, killing processes, file paths, temp files, shell scripts, package.json scripts, port handling, graceful shutdown
+
+1. **Always read first**: `features/CROSS_PLATFORM.md` — rules, patterns, and what's already handled
+2. Check `server/utils/fastedge-cli.ts` as the reference implementation for platform branching
 
 ### Testing Changes
 

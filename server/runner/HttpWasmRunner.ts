@@ -5,7 +5,7 @@
  * using the FastEdge-run CLI as a process-based runner.
  */
 
-import { spawn, ChildProcess } from "child_process";
+import { spawn, execSync, ChildProcess } from "child_process";
 import type {
   IWasmRunner,
   WasmType,
@@ -424,8 +424,11 @@ export class HttpWasmRunner implements IWasmRunner {
   }
 
   /**
-   * Kill the process gracefully (SIGINT) with fallback to SIGKILL
-   * FastEdge-run responds to SIGINT for graceful shutdown
+   * Kill the process gracefully (SIGINT) with platform-specific force-kill fallback.
+   * SIGINT is sent first on all platforms — Node.js translates it for Windows.
+   * If the process does not exit within 2 seconds:
+   *   - Windows: taskkill /F /T to terminate the process tree
+   *   - Unix: SIGKILL
    */
   private async killProcess(): Promise<void> {
     if (!this.process) return;
@@ -439,15 +442,26 @@ export class HttpWasmRunner implements IWasmRunner {
       // Try graceful shutdown first with SIGINT (FastEdge-run's preferred signal)
       this.process.kill("SIGINT");
 
-      // Wait up to 2 seconds for graceful shutdown
+      // Wait up to 2 seconds for graceful shutdown, then force kill
       const timeout = setTimeout(() => {
         if (this.process && !this.process.killed) {
-          this.process.kill("SIGKILL");
+          if (process.platform === "win32") {
+            const pid = this.process.pid;
+            if (pid) {
+              try {
+                execSync(`taskkill /F /T /PID ${pid}`);
+              } catch {
+                // Process may have already exited — not an error
+              }
+            }
+          } else {
+            this.process.kill("SIGKILL");
+          }
         }
         resolve();
       }, 2000);
 
-      // Resolve immediately if process exits
+      // Resolve immediately if process exits cleanly
       this.process.once("exit", () => {
         clearTimeout(timeout);
         resolve();
