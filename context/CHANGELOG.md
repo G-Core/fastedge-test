@@ -1,5 +1,214 @@
 # Proxy-WASM Runner - Changelog
 
+## March 19, 2026 - DotenvPanel: default OFF, panel always starts collapsed, config-load no longer expands
+
+### Overview
+Changed `dotenv.enabled` default from `true` to `false` — users must explicitly opt in. Fixed the toggle being stuck in the "off" state and non-functional (root cause: views were destructuring non-existent flat keys `dotenvEnabled`/`dotenvPath` from the store instead of the nested `dotenv` object). Separated panel expand/collapse from store state updates so config loads no longer auto-expand the panel.
+
+### 🎯 What Was Completed
+
+#### 1. Default `dotenv.enabled` changed to `false`
+- `configSlice.ts` `DEFAULT_CONFIG_STATE`: `enabled: true` → `enabled: false`
+- `loadFromConfig` fallback: `config.dotenv?.enabled ?? true` → `config.dotenv?.enabled ?? false`
+- Rationale: dotenv loading should be an explicit opt-in, not automatic — users who don't have `.env` files shouldn't see unexpected behaviour
+- Server-side API default (`POST /api/load`) remains `true` for backwards compatibility
+
+**Files Modified:**
+- `frontend/src/stores/slices/configSlice.ts`
+- `frontend/src/stores/slices/configSlice.test.ts` (4 assertions updated)
+
+#### 2. Bug fix: toggle stuck "off" and non-functional
+- Root cause: `App.tsx`, `HttpWasmView.tsx`, `ProxyWasmView.tsx`, and `ConfigButtons.tsx` all destructured `dotenvEnabled` and `dotenvPath` directly from `useAppStore()` — these flat keys don't exist on the store
+- The store has `dotenv: { enabled, path }` as a nested object; the flat names were always `undefined`
+- Result: toggle always rendered "off" (undefined → falsy), and `setDotenvEnabled(true)` updated the store but the component never re-rendered visually since `dotenvEnabled` stayed `undefined`
+- Fix: changed all four files to destructure `dotenv` and access `dotenv.enabled` / `dotenv.path`
+
+**Files Modified:**
+- `frontend/src/App.tsx`
+- `frontend/src/views/HttpWasmView/HttpWasmView.tsx`
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx`
+- `frontend/src/components/common/ConfigButtons/ConfigButtons.tsx`
+
+#### 3. Panel expand/collapse decoupled from store state
+- Previously: `useEffect(() => setIsExpanded(enabled), [enabled])` — any change to `dotenv.enabled` (including config loads) would expand/collapse the panel
+- Problem: loading a config file with `dotenv.enabled: true` auto-expanded the panel against the user's expectation
+- Fix: removed the `useEffect`. Added `handleToggle` that calls `onToggle(newEnabled)` AND `setIsExpanded(newEnabled)` — only user toggle clicks affect expand state
+- Panel now always starts collapsed regardless of stored `enabled` value
+- Header click still toggles expand/collapse independently
+- Config loads update the toggle visual state (`checked` prop) without touching `isExpanded`
+
+**Files Modified:**
+- `frontend/src/components/common/DotenvPanel/DotenvPanel.tsx`
+
+### 🧪 Testing
+- All tests pass: 333 frontend + 66 backend + 25 integration
+
+### 📝 Notes
+- The server-side API default (`dotenv.enabled ?? true` in `server.ts`) is intentionally unchanged — this only affects headless API callers (AI agents, npm package users), not the UI
+- Panel expand state is now fully local to the component and only changes on user interaction
+
+---
+
+## March 18, 2026 - DotenvPanel refactor, bug fixes, dead state removal
+
+### Overview
+Refactored dotenv UI from `ServerPropertiesPanel` into a standalone `DotenvPanel` shared by both CDN and HTTP views. Fixed three bugs introduced on March 17: HTTP toggle not calling the server, VSCode Browse button silently broken, and misleading description text. Consolidated applyDotenv side-effect into the store. Removed dead state (`autoSave`, `isDirty`, `lastSaved`, `markDirty`, `markClean`).
+
+### 🎯 What Was Completed
+
+#### 1. Standalone `DotenvPanel` component
+- Extracted dotenv toggle + path UI from `ServerPropertiesPanel` into `frontend/src/components/common/DotenvPanel/DotenvPanel.tsx`
+- Used in both `ProxyWasmView` and `HttpWasmView` — single source of truth for dotenv UI
+- `ServerPropertiesPanel` now only handles server properties (no dotenv props)
+- Panel expands/collapses in sync with the toggle state
+- Description text: `"Load runtime variables from dotenv path when enabled:"` (generic, not file-format-specific)
+- Label: `"Dotenv path:"` with `"workspace root (default)"` placeholder/display
+
+**Files Modified:**
+- `frontend/src/components/common/DotenvPanel/DotenvPanel.tsx` (new)
+- `frontend/src/components/common/DotenvPanel/DotenvPanel.module.css` (new)
+- `frontend/src/components/proxy-wasm/ServerPropertiesPanel/ServerPropertiesPanel.tsx` (stripped of dotenv)
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx`
+- `frontend/src/views/HttpWasmView/HttpWasmView.tsx`
+
+#### 2. Bug fix: HTTP toggle did not call `applyDotenv`
+- `HttpWasmView` wired `onToggle={setDotenvEnabled}` — only updated React state, never called the server
+- Fixed by consolidating the side-effect into the store (see §3)
+
+#### 3. Store consolidation: `setDotenvEnabled` and `setDotenvPath` are now async
+- Both actions in `configSlice` now: update state synchronously, then call `applyDotenv` if `wasmPath !== null`
+- Both views now pass store actions directly: `onToggle={setDotenvEnabled}`, `onPathChange={setDotenvPath}`
+- No more duplicated inline async wrappers in views
+
+**Files Modified:**
+- `frontend/src/stores/slices/configSlice.ts`
+- `frontend/src/stores/types.ts` (return types updated to `Promise<void>`)
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx`
+- `frontend/src/views/HttpWasmView/HttpWasmView.tsx`
+
+#### 4. Bug fix: VSCode Browse button did nothing
+- The webview wrapper script in `DebuggerWebviewProvider.ts` was missing two message bridge handlers
+- `openFolderPicker`: outbound from iframe → extension host (never forwarded → dialog never opened)
+- `folderPickerResult`: inbound from extension host → iframe (never forwarded → result never received)
+- Same pattern as the existing `openFilePicker`/`filePickerResult` pair
+
+**Files Modified:**
+- `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts`
+
+#### 5. Dead state removal: `autoSave`, `isDirty`, `lastSaved`, `markDirty`, `markClean`
+- All five were scaffolding for a "save config to file" feature that was never built
+- Nothing outside the store ever read `isDirty`, `lastSaved`, or `autoSave`
+- `markDirty`/`markClean` were never called from UI code
+- Removed from `ConfigState`, `ConfigActions`, all slice setters, and `PersistConfig`
+- `autoSave` was also missing from `partialize` (a pre-existing bug — fixed then removed)
+- 30 tests deleted (they only tested the removed behaviour)
+
+**Files Modified:**
+- `frontend/src/stores/slices/configSlice.ts`
+- `frontend/src/stores/slices/requestSlice.ts`
+- `frontend/src/stores/slices/uiSlice.ts`
+- `frontend/src/stores/types.ts`
+- `frontend/src/stores/index.ts`
+- `frontend/src/stores/slices/configSlice.test.ts`
+- `frontend/src/stores/slices/requestSlice.test.ts`
+- `frontend/src/stores/slices/uiSlice.test.ts`
+- `frontend/src/stores/index.test.ts`
+
+### 🧪 Testing
+- All tests pass: 333 frontend + 66 backend + 25 integration (363 → 333 frontend due to deleted dead-state tests)
+
+### 📝 Notes
+- `isVSCode()` detection in `DotenvPanel` uses `window !== window.top` — VSCode webviews run as iframes so this is correct
+- The async `setDotenvEnabled`/`setDotenvPath` are safe to call from sync `act()` in tests because `wasmPath` is always `null` in tests, so the API branch never executes
+
+---
+
+## March 17, 2026 - dotenvPath UI: directory picker in ServerPropertiesPanel
+
+### Overview
+Exposed `dotenvPath` in the debugger UI so users can point the runner at a custom `.env` directory instead of only using the default workspace root. Previously `dotenvPath` was a programmatic-only config (integration tests, advanced npm usage). Now it's a first-class UI setting with the same picker pattern as Load/Save Config.
+
+### 🎯 What Was Completed
+
+#### 1. Backend — accept `dotenvPath` from client
+- `server/schemas/api.ts`: added `dotenvPath?: string` to `ApiLoadBodySchema`
+- `server/schemas/config.ts`: added `dotenvPath?: string` to `TestConfigSchema`
+- `server/server.ts` `POST /api/load`: extracts `dotenvPath` from request body; precedence → client value → `WORKSPACE_PATH` → undefined (CWD)
+- `server/server.ts` `PATCH /api/dotenv`: same precedence logic
+
+**Files Modified:**
+- `server/schemas/api.ts`
+- `server/schemas/config.ts`
+- `server/server.ts`
+
+#### 2. Frontend store — `dotenvPath` state
+- `frontend/src/stores/types.ts`: added `dotenvPath: string | null` to `ConfigState`; added `setDotenvPath` to `ConfigActions`; added `dotenvPath?: string` to `TestConfig` interface
+- `frontend/src/stores/slices/configSlice.ts`: default `null`, `setDotenvPath` action, restored in `loadFromConfig`, included in `exportConfig` (omitted when null)
+
+**Files Modified:**
+- `frontend/src/stores/types.ts`
+- `frontend/src/stores/slices/configSlice.ts`
+
+#### 3. Frontend API layer
+- `uploadWasm`, `uploadWasmFromPath`: accept optional `dotenvPath`, forwarded in request body
+- `applyDotenv`: accepts optional `dotenvPath`, forwarded in request body
+
+**Files Modified:**
+- `frontend/src/api/index.ts`
+
+#### 4. VSCode extension — `openFolderPicker` message handler
+- Added handler for `openFolderPicker` in `DebuggerWebviewProvider.ts`
+- Uses `vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false })`
+- Returns `folderPickerResult` with `folderPath` or `canceled: true`
+
+**Files Modified:**
+- `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts`
+
+#### 5. UI — dotenv path row in `ServerPropertiesPanel`
+- New props: `dotenvPath: string | null`, `onDotenvPathChange`
+- Rendered below the dotenv notice when `dotenvEnabled` is true
+- **VSCode mode**: Browse button → `postMessage({ command: 'openFolderPicker' })` → listens for `folderPickerResult`; clear button resets to workspace root
+- **Standalone browser**: text input with placeholder `"Default: workspace root"` + clear button
+- Mode detection: `window !== window.top`
+
+**Files Modified:**
+- `frontend/src/components/proxy-wasm/ServerPropertiesPanel/ServerPropertiesPanel.tsx`
+- `frontend/src/components/proxy-wasm/ServerPropertiesPanel/ServerPropertiesPanel.module.css`
+
+#### 6. Wiring — store → UI → API
+- `wasmSlice.ts` `loadWasm`: reads `dotenvPath` from store via `get()`, passes to `uploadWasm`/`uploadWasmFromPath` — no signature change
+- `ProxyWasmView.tsx`: destructures `dotenvPath`/`setDotenvPath` from store, passes to `ServerPropertiesPanel`; `onDotenvPathChange` calls `applyDotenv` immediately if WASM is loaded
+- `App.tsx`: destructures `dotenvPath` from store (available for future effects)
+
+**Files Modified:**
+- `frontend/src/stores/slices/wasmSlice.ts`
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx`
+- `frontend/src/App.tsx`
+
+#### 7. JSON schemas — `dotenvPath` field
+- Added to `schemas/fastedge-config.test.schema.json` (IDE intellisense for config files)
+- Added to `schemas/api-load.schema.json` (POST /api/load request body)
+- Added to `schemas/api-config.schema.json` (POST /api/config config object)
+
+**Files Modified:**
+- `schemas/fastedge-config.test.schema.json`
+- `schemas/api-load.schema.json`
+- `schemas/api-config.schema.json`
+
+#### 8. Tests
+- `server/__tests__/unit/schemas/api.test.ts`: added `dotenvPath` acceptance and default-undefined tests
+- `server/__tests__/unit/schemas/config.test.ts`: added `dotenvPath` acceptance and default-undefined tests
+- `frontend/src/stores/slices/wasmSlice.test.ts`: updated 6 `toHaveBeenCalledWith` assertions to include third `undefined` arg
+
+### 📝 Notes
+- `dotenvPath` precedence: client-provided → `WORKSPACE_PATH` env var (VSCode) → undefined (CWD)
+- In VSCode the Browse button opens a native OS folder dialog via the extension; in standalone browser it's a text input (browser APIs cannot return an absolute filesystem path from a folder picker)
+- `dotenvPath` change fires `applyDotenv` immediately if WASM is already loaded — no reload required
+- `dotenvEnabled` toggle change continues to trigger a full WASM reload (existing behaviour unchanged)
+- `hook-call.schema.json` intentionally not changed — `dotenvPath` is a runner concern, not a per-hook-call concern
+
+---
+
 ## March 11, 2026 - ConfigEditorModal Simplification + HTTP Config Export/Load Fix
 
 ### Overview

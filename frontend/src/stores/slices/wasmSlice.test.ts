@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAppStore } from '../index';
 import * as api from '../../api';
+import type { UploadWasmResult } from '../../api';
 
 // Mock the API module
 vi.mock('../../api', () => ({
@@ -86,7 +87,7 @@ describe('WasmSlice', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true, undefined);
       expect(mockUploadWasm).toHaveBeenCalledTimes(1);
       expect(result.current.wasmPath).toBe(mockPath);
       expect(result.current.wasmBuffer).toBe(mockArrayBuffer);
@@ -111,7 +112,7 @@ describe('WasmSlice', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false, undefined);
       expect(result.current.wasmFile).toBe(mockFile);
       expect(result.current.error).toBe(null);
     });
@@ -120,8 +121,8 @@ describe('WasmSlice', () => {
       const mockArrayBuffer = new ArrayBuffer(8);
       const mockFile = createMockFile('wasm content', 'test.wasm', mockArrayBuffer);
 
-      let resolveUpload: (value: string) => void;
-      const uploadPromise = new Promise<string>((resolve) => {
+      let resolveUpload: (value: UploadWasmResult) => void;
+      const uploadPromise = new Promise<UploadWasmResult>((resolve) => {
         resolveUpload = resolve;
       });
       mockUploadWasm.mockReturnValue(uploadPromise);
@@ -137,7 +138,7 @@ describe('WasmSlice', () => {
 
       // Resolve the upload
       await act(async () => {
-        resolveUpload!('test.wasm');
+        resolveUpload!({ path: 'test.wasm', wasmType: 'proxy-wasm', loadingMode: 'buffer', loadTime: 0, fileSize: 0 });
         await uploadPromise;
       });
 
@@ -262,7 +263,7 @@ describe('WasmSlice', () => {
 
       // uploadWasm succeeds, but arrayBuffer() fails, so error is caught
       expect(result.current.error).toBe(errorMessage);
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true, undefined);
     });
 
     it('should set loading to false even when upload fails', async () => {
@@ -320,7 +321,7 @@ describe('WasmSlice', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false, undefined);
 
       // Reset mock to verify reloadWasm call
       mockUploadWasm.mockClear();
@@ -335,7 +336,7 @@ describe('WasmSlice', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, true, undefined);
       expect(mockUploadWasm).toHaveBeenCalledTimes(1);
       expect(result.current.error).toBe(null);
     });
@@ -369,7 +370,7 @@ describe('WasmSlice', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false);
+      expect(mockUploadWasm).toHaveBeenCalledWith(mockFile, false, undefined);
       expect(result.current.error).toBe(null);
     });
 
@@ -380,7 +381,7 @@ describe('WasmSlice', () => {
         await result.current.reloadWasm(true);
       });
 
-      expect(result.current.error).toBe('No WASM file loaded to reload');
+      expect(result.current.error).toBe('No WASM loaded to reload');
       expect(mockUploadWasm).not.toHaveBeenCalled();
     });
 
@@ -392,7 +393,7 @@ describe('WasmSlice', () => {
       });
 
       expect(mockUploadWasm).not.toHaveBeenCalled();
-      expect(result.current.error).toBe('No WASM file loaded to reload');
+      expect(result.current.error).toBe('No WASM loaded to reload');
     });
 
     it('should handle reload errors gracefully', async () => {
@@ -460,7 +461,7 @@ describe('WasmSlice', () => {
       });
 
       // Verify the same file instance was used
-      expect(mockUploadWasm).toHaveBeenCalledWith(storedFile, true);
+      expect(mockUploadWasm).toHaveBeenCalledWith(storedFile, true, undefined);
       expect(result.current.wasmFile).toBe(storedFile);
     });
   });

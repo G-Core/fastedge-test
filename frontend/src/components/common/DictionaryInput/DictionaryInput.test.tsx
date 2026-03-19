@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { DictionaryInput } from './DictionaryInput';
 
 describe('DictionaryInput', () => {
-  let mockOnChange: ReturnType<typeof vi.fn>;
+  let mockOnChange: (value: Record<string, string>) => void;
 
   beforeEach(() => {
     mockOnChange = vi.fn();
@@ -538,12 +538,12 @@ describe('DictionaryInput', () => {
 
       // Read-only row should not have delete button
       const readOnlyRow = rows[0];
-      const readOnlyDeleteButton = readOnlyRow ? within(readOnlyRow).queryByTitle('Delete row') : null;
+      const readOnlyDeleteButton = readOnlyRow ? within(readOnlyRow as HTMLElement).queryByTitle('Delete row') : null;
       expect(readOnlyDeleteButton).toBeNull();
 
       // Normal row should have delete button
       const normalRow = rows[1];
-      const normalDeleteButton = normalRow ? within(normalRow).queryByTitle('Delete row') : null;
+      const normalDeleteButton = normalRow ? within(normalRow as HTMLElement).queryByTitle('Delete row') : null;
       expect(normalDeleteButton).not.toBeNull();
     });
 

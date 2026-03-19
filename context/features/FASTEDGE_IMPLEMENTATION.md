@@ -412,11 +412,11 @@ FEATURE_FLAG_NEW_UI=true
 
    ```typescript
    app.post("/api/load", async (req, res) => {
-     const { wasmBase64, dotenvPath } = req.body;
+     const { wasmBase64, dotenv } = req.body;
 
      let fastEdgeConfig: FastEdgeConfig | undefined;
-     if (dotenvPath) {
-       fastEdgeConfig = loadDotenvFiles(dotenvPath);
+     if (dotenv?.path) {
+       fastEdgeConfig = loadDotenvFiles(dotenv.path);
      }
 
      const runner = new ProxyWasmRunner(fastEdgeConfig);

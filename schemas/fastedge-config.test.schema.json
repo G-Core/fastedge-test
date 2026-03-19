@@ -88,22 +88,22 @@
       },
       "additionalProperties": {}
     },
-    "dotenvEnabled": {
-      "default": true,
-      "type": "boolean"
-    },
-    "logLevel": {
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 4,
-      "default": 0,
-      "description": "Log verbosity: 0=trace, 1=debug, 2=info, 3=warn, 4=error"
+    "dotenv": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": [
     "request",
-    "properties",
-    "dotenvEnabled"
+    "properties"
   ],
   "additionalProperties": false
 }

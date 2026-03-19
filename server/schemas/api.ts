@@ -4,7 +4,10 @@ import { RequestConfigSchema, ResponseConfigSchema, TestConfigSchema } from './c
 export const ApiLoadBodySchema = z.object({
   wasmBase64: z.string().optional(),
   wasmPath: z.string().optional(),
-  dotenvEnabled: z.boolean().optional().default(true),
+  dotenv: z.object({
+    enabled: z.boolean().optional(),
+    path: z.string().optional(),
+  }).optional(),
 }).refine(d => d.wasmBase64 || d.wasmPath, {
   message: 'Either wasmBase64 or wasmPath must be provided',
 }).refine(d => !(d.wasmBase64 && d.wasmPath), {

@@ -126,7 +126,7 @@ Exactly one of `wasmPath` or `wasmBuffer` must be provided — TypeScript enforc
 
 ```typescript
 interface RunnerConfig {
-  dotenvEnabled?: boolean; // Load .env file (default: false)
+  dotenv?: { enabled?: boolean; path?: string }; // Dotenv configuration
   enforceProductionPropertyRules?: boolean; // CDN property access control (default: true)
 }
 ```
@@ -406,14 +406,14 @@ The package ships JSON Schema files for `fastedge-config.test.json` and all API 
 ```typescript
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const schema = require("@gcoredev/fastedge-test/schemas/test-config.schema.json");
+const schema = require("@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json");
 ```
 
 Or reference them directly from `fastedge-config.test.json` for VS Code autocomplete:
 
 ```json
 {
-  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/test-config.schema.json",
+  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
   "envVars": {},
   "secrets": {},
   "properties": {}

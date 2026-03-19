@@ -55,7 +55,7 @@ interface LoadRequest {
   wasmBase64?: string;
 
   // Common options
-  dotenvEnabled?: boolean;
+  dotenv?: { enabled?: boolean; path?: string };
 }
 ```
 
@@ -66,7 +66,7 @@ curl -X POST http://localhost:5179/api/load \
   -H "Content-Type: application/json" \
   -d '{
     "wasmPath": "/workspace/target/wasm32-wasi/release/app.wasm",
-    "dotenvEnabled": true
+    "dotenv": { "enabled": true }
   }'
 ```
 
@@ -80,7 +80,7 @@ curl -X POST http://localhost:5179/api/load \
   -H "Content-Type: application/json" \
   -d "{
     \"wasmBase64\": \"$WASM_BASE64\",
-    \"dotenvEnabled\": true
+    \"dotenv\": { \"enabled\": true }
   }"
 ```
 
@@ -278,7 +278,7 @@ export async function uploadWasm(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         wasmPath: file.path,
-        dotenvEnabled
+        dotenv: { enabled: dotenvEnabled }
       }),
     }).then(r => r.json());
   }
@@ -295,7 +295,7 @@ export async function uploadWasm(
   return await fetch(`${API_BASE}/load`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wasmBase64: base64, dotenvEnabled }),
+    body: JSON.stringify({ wasmBase64: base64, dotenv: { enabled: dotenvEnabled } }),
   }).then(r => r.json());
 }
 ```

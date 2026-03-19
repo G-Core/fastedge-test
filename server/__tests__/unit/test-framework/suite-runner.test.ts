@@ -209,11 +209,12 @@ describe('runAndExit', () => {
   });
 
   afterEach(() => {
-    exitSpy.mockRestore();
+    vi.restoreAllMocks();
     vi.resetAllMocks();
   });
 
   it('exits with 0 when all tests pass', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
     const { createRunner } = await import('../../../runner/standalone');
     (createRunner as ReturnType<typeof vi.fn>).mockResolvedValue(makeMockRunner());
 
@@ -226,6 +227,7 @@ describe('runAndExit', () => {
   });
 
   it('exits with 1 when any test fails', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
     const { createRunner } = await import('../../../runner/standalone');
     (createRunner as ReturnType<typeof vi.fn>).mockResolvedValue(makeMockRunner());
 
@@ -238,6 +240,7 @@ describe('runAndExit', () => {
   });
 
   it('exits with 1 when some pass and some fail', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
     const { createRunner } = await import('../../../runner/standalone');
     (createRunner as ReturnType<typeof vi.fn>).mockResolvedValue(makeMockRunner());
 

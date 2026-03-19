@@ -49,7 +49,10 @@ Load a WebAssembly module into the debugger. This must be called before executin
 {
   "wasmBase64": "string",      // Base64-encoded WASM binary (provide this OR wasmPath)
   "wasmPath": "string",        // Absolute path to WASM file on disk (provide this OR wasmBase64)
-  "dotenvEnabled": boolean     // Enable .env file loading (optional, default: true)
+  "dotenv": {                  // Dotenv configuration (optional)
+    "enabled": boolean,        //   Whether to load .env files (default: false)
+    "path": "string"           //   Directory to load .env files from (optional, default: CWD)
+  }
 }
 ```
 
@@ -74,7 +77,7 @@ WASM_BASE64=$(base64 -w 0 ./dist/app.wasm)
 # Load into debugger
 curl -X POST http://localhost:5179/api/load \
   -H "Content-Type: application/json" \
-  -d "{\"wasmBase64\": \"$WASM_BASE64\", \"dotenvEnabled\": true}"
+  -d "{\"wasmBase64\": \"$WASM_BASE64\", \"dotenv\": {\"enabled\": true}}"
 ```
 
 **Notes**:

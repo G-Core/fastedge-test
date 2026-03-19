@@ -32,7 +32,7 @@ if (!fs.existsSync(schemasDir)) {
 // Zod v4 exposes toJSONSchema() as an instance method on each schema
 
 const zodSchemas: Array<{ name: string; schema: { toJSONSchema(): object } }> = [
-  { name: 'test-config', schema: TestConfigSchema },
+  { name: 'fastedge-config.test', schema: TestConfigSchema },
   { name: 'api-load', schema: ApiLoadBodySchema },
   { name: 'api-send', schema: ApiSendBodySchema },
   { name: 'api-call', schema: ApiCallBodySchema },

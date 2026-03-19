@@ -53,7 +53,7 @@ The application currently uses 14 separate `useState` hooks:
 - `responseHeaders`: Record<string, string> - Mock response headers
 - `responseBody`: string - Mock response payload
 - `properties`: Record<string, string> - Server properties
-- `dotenvEnabled`: boolean - Enable .env file loading
+- `dotenv`: `{ enabled: boolean; path: string | null }` - Dotenv configuration
 - `logLevel`: number - Log filtering level (0-5)
 
 **Runtime/Ephemeral State** (Should NOT be persisted):
@@ -194,7 +194,7 @@ The application currently uses 14 separate `useState` hooks:
 ```typescript
 {
   properties: Record<string, string>;
-  dotenvEnabled: boolean;
+  dotenv: { enabled: boolean; path: string | null };
   logLevel: number;
   autoSave: boolean;
   lastSaved: number | null;
@@ -347,7 +347,7 @@ export type ResultsSlice = ResultsState & ResultsActions;
 // Config Store
 export interface ConfigState {
   properties: Record<string, string>;
-  dotenvEnabled: boolean;
+  dotenv: { enabled: boolean; path: string | null };
   logLevel: number;
   autoSave: boolean;
   lastSaved: number | null;
@@ -639,7 +639,7 @@ export const useAppStore = create<AppStore>()(
             },
             config: {
               properties: state.properties,
-              dotenvEnabled: state.dotenvEnabled,
+              dotenv: state.dotenv,
               logLevel: state.logLevel,
               autoSave: state.autoSave,
             },
@@ -845,7 +845,7 @@ export const useAppStore = create<AppStore>()(
             },
             config: {
               properties: state.properties,
-              dotenvEnabled: state.dotenvEnabled,
+              dotenv: state.dotenv,
               logLevel: state.logLevel,
               autoSave: state.autoSave,
             },
@@ -1148,13 +1148,13 @@ setUrlFromWebSocket: (url) =>
    // After
    function ServerPropertiesPanel() {
      const properties = useProperties();
-     const dotenvEnabled = useAppStore((state) => state.dotenvEnabled);
+     const dotenv = useAppStore((state) => state.dotenv);
      const { setProperties, setDotenvEnabled } = useConfigActions();
 
      return (
        <CollapsiblePanel title="Server Properties">
          <PropertiesEditor value={properties} onChange={setProperties} />
-         <Toggle checked={dotenvEnabled} onChange={setDotenvEnabled} />
+         <Toggle checked={dotenv.enabled} onChange={setDotenvEnabled} />
        </CollapsiblePanel>
      );
    }

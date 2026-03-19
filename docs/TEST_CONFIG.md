@@ -21,7 +21,7 @@
 | `response.headers` | object                 | optional         | —       | CDN only — mock origin response headers                                                                      |
 | `response.body`    | string                 | optional         | —       | CDN only — mock origin response body                                                                         |
 | `properties`       | object                 | required         | `{}`    | CDN property key/value pairs (e.g. `"request.country": "US"`)                                                |
-| `dotenvEnabled`    | boolean                | required         | `true`  | Whether to load .env files on server start                                                                   |
+| `dotenv`           | object                 | optional         | `{}`    | Dotenv configuration: `{ enabled: boolean, path?: string }`                                                  |
 | `logLevel`         | integer 0–4            | optional         | `0`     | 0=trace, 1=debug, 2=info, 3=warn, 4=error                                                                    |
 
 **Note on `response`**: only relevant for CDN (proxy-wasm) apps. Provides the mock origin response that the WASM filter can inspect and modify. Omit for HTTP-WASM apps.
@@ -85,7 +85,7 @@ FASTEDGE_VAR_RSP_HEADER_CACHE_CONTROL=no-store
     "request.country": "US",
     "client.ip": "1.2.3.4"
   },
-  "dotenvEnabled": true,
+  "dotenv": { "enabled": true },
   "logLevel": 0
 }
 ```
@@ -109,7 +109,7 @@ FASTEDGE_VAR_RSP_HEADER_CACHE_CONTROL=no-store
     "body": ""
   },
   "properties": {},
-  "dotenvEnabled": true,
+  "dotenv": { "enabled": true },
   "logLevel": 0
 }
 ```

@@ -30,7 +30,7 @@ describe('Store Composition (index.ts)', () => {
 
       // Config slice
       expect(result.current.properties).toBeDefined();
-      expect(result.current.dotenvEnabled).toBeDefined();
+      expect(result.current.dotenv).toBeDefined();
       expect(result.current.setProperties).toBeDefined();
 
       // UI slice
@@ -103,7 +103,7 @@ describe('Store Composition (index.ts)', () => {
 
       expect(parsedData.state.config.properties).toEqual({ key: 'value' });
       expect(parsedData.state.config.logLevel).toBe(5);
-      expect(parsedData.state.config.dotenvEnabled).toBe(false);
+      expect(parsedData.state.config.dotenv.enabled).toBe(false);
     });
 
     it('should persist UI expandedPanels only', async () => {
@@ -190,34 +190,6 @@ describe('Store Composition (index.ts)', () => {
       expect(parsedData.state.hookResults).toBeUndefined();
       expect(parsedData.state.finalResponse).toBeUndefined();
       expect(parsedData.state.isExecuting).toBeUndefined();
-    });
-
-    it('should NOT persist isDirty, lastSaved, or autoSave from config', async () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.setProperties({ key: 'value' });
-        result.current.markDirty();
-        result.current.setAutoSave(false);
-      });
-
-      await waitFor(
-        () => {
-          expect(localStorageMock.setItem).toHaveBeenCalled();
-        },
-        { timeout: 1000 }
-      );
-
-      const savedData = localStorageMock.setItem.mock.calls[
-        localStorageMock.setItem.mock.calls.length - 1
-      ][1];
-      const parsedData = JSON.parse(savedData);
-
-      // These config fields should not be persisted
-      expect(parsedData.state.config.isDirty).toBeUndefined();
-      expect(parsedData.state.config.lastSaved).toBeUndefined();
-      expect(parsedData.state.config.autoSave).toBeDefined(); // autoSave IS persisted
-      expect(parsedData.state.config.properties).toEqual({ key: 'value' });
     });
 
     it('should use correct storage key', async () => {
@@ -316,30 +288,6 @@ describe('Store Composition (index.ts)', () => {
   });
 
   describe('cross-slice interactions', () => {
-    it('should allow request slice to interact with config slice via markDirty', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setMethod('PUT');
-      });
-
-      // Request slice mutations should call markDirty from config slice
-      expect(result.current.isDirty).toBe(true);
-    });
-
-    it('should allow UI slice to interact with config slice via markDirty', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.togglePanel('testPanel');
-      });
-
-      // UI slice panel toggle should call markDirty from config slice
-      expect(result.current.isDirty).toBe(true);
-    });
-
     it('should export config from multiple slices', () => {
       const { result } = renderHook(() => useAppStore());
 
@@ -513,18 +461,14 @@ describe('Store Composition (index.ts)', () => {
           },
           properties: { env: 'test' },
           logLevel: 4,
-          dotenvEnabled: true,
+          dotenv: { enabled: true },
         });
       });
-
-      expect(result.current.isDirty).toBe(false);
 
       // Modify config
       act(() => {
         result.current.setUrl('https://modified.com');
       });
-
-      expect(result.current.isDirty).toBe(true);
 
       // Execute
       act(() => {
@@ -535,13 +479,6 @@ describe('Store Composition (index.ts)', () => {
         });
         result.current.setIsExecuting(false);
       });
-
-      // Mark clean after save
-      act(() => {
-        result.current.markClean();
-      });
-
-      expect(result.current.isDirty).toBe(false);
 
       // Verify persistence
       await waitFor(

@@ -154,11 +154,11 @@ await runAndExit(defineTestSuite({
 ## JSON Schemas
 
 Schemas for fastedge-config.test.json and API bodies ship in the package under `schemas/`.
-Import path: `@gcoredev/fastedge-test/schemas/test-config.schema.json`
+Import path: `@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json`
 
 Use in fastedge-config.test.json for IDE autocomplete:
 ```json
-{ "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/test-config.schema.json" }
+{ "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json" }
 ```
 
 ## Full Documentation

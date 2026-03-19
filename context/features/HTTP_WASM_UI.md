@@ -40,7 +40,7 @@ The detector uses a simple, reliable approach:
 **Server (`server/server.ts`):**
 ```typescript
 // No wasmType required in request
-POST /api/load { wasmBase64, dotenvEnabled }
+POST /api/load { wasmBase64, dotenv: { enabled } }
 
 // Auto-detect type
 const wasmType = await detectWasmType(buffer);
@@ -52,7 +52,7 @@ res.json({ ok: true, wasmType });
 **Frontend (`frontend/src/stores/slices/wasmSlice.ts`):**
 ```typescript
 // Upload without type
-const { path, wasmType } = await uploadWasm(file, dotenvEnabled);
+const { path, wasmType } = await uploadWasm(file, dotenvEnabled, dotenvPath);
 
 // Store detected type
 state.wasmType = wasmType;

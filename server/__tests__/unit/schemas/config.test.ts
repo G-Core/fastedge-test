@@ -96,10 +96,10 @@ describe('TestConfigSchema', () => {
   });
 
   describe('defaults', () => {
-    it('should default dotenvEnabled to true', () => {
+    it('should leave dotenv undefined when omitted (consuming code defaults enabled to false)', () => {
       const result = TestConfigSchema.safeParse({ request: minimalValidRequest });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.dotenvEnabled).toBe(true);
+      if (result.success) expect(result.data.dotenv).toBeUndefined();
     });
 
     it('should default properties to {}', () => {
@@ -107,13 +107,19 @@ describe('TestConfigSchema', () => {
       expect(result.success).toBe(true);
       if (result.success) expect(result.data.properties).toEqual({});
     });
+
+    it('should leave dotenv.path undefined when dotenv is provided without path', () => {
+      const result = TestConfigSchema.safeParse({ request: minimalValidRequest, dotenv: { enabled: true } });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.dotenv?.path).toBeUndefined();
+    });
   });
 
   describe('optional fields', () => {
     it('should accept $schema string', () => {
       const result = TestConfigSchema.safeParse({
         request: minimalValidRequest,
-        $schema: './schemas/test-config.schema.json',
+        $schema: './schemas/fastedge-config.test.schema.json',
       });
       expect(result.success).toBe(true);
     });
@@ -124,6 +130,15 @@ describe('TestConfigSchema', () => {
         wasm: { path: '/wasm/app.wasm' },
       });
       expect(result.success).toBe(true);
+    });
+
+    it('should accept dotenv.path', () => {
+      const result = TestConfigSchema.safeParse({
+        request: minimalValidRequest,
+        dotenv: { path: '/app/fixtures' },
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.dotenv.path).toBe('/app/fixtures');
     });
 
     it('should accept properties with mixed value types', () => {

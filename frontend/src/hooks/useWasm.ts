@@ -17,7 +17,7 @@ export function useWasm() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const path = await uploadWasm(file, dotenvEnabled);
+      const { path } = await uploadWasm(file, dotenvEnabled);
 
       setWasmState({
         wasmPath: path,

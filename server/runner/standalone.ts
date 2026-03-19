@@ -41,9 +41,9 @@ export async function createRunnerFromBuffer(
 
   let runner: IWasmRunner;
   if (wasmType === "http-wasm") {
-    runner = new HttpWasmRunner(new PortManager(), config?.dotenvEnabled ?? false);
+    runner = new HttpWasmRunner(new PortManager(), config?.dotenv?.enabled ?? false);
   } else {
-    runner = new ProxyWasmRunner(undefined, config?.dotenvEnabled ?? false);
+    runner = new ProxyWasmRunner(undefined, config?.dotenv?.enabled ?? false);
   }
 
   await runner.load(buffer, config);

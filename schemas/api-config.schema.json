@@ -91,15 +91,22 @@
           },
           "additionalProperties": {}
         },
-        "dotenvEnabled": {
-          "default": true,
-          "type": "boolean"
+        "dotenv": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
         "request",
-        "properties",
-        "dotenvEnabled"
+        "properties"
       ],
       "additionalProperties": false
     }

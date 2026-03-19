@@ -3,11 +3,11 @@ import { AppStore, ConfigSlice, ConfigState, TestConfig } from '../types';
 
 const DEFAULT_CONFIG_STATE: ConfigState = {
   properties: {},
-  dotenvEnabled: true,
+  dotenv: {
+    enabled: false,
+    path: null,
+  },
   logLevel: 2,
-  autoSave: true,
-  lastSaved: null,
-  isDirty: false,
 };
 
 export const createConfigSlice: StateCreator<
@@ -21,62 +21,56 @@ export const createConfigSlice: StateCreator<
   setProperties: (properties) =>
     set((state) => {
       state.properties = properties;
-      state.isDirty = true;
     }),
 
   updateProperty: (key, value) =>
     set((state) => {
       state.properties[key] = value;
-      state.isDirty = true;
     }),
 
   removeProperty: (key) =>
     set((state) => {
       delete state.properties[key];
-      state.isDirty = true;
     }),
 
   mergeProperties: (properties) =>
     set((state) => {
       Object.assign(state.properties, properties);
-      state.isDirty = true;
     }),
 
-  setDotenvEnabled: (enabled) =>
+  setDotenvEnabled: (enabled) => {
     set((state) => {
-      state.dotenvEnabled = enabled;
-      state.isDirty = true;
-    }),
+      state.dotenv.enabled = enabled;
+    });
+    // No applyDotenv here — App.tsx reloads WASM when this changes,
+    // which re-uploads with the new dotenv state. Calling applyDotenv
+    // concurrently would race with the reload and cause redundant server work.
+  },
+
+  setDotenvPath: async (path) => {
+    set((state) => {
+      state.dotenv.path = path;
+    });
+    const { wasmPath, dotenv } = get();
+    if (wasmPath !== null && dotenv.enabled) {
+      const { applyDotenv } = await import('../../api');
+      await applyDotenv(dotenv.enabled, path);
+    }
+  },
 
   setLogLevel: (level) =>
     set((state) => {
       state.logLevel = level;
-      state.isDirty = true;
-    }),
-
-  setAutoSave: (enabled) =>
-    set((state) => {
-      state.autoSave = enabled;
-    }),
-
-  markDirty: () =>
-    set((state) => {
-      state.isDirty = true;
-    }),
-
-  markClean: () =>
-    set((state) => {
-      state.isDirty = false;
-      state.lastSaved = Date.now();
     }),
 
   loadFromConfig: (config) =>
     set((state) => {
       state.properties = { ...config.properties };
       state.logLevel = config.logLevel;
-      state.dotenvEnabled = config.dotenvEnabled ?? true;
-      state.isDirty = false;
-      state.lastSaved = Date.now();
+      state.dotenv = {
+        enabled: config.dotenv?.enabled ?? false,
+        path: config.dotenv?.path ?? null,
+      };
 
       // Restore request fields into the correct slice based on app type
       if (config.appType === 'http-wasm') {
@@ -110,7 +104,10 @@ export const createConfigSlice: StateCreator<
       },
       properties: { ...state.properties },
       logLevel: state.logLevel,
-      dotenvEnabled: state.dotenvEnabled,
+      dotenv: {
+        enabled: state.dotenv.enabled,
+        ...(state.dotenv.path ? { path: state.dotenv.path } : {}),
+      },
     };
 
     // CDN apps have a configurable mock response; HTTP apps don't
@@ -134,6 +131,5 @@ export const createConfigSlice: StateCreator<
   resetConfig: () =>
     set((state) => {
       Object.assign(state, DEFAULT_CONFIG_STATE);
-      state.isDirty = true;
     }),
 });

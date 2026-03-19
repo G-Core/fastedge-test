@@ -49,11 +49,11 @@ export class HttpWasmRunner implements IWasmRunner {
    */
   async load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void> {
     // Update config if provided
-    if (config?.dotenvEnabled !== undefined) {
-      this.dotenvEnabled = config.dotenvEnabled;
+    if (config?.dotenv?.enabled !== undefined) {
+      this.dotenvEnabled = config.dotenv.enabled;
     }
-    if (config?.dotenvPath !== undefined) {
-      this.dotenvPath = config.dotenvPath;
+    if (config?.dotenv?.path !== undefined) {
+      this.dotenvPath = config.dotenv.path;
     }
 
     // Cleanup previous process if any

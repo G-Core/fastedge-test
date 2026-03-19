@@ -1,4 +1,4 @@
-import type { HookResult, FinalResponse, WebSocketStatus } from '../types';
+import type { HookResult, FinalResponse, WebSocketStatus } from "../types";
 
 // ============================================================================
 // STORE SLICE STATE INTERFACES
@@ -35,22 +35,33 @@ export interface WasmState {
   wasmPath: string | null;
   wasmBuffer: ArrayBuffer | null;
   wasmFile: File | null;
-  wasmType: 'proxy-wasm' | 'http-wasm' | null;
+  wasmType: "proxy-wasm" | "http-wasm" | null;
   loading: boolean;
   error: string | null;
   // Loading metadata
-  loadingMode: 'path' | 'buffer' | null;
+  loadingMode: "path" | "buffer" | null;
   loadTime: number | null; // Load time in milliseconds
   fileSize: number | null; // File size in bytes
 }
 
 export interface WasmActions {
-  loadWasm: (fileOrPath: File | string, dotenvEnabled: boolean) => Promise<void>;
-  reloadWasm: (dotenvEnabled: boolean) => Promise<void>;
+  loadWasm: (
+    fileOrPath: File | string,
+    dotenvEnabled: boolean,
+    dotenvPath?: string | null,
+  ) => Promise<void>;
+  reloadWasm: (
+    dotenvEnabled: boolean,
+    dotenvPath?: string | null,
+  ) => Promise<void>;
   clearWasm: () => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  setWasmLoaded: (filename: string, wasmType: WasmState['wasmType'], fileSize: number) => void;
+  setWasmLoaded: (
+    filename: string,
+    wasmType: WasmState["wasmType"],
+    fileSize: number,
+  ) => void;
 }
 
 export type WasmSlice = WasmState & WasmActions;
@@ -75,11 +86,11 @@ export type ResultsSlice = ResultsState & ResultsActions;
 // Config Store
 export interface ConfigState {
   properties: Record<string, string>;
-  dotenvEnabled: boolean;
+  dotenv: {
+    enabled: boolean;
+    path: string | null;
+  };
   logLevel: number;
-  autoSave: boolean;
-  lastSaved: number | null;
-  isDirty: boolean;
 }
 
 export interface ConfigActions {
@@ -88,10 +99,8 @@ export interface ConfigActions {
   removeProperty: (key: string) => void;
   mergeProperties: (properties: Record<string, string>) => void;
   setDotenvEnabled: (enabled: boolean) => void;
+  setDotenvPath: (path: string | null) => Promise<void>;
   setLogLevel: (level: number) => void;
-  setAutoSave: (enabled: boolean) => void;
-  markDirty: () => void;
-  markClean: () => void;
   loadFromConfig: (config: TestConfig) => void;
   exportConfig: () => TestConfig;
   resetConfig: () => void;
@@ -102,14 +111,14 @@ export type ConfigSlice = ConfigState & ConfigActions;
 // UI Store
 export interface UIState {
   activeHookTab: string;
-  activeSubView: 'logs' | 'inputs' | 'outputs';
+  activeSubView: "logs" | "inputs" | "outputs";
   expandedPanels: Record<string, boolean>;
   wsStatus: WebSocketStatus;
 }
 
 export interface UIActions {
   setActiveHookTab: (tab: string) => void;
-  setActiveSubView: (view: 'logs' | 'inputs' | 'outputs') => void;
+  setActiveSubView: (view: "logs" | "inputs" | "outputs") => void;
   togglePanel: (panel: string) => void;
   setWsStatus: (status: WebSocketStatus) => void;
 }
@@ -120,7 +129,7 @@ export type UISlice = UIState & UIActions;
 export interface HttpWasmState {
   // Request state
   httpMethod: string;
-  httpUrl: string;  // Full URL, but host prefix (http://test.localhost/) is fixed
+  httpUrl: string; // Full URL, but host prefix (http://test.localhost/) is fixed
   httpRequestHeaders: Record<string, string>;
   httpRequestBody: string;
 
@@ -146,10 +155,10 @@ export interface HttpWasmState {
 
 export interface HttpWasmActions {
   setHttpMethod: (method: string) => void;
-  setHttpUrl: (url: string) => void;  // Full URL (host prefix is enforced)
+  setHttpUrl: (url: string) => void; // Full URL (host prefix is enforced)
   setHttpRequestHeaders: (headers: Record<string, string>) => void;
   setHttpRequestBody: (body: string) => void;
-  setHttpResponse: (response: HttpWasmState['httpResponse']) => void;
+  setHttpResponse: (response: HttpWasmState["httpResponse"]) => void;
   setHttpLogs: (logs: Array<{ level: number; message: string }>) => void;
   appendHttpLogs: (logs: Array<{ level: number; message: string }>) => void;
   setHttpIsExecuting: (isExecuting: boolean) => void;
@@ -165,14 +174,19 @@ export type HttpWasmSlice = HttpWasmState & HttpWasmActions;
 // COMBINED APP STORE
 // ============================================================================
 
-export type AppStore = RequestSlice & WasmSlice & ResultsSlice & ConfigSlice & UISlice & HttpWasmSlice;
+export type AppStore = RequestSlice &
+  WasmSlice &
+  ResultsSlice &
+  ConfigSlice &
+  UISlice &
+  HttpWasmSlice;
 
 // ============================================================================
 // UTILITY TYPES
 // ============================================================================
 
 export interface TestConfig {
-  appType?: 'proxy-wasm' | 'http-wasm';
+  appType?: "proxy-wasm" | "http-wasm";
   description?: string;
   wasm?: {
     path: string;
@@ -190,11 +204,14 @@ export interface TestConfig {
   };
   properties: Record<string, string>;
   logLevel: number;
-  dotenvEnabled?: boolean;
+  dotenv?: {
+    enabled?: boolean;
+    path?: string;
+  };
 }
 
 export interface PersistConfig {
   request: RequestState;
-  config: Omit<ConfigState, 'isDirty' | 'lastSaved' | 'autoSave'>;
-  ui: Pick<UIState, 'expandedPanels'>;
+  config: ConfigState;
+  ui: Pick<UIState, "expandedPanels">;
 }

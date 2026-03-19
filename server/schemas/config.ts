@@ -24,7 +24,10 @@ export const TestConfigSchema = z.object({
   request: RequestConfigSchema,
   response: ResponseConfigSchema.optional(),
   properties: z.record(z.string(), z.unknown()).optional().default({}),
-  dotenvEnabled: z.boolean().optional().default(true),
+  dotenv: z.object({
+    enabled: z.boolean().optional(),
+    path: z.string().optional(),
+  }).optional(),
 });
 
 export type WasmConfig = z.infer<typeof WasmConfigSchema>;

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useAppStore } from '../index';
 import type { TestConfig } from '../types';
@@ -14,7 +14,6 @@ describe('ConfigSlice', () => {
       result.current.resetRequest(); // Reset all slices for clean state
       result.current.resetConfig();
       result.current.clearResults();
-      result.current.markClean(); // Clean after reset since reset marks dirty
     });
   });
 
@@ -30,11 +29,8 @@ describe('ConfigSlice', () => {
       });
 
       expect(result.current.properties).toEqual({});
-      expect(result.current.dotenvEnabled).toBe(true);
+      expect(result.current.dotenv.enabled).toBe(false);
       expect(result.current.logLevel).toBe(2);
-      expect(result.current.autoSave).toBe(true);
-      expect(result.current.lastSaved).toBe(null); // null after reset
-      expect(result.current.isDirty).toBe(true); // Reset marks dirty
     });
   });
 
@@ -48,17 +44,6 @@ describe('ConfigSlice', () => {
       });
 
       expect(result.current.properties).toEqual(properties);
-    });
-
-    it('should mark dirty when properties are set', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setProperties({ test: 'value' });
-      });
-
-      expect(result.current.isDirty).toBe(true);
     });
 
     it('should clear previous properties when setting new ones', () => {
@@ -107,17 +92,6 @@ describe('ConfigSlice', () => {
       expect(result.current.properties['key']).toBe('value2');
     });
 
-    it('should mark dirty when property is updated', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.updateProperty('key', 'value');
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
-
     it('should preserve other properties when updating', () => {
       const { result } = renderHook(() => useAppStore());
 
@@ -145,18 +119,6 @@ describe('ConfigSlice', () => {
 
       expect(result.current.properties['remove']).toBeUndefined();
       expect(result.current.properties['keep']).toBe('value');
-    });
-
-    it('should mark dirty when property is removed', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.setProperties({ key: 'value' });
-        result.current.markClean();
-        result.current.removeProperty('key');
-      });
-
-      expect(result.current.isDirty).toBe(true);
     });
 
     it('should handle removing non-existent property', () => {
@@ -203,17 +165,6 @@ describe('ConfigSlice', () => {
       });
     });
 
-    it('should mark dirty when properties are merged', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.mergeProperties({ key: 'value' });
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
-
     it('should handle merging empty object', () => {
       const { result } = renderHook(() => useAppStore());
 
@@ -235,7 +186,7 @@ describe('ConfigSlice', () => {
         result.current.setDotenvEnabled(true);
       });
 
-      expect(result.current.dotenvEnabled).toBe(true);
+      expect(result.current.dotenv.enabled).toBe(true);
     });
 
     it('should disable dotenv', () => {
@@ -245,19 +196,9 @@ describe('ConfigSlice', () => {
         result.current.setDotenvEnabled(false);
       });
 
-      expect(result.current.dotenvEnabled).toBe(false);
+      expect(result.current.dotenv.enabled).toBe(false);
     });
 
-    it('should mark dirty when dotenv is changed', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setDotenvEnabled(false);
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
   });
 
   describe('setLogLevel', () => {
@@ -271,17 +212,6 @@ describe('ConfigSlice', () => {
       expect(result.current.logLevel).toBe(5);
     });
 
-    it('should mark dirty when log level is changed', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setLogLevel(1);
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
-
     it('should handle various log levels', () => {
       const { result } = renderHook(() => useAppStore());
       const levels = [0, 1, 2, 3, 4, 5];
@@ -292,91 +222,6 @@ describe('ConfigSlice', () => {
         });
         expect(result.current.logLevel).toBe(level);
       });
-    });
-  });
-
-  describe('setAutoSave', () => {
-    it('should enable auto-save', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.setAutoSave(false);
-        result.current.setAutoSave(true);
-      });
-
-      expect(result.current.autoSave).toBe(true);
-    });
-
-    it('should disable auto-save', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.setAutoSave(false);
-      });
-
-      expect(result.current.autoSave).toBe(false);
-    });
-
-    it('should NOT mark dirty when auto-save is changed', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.setAutoSave(false);
-      });
-
-      // Auto-save is a UI preference, not persisted config data
-      expect(result.current.isDirty).toBe(false);
-    });
-  });
-
-  describe('markDirty and markClean', () => {
-    it('should mark state as dirty', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.markDirty();
-      });
-
-      expect(result.current.isDirty).toBe(true);
-    });
-
-    it('should mark state as clean and set lastSaved timestamp', () => {
-      const { result } = renderHook(() => useAppStore());
-      const beforeTime = Date.now();
-
-      act(() => {
-        result.current.markDirty();
-        result.current.markClean();
-      });
-
-      expect(result.current.isDirty).toBe(false);
-      expect(result.current.lastSaved).not.toBe(null);
-      expect(result.current.lastSaved).toBeGreaterThanOrEqual(beforeTime);
-    });
-
-    it('should update lastSaved each time markClean is called', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-      });
-
-      const firstSave = result.current.lastSaved;
-
-      // Wait a bit to ensure timestamp changes
-      vi.useFakeTimers();
-      vi.advanceTimersByTime(100);
-
-      act(() => {
-        result.current.markClean();
-      });
-
-      const secondSave = result.current.lastSaved;
-
-      expect(secondSave).toBeGreaterThan(firstSave!);
-      vi.useRealTimers();
     });
   });
 
@@ -396,7 +241,7 @@ describe('ConfigSlice', () => {
         },
         properties: { key1: 'value1', key2: 'value2' },
         logLevel: 5,
-        dotenvEnabled: false,
+        dotenv: { enabled: false },
       };
 
       act(() => {
@@ -405,12 +250,10 @@ describe('ConfigSlice', () => {
 
       expect(result.current.properties).toEqual(config.properties);
       expect(result.current.logLevel).toBe(5);
-      expect(result.current.dotenvEnabled).toBe(false);
-      expect(result.current.isDirty).toBe(false);
-      expect(result.current.lastSaved).not.toBe(null);
+      expect(result.current.dotenv.enabled).toBe(false);
     });
 
-    it('should default dotenvEnabled to true if not provided', () => {
+    it('should default dotenv.enabled to false if not provided', () => {
       const { result } = renderHook(() => useAppStore());
       const config: TestConfig = {
         request: {
@@ -427,28 +270,7 @@ describe('ConfigSlice', () => {
         result.current.loadFromConfig(config);
       });
 
-      expect(result.current.dotenvEnabled).toBe(true);
-    });
-
-    it('should mark clean after loading config', () => {
-      const { result } = renderHook(() => useAppStore());
-      const config: TestConfig = {
-        request: {
-          method: 'GET',
-          url: 'https://example.com',
-          headers: {},
-          body: '',
-        },
-        properties: { key: 'value' },
-        logLevel: 3,
-      };
-
-      act(() => {
-        result.current.markDirty();
-        result.current.loadFromConfig(config);
-      });
-
-      expect(result.current.isDirty).toBe(false);
+      expect(result.current.dotenv.enabled).toBe(false);
     });
 
     it('should create a copy of properties, not reference', () => {
@@ -507,7 +329,7 @@ describe('ConfigSlice', () => {
         },
         properties: { prop1: 'value1' },
         logLevel: 5,
-        dotenvEnabled: false,
+        dotenv: { enabled: false },
       });
     });
 
@@ -533,7 +355,7 @@ describe('ConfigSlice', () => {
       expect(config.request.method).toBe('POST');
       expect(config.properties).toEqual({});
       expect(config.logLevel).toBe(2);
-      expect(config.dotenvEnabled).toBe(true);
+      expect(config.dotenv?.enabled).toBe(false);
     });
   });
 
@@ -545,29 +367,12 @@ describe('ConfigSlice', () => {
         result.current.setProperties({ key: 'value' });
         result.current.setDotenvEnabled(false);
         result.current.setLogLevel(5);
-        result.current.setAutoSave(false);
-        result.current.markClean();
         result.current.resetConfig();
       });
 
       expect(result.current.properties).toEqual({});
-      expect(result.current.dotenvEnabled).toBe(true);
+      expect(result.current.dotenv.enabled).toBe(false);
       expect(result.current.logLevel).toBe(2);
-      expect(result.current.autoSave).toBe(true);
-      expect(result.current.lastSaved).toBe(null);
-      // isDirty should be true after reset since reset modifies state
-      expect(result.current.isDirty).toBe(true);
-    });
-
-    it('should mark dirty when reset', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.markClean();
-        result.current.resetConfig();
-      });
-
-      expect(result.current.isDirty).toBe(true);
     });
   });
 

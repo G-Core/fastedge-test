@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { computeJsonDiff, type DiffLine } from "../../../utils/diff";
+import { computeJsonDiff } from "../../../utils/diff";
 import styles from "./JsonDisplay.module.css";
 
 interface JsonDisplayProps {

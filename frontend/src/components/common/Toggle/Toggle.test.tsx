@@ -47,7 +47,7 @@ describe('Toggle', () => {
         <Toggle checked={false} onChange={onChange} label="Test toggle" />
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       expect(toggleSwitch).toBeInTheDocument();
       expect(toggleSwitch?.className).not.toContain('checked');
     });
@@ -58,7 +58,7 @@ describe('Toggle', () => {
         <Toggle checked={true} onChange={onChange} label="Test toggle" />
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       expect(toggleSwitch).toBeInTheDocument();
       expect(toggleSwitch?.className).toContain('checked');
     });
@@ -69,7 +69,7 @@ describe('Toggle', () => {
         <Toggle checked={false} onChange={onChange} disabled={true} label="Disabled toggle" />
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       const toggleLabel = container.querySelector('[class*="toggleLabel"]');
 
       expect(toggleSwitch?.className).toContain('disabled');
@@ -82,7 +82,7 @@ describe('Toggle', () => {
         <Toggle checked={true} onChange={onChange} disabled={true} />
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
 
       expect(toggleSwitch?.className).toContain('checked');
       expect(toggleSwitch?.className).toContain('disabled');
@@ -97,7 +97,7 @@ describe('Toggle', () => {
         <Toggle checked={false} onChange={onChange} label="Test toggle" />
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       expect(toggleSwitch).toBeInTheDocument();
 
       await user.click(toggleSwitch!);
@@ -113,7 +113,7 @@ describe('Toggle', () => {
         <Toggle checked={true} onChange={onChange} label="Test toggle" />
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       expect(toggleSwitch).toBeInTheDocument();
 
       await user.click(toggleSwitch!);
@@ -129,7 +129,7 @@ describe('Toggle', () => {
         <Toggle checked={false} onChange={onChange} disabled={true} label="Disabled toggle" />
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       expect(toggleSwitch).toBeInTheDocument();
 
       await user.click(toggleSwitch!);
@@ -147,7 +147,7 @@ describe('Toggle', () => {
         </div>
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       expect(toggleSwitch).toBeInTheDocument();
 
       await user.click(toggleSwitch!);
@@ -163,7 +163,7 @@ describe('Toggle', () => {
         <Toggle checked={false} onChange={onChange} />
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       expect(toggleSwitch).toBeInTheDocument();
 
       await user.click(toggleSwitch!);
@@ -196,7 +196,7 @@ describe('Toggle', () => {
       );
 
       const label = container.querySelector('label');
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
 
       expect(label).toContainElement(toggleSwitch);
       expect(label).toContainElement(screen.getByText('Feature toggle'));
@@ -222,7 +222,7 @@ describe('Toggle', () => {
       expect(label).toBeInTheDocument();
 
       // Verify label contains the toggle switch for proper association
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       expect(label).toContainElement(toggleSwitch);
 
       // Label acts as a semantic container, the div handles clicks
@@ -237,7 +237,7 @@ describe('Toggle', () => {
 
       const labelText = screen.getByText('Click me');
       const label = labelText.closest('label');
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
 
       // Verify the semantic relationship between label and toggle
       expect(label).toContainElement(labelText);
@@ -251,7 +251,7 @@ describe('Toggle', () => {
       );
 
       const toggleLabel = container.querySelector('[class*="toggleLabel"]');
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
 
       expect(toggleLabel?.className).toContain('disabled');
       expect(toggleSwitch?.className).toContain('disabled');
@@ -276,7 +276,7 @@ describe('Toggle', () => {
         <Toggle checked={false} onChange={onChange} />
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       await user.click(toggleSwitch!);
 
       expect(onChange).toHaveBeenCalled();
@@ -288,12 +288,12 @@ describe('Toggle', () => {
         <Toggle checked={false} onChange={onChange} />
       );
 
-      let toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      let toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       expect(toggleSwitch?.className).not.toContain('checked');
 
       rerender(<Toggle checked={true} onChange={onChange} />);
 
-      toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       expect(toggleSwitch?.className).toContain('checked');
     });
 
@@ -304,7 +304,7 @@ describe('Toggle', () => {
         <Toggle checked={false} onChange={onChange} disabled={false} />
       );
 
-      let toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      let toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       await user.click(toggleSwitch!);
       expect(onChange).toHaveBeenCalledTimes(1);
 
@@ -312,7 +312,7 @@ describe('Toggle', () => {
 
       rerender(<Toggle checked={false} onChange={onChange} disabled={true} />);
 
-      toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       await user.click(toggleSwitch!);
       expect(onChange).not.toHaveBeenCalled();
     });
@@ -345,7 +345,7 @@ describe('Toggle', () => {
         <Toggle checked={false} onChange={onChange1} />
       );
 
-      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]');
+      const toggleSwitch = container.querySelector('[class*="toggleSwitch"]') as HTMLElement;
       await user.click(toggleSwitch!);
       expect(onChange1).toHaveBeenCalledTimes(1);
       expect(onChange2).not.toHaveBeenCalled();

@@ -39,16 +39,28 @@ describe('ApiLoadBodySchema', () => {
   });
 
   describe('defaults', () => {
-    it('should default dotenvEnabled to true', () => {
+    it('should leave dotenv undefined when omitted (server defaults enabled to false)', () => {
       const result = ApiLoadBodySchema.safeParse({ wasmPath: '/wasm/app.wasm' });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.dotenvEnabled).toBe(true);
+      if (result.success) expect(result.data.dotenv).toBeUndefined();
     });
 
-    it('should accept explicit dotenvEnabled false', () => {
-      const result = ApiLoadBodySchema.safeParse({ wasmPath: '/wasm/app.wasm', dotenvEnabled: false });
+    it('should accept explicit dotenv.enabled false', () => {
+      const result = ApiLoadBodySchema.safeParse({ wasmPath: '/wasm/app.wasm', dotenv: { enabled: false } });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.dotenvEnabled).toBe(false);
+      if (result.success) expect(result.data.dotenv.enabled).toBe(false);
+    });
+
+    it('should accept dotenv.path', () => {
+      const result = ApiLoadBodySchema.safeParse({ wasmPath: '/wasm/app.wasm', dotenv: { path: '/app/fixtures' } });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.dotenv.path).toBe('/app/fixtures');
+    });
+
+    it('should leave dotenv.path undefined when dotenv is provided without path', () => {
+      const result = ApiLoadBodySchema.safeParse({ wasmPath: '/wasm/app.wasm', dotenv: { enabled: true } });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.dotenv?.path).toBeUndefined();
     });
   });
 });

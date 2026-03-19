@@ -4,7 +4,7 @@
  * Displays current WebSocket connection status with visual feedback
  */
 
-import type { WebSocketStatus } from "../../hooks/useWebSocket";
+import type { WebSocketStatus } from "../../../types";
 import styles from "./ConnectionStatus.module.css";
 
 export interface ConnectionStatusProps {

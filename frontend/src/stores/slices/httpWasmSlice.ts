@@ -57,9 +57,7 @@ export const createHttpWasmSlice: StateCreator<
     set(
       (state) => {
         state.httpMethod = method;
-      },
-      false,
-      'httpWasm/setMethod'
+      }
     );
   },
 
@@ -75,9 +73,7 @@ export const createHttpWasmSlice: StateCreator<
     set(
       (state) => {
         state.httpUrl = url;
-      },
-      false,
-      'httpWasm/setUrl'
+      }
     );
   },
 
@@ -88,9 +84,7 @@ export const createHttpWasmSlice: StateCreator<
     set(
       (state) => {
         state.httpRequestHeaders = headers;
-      },
-      false,
-      'httpWasm/setRequestHeaders'
+      }
     );
   },
 
@@ -101,9 +95,7 @@ export const createHttpWasmSlice: StateCreator<
     set(
       (state) => {
         state.httpRequestBody = body;
-      },
-      false,
-      'httpWasm/setRequestBody'
+      }
     );
   },
 
@@ -114,9 +106,7 @@ export const createHttpWasmSlice: StateCreator<
     set(
       (state) => {
         state.httpResponse = response;
-      },
-      false,
-      'httpWasm/setResponse'
+      }
     );
   },
 
@@ -127,9 +117,7 @@ export const createHttpWasmSlice: StateCreator<
     set(
       (state) => {
         state.httpLogs = logs;
-      },
-      false,
-      'httpWasm/setLogs'
+      }
     );
   },
 
@@ -140,9 +128,7 @@ export const createHttpWasmSlice: StateCreator<
     set(
       (state) => {
         state.httpLogs.push(...logs);
-      },
-      false,
-      'httpWasm/appendLogs'
+      }
     );
   },
 
@@ -153,9 +139,7 @@ export const createHttpWasmSlice: StateCreator<
     set(
       (state) => {
         state.httpRunnerPort = port;
-      },
-      false,
-      'httpWasm/setRunnerPort'
+      }
     );
   },
 
@@ -166,9 +150,7 @@ export const createHttpWasmSlice: StateCreator<
     set(
       (state) => {
         state.httpIsExecuting = isExecuting;
-      },
-      false,
-      'httpWasm/setIsExecuting'
+      }
     );
   },
 
@@ -183,9 +165,7 @@ export const createHttpWasmSlice: StateCreator<
       (state) => {
         state.httpIsExecuting = true;
         state.httpLogs = [];
-      },
-      false,
-      'httpWasm/executeRequest/start'
+      }
     );
 
     try {
@@ -209,9 +189,7 @@ export const createHttpWasmSlice: StateCreator<
           };
           state.httpLogs = result.logs;
           state.httpIsExecuting = false;
-        },
-        false,
-        'httpWasm/executeRequest/success'
+        }
       );
     } catch (err) {
       // Handle errors
@@ -230,9 +208,7 @@ export const createHttpWasmSlice: StateCreator<
             { level: 4, message: `Error: ${errorMessage}` }
           ];
           state.httpIsExecuting = false;
-        },
-        false,
-        'httpWasm/executeRequest/error'
+        }
       );
     }
   },
@@ -245,9 +221,7 @@ export const createHttpWasmSlice: StateCreator<
       (state) => {
         state.httpResponse = null;
         state.httpLogs = [];
-      },
-      false,
-      'httpWasm/clearResponse'
+      }
     );
   },
 
@@ -258,9 +232,7 @@ export const createHttpWasmSlice: StateCreator<
     set(
       (state) => {
         Object.assign(state, DEFAULT_HTTP_WASM_STATE);
-      },
-      false,
-      'httpWasm/reset'
+      }
     );
   },
 });

@@ -1,0 +1,166 @@
+import { useEffect, useRef, useState } from "react";
+import { Toggle } from "../Toggle";
+import styles from "./DotenvPanel.module.css";
+
+interface DotenvPanelProps {
+  enabled: boolean;
+  onToggle: (enabled: boolean) => void | Promise<void>;
+  path: string | null;
+  onPathChange: (path: string | null) => void | Promise<void>;
+}
+
+const isVSCode = () => window !== window.top;
+
+export function DotenvPanel({
+  enabled,
+  onToggle,
+  path,
+  onPathChange,
+}: DotenvPanelProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [resolvedRoot, setResolvedRoot] = useState<string | null>(null);
+  const listenerRef = useRef<((e: MessageEvent) => void) | null>(null);
+  const pathRef = useRef(path);
+  const onPathChangeRef = useRef(onPathChange);
+  useEffect(() => {
+    pathRef.current = path;
+    onPathChangeRef.current = onPathChange;
+  });
+
+  const handleToggle = async (newEnabled: boolean) => {
+    try {
+      await onToggle(newEnabled);
+      setIsExpanded(newEnabled);
+    } catch (error) {
+      // Prevent unhandled promise rejections if onToggle is async and rejects
+      console.error("Failed to toggle dotenv configuration:", error);
+    }
+  };
+
+  // Request the resolved app root from the extension on mount
+  useEffect(() => {
+    if (!isVSCode()) return;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.command !== "appRootResult") return;
+      window.removeEventListener("message", handler);
+      const appRoot = event.data.appRoot ?? null;
+      setResolvedRoot(appRoot);
+      // If no explicit path is set, use the resolved root as the effective path
+      // so it is captured when saving config (and the runner uses the correct --dotenv arg).
+      // Use refs to read the current path/callback, not the stale closure values.
+      if (appRoot && !pathRef.current) {
+        Promise
+          .resolve(onPathChangeRef.current(appRoot))
+          .catch((error) => {
+            // Prevent unhandled promise rejections if onPathChange is async and rejects
+            console.error("Failed to set dotenv path from app root:", error);
+          });
+      }
+    };
+    window.addEventListener("message", handler);
+    window.parent.postMessage({ command: "getAppRoot" }, "*");
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
+  // Clean up message listener on unmount
+  useEffect(() => {
+    return () => {
+      if (listenerRef.current) {
+        window.removeEventListener("message", listenerRef.current);
+      }
+    };
+  }, []);
+
+  const handleBrowse = () => {
+    if (isVSCode()) {
+      if (listenerRef.current) {
+        window.removeEventListener("message", listenerRef.current);
+      }
+      const handler = (event: MessageEvent) => {
+        if (event.data?.command !== "folderPickerResult") return;
+        window.removeEventListener("message", handler);
+        listenerRef.current = null;
+        if (event.data.canceled) return;
+        onPathChange(event.data.folderPath ?? null);
+      };
+      listenerRef.current = handler;
+      window.addEventListener("message", handler);
+      window.parent.postMessage({ command: "openFolderPicker" }, "*");
+    }
+  };
+
+  const arrowClass = `${styles.arrow} ${isExpanded ? styles.expanded : ""}`;
+
+  return (
+    <div className={styles.panel}>
+      <div
+        className={styles.header}
+        onClick={() => setIsExpanded((prev) => !prev)}
+      >
+        <h3 className={styles.title}>Dotenv</h3>
+        <div className={styles.headerRight}>
+          <div onClick={(e) => e.stopPropagation()}>
+            <Toggle checked={enabled} onChange={handleToggle} compact={true} />
+          </div>
+          <div className={arrowClass} />
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className={styles.content}>
+          <p className={styles.description}>
+            Load runtime variables from dotenv path when enabled:
+          </p>
+          <div className={styles.pathRow}>
+            <label className={styles.pathLabel}>Dotenv path:</label>
+            {isVSCode() ? (
+              <>
+                <span className={styles.pathValue}>
+                  {path ?? <em className={styles.defaultPath}>{resolvedRoot ?? "app root (default)"}</em>}
+                </span>
+                <button
+                  className={styles.browseButton}
+                  onClick={handleBrowse}
+                  type="button"
+                >
+                  Browse…
+                </button>
+                {path && path !== resolvedRoot && (
+                  <button
+                    className={styles.clearButton}
+                    onClick={() => onPathChange(resolvedRoot)}
+                    type="button"
+                    title="Reset to app root"
+                  >
+                    ✕
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <input
+                  className={styles.pathInput}
+                  type="text"
+                  value={path ?? ""}
+                  onChange={(e) => onPathChange(e.target.value || null)}
+                  placeholder="app root (default)"
+                  spellCheck={false}
+                />
+                {path && (
+                  <button
+                    className={styles.clearButton}
+                    onClick={() => onPathChange(null)}
+                    type="button"
+                    title="Reset to app root"
+                  >
+                    ✕
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -41,7 +41,7 @@ describe("CDN WASM Runner - Variables and Secrets", () => {
     );
 
     runner = createTestRunnerWithDotenv();
-    await runner.load(Buffer.from(wasmBinary), { dotenvPath: FIXTURES_DIR });
+    await runner.load(Buffer.from(wasmBinary), { dotenv: { path: FIXTURES_DIR } });
   }, 30000);
 
   afterAll(async () => {

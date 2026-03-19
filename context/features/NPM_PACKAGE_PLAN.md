@@ -54,7 +54,7 @@ Made `fastedge-config.test.json` and all API request/response bodies a versioned
 **Generated Schemas (10 files):**
 ```
 schemas/
-├── test-config.schema.json     ← TestConfig (what users write)
+├── fastedge-config.test.schema.json     ← TestConfig (what users write)
 ├── api-load.schema.json        ← POST /api/load body
 ├── api-send.schema.json        ← POST /api/send body
 ├── api-call.schema.json        ← POST /api/call body
@@ -74,7 +74,7 @@ schemas/
 **$schema in fastedge-config.test.json:**
 ```json
 {
-  "$schema": "./schemas/test-config.schema.json",
+  "$schema": "./schemas/fastedge-config.test.schema.json",
   ...
 }
 ```
@@ -306,7 +306,7 @@ Add automatic npm publish to the existing `create-release.yml` workflow. On a ve
 │   └── loadConfigFile()
 │
 └── ./schemas             ← JSON Schema files
-    ├── test-config.schema.json
+    ├── fastedge-config.test.schema.json
     ├── api-*.schema.json
     └── hook-*.schema.json
 ```

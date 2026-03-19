@@ -1,6 +1,12 @@
 import express, { type Request, type Response } from "express";
 import path from "node:path";
-import { promises as fs, existsSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import {
+  promises as fs,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  unlinkSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import { WasmRunnerFactory } from "./runner/WasmRunnerFactory.js";
 import type { IWasmRunner } from "./runner/IWasmRunner.js";
@@ -71,7 +77,12 @@ app.get("/api/workspace-wasm", async (req: Request, res: Response) => {
   }
 
   try {
-    const wasmPath = path.join(workspacePath, ".fastedge", "bin", "debugger.wasm");
+    const wasmPath = path.join(
+      workspacePath,
+      ".fastedge",
+      "bin",
+      "debugger.wasm",
+    );
 
     // Check if file exists
     try {
@@ -101,14 +112,22 @@ app.post("/api/reload-workspace-wasm", async (req: Request, res: Response) => {
   }
 
   try {
-    const wasmPath = path.join(workspacePath, ".fastedge", "bin", "debugger.wasm");
+    const wasmPath = path.join(
+      workspacePath,
+      ".fastedge",
+      "bin",
+      "debugger.wasm",
+    );
 
     // Check if file exists
     try {
       await fs.stat(wasmPath);
 
       // Emit WebSocket event with <workspace> placeholder
-      stateManager.emitReloadWorkspaceWasm("<workspace>/.fastedge/bin/debugger.wasm", "system");
+      stateManager.emitReloadWorkspaceWasm(
+        "<workspace>/.fastedge/bin/debugger.wasm",
+        "system",
+      );
 
       res.json({ ok: true, path: "<workspace>/.fastedge/bin/debugger.wasm" });
     } catch {
@@ -127,7 +146,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
-  const { wasmBase64, wasmPath, dotenvEnabled } = parsed.data;
+  const { wasmBase64, wasmPath, dotenv } = parsed.data;
 
   try {
     let bufferOrPath: Buffer | string;
@@ -148,7 +167,8 @@ app.post("/api/load", async (req: Request, res: Response) => {
         const workspacePath = process.env.WORKSPACE_PATH;
         if (!workspacePath) {
           res.status(400).json({
-            error: "<workspace> placeholder only available in VSCode environment"
+            error:
+              "<workspace> placeholder only available in VSCode environment",
           });
           return;
         }
@@ -201,25 +221,39 @@ app.post("/api/load", async (req: Request, res: Response) => {
     }
 
     // Create appropriate runner based on detected type
-    currentRunner = runnerFactory.createRunner(wasmType, dotenvEnabled);
+    currentRunner = runnerFactory.createRunner(
+      wasmType,
+      dotenv?.enabled ?? false,
+    );
     currentRunner.setStateManager(stateManager);
 
-    // When running inside VSCode, the server's CWD is the extension's dist/debugger/
-    // directory — not the user's workspace. Use WORKSPACE_PATH so both runners
-    // (ProxyWasmRunner and HttpWasmRunner) look for .env/.secrets in the right place.
-    const dotenvPath = process.env.WORKSPACE_PATH || undefined;
+    // Precedence: client-provided path → WORKSPACE_PATH (VSCode) → undefined (CWD).
+    // When running inside VSCode the server CWD is the extension's dist/debugger/
+    // directory, so WORKSPACE_PATH is the fallback. A client-provided path wins.
+    const dotenvPath = dotenv?.path || process.env.WORKSPACE_PATH || undefined;
 
     // Load WASM (accepts either Buffer or string path)
-    await currentRunner.load(bufferOrPath, { dotenvEnabled, dotenvPath });
+    await currentRunner.load(bufferOrPath, {
+      dotenv: { enabled: dotenv?.enabled ?? false, path: dotenvPath },
+    });
 
     // Emit WASM loaded event — include runner port for HTTP WASM so the
     // frontend can build the live preview URL without a separate API call
     const source = (req.headers["x-source"] as any) || "ui";
-    const runnerPort = currentRunner.getType() === "http-wasm"
-      ? (currentRunner as HttpWasmRunner).getPort()
-      : null;
-    const resolvedPath = typeof bufferOrPath === 'string' ? bufferOrPath : undefined;
-    stateManager.emitWasmLoaded(fileName, fileSize, source, runnerPort, wasmType, resolvedPath);
+    const runnerPort =
+      currentRunner.getType() === "http-wasm"
+        ? (currentRunner as HttpWasmRunner).getPort()
+        : null;
+    const resolvedPath =
+      typeof bufferOrPath === "string" ? bufferOrPath : undefined;
+    stateManager.emitWasmLoaded(
+      fileName,
+      fileSize,
+      source,
+      runnerPort,
+      wasmType,
+      resolvedPath,
+    );
     res.json({ ok: true, wasmType, resolvedPath });
   } catch (error) {
     // Cleanup runner if load failed
@@ -232,20 +266,30 @@ app.post("/api/load", async (req: Request, res: Response) => {
 });
 
 app.patch("/api/dotenv", async (req: Request, res: Response) => {
-  const { enabled } = req.body ?? {};
-  if (typeof enabled !== "boolean") {
-    res.status(400).json({ ok: false, error: "enabled must be a boolean" });
+  const { dotenv } = req.body ?? {};
+  if (!dotenv || typeof dotenv.enabled !== "boolean") {
+    res
+      .status(400)
+      .json({ ok: false, error: "dotenv.enabled must be a boolean" });
     return;
   }
 
   if (!currentRunner) {
-    res.status(400).json({ ok: false, error: "No WASM module loaded. Call /api/load first." });
+    res
+      .status(400)
+      .json({
+        ok: false,
+        error: "No WASM module loaded. Call /api/load first.",
+      });
     return;
   }
 
   try {
-    const dotenvPath = process.env.WORKSPACE_PATH || undefined;
-    await currentRunner.applyDotenv(enabled, dotenvPath);
+    const dotenvPath =
+      (typeof dotenv.path === "string" ? dotenv.path : undefined) ||
+      process.env.WORKSPACE_PATH ||
+      undefined;
+    await currentRunner.applyDotenv(dotenv.enabled, dotenvPath);
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ ok: false, error: String(error) });
@@ -256,7 +300,9 @@ app.post("/api/execute", async (req: Request, res: Response) => {
   const { url, method, headers, body } = req.body ?? {};
 
   if (!currentRunner) {
-    res.status(400).json({ error: "No WASM module loaded. Call /api/load first." });
+    res
+      .status(400)
+      .json({ error: "No WASM module loaded. Call /api/load first." });
     return;
   }
 
@@ -310,7 +356,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
         response?.status || 200,
         response?.statusText || "OK",
         properties || {},
-        true // enforceProductionPropertyRules
+        true, // enforceProductionPropertyRules
       );
 
       // Emit request completed event
@@ -346,7 +392,9 @@ app.post("/api/call", async (req: Request, res: Response) => {
   const { hook, request, response, properties } = parsed.data;
 
   if (!currentRunner) {
-    res.status(400).json({ error: "No WASM module loaded. Call /api/load first." });
+    res
+      .status(400)
+      .json({ error: "No WASM module loaded. Call /api/load first." });
     return;
   }
 
@@ -373,7 +421,9 @@ app.post("/api/send", async (req: Request, res: Response) => {
   const { url, request, response, properties } = parsed.data;
 
   if (!currentRunner) {
-    res.status(400).json({ error: "No WASM module loaded. Call /api/load first." });
+    res
+      .status(400)
+      .json({ error: "No WASM module loaded. Call /api/load first." });
     return;
   }
 
@@ -389,7 +439,7 @@ app.post("/api/send", async (req: Request, res: Response) => {
       200,
       "OK",
       properties || {},
-      true // enforceProductionPropertyRules
+      true, // enforceProductionPropertyRules
     );
 
     // Emit request completed event
@@ -427,7 +477,9 @@ app.get("/api/config", async (req: Request, res: Response) => {
       ok: true,
       config,
       valid: validation.success,
-      validationErrors: validation.success ? undefined : validation.error.flatten(),
+      validationErrors: validation.success
+        ? undefined
+        : validation.error.flatten(),
     });
   } catch (error) {
     res.status(404).json({ ok: false, error: "Config file not found" });
@@ -450,7 +502,10 @@ app.post("/api/config", async (req: Request, res: Response) => {
     // Emit properties updated event if properties changed
     if (config.properties) {
       const source = (req.headers["x-source"] as any) || "ui";
-      stateManager.emitPropertiesUpdated(config.properties as Record<string, string>, source);
+      stateManager.emitPropertiesUpdated(
+        config.properties as Record<string, string>,
+        source,
+      );
     }
 
     res.json({ ok: true });
@@ -460,40 +515,43 @@ app.post("/api/config", async (req: Request, res: Response) => {
 });
 
 // Show save dialog (Electron only)
-app.post("/api/config/show-save-dialog", async (req: Request, res: Response) => {
-  try {
-    const { suggestedName } = req.body ?? {};
+app.post(
+  "/api/config/show-save-dialog",
+  async (req: Request, res: Response) => {
+    try {
+      const { suggestedName } = req.body ?? {};
 
-    if (!electronDialog) {
-      res.status(501).json({
-        ok: false,
-        error: "Dialog API not available (not running in Electron)",
-        fallbackRequired: true
+      if (!electronDialog) {
+        res.status(501).json({
+          ok: false,
+          error: "Dialog API not available (not running in Electron)",
+          fallbackRequired: true,
+        });
+        return;
+      }
+
+      // Show Electron save dialog
+      const result = await electronDialog.showSaveDialog({
+        title: "Save Config File",
+        defaultPath: suggestedName || "fastedge-config.test.json",
+        filters: [
+          { name: "JSON Files", extensions: ["json"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
       });
-      return;
+
+      if (result.canceled || !result.filePath) {
+        res.json({ ok: true, canceled: true });
+        return;
+      }
+
+      res.json({ ok: true, filePath: result.filePath });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: String(error) });
     }
-
-    // Show Electron save dialog
-    const result = await electronDialog.showSaveDialog({
-      title: "Save Config File",
-      defaultPath: suggestedName || "fastedge-config.test.json",
-      filters: [
-        { name: "JSON Files", extensions: ["json"] },
-        { name: "All Files", extensions: ["*"] }
-      ],
-      properties: ["createDirectory", "showOverwriteConfirmation"]
-    });
-
-    if (result.canceled || !result.filePath) {
-      res.json({ ok: true, canceled: true });
-      return;
-    }
-
-    res.json({ ok: true, filePath: result.filePath });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: String(error) });
-  }
-});
+  },
+);
 
 // Save config to a specific file path
 app.post("/api/config/save-as", async (req: Request, res: Response) => {
@@ -539,7 +597,12 @@ app.post("/api/config/save-as", async (req: Request, res: Response) => {
 
 // Serve JSON Schema files for API consumers and agents
 app.get("/api/schema/:name", (req: Request, res: Response) => {
-  const schemaPath = path.join(__dirname, "..", "schemas", `${req.params.name}.schema.json`);
+  const schemaPath = path.join(
+    __dirname,
+    "..",
+    "schemas",
+    `${req.params.name}.schema.json`,
+  );
   if (!existsSync(schemaPath)) {
     res.status(404).json({ ok: false, error: "Schema not found" });
     return;

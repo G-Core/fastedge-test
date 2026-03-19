@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PropertyResolver } from "../../../runner/PropertyResolver";
 import type { HeaderMap } from "../../../runner/types";
 
@@ -243,7 +243,9 @@ describe("PropertyResolver", () => {
 
   describe("URL parsing error handling", () => {
     it("should handle malformed URL with fallback values", () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
       resolver.extractRuntimePropertiesFromUrl("not-a-valid-url");
+      vi.restoreAllMocks();
       expect(resolver.resolve("request.url")).toBe("not-a-valid-url");
       expect(resolver.resolve("request.host")).toBe("localhost");
       expect(resolver.resolve("request.path")).toBe("/");
@@ -252,7 +254,9 @@ describe("PropertyResolver", () => {
     });
 
     it("should handle empty URL string", () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
       resolver.extractRuntimePropertiesFromUrl("");
+      vi.restoreAllMocks();
       // Empty URL falls back to constructed URL with localhost
       // Since requestUrl is empty, it constructs from components
       expect(resolver.resolve("request.url")).toBe("https://localhost/");
@@ -261,7 +265,9 @@ describe("PropertyResolver", () => {
     });
 
     it("should handle URL with only protocol", () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
       resolver.extractRuntimePropertiesFromUrl("https://");
+      vi.restoreAllMocks();
       expect(resolver.resolve("request.url")).toBe("https://");
       expect(resolver.resolve("request.host")).toBe("localhost");
     });

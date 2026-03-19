@@ -99,6 +99,7 @@ export interface UploadWasmResult {
 export async function uploadWasm(
   file: File,
   dotenvEnabled: boolean = true,
+  dotenvPath?: string | null,
 ): Promise<UploadWasmResult> {
   const startTime = performance.now();
   const fileSize = file.size;
@@ -118,7 +119,7 @@ export async function uploadWasm(
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ wasmPath: filePath, dotenvEnabled }),
+          body: JSON.stringify({ wasmPath: filePath, dotenv: { enabled: dotenvEnabled, ...(dotenvPath ? { path: dotenvPath } : {}) } }),
         });
 
         if (!response.ok) {
@@ -171,7 +172,7 @@ export async function uploadWasm(
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ wasmBase64: base64, dotenvEnabled }),
+    body: JSON.stringify({ wasmBase64: base64, dotenv: { enabled: dotenvEnabled, ...(dotenvPath ? { path: dotenvPath } : {}) } }),
   });
 
   if (!response.ok) {
@@ -211,6 +212,7 @@ export async function uploadWasm(
 export async function uploadWasmFromPath(
   wasmPath: string,
   dotenvEnabled: boolean = true,
+  dotenvPath?: string | null,
 ): Promise<UploadWasmResult> {
   const startTime = performance.now();
 
@@ -221,7 +223,7 @@ export async function uploadWasmFromPath(
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ wasmPath, dotenvEnabled }),
+    body: JSON.stringify({ wasmPath, dotenv: { enabled: dotenvEnabled, ...(dotenvPath ? { path: dotenvPath } : {}) } }),
   });
 
   if (!response.ok) {
@@ -368,6 +370,10 @@ export interface TestConfig {
   };
   properties: Record<string, string>;
   logLevel: number;
+  dotenv?: {
+    enabled?: boolean;
+    path?: string;
+  };
 }
 
 export async function loadConfig(): Promise<TestConfig> {
@@ -480,11 +486,11 @@ export async function executeHttpWasm(
  * For proxy-wasm: resets stores and re-loads .env files in-place.
  * For http-wasm: restarts the fastedge-run process with the updated flag.
  */
-export async function applyDotenv(enabled: boolean): Promise<void> {
+export async function applyDotenv(enabled: boolean, dotenvPath?: string | null): Promise<void> {
   const response = await fetch(`${API_BASE}/dotenv`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ enabled }),
+    body: JSON.stringify({ dotenv: { enabled, ...(dotenvPath ? { path: dotenvPath } : {}) } }),
   });
 
   if (!response.ok) {
