@@ -666,6 +666,12 @@ if ((require as any).main === module) {
   startServer();
 }
 
+// Port file cleanup on exit — covers Windows where SIGTERM is never sent.
+// The unlinkSync in deletePortFile is already try/catch so double-deletion is safe.
+process.on("exit", () => {
+  deletePortFile();
+});
+
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   console.log("SIGTERM received, closing server...");

@@ -5,7 +5,7 @@
  * using the FastEdge-run CLI as a process-based runner.
  */
 
-import { spawn, ChildProcess } from "child_process";
+import { spawn, execSync, ChildProcess } from "child_process";
 import type {
   IWasmRunner,
   WasmType,
@@ -47,7 +47,10 @@ export class HttpWasmRunner implements IWasmRunner {
   /**
    * Load WASM binary and spawn fastedge-run process
    */
-  async load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void> {
+  async load(
+    bufferOrPath: Buffer | string,
+    config?: RunnerConfig,
+  ): Promise<void> {
     // Update config if provided
     if (config?.dotenv?.enabled !== undefined) {
       this.dotenvEnabled = config.dotenv.enabled;
@@ -124,7 +127,8 @@ export class HttpWasmRunner implements IWasmRunner {
     // - Large WASM files that take time to compile (10MB+ can take 3-5s)
     // - WASMs that make downstream HTTP requests on first request (up to 5s)
     // - Test environments where startup can be slower
-    const timeout = process.env.NODE_ENV === 'test' || process.env.VITEST ? 20000 : 10000;
+    const timeout =
+      process.env.NODE_ENV === "test" || process.env.VITEST ? 20000 : 10000;
     await this.waitForServerReady(this.port, timeout);
   }
 
@@ -185,7 +189,7 @@ export class HttpWasmRunner implements IWasmRunner {
    */
   async callHook(_hookCall: HookCall): Promise<HookResult> {
     throw new Error(
-      "callHook() is not supported for HTTP WASM. Use execute() instead."
+      "callHook() is not supported for HTTP WASM. Use execute() instead.",
     );
   }
 
@@ -202,10 +206,10 @@ export class HttpWasmRunner implements IWasmRunner {
     _responseStatus: number,
     _responseStatusText: string,
     _properties: Record<string, unknown>,
-    _enforceProductionPropertyRules: boolean
+    _enforceProductionPropertyRules: boolean,
   ): Promise<FullFlowResult> {
     throw new Error(
-      "callFullFlow() is not supported for HTTP WASM. Use execute() instead."
+      "callFullFlow() is not supported for HTTP WASM. Use execute() instead.",
     );
   }
 
@@ -219,7 +223,12 @@ export class HttpWasmRunner implements IWasmRunner {
       this.dotenvPath = dotenvPath;
     }
 
-    if (!this.process || !this.currentWasmPath || !this.cliPath || this.port === null) {
+    if (
+      !this.process ||
+      !this.currentWasmPath ||
+      !this.cliPath ||
+      this.port === null
+    ) {
       // No running process to restart — settings will apply on next load()
       return;
     }
@@ -257,7 +266,8 @@ export class HttpWasmRunner implements IWasmRunner {
     this.setupLogCapture();
     this.setupErrorHandlers();
 
-    const timeout = process.env.NODE_ENV === "test" || process.env.VITEST ? 20000 : 10000;
+    const timeout =
+      process.env.NODE_ENV === "test" || process.env.VITEST ? 20000 : 10000;
     await this.waitForServerReady(this.port, timeout);
   }
 
@@ -317,12 +327,18 @@ export class HttpWasmRunner implements IWasmRunner {
     const match = message.trimStart().match(/^\[?(\w+)\]?/);
     const prefix = match?.[1]?.toUpperCase();
     switch (prefix) {
-      case "TRACE": return 0;
-      case "DEBUG": return 1;
-      case "INFO":  return 2;
-      case "WARN":  return 3;
-      case "ERROR": return 4;
-      default:      return fallback;
+      case "TRACE":
+        return 0;
+      case "DEBUG":
+        return 1;
+      case "INFO":
+        return 2;
+      case "WARN":
+        return 3;
+      case "ERROR":
+        return 4;
+      default:
+        return fallback;
     }
   }
 
@@ -396,25 +412,32 @@ export class HttpWasmRunner implements IWasmRunner {
     return new Promise((resolve, reject) => {
       const check = () => {
         if (this.process && this.process.exitCode !== null) {
-          return reject(new Error(
-            `FastEdge-run process exited with code ${this.process.exitCode} before server started`
-          ));
+          return reject(
+            new Error(
+              `FastEdge-run process exited with code ${this.process.exitCode} before server started`,
+            ),
+          );
         }
 
-        if (this.logs.some(l => l.message.includes('Listening on'))) {
+        if (this.logs.some((l) => l.message.includes("Listening on"))) {
           return resolve();
         }
 
         if (Date.now() - startTime >= timeoutMs) {
           const processInfo = this.process
             ? `Process state: exitCode=${this.process.exitCode}, killed=${this.process.killed}, pid=${this.process.pid}`
-            : 'Process is null';
-          const recentLogs = this.logs.slice(-5).map(l => `[${l.level}] ${l.message}`).join('\n');
-          return reject(new Error(
-            `FastEdge-run server did not start within ${timeoutMs}ms on port ${port}\n` +
-            `${processInfo}\n` +
-            `Recent logs:\n${recentLogs || '(no logs)'}`
-          ));
+            : "Process is null";
+          const recentLogs = this.logs
+            .slice(-5)
+            .map((l) => `[${l.level}] ${l.message}`)
+            .join("\n");
+          return reject(
+            new Error(
+              `FastEdge-run server did not start within ${timeoutMs}ms on port ${port}\n` +
+                `${processInfo}\n` +
+                `Recent logs:\n${recentLogs || "(no logs)"}`,
+            ),
+          );
         }
 
         setTimeout(check, 50);
@@ -424,8 +447,11 @@ export class HttpWasmRunner implements IWasmRunner {
   }
 
   /**
-   * Kill the process gracefully (SIGINT) with fallback to SIGKILL
-   * FastEdge-run responds to SIGINT for graceful shutdown
+   * Kill the process gracefully (SIGINT) with platform-specific force-kill fallback.
+   * SIGINT is sent first on all platforms — Node.js translates it for Windows.
+   * If the process does not exit within 2 seconds:
+   *   - Windows: taskkill /F /T to terminate the process tree
+   *   - Unix: SIGKILL
    */
   private async killProcess(): Promise<void> {
     if (!this.process) return;
@@ -439,15 +465,30 @@ export class HttpWasmRunner implements IWasmRunner {
       // Try graceful shutdown first with SIGINT (FastEdge-run's preferred signal)
       this.process.kill("SIGINT");
 
-      // Wait up to 2 seconds for graceful shutdown
+      // Wait up to 2 seconds for graceful shutdown, then force kill
       const timeout = setTimeout(() => {
-        if (this.process && !this.process.killed) {
-          this.process.kill("SIGKILL");
+        if (
+          this.process &&
+          this.process.exitCode === null &&
+          this.process.signalCode === null
+        ) {
+          if (process.platform === "win32") {
+            const pid = this.process.pid;
+            if (pid) {
+              try {
+                execSync(`taskkill /F /T /PID ${pid}`);
+              } catch {
+                // Process may have already exited — not an error
+              }
+            }
+          } else {
+            this.process.kill("SIGKILL");
+          }
         }
         resolve();
       }, 2000);
 
-      // Resolve immediately if process exits
+      // Resolve immediately if process exits cleanly
       this.process.once("exit", () => {
         clearTimeout(timeout);
         resolve();
@@ -469,9 +510,7 @@ export class HttpWasmRunner implements IWasmRunner {
       "application/gzip",
     ];
 
-    return binaryTypes.some((type) =>
-      contentType.toLowerCase().includes(type)
-    );
+    return binaryTypes.some((type) => contentType.toLowerCase().includes(type));
   }
 
   /**
