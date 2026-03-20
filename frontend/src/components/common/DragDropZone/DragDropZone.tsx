@@ -76,61 +76,9 @@ export function DragDropZone({ onWasmDrop, onConfigDrop, children }: DragDropZon
     const file = files[0];
     const fileType = detectFileType(file.name);
 
-    // Enhanced debugging - log ALL available data
-    console.log('=== Drag & Drop Debug (Enhanced) ===');
-    console.log('File name:', file.name);
-    console.log('File type:', fileType);
-    console.log('DataTransfer types:', e.dataTransfer.types);
-
-    // Try to get ALL possible data types
-    console.log('\n--- Attempting to read all data types ---');
-    e.dataTransfer.types.forEach((type) => {
-      try {
-        const data = e.dataTransfer.getData(type);
-        console.log(`${type}:`, data || '(empty)');
-      } catch (err) {
-        console.log(`${type}: (error reading)`);
-      }
-    });
-
-    // Also try common types that might not be in the list
-    const commonTypes = [
-      'text/uri-list',
-      'text/plain',
-      'text/html',
-      'text/x-moz-url',
-      'application/x-moz-file',
-    ];
-    console.log('\n--- Trying common types ---');
-    commonTypes.forEach((type) => {
-      try {
-        const data = e.dataTransfer.getData(type);
-        if (data) {
-          console.log(`${type}:`, data);
-        }
-      } catch (err) {
-        // Ignore
-      }
-    });
-
-    // Check items
-    console.log('\n--- DataTransfer Items ---');
-    for (let i = 0; i < e.dataTransfer.items.length; i++) {
-      const item = e.dataTransfer.items[i];
-      console.log(`Item ${i}: kind=${item.kind}, type=${item.type}`);
-    }
-
-    // Handle based on file type
     if (fileType === 'wasm') {
-      // Note: Modern browsers block file paths for security
-      // Drag & drop uses buffer mode (file contents)
-      // For path-based loading, use the File Path tab
-      console.log('\n--- Loading WASM ---');
-      console.log('✅ Using drag & drop (buffer mode)');
-      console.log('💡 Tip: For path-based loading, use File Path tab');
       onWasmDrop(file);
     } else if (fileType === 'json') {
-      console.log('📄 Loading config file');
       onConfigDrop(file);
     } else {
       alert('❌ Unsupported file type. Please drop a .wasm or .json file.');
