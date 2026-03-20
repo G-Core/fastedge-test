@@ -1,5 +1,23 @@
 # Proxy-WASM Runner - Changelog
 
+## March 20, 2026 - DragDropZone: removed debug logging
+
+### Overview
+Removed investigation-era debug logging from `DragDropZone.handleDrop`. The logging was added while investigating why drag-and-drop did not work inside the VSCode webview. Root cause was confirmed: VSCode intercepts all file drag events at the application level — the webview HTML document never receives them. Drag-and-drop continues to work normally in standalone browser mode.
+
+### 🎯 What Was Completed
+
+- Removed ~50 lines of `console.log` from `handleDrop` in `DragDropZone.tsx`: DataTransfer type enumeration, common type probing, items inspection, WASM load mode logging
+- Handler logic is unchanged — `.wasm` → `onWasmDrop(file)`, `.json` → `onConfigDrop(file)`, other → alert
+
+**Files Modified:**
+- `frontend/src/components/common/DragDropZone/DragDropZone.tsx`
+
+### 📝 Notes
+- VSCode users load files via the explorer context menu commands added to `FastEdge-vscode` (right-click `.wasm` or `*test.json`). Drag-and-drop in VSCode is a known platform limitation, not a bug in this codebase.
+
+---
+
 ## March 19, 2026 - DotenvPanel: default OFF, panel always starts collapsed, config-load no longer expands
 
 ### Overview
