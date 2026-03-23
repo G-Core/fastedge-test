@@ -1,36 +1,31 @@
 # Debugger Server
 
-Runs the FastEdge debugger HTTP server, which hosts the web UI, REST API, and WebSocket endpoint for testing proxy-wasm and HTTP WASM modules.
+Runs the FastEdge debugger HTTP server, which hosts the web UI, REST API, and WebSocket endpoint for loading and testing WASM modules.
 
 ## CLI Usage
 
-Start the server using `npx`:
+The package exposes a `fastedge-debug` binary. Run it with `npx` without installing:
+
+```bash
+npx @gcoredev/fastedge-test
+```
+
+Or using the explicit binary name:
 
 ```bash
 npx fastedge-debug
 ```
 
-Or via the full package name:
-
-```bash
-npx @gcoredev/fastedge-test fastedge-debug
-```
-
-The server listens on port `5179` by default and prints the bound address on startup:
-
-```
-Proxy runner listening on http://localhost:5179
-WebSocket available at ws://localhost:5179/ws
-```
+Once started, the server listens on `http://localhost:5179` by default and logs the bound address to stdout.
 
 ## Programmatic Usage
 
-Import `startServer` from the server entry point:
+Import `startServer` from the `./server` export to start the server from your own script or test setup:
 
 ```typescript
 import { startServer } from "@gcoredev/fastedge-test/server";
 
-// Start on default port (5179)
+// Start on the default port (5179)
 await startServer();
 
 // Start on a custom port
@@ -43,21 +38,35 @@ await startServer(3000);
 function startServer(port?: number): Promise<void>
 ```
 
-The returned promise resolves once the server is listening. When the module is executed directly (e.g. via the CLI), `startServer()` is called automatically. When imported programmatically, you must call it explicitly.
+The returned promise resolves once the server is bound and ready to accept connections.
+
+**Example: start and stop in a test setup**
+
+```typescript
+import { startServer } from "@gcoredev/fastedge-test/server";
+import { createServer } from "node:http";
+
+// Start server for integration tests
+await startServer(5200);
+
+// ... run tests ...
+
+// Send SIGTERM to trigger graceful shutdown
+process.kill(process.pid, "SIGTERM");
+```
 
 ## Port Configuration
 
-| Method | Value |
+| Source | Value |
 |--------|-------|
 | Default | `5179` |
-| Environment variable | `PORT` |
-| Programmatic argument | `startServer(port)` |
-
-The `PORT` environment variable takes precedence over the compiled default. A port passed directly to `startServer()` takes precedence over both.
+| `PORT` env var | Any valid port number |
 
 ```bash
 PORT=8080 npx fastedge-debug
 ```
+
+When `WORKSPACE_PATH` is set, the server writes the bound port number to `$WORKSPACE_PATH/.debug-port` on startup and deletes it on shutdown.
 
 ## Health Check
 
@@ -65,7 +74,7 @@ PORT=8080 npx fastedge-debug
 GET /health
 ```
 
-Returns HTTP `200` with a JSON body:
+Returns `200 OK` with a JSON body:
 
 ```json
 {
@@ -74,47 +83,71 @@ Returns HTTP `200` with a JSON body:
 }
 ```
 
-Use the `service` field to confirm you are talking to the correct server when running multiple local services.
+Use this endpoint to verify the server is running before sending requests. The `service` field is always `"fastedge-debugger"`.
+
+```bash
+curl http://localhost:5179/health
+```
 
 ## Environment Variables
 
-| Variable | Type | Description |
-|----------|------|-------------|
-| `PORT` | `number` | Server port. Default: `5179` |
-| `PROXY_RUNNER_DEBUG` | `"1"` | Enable verbose debug logging to stdout |
-| `VSCODE_INTEGRATION` | `"true"` | Signals the server is running inside the VSCode extension context |
-| `WORKSPACE_PATH` | `string` | Absolute path to the workspace root. Used as the base path for `.env` file resolution and WASM path expansion when `VSCODE_INTEGRATION` is set |
-| `FASTEDGE_RUN_PATH` | `string` | Override the path to the `fastedge-run` CLI binary used for HTTP WASM execution |
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `PORT` | `number` | `5179` | Port the HTTP server listens on |
+| `PROXY_RUNNER_DEBUG` | `"1"` | unset | Enable verbose debug logging for WebSocket and runner activity |
+| `VSCODE_INTEGRATION` | `"true"` | unset | Signals the server is running inside the VSCode extension context |
+| `WORKSPACE_PATH` | `string` | unset | Absolute path to the workspace root; used as the `.env` file base and for port file placement |
+| `FASTEDGE_RUN_PATH` | `string` | unset | Override the path to the `fastedge-run` CLI binary used to execute WASM modules |
 
-Variables are read at startup. Changes after the process starts have no effect.
+### Usage examples
 
 ```bash
-PROXY_RUNNER_DEBUG=1 PORT=8080 npx fastedge-debug
+# Enable debug logging
+PROXY_RUNNER_DEBUG=1 npx fastedge-debug
+
+# Use a non-default port with debug logging
+PORT=8080 PROXY_RUNNER_DEBUG=1 npx fastedge-debug
+
+# Point to a workspace and override the fastedge-run binary
+WORKSPACE_PATH=/home/user/myproject \
+FASTEDGE_RUN_PATH=/usr/local/bin/fastedge-run \
+npx fastedge-debug
 ```
 
 ## Graceful Shutdown
 
 The server handles `SIGTERM` and `SIGINT`:
 
-1. Cleans up the currently loaded WASM runner (releases memory, closes child processes)
-2. Closes all WebSocket connections
-3. Removes the `.debug-port` file (if `WORKSPACE_PATH` is set)
-4. Closes the HTTP server
-5. Exits with code `0`
+1. Logs the received signal
+2. Cleans up the active WASM runner (frees memory, closes child processes)
+3. Closes all WebSocket connections
+4. Deletes the `.debug-port` file (if `WORKSPACE_PATH` is set)
+5. Closes the HTTP server
+6. Exits with code `0`
 
-On platforms where `SIGTERM` is not delivered (Windows), cleanup also runs on the `exit` event.
+The `.debug-port` file is also deleted on the Node.js `exit` event, which covers Windows environments where `SIGTERM` is not delivered.
 
-Send `SIGINT` interactively with `Ctrl+C`. In containerised or process-managed environments, send `SIGTERM` to trigger a clean shutdown before `SIGKILL`.
+Send `SIGTERM` to trigger shutdown programmatically:
+
+```bash
+kill -SIGTERM <pid>
+```
+
+Or press `Ctrl+C` in the terminal to send `SIGINT`.
 
 ## Web UI
 
-When the server is running, navigating to `http://localhost:5179` (or your configured port) opens the debugger web UI. The UI lets you load WASM modules, configure test properties, send requests, and inspect hook execution results interactively.
+When the server starts, it serves a browser-based UI at the root URL:
 
-For the REST endpoints the UI and automation tooling call, see [API.md](./API.md). For the WebSocket protocol used to stream real-time events, see [WEBSOCKET.md](./WEBSOCKET.md).
+```
+http://localhost:5179
+```
+
+The UI provides a graphical interface for loading WASM modules, configuring requests, and inspecting results. All UI interactions use the same REST and WebSocket endpoints available to API consumers.
 
 ## See Also
 
-- [API.md](./API.md) — REST API reference
-- [WEBSOCKET.md](./WEBSOCKET.md) — WebSocket event protocol
-- [TEST_FRAMEWORK.md](./TEST_FRAMEWORK.md) — Programmatic test framework
-- [TEST_CONFIG.md](./TEST_CONFIG.md) — Test configuration file format
+- [API.md](API.md) — REST endpoint reference for loading WASM, sending requests, and managing configuration
+- [WEBSOCKET.md](WEBSOCKET.md) — WebSocket protocol, event types, and real-time state updates
+- [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) — Programmatic test framework for writing automated WASM tests
+- [TEST_CONFIG.md](TEST_CONFIG.md) — `fastedge-config.test.json` schema and configuration options

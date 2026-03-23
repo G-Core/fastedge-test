@@ -1,41 +1,79 @@
 # fastedge-test Documentation
 
-Navigation index for the `@gcoredev/fastedge-test` package (`v0.0.1-beta.5`).
+`@gcoredev/fastedge-test` — local test runner and debugger for FastEdge WASM modules.
 
 ## Documentation Files
 
 | File | Audience | Description |
 |------|----------|-------------|
-| [quickstart.md](./quickstart.md) | All users | Install the package, run your first test, and launch the debugger server |
-| [TEST_FRAMEWORK.md](./TEST_FRAMEWORK.md) | Test authors | High-level API for defining and running WASM test suites against the FastEdge runtime |
-| [TEST_CONFIG.md](./TEST_CONFIG.md) | Test authors | `fastedge-config.test.json` schema — WASM binary path, request inputs, origin mock, CDN properties, and env var loading |
-| [RUNNER.md](./RUNNER.md) | Tooling builders | Low-level programmatic API for executing WASM modules with direct lifecycle control |
-| [API.md](./API.md) | Tooling builders | HTTP REST API exposed by the debugger server — load modules, execute flows, manage configuration |
-| [WEBSOCKET.md](./WEBSOCKET.md) | Tooling builders | WebSocket event stream for real-time test runner output |
-| [DEBUGGER.md](./DEBUGGER.md) | All users | CLI (`fastedge-debug`) and programmatic usage of the debugger server |
+| [quickstart.md](quickstart.md) | All users | Install, configure, and run your first test in under five minutes |
+| [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) | Test authors | High-level API (`defineTestSuite`, `runTestSuite`, assertions) for writing automated test suites |
+| [TEST_CONFIG.md](TEST_CONFIG.md) | Test authors | `fastedge-config.test.json` schema — all fields, defaults, and validation rules |
+| [RUNNER.md](RUNNER.md) | Advanced / CI tooling | Low-level programmatic API for direct runner lifecycle control |
+| [DEBUGGER.md](DEBUGGER.md) | All users | `fastedge-debug` CLI — starting the interactive debugger server |
+| [API.md](API.md) | Tooling integrators | HTTP REST API exposed by the debugger server |
+| [WEBSOCKET.md](WEBSOCKET.md) | Tooling integrators | WebSocket event stream API for real-time server events |
 
 ## Quick Links
 
 | Goal | Start here |
 |------|-----------|
-| Writing tests for a WASM module | [TEST_FRAMEWORK.md](./TEST_FRAMEWORK.md) |
-| Configuring test inputs and mock responses | [TEST_CONFIG.md](./TEST_CONFIG.md) |
-| Building custom CI tooling or scripts | [API.md](./API.md) + [RUNNER.md](./RUNNER.md) |
-| Streaming test events in real time | [WEBSOCKET.md](./WEBSOCKET.md) |
-| Launching the debugger server | [DEBUGGER.md](./DEBUGGER.md) |
-| Getting started from scratch | [quickstart.md](./quickstart.md) |
+| Writing tests for a WASM module | [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) |
+| Understanding the test config file format | [TEST_CONFIG.md](TEST_CONFIG.md) |
+| Running the interactive debugger UI | [DEBUGGER.md](DEBUGGER.md) |
+| Building custom CI or automation tooling | [API.md](API.md) |
+| Subscribing to real-time server events | [WEBSOCKET.md](WEBSOCKET.md) |
+| Direct runner control without the test framework | [RUNNER.md](RUNNER.md) |
+| First time using this package | [quickstart.md](quickstart.md) |
 
 ## Package Exports
 
-| Export | Entry point | Description |
-|--------|-------------|-------------|
-| `.` | `@gcoredev/fastedge-test` | Main package entry — re-exports the runner and test framework public API |
-| `./test` | `@gcoredev/fastedge-test/test` | Test framework API (`describe`, `it`, assertions, result types) |
-| `./server` | `@gcoredev/fastedge-test/server` | Programmatic server entry point for starting the debugger server in Node.js |
-| `./schemas` | `@gcoredev/fastedge-test/schemas` | JSON Schema files for `fastedge-config.test.json` and related config formats |
+| Entry point | Description |
+|-------------|-------------|
+| `.` | Main entry — re-exports the runner API and core types |
+| `./test` | Test framework API — use this for writing and running test suites |
+| `./server` | Debugger server entry — used by the `fastedge-debug` CLI binary |
+| `./schemas` | JSON Schema files for `fastedge-config.test.json` — reference these in editors for validation |
 
-The `fastedge-debug` binary (installed to `node_modules/.bin/fastedge-debug`) launches the debugger server from the command line. See [DEBUGGER.md](./DEBUGGER.md).
+### `@gcoredev/fastedge-test` (`.`)
+
+Exports the low-level runner API. See [RUNNER.md](RUNNER.md) for full reference.
+
+```typescript
+import { createRunner, createRunnerFromBuffer } from "@gcoredev/fastedge-test";
+```
+
+### `@gcoredev/fastedge-test/test`
+
+Exports the high-level test framework. See [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) for full reference.
+
+| Export | Kind | Description |
+|--------|------|-------------|
+| `defineTestSuite` | function | Validates and returns a typed `TestSuite` definition |
+| `runTestSuite` | function | Executes a `TestSuite` and returns a `SuiteResult` |
+| `runAndExit` | function | Runs a suite and exits the process with a pass/fail code |
+| `runFlow` | function | Executes a single request flow directly |
+| `loadConfigFile` | function | Loads and validates a `fastedge-config.test.json` file |
+| `assertRequestHeader` | function | Asserts a header is present on the outgoing request |
+| `assertResponseHeader` | function | Asserts a header is present on the final response |
+| `assertFinalStatus` | function | Asserts the final HTTP status code |
+| `assertReturnCode` | function | Asserts the proxy-wasm return code |
+| `assertLog` | function | Asserts a log entry was emitted |
+| `TestSuite` | type | Suite definition — one of `wasmPath` or `wasmBuffer` plus test cases |
+| `TestCase` | type | A single test scenario with config and assertions |
+| `SuiteResult` | type | Aggregated result returned by `runTestSuite` |
+| `FlowOptions` | type | Options accepted by `runFlow` |
+
+### `@gcoredev/fastedge-test/server`
+
+The debugger server entrypoint. This export is used internally by the `fastedge-debug` binary and is not intended for direct import. Start the server via the CLI instead — see [DEBUGGER.md](DEBUGGER.md).
+
+### `@gcoredev/fastedge-test/schemas`
+
+Directory of JSON Schema files. Point your editor's `$schema` field at the appropriate file to enable validation and autocompletion in `fastedge-config.test.json`. See [TEST_CONFIG.md](TEST_CONFIG.md) for usage.
 
 ## Internal Documentation
 
-Contributors working on this repository should refer to `context/CONTEXT_INDEX.md` for the developer documentation index, architecture guides, and implementation notes.
+Contributors and developers working in this repository should refer to the internal context documentation:
+
+- [`context/CONTEXT_INDEX.md`](../context/CONTEXT_INDEX.md) — discovery-based index of all internal developer docs

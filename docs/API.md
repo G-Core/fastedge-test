@@ -1,6 +1,6 @@
 # REST API Reference
 
-HTTP API exposed by the `@gcoredev/fastedge-test` debugger server. Use these endpoints to load WASM modules, execute CDN flows, and manage test configuration programmatically.
+HTTP API exposed by the `@gcoredev/fastedge-test` debugger server. Use these endpoints to load WASM modules, execute test requests, and manage test configuration programmatically.
 
 ## Base URL
 
@@ -8,22 +8,26 @@ HTTP API exposed by the `@gcoredev/fastedge-test` debugger server. Use these end
 http://localhost:5179
 ```
 
-The port is configurable via the `PORT` environment variable. When `WORKSPACE_PATH` is set, the server writes the active port to `$WORKSPACE_PATH/.debug-port` on startup and deletes it on shutdown — use this file for port discovery in CI tooling.
+The port is configurable via the `PORT` environment variable. See [DEBUGGER.md](DEBUGGER.md) for server startup options.
 
 ## Common Headers
 
-### X-Source
+### X-Source Header
 
-Several endpoints accept an optional `X-Source` request header that tags the originating caller on WebSocket broadcast events. Consumers of the REST API should send `X-Source: api`.
+The `/api/execute`, `/api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header. This header tags the originating caller on WebSocket broadcast events, allowing connected UI clients to distinguish the event source.
 
 | Value | Description |
-|-------|-------------|
-| `api` | Direct REST API call |
-| `ai_agent` | AI agent or automated tooling |
-| `ui` | Web UI (default when header is absent) |
-| `system` | Internal system event |
+|---|---|
+| `ui` | Request originated from the browser UI (default) |
+| `ai_agent` | Request originated from an AI agent |
+| `api` | Request originated from a REST API caller |
+| `system` | Request originated from internal system automation |
 
-**Applies to**: `POST /api/execute`, `POST /api/send`, `POST /api/config`
+```http
+X-Source: api
+```
+
+If omitted, the value defaults to `"ui"`.
 
 ---
 
@@ -55,13 +59,9 @@ curl http://localhost:5179/health
 }
 ```
 
-**Errors**: None — always returns `200`.
-
----
-
 ### GET /api/client-count
 
-Returns the number of active WebSocket clients. Useful for CI tooling that needs to wait until the UI has connected before proceeding.
+Returns the number of currently connected WebSocket clients. Useful in CI tooling to wait until a UI client has connected before loading a WASM module.
 
 **Response**
 
@@ -78,10 +78,10 @@ curl http://localhost:5179/api/client-count
 ```
 
 ```json
-{ "count": 1 }
+{
+  "count": 1
+}
 ```
-
-**Errors**: None — always returns `200`.
 
 ---
 
@@ -89,23 +89,19 @@ curl http://localhost:5179/api/client-count
 
 ### POST /api/load
 
-Loads a WASM binary into the runner. Auto-detects whether the binary is HTTP-WASM or Proxy-WASM. Must be called before any execution endpoint.
+Loads a WASM binary into the runner. Accepts either a file path or a base64-encoded binary. Also configures dotenv settings for the loaded module.
+
+Exactly one of `wasmPath` or `wasmBase64` must be provided.
 
 **Request Body**
 
-Provide either `wasmPath` (preferred) or `wasmBase64`.
-
 ```typescript
 type LoadRequest = {
-  /** Absolute filesystem path to a .wasm file. */
-  wasmPath?: string;
-  /** Base64-encoded WASM binary. */
-  wasmBase64?: string;
+  wasmPath?: string;    // Absolute path to a .wasm file on the server filesystem
+  wasmBase64?: string;  // Base64-encoded WASM binary
   dotenv?: {
-    /** Whether to apply .env variables to the WASM environment. */
     enabled: boolean;
-    /** Path to the directory containing the .env file. Defaults to server working directory. */
-    path?: string;
+    path?: string;      // Path to .env file; defaults to server working directory
   };
 };
 ```
@@ -113,24 +109,26 @@ type LoadRequest = {
 **Response**
 
 ```typescript
-type LoadResponse = {
-  ok: true;
-  /** Detected runner type. */
-  wasmType: "http-wasm" | "proxy-wasm";
-  /** Resolved absolute path, present only when wasmPath was used. */
-  resolvedPath?: string;
-};
+type LoadResponse =
+  | {
+      ok: true;
+      wasmType: "http-wasm" | "proxy-wasm";
+      resolvedPath?: string; // Populated when wasmPath was used
+    }
+  | {
+      ok: false;
+      error: string | object;
+    };
 ```
 
-**Example — path-based load**
+**Example — load by path**
 
 ```bash
 curl -X POST http://localhost:5179/api/load \
   -H "Content-Type: application/json" \
-  -H "X-Source: api" \
   -d '{
-    "wasmPath": "/path/to/my-app.wasm",
-    "dotenv": { "enabled": true, "path": "/path/to/project" }
+    "wasmPath": "/home/user/project/.fastedge/bin/app.wasm",
+    "dotenv": { "enabled": true, "path": "/home/user/project" }
   }'
 ```
 
@@ -138,48 +136,48 @@ curl -X POST http://localhost:5179/api/load \
 {
   "ok": true,
   "wasmType": "proxy-wasm",
-  "resolvedPath": "/path/to/my-app.wasm"
+  "resolvedPath": "/home/user/project/.fastedge/bin/app.wasm"
 }
 ```
 
-**Example — base64 load**
+**Example — load by base64**
 
-```typescript
-import { readFileSync } from "fs";
-
-const wasmBase64 = readFileSync("my-app.wasm").toString("base64");
-
-const res = await fetch("http://localhost:5179/api/load", {
-  method: "POST",
-  headers: { "Content-Type": "application/json", "X-Source": "api" },
-  body: JSON.stringify({ wasmBase64 }),
-});
-const data = await res.json();
-// { ok: true, wasmType: "proxy-wasm" }
+```bash
+curl -X POST http://localhost:5179/api/load \
+  -H "Content-Type: application/json" \
+  -d '{
+    "wasmBase64": "AGFzbQEAAAA...",
+    "dotenv": { "enabled": false }
+  }'
 ```
 
-**Errors**
+```json
+{
+  "ok": true,
+  "wasmType": "http-wasm"
+}
+```
+
+**Error Responses**
 
 | Status | Condition |
-|--------|-----------|
-| `400` | Validation failed, path invalid, path not ending in `.wasm`, file not found, or missing both `wasmPath` and `wasmBase64` |
+|---|---|
+| `400` | Missing both `wasmPath` and `wasmBase64`, invalid path, path does not end in `.wasm`, or validation failure |
 | `500` | WASM failed to load or instantiate |
 
 ---
 
 ### PATCH /api/dotenv
 
-Applies or updates dotenv settings on the currently loaded WASM module without reloading it.
+Applies or updates dotenv configuration for the currently loaded WASM module without reloading the binary.
 
 **Request Body**
 
 ```typescript
 type DotenvRequest = {
   dotenv: {
-    /** Enable or disable .env injection. */
     enabled: boolean;
-    /** Path to directory containing the .env file. */
-    path?: string;
+    path?: string; // Path to .env file; defaults to server working directory
   };
 };
 ```
@@ -187,9 +185,9 @@ type DotenvRequest = {
 **Response**
 
 ```typescript
-type DotenvResponse = {
-  ok: true;
-};
+type DotenvResponse =
+  | { ok: true }
+  | { ok: false; error: string };
 ```
 
 **Example**
@@ -197,20 +195,20 @@ type DotenvResponse = {
 ```bash
 curl -X PATCH http://localhost:5179/api/dotenv \
   -H "Content-Type: application/json" \
-  -d '{ "dotenv": { "enabled": false } }'
+  -d '{ "dotenv": { "enabled": true, "path": "/home/user/project" } }'
 ```
 
 ```json
 { "ok": true }
 ```
 
-**Errors**
+**Error Responses**
 
 | Status | Condition |
-|--------|-----------|
+|---|---|
 | `400` | `dotenv.enabled` is missing or not a boolean |
-| `400` | No WASM module loaded |
-| `500` | Failed to apply dotenv settings |
+| `400` | No WASM module is currently loaded |
+| `500` | Internal error applying dotenv settings |
 
 ---
 
@@ -218,25 +216,27 @@ curl -X PATCH http://localhost:5179/api/dotenv \
 
 ### POST /api/execute
 
-Executes a request against the loaded WASM module. Behavior differs based on the loaded runner type (HTTP-WASM vs Proxy-WASM).
+Executes a request against the loaded WASM module. Behavior differs by runner type.
 
-This endpoint does not use schema validation — fields are read directly from the request body.
+- **HTTP-WASM**: Executes a direct HTTP request/response cycle. Supply top-level `url`, `method`, `headers`, and `body`.
+- **Proxy-WASM**: Runs the full CDN hook flow. Supply top-level `url` plus nested `request`, `response`, and `properties` objects.
+
+This endpoint does not use JSON Schema validation. Fields are read directly from the request body.
+
+Emits a WebSocket event on completion. Accepts the `X-Source` header.
 
 **Request Body**
 
 ```typescript
 type ExecuteRequest = {
-  /** Target URL. Required for both runner types. */
-  url: string;
-  /** HTTP method. Defaults to "GET". */
-  method?: string;
-  /** Request headers as key-value pairs. */
-  headers?: Record<string, string>;
-  /** Request body string. */
-  body?: string;
+  url: string;       // Required for both runner types
 
-  // The following fields are only used for Proxy-WASM runners:
+  // HTTP-WASM fields (top-level)
+  method?: string;                     // HTTP method, e.g. "GET"
+  headers?: Record<string, string>;    // Request headers
+  body?: string;                       // Request body
 
+  // Proxy-WASM fields (nested; ignored for HTTP-WASM)
   request?: {
     method?: string;
     headers?: Record<string, string>;
@@ -252,38 +252,59 @@ type ExecuteRequest = {
 };
 ```
 
-For **HTTP-WASM**: `url`, `method`, `headers`, and `body` are used directly as the request.
-
-For **Proxy-WASM**: `url` is required; `request`, `response`, and `properties` are used for the CDN flow. Top-level `method`, `headers`, and `body` are ignored.
-
 **Response — HTTP-WASM**
 
 ```typescript
-type HttpWasmExecuteResponse = {
-  ok: true;
-  result: {
-    status: number;
-    statusText: string;
-    headers: Record<string, string>;
-    body: string;
-    contentType: string;
-    isBase64: boolean;
-  };
-};
+type ExecuteHttpWasmResponse =
+  | {
+      ok: true;
+      result: {
+        status: number;
+        statusText: string;
+        headers: Record<string, string>;
+        body: string;
+        contentType: string;
+        isBase64?: boolean;
+      };
+    }
+  | { ok: false; error: string };
 ```
 
 **Response — Proxy-WASM**
 
 ```typescript
-type ProxyWasmExecuteResponse = {
-  ok: true;
-  hookResults: HookResult[];
-  finalResponse: HttpResponse;
-  calculatedProperties: Record<string, string>;
+type ExecuteProxyWasmResponse =
+  | {
+      ok: true;
+      hookResults: Record<string, HookResult>;
+      finalResponse: {
+        status: number;
+        statusText: string;
+        headers: Record<string, string>;
+        body: string;
+        contentType: string;
+        isBase64?: boolean;
+      };
+      calculatedProperties?: Record<string, unknown>;
+    }
+  | { ok: false; error: string };
+
+type HookResult = {
+  returnCode: number | null;
+  logs: { level: number; message: string }[];
+  input: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  output: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  properties: Record<string, unknown>;
 };
 ```
-
-See `GET /api/schema/:name` for the `hook-result`, `http-response`, and `full-flow-result` schemas.
 
 **Example — HTTP-WASM**
 
@@ -292,10 +313,24 @@ curl -X POST http://localhost:5179/api/execute \
   -H "Content-Type: application/json" \
   -H "X-Source: api" \
   -d '{
-    "url": "http://example.com/api/data",
+    "url": "http://localhost:5179/hello",
     "method": "GET",
-    "headers": { "Accept": "application/json" }
+    "headers": { "accept": "application/json" },
+    "body": ""
   }'
+```
+
+```json
+{
+  "ok": true,
+  "result": {
+    "status": 200,
+    "statusText": "OK",
+    "headers": { "content-type": "application/json" },
+    "body": "{\"message\":\"hello\"}",
+    "contentType": "application/json"
+  }
+}
 ```
 
 **Example — Proxy-WASM**
@@ -305,34 +340,67 @@ curl -X POST http://localhost:5179/api/execute \
   -H "Content-Type: application/json" \
   -H "X-Source: api" \
   -d '{
-    "url": "https://example.com/page",
+    "url": "https://example.com/api/data",
     "request": {
       "method": "GET",
-      "headers": { "host": "example.com" },
+      "headers": { "x-custom": "value" },
       "body": ""
     },
     "response": {
-      "headers": { "content-type": "text/html" },
-      "body": "<html>...</html>",
-      "status": 200
+      "headers": { "content-type": "application/json" },
+      "body": "{\"data\":true}",
+      "status": 200,
+      "statusText": "OK"
     },
-    "properties": { "client_country": "US" }
+    "properties": { "tenant_id": "abc123" }
   }'
 ```
 
-**Errors**
+```json
+{
+  "ok": true,
+  "hookResults": {
+    "onRequestHeaders": {
+      "returnCode": 0,
+      "logs": [
+        { "level": 2, "message": "processing request" }
+      ],
+      "input": {
+        "request": { "headers": { "x-custom": "value" }, "body": "" },
+        "response": { "headers": {}, "body": "" },
+        "properties": { "tenant_id": "abc123" }
+      },
+      "output": {
+        "request": { "headers": { "x-custom": "value", "x-added": "true" }, "body": "" },
+        "response": { "headers": {}, "body": "" }
+      },
+      "properties": { "tenant_id": "abc123" }
+    }
+  },
+  "finalResponse": {
+    "status": 200,
+    "statusText": "OK",
+    "headers": { "content-type": "application/json" },
+    "body": "{\"data\":true}",
+    "contentType": "application/json"
+  },
+  "calculatedProperties": { "tenant_id": "abc123" }
+}
+```
+
+**Error Responses**
 
 | Status | Condition |
-|--------|-----------|
+|---|---|
 | `400` | No WASM module loaded |
-| `400` | `url` is missing or not a string |
-| `500` | Execution failed |
+| `400` | `url` missing or not a string |
+| `500` | Execution error |
 
 ---
 
 ### POST /api/call
 
-Calls a single Proxy-WASM CDN hook by name.
+Calls a single named CDN hook on the loaded Proxy-WASM module.
 
 **Request Body**
 
@@ -351,18 +419,34 @@ type CallRequest = {
 };
 ```
 
-`request` and `response` default to `{ headers: {}, body: "" }` when omitted. `properties` defaults to `{}`.
+`request` and `response` default to `{ headers: {}, body: "" }` if omitted. `properties` defaults to `{}`.
 
 **Response**
 
 ```typescript
-type CallResponse = {
-  ok: true;
-  result: HookResult;
+type CallResponse =
+  | {
+      ok: true;
+      result: HookResult;
+    }
+  | { ok: false; error: string | object };
+
+type HookResult = {
+  returnCode: number | null;
+  logs: { level: number; message: string }[];
+  input: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  output: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  properties: Record<string, unknown>;
 };
 ```
-
-See `GET /api/schema/:name` for the `hook-result` and `hook-call` schemas.
 
 **Example**
 
@@ -372,10 +456,14 @@ curl -X POST http://localhost:5179/api/call \
   -d '{
     "hook": "onRequestHeaders",
     "request": {
-      "headers": { "host": "example.com", "x-custom": "value" },
+      "headers": { "host": "example.com", "x-forwarded-for": "1.2.3.4" },
       "body": ""
     },
-    "properties": { "client_country": "DE" }
+    "response": {
+      "headers": {},
+      "body": ""
+    },
+    "properties": { "geo_country": "US" }
   }'
 ```
 
@@ -383,59 +471,100 @@ curl -X POST http://localhost:5179/api/call \
 {
   "ok": true,
   "result": {
-    "action": "continue",
-    "headers": { "host": "example.com", "x-custom": "value" }
+    "returnCode": 0,
+    "logs": [
+      { "level": 2, "message": "onRequestHeaders called" }
+    ],
+    "input": {
+      "request": {
+        "headers": { "host": "example.com", "x-forwarded-for": "1.2.3.4" },
+        "body": ""
+      },
+      "response": { "headers": {}, "body": "" },
+      "properties": { "geo_country": "US" }
+    },
+    "output": {
+      "request": {
+        "headers": { "host": "example.com", "x-forwarded-for": "1.2.3.4", "x-country": "US" },
+        "body": ""
+      },
+      "response": { "headers": {}, "body": "" }
+    },
+    "properties": { "geo_country": "US" }
   }
 }
 ```
 
-**Errors**
+**Error Responses**
 
 | Status | Condition |
-|--------|-----------|
-| `400` | Validation failed (invalid `hook` value, missing required fields) |
+|---|---|
+| `400` | Schema validation failure (invalid `hook` value, missing required fields) |
 | `400` | No WASM module loaded |
-| `500` | Hook execution failed |
+| `500` | Hook execution error |
 
 ---
 
 ### POST /api/send
 
-Executes the full Proxy-WASM CDN request/response flow (all hooks in sequence). Equivalent to `POST /api/execute` for Proxy-WASM, but with stricter schema validation.
+Runs the full CDN request/response flow through all applicable Proxy-WASM hooks. This is the primary endpoint for end-to-end Proxy-WASM testing.
+
+Emits a WebSocket event on completion. Accepts the `X-Source` header.
 
 **Request Body**
 
 ```typescript
 type SendRequest = {
-  /** Target URL. Required. */
-  url: string;
+  url: string;           // Required
   request?: {
-    method?: string;   // default: "GET"
+    method?: string;     // Default: "GET"
     url?: string;
-    headers?: Record<string, string>;  // default: {}
-    body?: string;     // default: ""
+    headers?: Record<string, string>; // Default: {}
+    body?: string;       // Default: ""
   };
   response?: {
-    headers?: Record<string, string>;  // default: {}
-    body?: string;     // default: ""
+    headers?: Record<string, string>; // Default: {}
+    body?: string;       // Default: ""
   };
-  /** Required. Pass {} if no properties needed. */
-  properties: Record<string, unknown>;
+  properties: Record<string, unknown>; // Required (may be empty object)
 };
 ```
 
 **Response**
 
 ```typescript
-type SendResponse = {
-  ok: true;
-  hookResults: HookResult[];
-  finalResponse: HttpResponse;
-  calculatedProperties: Record<string, string>;
+type SendResponse =
+  | {
+      ok: true;
+      hookResults: Record<string, HookResult>;
+      finalResponse: {
+        status: number;
+        statusText: string;
+        headers: Record<string, string>;
+        body: string;
+        contentType: string;
+        isBase64?: boolean;
+      };
+      calculatedProperties?: Record<string, unknown>;
+    }
+  | { ok: false; error: string | object };
+
+type HookResult = {
+  returnCode: number | null;
+  logs: { level: number; message: string }[];
+  input: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  output: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  properties: Record<string, unknown>;
 };
 ```
-
-See `GET /api/schema/:name` for the `full-flow-result`, `hook-result`, and `http-response` schemas.
 
 **Example**
 
@@ -444,43 +573,83 @@ curl -X POST http://localhost:5179/api/send \
   -H "Content-Type: application/json" \
   -H "X-Source: api" \
   -d '{
-    "url": "https://example.com/",
+    "url": "https://example.com/api/resource",
     "request": {
-      "method": "GET",
-      "headers": { "host": "example.com" },
-      "body": ""
+      "method": "POST",
+      "headers": { "content-type": "application/json" },
+      "body": "{\"key\":\"value\"}"
     },
     "response": {
-      "headers": { "content-type": "text/html" },
-      "body": "<html>Hello</html>"
+      "headers": { "content-type": "application/json" },
+      "body": "{\"result\":\"ok\"}"
     },
-    "properties": { "client_country": "US" }
+    "properties": { "datacenter": "eu-west" }
   }'
 ```
 
 ```json
 {
   "ok": true,
-  "hookResults": [
-    { "hook": "onRequestHeaders", "action": "continue" },
-    { "hook": "onResponseHeaders", "action": "continue" }
-  ],
+  "hookResults": {
+    "onRequestHeaders": {
+      "returnCode": 0,
+      "logs": [],
+      "input": {
+        "request": {
+          "headers": { "content-type": "application/json" },
+          "body": ""
+        },
+        "response": { "headers": {}, "body": "" },
+        "properties": { "datacenter": "eu-west" }
+      },
+      "output": {
+        "request": {
+          "headers": { "content-type": "application/json" },
+          "body": ""
+        },
+        "response": { "headers": {}, "body": "" }
+      },
+      "properties": { "datacenter": "eu-west" }
+    },
+    "onResponseHeaders": {
+      "returnCode": 0,
+      "logs": [],
+      "input": {
+        "request": { "headers": {}, "body": "" },
+        "response": {
+          "headers": { "content-type": "application/json" },
+          "body": ""
+        },
+        "properties": { "datacenter": "eu-west" }
+      },
+      "output": {
+        "request": { "headers": {}, "body": "" },
+        "response": {
+          "headers": { "content-type": "application/json", "x-processed": "true" },
+          "body": ""
+        }
+      },
+      "properties": { "datacenter": "eu-west" }
+    }
+  },
   "finalResponse": {
     "status": 200,
-    "headers": { "content-type": "text/html" },
-    "body": "<html>Hello</html>"
+    "statusText": "OK",
+    "headers": { "content-type": "application/json", "x-processed": "true" },
+    "body": "{\"result\":\"ok\"}",
+    "contentType": "application/json"
   },
-  "calculatedProperties": { "client_country": "US" }
+  "calculatedProperties": { "datacenter": "eu-west" }
 }
 ```
 
-**Errors**
+**Error Responses**
 
 | Status | Condition |
-|--------|-----------|
-| `400` | Validation failed (`url` or `properties` missing) |
+|---|---|
+| `400` | Schema validation failure (missing `url` or `properties`) |
 | `400` | No WASM module loaded |
-| `500` | Execution failed |
+| `500` | Flow execution error |
 
 ---
 
@@ -488,24 +657,44 @@ curl -X POST http://localhost:5179/api/send \
 
 ### GET /api/config
 
-Reads `fastedge-config.test.json` from the server's working directory and returns it with a validation result.
+Reads `fastedge-config.test.json` from the project root and returns it along with a schema validation result.
 
 **Response**
 
 ```typescript
-type GetConfigResponse = {
-  ok: true;
-  config: TestConfig;
-  valid: boolean;
-  /** Present only when valid is false. */
-  validationErrors?: {
-    formErrors: string[];
-    fieldErrors: Record<string, string[]>;
+type GetConfigResponse =
+  | {
+      ok: true;
+      config: TestConfig;
+      valid: boolean;
+      validationErrors?: object; // Present when valid is false
+    }
+  | { ok: false; error: string };
+
+type TestConfig = {
+  $schema?: string;
+  description?: string;
+  wasm?: {
+    path: string;
+    description?: string;
+  };
+  request: {
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    body: string;
+  };
+  response?: {
+    headers: Record<string, string>;
+    body: string;
+  };
+  properties: Record<string, unknown>;
+  dotenv?: {
+    enabled?: boolean;
+    path?: string;
   };
 };
 ```
-
-`TestConfig` matches the `api-config` schema shape (see `GET /api/schema/:name`).
 
 **Example**
 
@@ -517,29 +706,34 @@ curl http://localhost:5179/api/config
 {
   "ok": true,
   "config": {
+    "$schema": "http://localhost:5179/api/schema/fastedge-config.test",
+    "wasm": { "path": "./.fastedge/bin/app.wasm" },
     "request": {
       "method": "GET",
-      "url": "https://example.com/",
+      "url": "https://example.com/path",
       "headers": {},
       "body": ""
     },
-    "properties": {}
+    "response": { "headers": {}, "body": "" },
+    "properties": { "geo_country": "US" }
   },
   "valid": true
 }
 ```
 
-**Errors**
+**Error Responses**
 
 | Status | Condition |
-|--------|-----------|
-| `404` | `fastedge-config.test.json` does not exist or cannot be read |
+|---|---|
+| `404` | `fastedge-config.test.json` does not exist |
 
 ---
 
 ### POST /api/config
 
-Saves a test configuration object to `fastedge-config.test.json` in the server's working directory.
+Saves a test configuration object to `fastedge-config.test.json` in the project root. If the config contains a `properties` field, a WebSocket event is emitted to notify connected clients.
+
+Accepts the `X-Source` header.
 
 **Request Body**
 
@@ -553,7 +747,7 @@ type PostConfigRequest = {
       description?: string;
     };
     request: {
-      method: string;    // default: "GET"
+      method: string;
       url: string;
       headers: Record<string, string>;
       body: string;
@@ -562,8 +756,7 @@ type PostConfigRequest = {
       headers: Record<string, string>;
       body: string;
     };
-    /** Required. Pass {} if no properties needed. */
-    properties: Record<string, unknown>;
+    properties: Record<string, unknown>; // Required
     dotenv?: {
       enabled?: boolean;
       path?: string;
@@ -575,9 +768,9 @@ type PostConfigRequest = {
 **Response**
 
 ```typescript
-type PostConfigResponse = {
-  ok: true;
-};
+type PostConfigResponse =
+  | { ok: true }
+  | { ok: false; error: string | object };
 ```
 
 **Example**
@@ -588,13 +781,16 @@ curl -X POST http://localhost:5179/api/config \
   -H "X-Source: api" \
   -d '{
     "config": {
+      "$schema": "http://localhost:5179/api/schema/fastedge-config.test",
+      "wasm": { "path": "./.fastedge/bin/app.wasm" },
       "request": {
         "method": "GET",
         "url": "https://example.com/",
-        "headers": { "host": "example.com" },
+        "headers": {},
         "body": ""
       },
-      "properties": { "client_country": "US" }
+      "response": { "headers": {}, "body": "" },
+      "properties": { "geo_country": "DE" }
     }
   }'
 ```
@@ -603,38 +799,37 @@ curl -X POST http://localhost:5179/api/config \
 { "ok": true }
 ```
 
-**Errors**
+**Error Responses**
 
 | Status | Condition |
-|--------|-----------|
-| `400` | Validation failed (missing required `config.request` or `config.properties`) |
-| `500` | File write failed |
+|---|---|
+| `400` | Schema validation failure |
+| `500` | File write error |
 
 ---
 
 ### POST /api/config/save-as
 
-Saves a test configuration object to an arbitrary file path. Creates intermediate directories if needed.
+Saves a test configuration object to an arbitrary file path. Creates intermediate directories if they do not exist. Appends `.json` if the path does not already end with it.
 
 **Request Body**
 
 ```typescript
 type SaveAsRequest = {
-  /** Config object (same shape as POST /api/config). */
-  config: object;
-  /** Absolute or relative file path. A .json extension is appended if missing. */
-  filePath: string;
+  config: object;    // Any valid config object
+  filePath: string;  // Absolute or relative path (relative to server project root)
 };
 ```
 
 **Response**
 
 ```typescript
-type SaveAsResponse = {
-  ok: true;
-  /** The resolved absolute path where the file was written. */
-  savedPath: string;
-};
+type SaveAsResponse =
+  | {
+      ok: true;
+      savedPath: string; // The resolved absolute path where the file was written
+    }
+  | { ok: false; error: string };
 ```
 
 **Example**
@@ -645,31 +840,30 @@ curl -X POST http://localhost:5179/api/config/save-as \
   -d '{
     "config": {
       "request": {
-        "method": "POST",
-        "url": "https://api.example.com/submit",
-        "headers": { "content-type": "application/json" },
-        "body": "{\"key\": \"value\"}"
+        "method": "GET",
+        "url": "https://example.com/",
+        "headers": {},
+        "body": ""
       },
       "properties": {}
     },
-    "filePath": "configs/my-test"
+    "filePath": "configs/staging-test"
   }'
 ```
 
 ```json
 {
   "ok": true,
-  "savedPath": "/home/user/project/configs/my-test.json"
+  "savedPath": "/home/user/project/configs/staging-test.json"
 }
 ```
 
-**Errors**
+**Error Responses**
 
 | Status | Condition |
-|--------|-----------|
-| `400` | `config` is missing |
-| `400` | `filePath` is missing |
-| `500` | File write or directory creation failed |
+|---|---|
+| `400` | `config` or `filePath` missing from request body |
+| `500` | File system error |
 
 ---
 
@@ -677,39 +871,39 @@ curl -X POST http://localhost:5179/api/config/save-as \
 
 ### GET /api/schema/:name
 
-Serves a JSON Schema file by name. Useful for editor validation, request body construction, and response parsing.
+Serves a JSON Schema file by name. Use these schemas to validate request bodies or understand response shapes before making API calls.
 
 **Path Parameter**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `name` | `string` | Schema name without the `.schema.json` suffix |
-
-**Available Schemas**
-
-**Request Schemas** — use these to validate or construct request bodies:
-
-| Name | Validates |
-|------|-----------|
-| `api-load` | `POST /api/load` request body |
-| `api-send` | `POST /api/send` request body |
-| `api-call` | `POST /api/call` request body |
-| `api-config` | `POST /api/config` request body |
-
-**Response / Type Schemas** — use these to parse and validate response payloads:
-
-| Name | Describes |
-|------|-----------|
-| `fastedge-config.test` | Shape of `fastedge-config.test.json` |
-| `hook-result` | Single hook execution result (used in `hookResults` arrays) |
-| `hook-call` | Hook call input shape (used with `/api/call`) |
-| `full-flow-result` | Complete flow result from `/api/send` and Proxy-WASM `/api/execute` |
-| `http-request` | HTTP request object shape |
-| `http-response` | HTTP response object shape |
+| Parameter | Description |
+|---|---|
+| `name` | Schema name without the `.schema.json` suffix |
 
 **Response**
 
-Returns the schema as `application/json`.
+Returns the JSON Schema document with `Content-Type: application/json`.
+
+**Available Schemas**
+
+**Request Schemas** — validate bodies sent to the API:
+
+| Name | Endpoint |
+|---|---|
+| `api-load` | `POST /api/load` |
+| `api-send` | `POST /api/send` |
+| `api-call` | `POST /api/call` |
+| `api-config` | `POST /api/config` |
+
+**Response / Type Schemas** — describe response shapes and shared types:
+
+| Name | Description |
+|---|---|
+| `fastedge-config.test` | Shape of `fastedge-config.test.json` |
+| `hook-result` | `HookResult` type returned by `/api/call` |
+| `hook-call` | `HookCall` input type |
+| `full-flow-result` | `FullFlowResult` type returned by `/api/send` and `/api/execute` (Proxy-WASM) |
+| `http-request` | HTTP request shape for HTTP-WASM |
+| `http-response` | HTTP response shape for HTTP-WASM |
 
 **Example**
 
@@ -717,17 +911,15 @@ Returns the schema as `application/json`.
 curl http://localhost:5179/api/schema/api-send
 ```
 
-```typescript
-// Fetch and use for validation in Node.js
-const schema = await fetch("http://localhost:5179/api/schema/api-load")
-  .then(r => r.json());
+```bash
+curl http://localhost:5179/api/schema/full-flow-result
 ```
 
-**Errors**
+**Error Responses**
 
 | Status | Condition |
-|--------|-----------|
-| `404` | No schema file found for the given name |
+|---|---|
+| `404` | Schema name not found |
 
 ---
 
@@ -742,30 +934,37 @@ type ErrorResponse = {
 };
 ```
 
-When a request body fails Zod schema validation, `error` is a flattened Zod error object:
+Endpoints that use Zod schema validation (`/api/load`, `/api/call`, `/api/send`, `POST /api/config`) return a structured `ZodFlattenedError` object on validation failure:
 
-```typescript
-type ZodFlattenedError = {
-  formErrors: string[];
-  fieldErrors: Record<string, string[]>;
-};
+```json
+{
+  "ok": false,
+  "error": {
+    "formErrors": [],
+    "fieldErrors": {
+      "url": ["Required"],
+      "properties": ["Required"]
+    }
+  }
+}
 ```
 
-When an error is a runtime exception, `error` is the string representation of the thrown value.
+Endpoints that perform manual validation return a plain string in `error`.
 
-**Common status codes**
+**Common Status Codes**
 
 | Status | Meaning |
-|--------|---------|
-| `400` | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded) |
+|---|---|
+| `400` | Invalid request body or a precondition not met (e.g. no WASM loaded) |
 | `404` | Resource not found (config file, schema file) |
-| `500` | Server-side execution error |
+| `500` | Internal server error during execution |
 
 ---
 
 ## See Also
 
-- [WEBSOCKET.md](WEBSOCKET.md) — WebSocket protocol and real-time event types
-- [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) — Test framework API for writing automated tests
-- [RUNNER.md](RUNNER.md) — Runner API and programmatic server startup
-- [DEBUGGER.md](DEBUGGER.md) — Server configuration, environment variables, and startup options
+- [DEBUGGER.md](DEBUGGER.md) — server startup, environment variables, port configuration
+- [WEBSOCKET.md](WEBSOCKET.md) — WebSocket protocol and broadcast event shapes
+- [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) — test framework API for writing automated tests
+- [RUNNER.md](RUNNER.md) — programmatic runner API
+- [TEST_CONFIG.md](TEST_CONFIG.md) — `fastedge-config.test.json` format and fields

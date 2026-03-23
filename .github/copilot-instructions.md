@@ -27,7 +27,7 @@ When reviewing PRs, check whether code changes affect any of the following and f
 | `server/server.ts`, `server/routes/` | `docs/API.md` |
 | `server/test-framework/` | `docs/TEST_FRAMEWORK.md` |
 | `schemas/fastedge-config.test.schema.json` | `docs/TEST_CONFIG.md` |
-| `server/server.ts` (startup, port, health) | `docs/LOCAL_SERVER.md` |
+| `server/server.ts` (startup, port, health) | `docs/DEBUGGER.md` |
 
 ### Pipeline source contract
 If `fastedge-plugin-source/.generation-config.md` exists, check whether changed source files overlap with those listed in it. If so, flag that `docs/` may need updating to keep the plugin pipeline's source material current.

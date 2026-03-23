@@ -156,7 +156,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     // Path-based loading (preferred for performance)
     if (wasmPath) {
       if (typeof wasmPath !== "string") {
-        res.status(400).json({ error: "wasmPath must be a string" });
+        res.status(400).json({ ok: false, error: "wasmPath must be a string" });
         return;
       }
 
@@ -167,6 +167,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
         const workspacePath = process.env.WORKSPACE_PATH;
         if (!workspacePath) {
           res.status(400).json({
+            ok: false,
             error:
               "<workspace> placeholder only available in VSCode environment",
           });
@@ -183,7 +184,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
       });
 
       if (!validationResult.valid) {
-        res.status(400).json({ error: validationResult.error });
+        res.status(400).json({ ok: false, error: validationResult.error });
         return;
       }
 
@@ -198,7 +199,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     // Buffer-based loading (fallback for web UI)
     else if (wasmBase64) {
       if (typeof wasmBase64 !== "string") {
-        res.status(400).json({ error: "wasmBase64 must be a string" });
+        res.status(400).json({ ok: false, error: "wasmBase64 must be a string" });
         return;
       }
 
@@ -208,7 +209,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
       fileName = "binary.wasm";
     } else {
       // This shouldn't happen due to validation above, but TypeScript needs it
-      res.status(400).json({ error: "Missing wasmBase64 or wasmPath" });
+      res.status(400).json({ ok: false, error: "Missing wasmBase64 or wasmPath" });
       return;
     }
 
@@ -302,7 +303,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
   if (!currentRunner) {
     res
       .status(400)
-      .json({ error: "No WASM module loaded. Call /api/load first." });
+      .json({ ok: false, error: "No WASM module loaded. Call /api/load first." });
     return;
   }
 
@@ -310,7 +311,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
     if (currentRunner.getType() === "http-wasm") {
       // HTTP WASM: Simple request/response
       if (!url || typeof url !== "string") {
-        res.status(400).json({ error: "Missing url for HTTP WASM request" });
+        res.status(400).json({ ok: false, error: "Missing url for HTTP WASM request" });
         return;
       }
 
@@ -340,7 +341,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
     } else {
       // Proxy-wasm: Use existing callFullFlow
       if (!url || typeof url !== "string") {
-        res.status(400).json({ error: "Missing url" });
+        res.status(400).json({ ok: false, error: "Missing url" });
         return;
       }
 
@@ -394,7 +395,7 @@ app.post("/api/call", async (req: Request, res: Response) => {
   if (!currentRunner) {
     res
       .status(400)
-      .json({ error: "No WASM module loaded. Call /api/load first." });
+      .json({ ok: false, error: "No WASM module loaded. Call /api/load first." });
     return;
   }
 
@@ -423,7 +424,7 @@ app.post("/api/send", async (req: Request, res: Response) => {
   if (!currentRunner) {
     res
       .status(400)
-      .json({ error: "No WASM module loaded. Call /api/load first." });
+      .json({ ok: false, error: "No WASM module loaded. Call /api/load first." });
     return;
   }
 
@@ -558,11 +559,11 @@ app.post("/api/config/save-as", async (req: Request, res: Response) => {
   try {
     const { config, filePath } = req.body ?? {};
     if (!config) {
-      res.status(400).json({ error: "Missing config" });
+      res.status(400).json({ ok: false, error: "Missing config" });
       return;
     }
     if (!filePath) {
-      res.status(400).json({ error: "Missing filePath" });
+      res.status(400).json({ ok: false, error: "Missing filePath" });
       return;
     }
 

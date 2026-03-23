@@ -1,6 +1,6 @@
 # WebSocket API
 
-Real-time event stream from the test runner server to connected clients.
+Real-time event stream from the `@gcoredev/fastedge-test` server to connected clients.
 
 ## Connection
 
@@ -10,49 +10,51 @@ Connect to the WebSocket server at:
 ws://localhost:{port}/ws
 ```
 
-Replace `{port}` with the port the server is running on (default: `5179`).
+where `{port}` is the port the server is running on (default `5179`).
 
-```javascript
-const ws = new WebSocket('ws://localhost:5179/ws');
+```typescript
+const ws = new WebSocket("ws://localhost:5179/ws");
 
-ws.addEventListener('message', (event) => {
+ws.addEventListener("open", () => {
+  console.log("Connected");
+});
+
+ws.addEventListener("message", (event) => {
   const data = JSON.parse(event.data);
   console.log(data.type, data);
 });
 ```
 
-On connection, the server immediately sends a `connection_status` event confirming the connection and current client count.
-
-## Connection Lifecycle
+### Connection Lifecycle
 
 | Phase | Description |
 |---|---|
-| Connect | Client opens a WebSocket to `/ws`. Server sends `connection_status` with `connected: true`. |
-| Active | Server broadcasts events to all connected clients as test runner state changes. |
-| Ping/Pong | Server pings clients every 15 seconds. Clients inactive for more than 30 seconds are terminated. |
-| Disconnect | Client closes the connection or is terminated. Remaining clients receive an updated `connection_status`. |
-
-The WebSocket protocol's native ping/pong frames are used for keepalive — no application-level heartbeat is required.
+| Connect | Server sends a `connection_status` event immediately on connection |
+| Active | Server broadcasts events as they occur; server pings every 15 seconds |
+| Ping/Pong | Server uses WebSocket-level `ping` frames; clients must respond with `pong` (most WebSocket clients do this automatically) |
+| Timeout | Clients that do not respond to pings within 30 seconds are terminated |
+| Disconnect | Connection closes normally; remaining clients receive an updated `connection_status` |
 
 ## Event Format
 
-All events share a common base structure:
+All events share a common envelope:
 
 ```typescript
 interface BaseEvent {
-  type: string;
-  timestamp: number;      // Unix milliseconds
-  source: EventSource;    // "ui" | "ai_agent" | "api" | "system"
+  type: string;       // Event discriminator
+  timestamp: number;  // Unix milliseconds (Date.now())
+  source: "ui" | "ai_agent" | "api" | "system";
+  data: object;       // Event-specific payload
 }
 ```
 
-Every message is a JSON object. Parse with `JSON.parse(event.data)` and switch on `type` to handle specific events.
+Events are delivered as JSON strings. Parse with `JSON.parse(event.data)` and switch on `type`.
 
 ## Event Types
 
 ### wasm_loaded
 
-Fired when a WASM binary has been loaded into the runner.
+Fired when a WASM binary has been loaded and is ready for execution.
 
 ```typescript
 interface WasmLoadedEvent {
@@ -69,24 +71,34 @@ interface WasmLoadedEvent {
 }
 ```
 
+| Field | Description |
+|---|---|
+| `filename` | Name of the loaded WASM file |
+| `size` | File size in bytes |
+| `runnerPort` | Port used by the runner process, or `null` if not applicable |
+| `wasmType` | Whether this is a proxy-wasm or http-wasm binary |
+| `resolvedPath` | Absolute path to the file on disk, or `null` |
+
 ```json
 {
   "type": "wasm_loaded",
-  "timestamp": 1742652000000,
+  "timestamp": 1742738400000,
   "source": "api",
   "data": {
     "filename": "my-filter.wasm",
     "size": 204800,
-    "runnerPort": 5179,
+    "runnerPort": 8080,
     "wasmType": "proxy-wasm",
-    "resolvedPath": "/workspace/my-filter.wasm"
+    "resolvedPath": "/home/user/project/my-filter.wasm"
   }
 }
 ```
 
+---
+
 ### request_started
 
-Fired when the runner begins executing a request against the loaded WASM.
+Fired at the beginning of a request execution, before any hooks run.
 
 ```typescript
 interface RequestStartedEvent {
@@ -104,22 +116,24 @@ interface RequestStartedEvent {
 ```json
 {
   "type": "request_started",
-  "timestamp": 1742652001000,
+  "timestamp": 1742738400000,
   "source": "api",
   "data": {
     "url": "https://example.com/api/resource",
     "method": "GET",
     "headers": {
-      "x-custom-header": "value",
-      "content-type": "application/json"
+      "accept": "application/json",
+      "x-forwarded-for": "1.2.3.4"
     }
   }
 }
 ```
 
+---
+
 ### hook_executed
 
-Fired each time an individual proxy-wasm hook completes during a request. Multiple `hook_executed` events may be emitted per request, one per hook invocation.
+Fired after each individual proxy-wasm hook completes. Multiple `hook_executed` events may be emitted per request.
 
 ```typescript
 interface HookExecutedEvent {
@@ -142,25 +156,33 @@ interface HookExecutedEvent {
 }
 ```
 
+| Field | Description |
+|---|---|
+| `hook` | Hook name (e.g. `on_request_headers`, `on_response_headers`) |
+| `returnCode` | The action code returned by the hook, or `null` |
+| `logCount` | Number of log lines emitted by this hook |
+| `input` | Request and response state passed into the hook |
+| `output` | Request and response state after the hook ran |
+
 ```json
 {
   "type": "hook_executed",
-  "timestamp": 1742652001050,
+  "timestamp": 1742738400000,
   "source": "system",
   "data": {
-    "hook": "on_http_request_headers",
+    "hook": "on_request_headers",
     "returnCode": 0,
     "logCount": 2,
     "input": {
       "request": {
-        "headers": { "x-forwarded-for": "1.2.3.4" },
+        "headers": { ":method": "GET", ":path": "/api/resource" },
         "body": ""
       },
       "response": { "headers": {}, "body": "" }
     },
     "output": {
       "request": {
-        "headers": { "x-forwarded-for": "1.2.3.4", "x-added-by-wasm": "true" },
+        "headers": { ":method": "GET", ":path": "/api/resource", "x-added": "value" },
         "body": ""
       },
       "response": { "headers": {}, "body": "" }
@@ -169,9 +191,11 @@ interface HookExecutedEvent {
 }
 ```
 
+---
+
 ### request_completed
 
-Fired when all hooks for a request have completed and a final response has been determined.
+Fired when all hooks have run and the request execution is complete. Contains the aggregated results and final response.
 
 ```typescript
 interface RequestCompletedEvent {
@@ -179,7 +203,7 @@ interface RequestCompletedEvent {
   timestamp: number;
   source: EventSource;
   data: {
-    hookResults: Record<string, unknown>;
+    hookResults: Record<string, any>;
     finalResponse: {
       status: number;
       statusText: string;
@@ -193,34 +217,42 @@ interface RequestCompletedEvent {
 }
 ```
 
+| Field | Description |
+|---|---|
+| `hookResults` | Map of hook name to result data |
+| `finalResponse` | The HTTP response produced by the filter |
+| `finalResponse.isBase64` | If `true`, `body` is base64-encoded binary data |
+| `calculatedProperties` | Property values computed during execution, if any |
+
 ```json
 {
   "type": "request_completed",
-  "timestamp": 1742652001200,
+  "timestamp": 1742738400000,
   "source": "system",
   "data": {
     "hookResults": {
-      "on_http_request_headers": 0,
-      "on_http_response_headers": 0
+      "on_request_headers": { "returnCode": 0 }
     },
     "finalResponse": {
       "status": 200,
       "statusText": "OK",
       "headers": { "content-type": "application/json" },
-      "body": "{\"result\":\"ok\"}",
+      "body": "{\"ok\":true}",
       "contentType": "application/json",
       "isBase64": false
     },
     "calculatedProperties": {
-      "request.path": "/api/resource"
+      "my_property": "computed_value"
     }
   }
 }
 ```
 
+---
+
 ### request_failed
 
-Fired when a request execution fails before completing all hooks.
+Fired when request execution fails due to an error (e.g. WASM trap, invalid input).
 
 ```typescript
 interface RequestFailedEvent {
@@ -237,18 +269,20 @@ interface RequestFailedEvent {
 ```json
 {
   "type": "request_failed",
-  "timestamp": 1742652001100,
+  "timestamp": 1742738400000,
   "source": "system",
   "data": {
-    "error": "WASM trap: unreachable",
-    "details": "Hook on_http_request_headers panicked at src/lib.rs:42"
+    "error": "WASM execution failed",
+    "details": "RuntimeError: unreachable executed at offset 0x1a2b"
   }
 }
 ```
 
+---
+
 ### properties_updated
 
-Fired when the set of active proxy-wasm properties changes.
+Fired when the set of proxy-wasm properties is updated on the server.
 
 ```typescript
 interface PropertiesUpdatedEvent {
@@ -261,23 +295,27 @@ interface PropertiesUpdatedEvent {
 }
 ```
 
+`properties` is the full current property map after the update — not a diff.
+
 ```json
 {
   "type": "properties_updated",
-  "timestamp": 1742652002000,
+  "timestamp": 1742738400000,
   "source": "api",
   "data": {
     "properties": {
-      "request.path": "/api/resource",
-      "upstream.address": "10.0.0.1"
+      "plugin.name": "my-filter",
+      "plugin.vm_id": "vm1"
     }
   }
 }
 ```
 
+---
+
 ### http_wasm_request_completed
 
-Fired when an http-wasm request completes. Equivalent to `request_completed` for the http-wasm runtime.
+Fired when an http-wasm filter finishes processing a request. Equivalent to `request_completed` but for http-wasm binaries.
 
 ```typescript
 interface HttpWasmRequestCompletedEvent {
@@ -300,14 +338,14 @@ interface HttpWasmRequestCompletedEvent {
 ```json
 {
   "type": "http_wasm_request_completed",
-  "timestamp": 1742652003000,
+  "timestamp": 1742738400000,
   "source": "system",
   "data": {
     "response": {
       "status": 403,
       "statusText": "Forbidden",
       "headers": { "content-type": "text/plain" },
-      "body": "Blocked by policy",
+      "body": "Access denied",
       "contentType": "text/plain",
       "isBase64": false
     }
@@ -315,9 +353,11 @@ interface HttpWasmRequestCompletedEvent {
 }
 ```
 
+---
+
 ### http_wasm_log
 
-Fired for each log line emitted by an http-wasm module. Events are streamed in real-time during both execute and live modes.
+Fired for each log line emitted by an http-wasm filter. These are streamed in real-time during both single-execution and live-mode runs.
 
 ```typescript
 interface HttpWasmLogEvent {
@@ -331,21 +371,19 @@ interface HttpWasmLogEvent {
 }
 ```
 
-Log levels follow the proxy-wasm log level convention:
-
-| Level | Meaning |
+| `level` | Meaning |
 |---|---|
-| `0` | trace |
-| `1` | debug |
-| `2` | info |
-| `3` | warn |
-| `4` | error |
-| `5` | critical |
+| `0` | Trace |
+| `1` | Debug |
+| `2` | Info |
+| `3` | Warn |
+| `4` | Error |
+| `5` | Critical |
 
 ```json
 {
   "type": "http_wasm_log",
-  "timestamp": 1742652003050,
+  "timestamp": 1742738400000,
   "source": "system",
   "data": {
     "level": 2,
@@ -354,9 +392,11 @@ Log levels follow the proxy-wasm log level convention:
 }
 ```
 
+---
+
 ### connection_status
 
-Sent by the server to all clients when a client connects or disconnects, and immediately to a newly connected client as a welcome message. Also sent in response to a client `ping` message (see [Client Messages](#client-messages)).
+Fired on initial connection and whenever the connected client count changes (a client connects or disconnects). Can also be received in response to a client `ping` message.
 
 ```typescript
 interface ConnectionStatusEvent {
@@ -370,40 +410,35 @@ interface ConnectionStatusEvent {
 }
 ```
 
+| Field | Description |
+|---|---|
+| `connected` | Always `true` when received (connection is established) |
+| `clientCount` | Total number of currently connected WebSocket clients |
+
 ```json
 {
   "type": "connection_status",
-  "timestamp": 1742652000000,
+  "timestamp": 1742738400000,
   "source": "system",
   "data": {
     "connected": true,
-    "clientCount": 1
+    "clientCount": 2
   }
 }
 ```
 
 ## Client Messages
 
-The WebSocket channel is primarily server → client. One client-initiated message type is supported:
-
-### ping
-
-Send a `ping` message to request the server's current connection status without waiting for the next state change.
+The WebSocket channel is primarily server → client. The only message clients can send is a `ping` to check connectivity:
 
 ```json
 { "type": "ping" }
 ```
 
-The server responds with a `connection_status` event sent only to the requesting client.
-
-```javascript
-ws.send(JSON.stringify({ type: 'ping' }));
-```
-
-All other control commands (loading WASM, executing requests, updating properties) are sent via the REST API documented in API.md.
+The server responds with a `connection_status` event. All other commands (loading WASM, executing requests, updating properties) are performed via the HTTP REST API.
 
 ## See Also
 
-- [API Reference](API.md) — REST endpoints for controlling the test runner
-- [Test Framework](TEST_FRAMEWORK.md) — Using WebSocket events in automated tests
-- [Runner Guide](RUNNER.md) — Starting the server and configuration options
+- [API.md](./API.md) — REST endpoints for executing requests, loading WASM, and updating properties
+- [TEST_FRAMEWORK.md](./TEST_FRAMEWORK.md) — Using WebSocket events within test suites
+- [RUNNER.md](./RUNNER.md) — Starting the server and configuring the port
