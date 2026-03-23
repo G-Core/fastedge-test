@@ -1,132 +1,238 @@
-# Test Configuration: fastedge-config.test.json
+# Test Configuration
 
-## Purpose
+Configuration file schema for `fastedge-config.test.json` — defines the WASM binary, request inputs, mock origin response, CDN properties, and environment variable loading for a single test scenario.
 
-`fastedge-config.test.json` is the test configuration file. It auto-loads in the visual debugger and can be loaded programmatically via `loadConfigFile()`. It persists request setup, WASM path, CDN properties, and log level. It does NOT store secrets or env vars inline — those go in dotenv files.
+## Overview
 
----
+Each test scenario is described by a `fastedge-config.test.json` file. The file is loaded and validated against the schema before execution. Fields with defaults are optional at runtime; fields marked required must be present.
 
-## Schema
+The configuration covers two execution modes:
 
-| Field              | Type                   | Required         | Default | Notes                                                                                                        |
-| ------------------ | ---------------------- | ---------------- | ------- | ------------------------------------------------------------------------------------------------------------ |
-| `$schema`          | string                 | optional         | —       | Path to `./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json` for IDE validation |
-| `description`      | string                 | optional         | —       | Human label for this config                                                                                  |
-| `wasm.path`        | string                 | required-if-wasm | —       | Relative or absolute path to compiled WASM binary                                                            |
-| `wasm.description` | string                 | optional         | —       | Label for the loaded binary                                                                                  |
-| `request.method`   | string                 | required         | `"GET"` | HTTP method                                                                                                  |
-| `request.url`      | string                 | required         | —       | Full URL or path                                                                                             |
-| `request.headers`  | object (string→string) | required         | `{}`    | Request headers                                                                                              |
-| `request.body`     | string                 | required         | `""`    | Request body                                                                                                 |
-| `response.headers` | object                 | optional         | —       | CDN only — mock origin response headers                                                                      |
-| `response.body`    | string                 | optional         | —       | CDN only — mock origin response body                                                                         |
-| `properties`       | object                 | required         | `{}`    | CDN property key/value pairs (e.g. `"request.country": "US"`)                                                |
-| `dotenv`           | object                 | optional         | `{}`    | Dotenv configuration: `{ enabled: boolean, path?: string }`                                                  |
-| `logLevel`         | integer 0–4            | optional         | `0`     | 0=trace, 1=debug, 2=info, 3=warn, 4=error                                                                    |
+- **CDN mode** — runs the WASM binary through the full CDN request/response lifecycle, including mock origin responses and CDN property values.
+- **HTTP-WASM mode** — runs the WASM binary as an HTTP filter without CDN-specific properties or origin response simulation.
 
-**Note on `response`**: only relevant for CDN (proxy-wasm) apps. Provides the mock origin response that the WASM filter can inspect and modify. Omit for HTTP-WASM apps.
+## Schema Reference
 
----
+| JSON path | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `$schema` | `string` | No | — | URI to the JSON schema file for IDE validation and autocompletion. |
+| `description` | `string` | No | — | Human-readable label for the configuration, shown in the UI. |
+| `wasm.path` | `string` | Yes (if no inline binary) | — | Path to the compiled `.wasm` binary, relative to the config file. |
+| `wasm.description` | `string` | No | — | Human-readable label for the WASM binary. |
+| `request.method` | `string` | No | `"GET"` | HTTP method for the simulated incoming request. |
+| `request.url` | `string` | Yes | — | Full URL or path for the simulated incoming request (e.g. `https://example.com/path` or `/path`). |
+| `request.headers` | `Record<string, string>` | No | `{}` | HTTP headers to include on the simulated incoming request. |
+| `request.body` | `string` | No | `""` | Body of the simulated incoming request. |
+| `response.headers` | `Record<string, string>` | No | `{}` | CDN only: headers returned by the mock origin server. |
+| `response.body` | `string` | No | `""` | CDN only: body returned by the mock origin server. |
+| `properties` | `Record<string, unknown>` | No | `{}` | CDN property key/value pairs made available to the WASM binary via the properties API. |
+| `dotenv.enabled` | `boolean` | No | — | When `true`, loads a `.env` file before executing the WASM binary. |
+| `dotenv.path` | `string` | No | — | Path to the `.env` file, relative to the config file. Defaults to `.env` in the same directory as the config file when `dotenv.enabled` is `true` and no path is specified. |
 
-## Runtime Secrets and Env Vars via Dotenv
+### Type Definitions
 
-`envVars` and secrets are NOT fields in `fastedge-config.test.json`. They are injected at runtime from dotenv files.
+```typescript
+interface WasmConfig {
+  path: string;
+  description?: string;
+}
 
-**Option A — single `.env` file with prefixes:**
+interface RequestConfig {
+  method: string;       // default: "GET"
+  url: string;
+  headers: Record<string, string>;  // default: {}
+  body: string;         // default: ""
+}
 
+interface ResponseConfig {
+  headers: Record<string, string>;  // default: {}
+  body: string;         // default: ""
+}
+
+interface TestConfig {
+  $schema?: string;
+  description?: string;
+  wasm?: WasmConfig;
+  request: RequestConfig;
+  response?: ResponseConfig;
+  properties?: Record<string, unknown>;  // default: {}
+  dotenv?: {
+    enabled?: boolean;
+    path?: string;
+  };
+}
 ```
-FASTEDGE_VAR_ENV_API_URL=https://api.example.com
-FASTEDGE_VAR_SECRET_JWT_KEY=my-secret
-FASTEDGE_VAR_REQ_HEADER_X_CUSTOM=value
-FASTEDGE_VAR_RSP_HEADER_CACHE_CONTROL=no-store
-```
 
-**Option B — separate files (no prefix needed):**
+### Required Fields
 
-- `.env.variables` → env vars
-- `.env.secrets` → secrets
-- `.env.req_headers` → request headers
-- `.env.rsp_headers` → response headers
+Only two fields are required by the schema:
 
-**Priority order (highest to lowest):**
+- `request` — the object itself (with `url` inside it)
+- `request.url` — the URL for the simulated request
 
-1. Direct `RunnerConfig` values
-2. `.env` (prefixed)
-3. `.env.variables` / `.env.secrets` / `.env.req_headers` / `.env.rsp_headers`
-4. `fastedge-config.test.json` fallback
+All other fields either have defaults or are fully optional. The `wasm` object is optional in the JSON schema to support programmatic usage where the binary is supplied via `wasmBuffer` rather than a file path. When loading configs for file-based execution, `wasm.path` must be set.
 
----
+## Dotenv Configuration
 
-## CDN Example
+When `dotenv.enabled` is `true`, the runner loads a `.env` file and merges its values into the environment before executing the WASM binary.
+
+**File resolution:**
+
+1. If `dotenv.path` is set, that path is resolved relative to the config file's directory.
+2. If `dotenv.path` is not set, the runner looks for `.env` in the same directory as the config file.
+
+**Precedence:** Values from the `.env` file do not override environment variables that are already set in the process environment. Variables present in the `.env` file but absent from the process environment are added.
+
+**CDN vs HTTP-WASM:** Dotenv works the same way in both modes. Loaded values are available to the WASM binary through the environment API. In CDN mode, environment variables are separate from CDN `properties` — they are different access mechanisms.
+
+**Security note:** Do not commit `.env` files containing secrets to source control. Use `.env` for local development and CI secret injection for production pipelines.
+
+## Examples
+
+### Minimal CDN Configuration
 
 ```json
 {
   "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
-  "description": "CDN geo-filter app",
   "wasm": {
-    "path": "./dist/filter.wasm",
-    "description": "Geo-filter proxy-wasm binary"
+    "path": "./dist/main.wasm"
+  },
+  "request": {
+    "url": "https://example.com/api/hello",
+    "method": "GET"
+  },
+  "properties": {}
+}
+```
+
+### CDN with Properties and Secrets
+
+```json
+{
+  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
+  "description": "Auth middleware — production-like config",
+  "wasm": {
+    "path": "./dist/auth.wasm",
+    "description": "Auth middleware binary"
   },
   "request": {
     "method": "GET",
-    "url": "https://example.com/page",
+    "url": "https://example.com/protected/resource",
     "headers": {
-      "User-Agent": "Mozilla/5.0"
+      "authorization": "Bearer test-token-abc123",
+      "x-forwarded-for": "203.0.113.42"
     },
     "body": ""
+  },
+  "properties": {
+    "auth_mode": "jwt",
+    "allowed_origins": "example.com,api.example.com",
+    "rate_limit": 100
+  },
+  "dotenv": {
+    "enabled": true,
+    "path": "./.env.test"
+  }
+}
+```
+
+The `.env.test` file for the above:
+
+```ini
+JWT_SECRET=dev-secret-do-not-use-in-production
+TOKEN_ISSUER=https://auth.example.com
+```
+
+### HTTP-WASM Configuration
+
+HTTP-WASM mode does not use `response` or `properties`. Omit them or leave `properties` as `{}`.
+
+```json
+{
+  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
+  "description": "Header rewrite filter",
+  "wasm": {
+    "path": "./dist/header-rewrite.wasm"
+  },
+  "request": {
+    "method": "POST",
+    "url": "https://example.com/submit",
+    "headers": {
+      "content-type": "application/json",
+      "x-request-id": "abc-123"
+    },
+    "body": "{\"key\": \"value\"}"
+  },
+  "properties": {}
+}
+```
+
+### Custom Origin Response
+
+Use `response` to control what the mock origin returns to the WASM binary during CDN execution. This lets you test how your binary handles different upstream responses without running a real origin server.
+
+```json
+{
+  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
+  "description": "Test binary behavior on 404 from origin",
+  "wasm": {
+    "path": "./dist/error-handler.wasm"
+  },
+  "request": {
+    "method": "GET",
+    "url": "https://example.com/missing-page",
+    "headers": {}
   },
   "response": {
     "headers": {
-      "Content-Type": "text/html"
+      "content-type": "text/plain",
+      "x-origin-error": "not-found"
     },
-    "body": "<html>Original content</html>"
+    "body": "Not Found"
   },
   "properties": {
-    "request.country": "US",
-    "client.ip": "1.2.3.4"
-  },
-  "dotenv": { "enabled": true },
-  "logLevel": 0
+    "custom_404_page": "/errors/404.html"
+  }
 }
 ```
 
----
+## IDE Integration
 
-## HTTP-WASM Example
+Set `$schema` to enable JSON schema validation, field autocompletion, and inline documentation in VSCode and other editors that support JSON Schema Draft 2020-12.
 
 ```json
 {
-  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
-  "description": "HTTP API handler",
-  "wasm": {
-    "path": "./dist/app.wasm",
-    "description": "HTTP-WASM binary"
-  },
-  "request": {
-    "method": "GET",
-    "url": "http://localhost/api/hello",
-    "headers": {},
-    "body": ""
-  },
-  "properties": {},
-  "dotenv": { "enabled": true },
-  "logLevel": 0
+  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json"
 }
 ```
 
----
+The schema file is published as part of the package at `schemas/fastedge-config.test.schema.json`. Use a relative path from the config file to the schema inside `node_modules`.
 
-## What to Commit / Gitignore
+For monorepos or non-standard `node_modules` locations, adjust the path accordingly:
 
-**Commit:**
-
-- `fastedge-config.test.json` — use placeholder values for any sensitive fields
-- `.env.example` — document expected variable names, no real values
-
-**Gitignore:**
-
+```json
+{
+  "$schema": "../../node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json"
+}
 ```
-.env
-.env.*
-!.env.example
+
+## Programmatic Usage
+
+To load and validate a `fastedge-config.test.json` file in code, use `loadConfigFile` from the test framework:
+
+```typescript
+import { loadConfigFile } from '@gcoredev/fastedge-test';
+
+const config = await loadConfigFile('./fastedge-config.test.json');
+// config is a validated TestConfig — all fields have their defaults applied
+console.log(config.request.method); // "GET"
 ```
+
+`loadConfigFile` reads the file, parses JSON, and validates against the schema. It throws a descriptive error if the file cannot be read, contains invalid JSON, or fails schema validation.
+
+The returned `TestConfig` type has all optional fields resolved with their defaults — for example, `request.headers` is always `Record<string, string>` (never `undefined`) after validation.
+
+## See Also
+
+- [TEST_FRAMEWORK.md](./TEST_FRAMEWORK.md) — using `loadConfigFile`, `defineTestSuite`, and `runTestSuite` in test code
+- [API.md](./API.md) — `GET /api/config` and `POST /api/config` endpoints for reading and writing config via REST

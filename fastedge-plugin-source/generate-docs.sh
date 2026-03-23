@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Generate docs/ from source code using .generation-config.md
+# Usage:
+#   ./fastedge-plugin-source/generate-docs.sh                  # all files (parallel where possible)
+#   ./fastedge-plugin-source/generate-docs.sh API.md           # specific file
+#   ./fastedge-plugin-source/generate-docs.sh API.md RUNNER.md # multiple files
+
+# Model to use for generation (sonnet is recommended for cost efficiency)
+MODEL="sonnet"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/.generation-config.md"
+DOCS_DIR="$REPO_ROOT/docs"
+
+# Dependency tiers for parallel execution:
+#   Tier 1: Core reference files (independent — read from source code only)
+#   Tier 2: quickstart.md (may reference patterns from tier 1 docs)
+#   Tier 3: INDEX.md (summarizes all other docs)
+TIER1_FILES=("DEBUGGER.md" "API.md" "WEBSOCKET.md" "RUNNER.md" "TEST_CONFIG.md" "TEST_FRAMEWORK.md")
+TIER2_FILES=("quickstart.md")
+TIER3_FILES=("INDEX.md")
+
+ALL_FILES=("${TIER1_FILES[@]}" "${TIER2_FILES[@]}" "${TIER3_FILES[@]}")
+
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "Error: $CONFIG_FILE not found"
+  exit 1
+fi
+
+# Determine which files to generate
+if [ $# -eq 0 ]; then
+  targets=("${ALL_FILES[@]}")
+  run_all=true
+else
+  targets=("$@")
+  run_all=false
+  # Validate targets
+  for target in "${targets[@]}"; do
+    found=false
+    for valid in "${ALL_FILES[@]}"; do
+      if [ "$target" = "$valid" ]; then
+        found=true
+        break
+      fi
+    done
+    if [ "$found" = false ]; then
+      echo "Error: unknown doc file '$target'"
+      echo "Valid files: ${ALL_FILES[*]}"
+      exit 1
+    fi
+  done
+fi
+
+mkdir -p "$DOCS_DIR"
+
+# Source file mappings per doc file
+declare -A SOURCE_FILES
+SOURCE_FILES[INDEX.md]="package.json"
+SOURCE_FILES[quickstart.md]="package.json schemas/fastedge-config.test.schema.json server/test-framework/suite-runner.ts server/runner/standalone.ts server/server.ts"
+SOURCE_FILES[API.md]="server/server.ts schemas/api-load.schema.json schemas/api-send.schema.json schemas/api-call.schema.json schemas/api-config.schema.json"
+SOURCE_FILES[WEBSOCKET.md]="server/websocket/WebSocketManager.ts server/websocket/types.ts server/websocket/index.ts"
+SOURCE_FILES[TEST_FRAMEWORK.md]="server/test-framework/index.ts server/test-framework/suite-runner.ts server/test-framework/assertions.ts server/test-framework/types.ts"
+SOURCE_FILES[RUNNER.md]="server/runner/index.ts server/runner/standalone.ts server/runner/IWasmRunner.ts server/runner/types.ts server/runner/IStateManager.ts server/runner/ProxyWasmRunner.ts server/runner/HttpWasmRunner.ts"
+SOURCE_FILES[TEST_CONFIG.md]="schemas/fastedge-config.test.schema.json server/schemas/config.ts server/test-framework/suite-runner.ts"
+SOURCE_FILES[DEBUGGER.md]="server/server.ts bin/fastedge-debug.js package.json"
+
+generate_file() {
+  local target="$1"
+  local sources="${SOURCE_FILES[$target]}"
+
+  echo "Generating docs/$target ..."
+
+  # Build the source files content block
+  local source_content=""
+  for src in $sources; do
+    local full_path="$REPO_ROOT/$src"
+    if [ ! -f "$full_path" ]; then
+      echo "  Warning: source file $src not found, skipping"
+      continue
+    fi
+    source_content+="
+--- FILE: $src ---
+$(cat "$full_path")
+--- END FILE ---
+"
+  done
+
+  # Extract the section for this target from generation-config
+  # Use awk variable to avoid regex delimiter issues with /
+  local section
+  local escaped_target="docs/$target"
+  section=$(awk -v start="## $escaped_target" '
+    $0 == start { found=1; next }
+    found && /^## docs\// { exit }
+    found { print }
+  ' "$CONFIG_FILE")
+
+  local prompt
+  prompt="$(cat <<PROMPT
+You are a documentation generator. Your output will be piped directly to a file.
+You MUST output ONLY the raw markdown content. No conversational text. No preamble.
+No "here is the file" or "I'll generate". No questions. No explanations before or after.
+Do not ask for permissions. Do not mention files or directories.
+Start your output with the level-1 heading and end with the last line of markdown.
+
+Generate docs/$target for the @gcoredev/fastedge-test npm package.
+
+# Global Rules
+$(awk '/^## Global Rules$/{found=1; next} found && /^## docs\//{exit} found{print}' "$CONFIG_FILE")
+
+# Instructions for this file
+$section
+
+# Source Code to Reference
+$source_content
+PROMPT
+)"
+
+  local max_attempts=3
+  local attempt=1
+  while [ $attempt -le $max_attempts ]; do
+    claude -p --model "$MODEL" "$prompt" > "$DOCS_DIR/$target"
+
+    # Validate: first non-empty line must start with #
+    local first_line
+    first_line=$(grep -m1 '.' "$DOCS_DIR/$target" || true)
+    if [[ "$first_line" == \#* ]]; then
+      echo "  Done: docs/$target"
+      return 0
+    fi
+
+    echo "  Attempt $attempt/$max_attempts failed for $target (got conversational output), retrying..."
+    attempt=$((attempt + 1))
+  done
+
+  echo "  FAILED after $max_attempts attempts: docs/$target"
+  return 1
+}
+
+# Run a tier of files in parallel, wait for all to complete
+run_tier() {
+  local tier_name="$1"
+  shift
+  local files=("$@")
+  local pids=()
+  local failed=()
+
+  echo "--- $tier_name (${#files[@]} files in parallel) ---"
+
+  for target in "${files[@]}"; do
+    generate_file "$target" &
+    pids+=($!)
+  done
+
+  # Wait for all and collect failures
+  for i in "${!pids[@]}"; do
+    if ! wait "${pids[$i]}"; then
+      failed+=("${files[$i]}")
+    fi
+  done
+
+  if [ ${#failed[@]} -gt 0 ]; then
+    echo "  FAILED in $tier_name: ${failed[*]}"
+    return 1
+  fi
+  return 0
+}
+
+# --- Main execution ---
+
+if [ "$run_all" = true ]; then
+  # Parallel tiered execution
+  tier_failed=false
+
+  run_tier "Tier 1: Core reference" "${TIER1_FILES[@]}" || tier_failed=true
+
+  if [ "$tier_failed" = false ]; then
+    run_tier "Tier 2: Quickstart" "${TIER2_FILES[@]}" || tier_failed=true
+  else
+    echo "Skipping Tier 2 due to Tier 1 failures"
+  fi
+
+  if [ "$tier_failed" = false ]; then
+    run_tier "Tier 3: Index" "${TIER3_FILES[@]}" || tier_failed=true
+  else
+    echo "Skipping Tier 3 due to earlier failures"
+  fi
+
+  echo ""
+  echo "=== Generation Complete ==="
+  echo "Generated: ${#ALL_FILES[@]} file(s) in docs/"
+  if [ "$tier_failed" = true ]; then
+    echo "Some files failed — check output above"
+    exit 1
+  fi
+else
+  # Specific files: run sequentially (user chose explicit order)
+  failed=()
+  for target in "${targets[@]}"; do
+    if ! generate_file "$target"; then
+      failed+=("$target")
+      echo "  FAILED: docs/$target"
+    fi
+  done
+
+  echo ""
+  echo "=== Generation Complete ==="
+  echo "Generated: ${#targets[@]} file(s) in docs/"
+  if [ ${#failed[@]} -gt 0 ]; then
+    echo "Failed: ${failed[*]}"
+    exit 1
+  fi
+fi
