@@ -1,143 +1,70 @@
-# FastEdge Test Framework
+# Test Framework API
 
-`@gcoredev/fastedge-test` provides a programmatic API for testing FastEdge WASM binaries — no server required. Use it in CI pipelines, agent scripts, or alongside your existing test runner (vitest, jest, etc.).
+High-level API for defining and running proxy-wasm test suites with `@gcoredev/fastedge-test`.
 
-## Installation
-
-```bash
-npm install @gcoredev/fastedge-test
-# or
-pnpm add @gcoredev/fastedge-test
-```
-
-## Two Entry Points
-
-| Import                         | Purpose                                                           |
-| ------------------------------ | ----------------------------------------------------------------- |
-| `@gcoredev/fastedge-test`      | Low-level runner — load and execute WASM directly                 |
-| `@gcoredev/fastedge-test/test` | High-level test framework — define and run structured test suites |
-
----
-
-## High-Level: Test Suites
-
-The `./test` entry point is the recommended starting point. It manages the runner lifecycle for you — each test case gets a fresh, isolated runner instance.
-
-### CDN (Proxy-WASM) Example
+## Import
 
 ```typescript
 import {
   defineTestSuite,
   runTestSuite,
+  runAndExit,
   runFlow,
-} from "@gcoredev/fastedge-test/test";
-import {
+  loadConfigFile,
   assertRequestHeader,
+  assertResponseHeader,
   assertFinalStatus,
+  assertReturnCode,
   assertLog,
 } from "@gcoredev/fastedge-test/test";
-
-const suite = defineTestSuite({
-  wasmPath: "./build/my-cdn-app.wasm",
-  tests: [
-    {
-      name: "injects x-custom header on request",
-      run: async (runner) => {
-        const result = await runFlow(runner, {
-          url: "https://example.com/page",
-          method: "GET",
-          requestHeaders: { "user-agent": "Mozilla/5.0" },
-          responseBody: "<html>content</html>",
-          responseStatus: 200,
-        });
-
-        assertRequestHeader(
-          result.hookResults.onRequestHeaders,
-          "x-custom",
-          "expected-value",
-        );
-      },
-    },
-    {
-      name: "returns 403 for blocked paths",
-      run: async (runner) => {
-        const result = await runFlow(runner, {
-          url: "https://example.com/admin",
-          method: "GET",
-        });
-
-        assertFinalStatus(result, 403);
-      },
-    },
-  ],
-});
-
-const results = await runTestSuite(suite);
-console.log(`${results.passed}/${results.total} passed`);
+import type { TestSuite, TestCase, SuiteResult, FlowOptions } from "@gcoredev/fastedge-test/test";
 ```
 
-### HTTP-WASM Example
+## Types
 
-HTTP-WASM binaries (component model) use `runner.execute()` instead of `runFlow()`:
+### TestSuite
 
-```typescript
-import { defineTestSuite, runTestSuite } from "@gcoredev/fastedge-test/test";
-
-const suite = defineTestSuite({
-  wasmPath: "./build/my-http-app.wasm",
-  tests: [
-    {
-      name: "responds with 200 OK",
-      run: async (runner) => {
-        const response = await runner.execute({
-          path: "/api/hello",
-          method: "GET",
-          headers: { "content-type": "application/json" },
-        });
-
-        if (response.status !== 200) {
-          throw new Error(`Expected 200, got ${response.status}`);
-        }
-      },
-    },
-  ],
-});
-
-await runTestSuite(suite);
-```
-
-The WASM type (CDN vs HTTP) is detected automatically from the binary.
-
----
-
-## `defineTestSuite(config)`
-
-Validates and returns a typed suite definition. Throws if the config is invalid.
+A discriminated union requiring exactly one of `wasmPath` or `wasmBuffer`. Supplying both, or neither, is a TypeScript compile-time error.
 
 ```typescript
+type TestSuiteBase = {
+  runnerConfig?: RunnerConfig;
+  tests: TestCase[];
+};
+
 type TestSuite =
-  | { wasmPath: string; runnerConfig?: RunnerConfig; tests: TestCase[] }
-  | { wasmBuffer: Buffer; runnerConfig?: RunnerConfig; tests: TestCase[] };
+  | (TestSuiteBase & { wasmPath: string; wasmBuffer?: never })
+  | (TestSuiteBase & { wasmBuffer: Buffer; wasmPath?: never });
 ```
 
-Exactly one of `wasmPath` or `wasmBuffer` must be provided — TypeScript enforces this at compile time.
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `wasmPath` | `string` | One of | Filesystem path to the `.wasm` file |
+| `wasmBuffer` | `Buffer` | One of | Pre-loaded WASM binary |
+| `tests` | `TestCase[]` | Yes | Test cases to execute; must be non-empty |
+| `runnerConfig` | `RunnerConfig` | No | Optional runner configuration (see [RUNNER.md](RUNNER.md)) |
 
-### `RunnerConfig`
+### TestCase
+
+A single test case. The `run` function receives a fully loaded `IWasmRunner` instance. Throw an error (or use assertion helpers) to fail the test.
 
 ```typescript
-interface RunnerConfig {
-  dotenv?: { enabled?: boolean; path?: string }; // Dotenv configuration
-  enforceProductionPropertyRules?: boolean; // CDN property access control (default: true)
+interface TestCase {
+  name: string;
+  run: (runner: IWasmRunner) => Promise<void>;
 }
 ```
 
----
-
-## `runTestSuite(suite)`
-
-Executes all test cases and returns a `SuiteResult`. Tests run sequentially; each gets its own runner instance.
+### TestResult & SuiteResult
 
 ```typescript
+interface TestResult {
+  name: string;
+  passed: boolean;
+  error?: string;      // Present when passed is false
+  durationMs: number;
+}
+
 interface SuiteResult {
   passed: number;
   failed: number;
@@ -145,173 +72,438 @@ interface SuiteResult {
   durationMs: number;
   results: TestResult[];
 }
-
-interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string; // Set when passed is false
-  durationMs: number;
-}
 ```
 
----
+### FlowOptions
 
-## `runAndExit(suite)` — CI / Standalone Scripts
-
-Runs the suite, prints a summary to stdout, and exits the process. Exit code 0 = all passed, 1 = any failures.
-
-```typescript
-import { defineTestSuite, runAndExit } from '@gcoredev/fastedge-test/test';
-
-const suite = defineTestSuite({ ... });
-
-await runAndExit(suite);
-// Output:
-//   ✓ injects x-custom header (12ms)
-//   ✗ returns 403 for blocked paths (5ms)
-//       Expected final response status 403, got 200
-//
-//   1/2 passed in 17ms
-```
-
-Designed for use in Makefile targets, shell scripts, and CI pipelines where a non-zero exit code signals failure.
-
----
-
-## `runFlow(runner, options)` — CDN Helper
-
-A convenience wrapper around the low-level `runner.callFullFlow()` that accepts named options and automatically derives HTTP/2 pseudo-headers (`:method`, `:path`, `:authority`, `:scheme`) from the URL.
+Object-based options for `runFlow()`. HTTP/2 pseudo-headers (`:method`, `:path`, `:authority`, `:scheme`) are derived from `url` and `method` automatically. Any pseudo-header supplied in `requestHeaders` overrides the derived default.
 
 ```typescript
 interface FlowOptions {
   url: string;
-  method?: string; // Default: 'GET'
+  method?: string;                          // Default: "GET"
   requestHeaders?: Record<string, string>;
-  requestBody?: string;
-  responseStatus?: number; // Default: 200
-  responseStatusText?: string; // Default: 'OK'
-  responseHeaders?: Record<string, string>;
-  responseBody?: string;
-  properties?: Record<string, unknown>;
+  requestBody?: string;                     // Default: ""
+  responseStatus?: number;                  // Default: 200
+  responseStatusText?: string;              // Default: "OK"
+  responseHeaders?: Record<string, string>; // Default: {}
+  responseBody?: string;                    // Default: ""
+  properties?: Record<string, unknown>;     // Default: {}
   enforceProductionPropertyRules?: boolean; // Default: true
 }
 ```
 
-Returns a `FullFlowResult`:
+| Field | Default | Description |
+|-------|---------|-------------|
+| `url` | — | Full URL including scheme and host; used to derive pseudo-headers |
+| `method` | `"GET"` | HTTP method |
+| `requestHeaders` | `{}` | Additional request headers; pseudo-headers here override derived values |
+| `requestBody` | `""` | Request body string |
+| `responseStatus` | `200` | Simulated upstream response status code |
+| `responseStatusText` | `"OK"` | Simulated upstream response status text |
+| `responseHeaders` | `{}` | Simulated upstream response headers |
+| `responseBody` | `""` | Simulated upstream response body |
+| `properties` | `{}` | Proxy-wasm properties to inject |
+| `enforceProductionPropertyRules` | `true` | When true, denies access to properties not available in production FastEdge |
+
+### RunnerConfig
+
+Re-exported from the runner. Controls WASM execution behaviour. See [RUNNER.md](RUNNER.md) for the full definition.
+
+```typescript
+import type { RunnerConfig } from "@gcoredev/fastedge-test/test";
+```
+
+## Functions
+
+### defineTestSuite
+
+```typescript
+function defineTestSuite(suite: TestSuite): TestSuite
+```
+
+Validates and returns a typed `TestSuite` definition. Throws if neither `wasmPath` nor `wasmBuffer` is provided, or if `tests` is empty.
+
+```typescript
+const suite = defineTestSuite({
+  wasmPath: "./build/my-filter.wasm",
+  tests: [
+    {
+      name: "adds x-request-id header",
+      async run(runner) {
+        const result = await runFlow(runner, {
+          url: "https://example.com/api",
+        });
+        assertRequestHeader(result.hookResults.onRequestHeaders, "x-request-id");
+      },
+    },
+  ],
+});
+```
+
+### runTestSuite
+
+```typescript
+function runTestSuite(suite: TestSuite): Promise<SuiteResult>
+```
+
+Executes all test cases in the suite sequentially. Each test receives a **fresh runner instance** — tests are fully isolated. A thrown error or failed assertion marks that test as failed; remaining tests still execute.
+
+```typescript
+const suite = defineTestSuite({ wasmPath: "./filter.wasm", tests: [...] });
+const result = await runTestSuite(suite);
+
+console.log(`${result.passed}/${result.total} passed`);
+for (const r of result.results) {
+  if (!r.passed) console.error(`FAIL: ${r.name} — ${r.error}`);
+}
+```
+
+### runAndExit
+
+```typescript
+function runAndExit(suite: TestSuite): Promise<never>
+```
+
+Runs the suite, prints a summary to stdout, then calls `process.exit(0)` if all tests pass or `process.exit(1)` if any fail. Intended for standalone Node.js test scripts run in CI.
+
+```typescript
+// test.mjs
+import { defineTestSuite, runAndExit } from "@gcoredev/fastedge-test/test";
+
+const suite = defineTestSuite({ wasmPath: "./filter.wasm", tests: [...] });
+await runAndExit(suite);
+```
+
+Output format:
+
+```
+  ✓ adds x-request-id header (12ms)
+  ✗ blocks requests without auth (5ms)
+      Expected request header 'authorization' to be absent, but found 'Bearer token'
+
+  1/2 passed in 17ms
+```
+
+### runFlow
+
+```typescript
+function runFlow(runner: IWasmRunner, options: FlowOptions): Promise<FullFlowResult>
+```
+
+Executes a complete request/response flow through the WASM filter. Object-based wrapper around the runner's low-level `callFullFlow` method — callers do not need to construct pseudo-headers manually.
+
+The returned `FullFlowResult` has this shape:
 
 ```typescript
 interface FullFlowResult {
-  hookResults: Record<string, HookResult>; // Keys: 'onRequestHeaders', 'onRequestBody', etc.
+  hookResults: Record<string, HookResult>; // keyed by camelCase hook name
   finalResponse: {
     status: number;
-    statusText: string;
     headers: Record<string, string>;
     body: string;
-    contentType: string;
-    isBase64?: boolean;
   };
-  calculatedProperties?: Record<string, unknown>;
 }
 ```
 
-Each `HookResult` contains:
+Hook results are accessed by camelCase key:
+
+| Key | Hook |
+|-----|------|
+| `onRequestHeaders` | `on_request_headers` hook |
+| `onRequestBody` | `on_request_body` hook |
+| `onResponseHeaders` | `on_response_headers` hook |
+| `onResponseBody` | `on_response_body` hook |
 
 ```typescript
-interface HookResult {
-  returnCode: number | null;
-  logs: { level: number; message: string }[];
-  input: {
-    request: { headers: Record<string, string>; body: string };
-    response: { headers: Record<string, string>; body: string };
-  };
-  output: {
-    request: { headers: Record<string, string>; body: string };
-    response: { headers: Record<string, string>; body: string };
-  };
-  properties: Record<string, unknown>;
-}
+const result = await runFlow(runner, {
+  url: "https://api.example.com/v1/resource",
+  method: "POST",
+  requestHeaders: { "content-type": "application/json" },
+  requestBody: '{"key":"value"}',
+  responseStatus: 201,
+  responseHeaders: { "x-upstream": "backend-1" },
+});
+
+// Access hook results
+const reqHook = result.hookResults.onRequestHeaders;
+const resHook = result.hookResults.onResponseHeaders;
+
+// Access final response
+console.log(result.finalResponse.status); // 201
 ```
 
----
+### loadConfigFile
+
+```typescript
+function loadConfigFile(configPath: string): Promise<TestConfig>
+```
+
+Reads and validates a `fastedge-config.test.json` file. Returns the parsed `TestConfig` or throws with a descriptive error. See [TEST_CONFIG.md](TEST_CONFIG.md) for the full config schema.
+
+```typescript
+const config = await loadConfigFile("./fastedge-config.test.json");
+```
 
 ## Assertion Helpers
 
-All helpers throw a descriptive `Error` on failure — compatible with any test framework or plain try/catch.
+All assertion helpers throw an `Error` on failure, making them compatible with any test framework (vitest, jest, node:assert) or plain try/catch.
 
-### Request Headers (CDN)
+### Request Headers
 
 ```typescript
-// Assert a header is present (and optionally matches a value)
-assertRequestHeader(hookResult, "x-custom");
-assertRequestHeader(hookResult, "x-custom", "expected-value");
-
-// Assert a header is absent
-assertNoRequestHeader(hookResult, "x-should-not-exist");
+function assertRequestHeader(result: HookResult, name: string, expected?: string): void
+function assertNoRequestHeader(result: HookResult, name: string): void
 ```
 
-### Response Headers (CDN)
+`assertRequestHeader` asserts the named header exists in the hook's output request headers. If `expected` is provided, also asserts the value matches exactly.
+
+`assertNoRequestHeader` asserts the named header is absent.
 
 ```typescript
-assertResponseHeader(hookResult, "cache-control", "no-store");
-assertNoResponseHeader(hookResult, "x-sensitive");
+const hookResult = result.hookResults.onRequestHeaders;
+
+assertRequestHeader(hookResult, "x-forwarded-for");                   // exists
+assertRequestHeader(hookResult, "x-country-code", "DE");              // exists with value
+assertNoRequestHeader(hookResult, "x-internal-secret");               // absent
 ```
 
-### Final Response (CDN full flow)
+### Response Headers
 
 ```typescript
-assertFinalStatus(fullFlowResult, 200);
-assertFinalHeader(fullFlowResult, "content-type", "application/json");
+function assertResponseHeader(result: HookResult, name: string, expected?: string): void
+function assertNoResponseHeader(result: HookResult, name: string): void
 ```
 
-### Hook Return Code
+Same semantics as the request header variants, but operates on the hook's output response headers.
 
 ```typescript
-assertReturnCode(hookResult, 0); // 0 = Ok, 1 = Pause
+const hookResult = result.hookResults.onResponseHeaders;
+
+assertResponseHeader(hookResult, "cache-control");
+assertResponseHeader(hookResult, "content-type", "application/json");
+assertNoResponseHeader(hookResult, "server");
+```
+
+### Final Response
+
+```typescript
+function assertFinalStatus(result: FullFlowResult, expected: number): void
+function assertFinalHeader(result: FullFlowResult, name: string, expected?: string): void
+```
+
+`assertFinalStatus` asserts the final response status code after the full flow completes.
+
+`assertFinalHeader` asserts a header in `result.finalResponse.headers`. If `expected` is provided, also asserts the value.
+
+```typescript
+assertFinalStatus(result, 200);
+assertFinalHeader(result, "x-cache", "HIT");
+assertFinalHeader(result, "content-encoding");                        // exists, any value
+```
+
+### Return Code
+
+```typescript
+function assertReturnCode(result: HookResult, expected: number): void
+```
+
+Asserts the hook's return code. Common values: `0` = Continue, `1` = Pause/StopIteration.
+
+```typescript
+assertReturnCode(result.hookResults.onRequestHeaders, 0); // filter continued
+assertReturnCode(result.hookResults.onRequestHeaders, 1); // filter paused
 ```
 
 ### Logs
 
 ```typescript
-assertLog(hookResult, "cache hit"); // At least one log contains substring
-assertNoLog(hookResult, "error"); // No log contains substring
-const found = logsContain(hookResult, "x"); // Boolean — for conditional logic
+function assertLog(result: HookResult, messageSubstring: string): void
+function assertNoLog(result: HookResult, messageSubstring: string): void
+function logsContain(result: HookResult, messageSubstring: string): boolean
 ```
 
-### CDN Property Access
+`assertLog` asserts at least one log entry contains `messageSubstring`.
+
+`assertNoLog` asserts no log entry contains `messageSubstring`.
+
+`logsContain` is a non-throwing predicate — useful for conditional checks.
 
 ```typescript
-assertPropertyAllowed(hookResult, "client.ip"); // Access was permitted
-assertPropertyDenied(hookResult, "internal.key"); // Access was denied
-const violated = hasPropertyAccessViolation(hookResult); // Boolean
+const hookResult = result.hookResults.onRequestHeaders;
+
+assertLog(hookResult, "cache miss");
+assertNoLog(hookResult, "error");
+
+if (logsContain(hookResult, "debug:")) {
+  // conditional logic based on log presence
+}
 ```
 
----
+### Properties
 
-## `loadConfigFile(path)` — Reuse `fastedge-config.test.json`
+```typescript
+function hasPropertyAccessViolation(result: HookResult): boolean
+function assertPropertyAllowed(result: HookResult, propertyPath: string): void
+function assertPropertyDenied(result: HookResult, propertyPath: string): void
+```
 
-Load and validate a `fastedge-config.test.json` file, returning a typed `TestConfig`. Throws with a descriptive error if the file is missing, invalid JSON, or fails schema validation.
+Property access violations appear as log messages containing `"Property access denied"`.
+
+`hasPropertyAccessViolation` returns true if any such message exists.
+
+`assertPropertyAllowed` throws if the named property path was denied.
+
+`assertPropertyDenied` throws if the named property path was not denied.
+
+```typescript
+const hookResult = result.hookResults.onRequestHeaders;
+
+assertPropertyAllowed(hookResult, "request.path");
+assertPropertyDenied(hookResult, "upstream.address");
+
+if (hasPropertyAccessViolation(hookResult)) {
+  console.warn("At least one property access was denied");
+}
+```
+
+## CI Integration
+
+`runAndExit` is the primary entry point for CI pipelines. It exits with code `0` on full pass and `1` on any failure, compatible with standard CI exit-code conventions.
+
+**package.json script:**
+
+```json
+{
+  "scripts": {
+    "test:wasm": "node --experimental-vm-modules test/suite.mjs"
+  }
+}
+```
+
+**GitHub Actions example:**
+
+```yaml
+- name: Run WASM tests
+  run: npm run test:wasm
+```
+
+**Makefile example:**
+
+```makefile
+test:
+	node test/suite.mjs
+```
+
+For programmatic use (e.g. collecting results before exiting), use `runTestSuite` directly and inspect `SuiteResult.failed`:
+
+```typescript
+const result = await runTestSuite(suite);
+process.exitCode = result.failed > 0 ? 1 : 0;
+```
+
+## Complete Example
 
 ```typescript
 import {
-  loadConfigFile,
   defineTestSuite,
   runAndExit,
+  runFlow,
+  assertRequestHeader,
+  assertNoRequestHeader,
+  assertResponseHeader,
+  assertFinalStatus,
+  assertFinalHeader,
+  assertReturnCode,
+  assertLog,
+  assertPropertyAllowed,
+  assertPropertyDenied,
 } from "@gcoredev/fastedge-test/test";
 
-const config = await loadConfigFile("./fastedge-config.test.json");
-
 const suite = defineTestSuite({
-  wasmPath: "./build/app.wasm",
+  wasmPath: "./build/cdn-filter.wasm",
   tests: [
     {
-      name: "uses env var from config",
-      run: async (runner) => {
-        // config.envVars, config.secrets, config.properties available here
+      name: "injects geo headers on request",
+      async run(runner) {
         const result = await runFlow(runner, {
-          url: "https://example.com",
-          properties: config.properties,
+          url: "https://cdn.example.com/image.png",
+          method: "GET",
+          properties: {
+            "request.geo.country_code": "DE",
+          },
         });
-        // ...
+
+        const req = result.hookResults.onRequestHeaders;
+        assertReturnCode(req, 0);
+        assertRequestHeader(req, "x-country-code", "DE");
+        assertNoRequestHeader(req, "x-internal-token");
+      },
+    },
+
+    {
+      name: "sets cache-control on response",
+      async run(runner) {
+        const result = await runFlow(runner, {
+          url: "https://cdn.example.com/static/app.js",
+          responseStatus: 200,
+          responseHeaders: { "content-type": "application/javascript" },
+        });
+
+        const res = result.hookResults.onResponseHeaders;
+        assertResponseHeader(res, "cache-control", "public, max-age=31536000");
+        assertFinalStatus(result, 200);
+      },
+    },
+
+    {
+      name: "blocks requests missing required auth header",
+      async run(runner) {
+        const result = await runFlow(runner, {
+          url: "https://cdn.example.com/api/private",
+          method: "POST",
+          requestHeaders: { "content-type": "application/json" },
+        });
+
+        assertFinalStatus(result, 403);
+        assertFinalHeader(result, "x-block-reason", "missing-auth");
+      },
+    },
+
+    {
+      name: "logs cache decision",
+      async run(runner) {
+        const result = await runFlow(runner, {
+          url: "https://cdn.example.com/data.json",
+        });
+
+        const req = result.hookResults.onRequestHeaders;
+        assertLog(req, "cache-check:");
+      },
+    },
+
+    {
+      name: "allows access to request path property",
+      async run(runner) {
+        const result = await runFlow(runner, {
+          url: "https://cdn.example.com/path/to/resource",
+        });
+
+        const req = result.hookResults.onRequestHeaders;
+        assertPropertyAllowed(req, "request.path");
+        assertPropertyDenied(req, "upstream.address");
+      },
+    },
+
+    {
+      name: "passes through with pre-loaded buffer",
+      async run(runner) {
+        const result = await runFlow(runner, {
+          url: "https://cdn.example.com/",
+          responseStatus: 304,
+        });
+
+        assertFinalStatus(result, 304);
       },
     },
   ],
@@ -320,109 +512,9 @@ const suite = defineTestSuite({
 await runAndExit(suite);
 ```
 
----
+## See Also
 
-## Low-Level: Runner API
-
-For cases where you need direct control over the runner lifecycle — or want to integrate with an existing test framework — use the root entry point.
-
-```typescript
-import { createRunner, createRunnerFromBuffer } from "@gcoredev/fastedge-test";
-
-// From a file path
-const runner = await createRunner("./build/app.wasm");
-
-// From a buffer (e.g. fetched from a URL or built in-memory)
-const buffer = await fs.readFile("./build/app.wasm");
-const runner = await createRunnerFromBuffer(buffer);
-
-// CDN: run the full request/response flow
-const result = await runner.callFullFlow(
-  "https://example.com", // url
-  "GET", // method
-  {}, // request headers
-  "", // request body
-  {}, // response headers
-  "", // response body
-  200, // response status
-  "OK", // response status text
-  {}, // properties
-  true, // enforce production property rules
-);
-
-// HTTP-WASM: execute a request
-const response = await runner.execute({
-  path: "/api/hello",
-  method: "GET",
-  headers: {},
-});
-
-// Always clean up when done
-await runner.cleanup();
-```
-
-> **Tip**: Prefer `runFlow()` from `@gcoredev/fastedge-test/test` over `callFullFlow()` directly — it handles pseudo-headers and has named parameters.
-
----
-
-## Integrating with Vitest / Jest
-
-The assertion helpers throw plain `Error` instances, so they work naturally inside any test framework:
-
-```typescript
-import { describe, it } from "vitest";
-import { createRunner } from "@gcoredev/fastedge-test";
-import { runFlow, assertFinalStatus } from "@gcoredev/fastedge-test/test";
-
-describe("my CDN app", () => {
-  it("returns 200 for homepage", async () => {
-    const runner = await createRunner("./build/app.wasm");
-    try {
-      const result = await runFlow(runner, { url: "https://example.com/" });
-      assertFinalStatus(result, 200);
-    } finally {
-      await runner.cleanup();
-    }
-  });
-});
-```
-
-Or use `defineTestSuite` / `runTestSuite` to manage the lifecycle automatically and inspect `SuiteResult` inside your test:
-
-```typescript
-it('all flows pass', async () => {
-  const suite = defineTestSuite({ wasmPath: './build/app.wasm', tests: [...] });
-  const results = await runTestSuite(suite);
-  expect(results.failed).toBe(0);
-});
-```
-
----
-
-## JSON Schemas
-
-The package ships JSON Schema files for `fastedge-config.test.json` and all API request/response bodies. These enable IDE autocomplete and validation.
-
-```typescript
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const schema = require("@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json");
-```
-
-Or reference them directly from `fastedge-config.test.json` for VS Code autocomplete:
-
-```json
-{
-  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
-  "envVars": {},
-  "secrets": {},
-  "properties": {}
-}
-```
-
----
-
-## Related Documentation
-
-- **REST API**: `docs/API.md` — HTTP endpoints for server-based testing
-- **WASM Loading**: `docs/HYBRID_LOADING.md` — path vs buffer performance tradeoffs
+- [RUNNER.md](RUNNER.md) — Low-level `IWasmRunner` interface, `RunnerConfig`, and `callFullFlow`
+- [API.md](API.md) — REST API for running tests via HTTP
+- [TEST_CONFIG.md](TEST_CONFIG.md) — `fastedge-config.test.json` schema and `loadConfigFile` config options
+- [quickstart.md](quickstart.md) — Installation and first test walkthrough

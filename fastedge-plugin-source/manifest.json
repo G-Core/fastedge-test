@@ -1,0 +1,81 @@
+{
+  "$schema": "https://fastedge-plugin-source/manifest/v1",
+  "repo_id": "fastedge-test",
+  "version": "1.1.0",
+  "sources": {
+    "test-framework": {
+      "files": [
+        "docs/TEST_FRAMEWORK.md"
+      ],
+      "required": true,
+      "description": "Test framework API — defineTestSuite, runAndExit, runFlow, assertions"
+    },
+    "server-api": {
+      "files": [
+        "docs/API.md",
+        "docs/WEBSOCKET.md"
+      ],
+      "required": false,
+      "description": "REST endpoints and WebSocket protocol for the debugger server"
+    },
+    "runner-internals": {
+      "files": [
+        "docs/RUNNER.md"
+      ],
+      "required": false,
+      "description": "Low-level runner API, WASM instance lifecycle, and direct runner control"
+    },
+    "test-config": {
+      "files": [
+        "docs/TEST_CONFIG.md",
+        "schemas/fastedge-config.test.schema.json"
+      ],
+      "required": true,
+      "description": "Test configuration schema and usage examples"
+    },
+    "vscode-debugger": {
+      "files": [
+        "docs/DEBUGGER.md"
+      ],
+      "required": false,
+      "description": "Debugger server CLI usage, programmatic startup, port configuration"
+    },
+    "dotenv": {
+      "files": [
+        "docs/TEST_CONFIG.md"
+      ],
+      "required": true,
+      "description": "Dotenv injection mechanism — prefix scheme, file options, priority order"
+    }
+  },
+  "target_mapping": {
+    "test-framework": {
+      "reference_file": "plugins/gcore-fastedge/skills/test/reference/test-framework.md",
+      "section": null
+    },
+    "server-api": {
+      "reference_file": "plugins/gcore-fastedge/skills/test/reference/server-api.md",
+      "section": null
+    },
+    "runner-internals": {
+      "reference_file": "plugins/gcore-fastedge/skills/test/reference/runner-internals.md",
+      "section": null
+    },
+    "test-config": {
+      "reference_file": "plugins/gcore-fastedge/skills/test/reference/test-config.md",
+      "section": null
+    },
+    "vscode-debugger": {
+      "reference_file": "plugins/gcore-fastedge/skills/test/reference/vscode-debugger.md",
+      "section": null
+    },
+    "dotenv": {
+      "reference_file": "plugins/gcore-fastedge/skills/test/reference/dotenv.md",
+      "section": null
+    }
+  },
+  "validation": {
+    "mode": "advisory",
+    "strict_fields": ["test-framework", "test-config", "dotenv"]
+  }
+}

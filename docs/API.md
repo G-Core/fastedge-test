@@ -1,26 +1,55 @@
-# FastEdge Debugger REST API Documentation
+# REST API Reference
 
-## Overview
+The `@gcoredev/fastedge-test` debugger server exposes a REST API for loading WASM modules, executing requests, and managing test configuration.
 
-The FastEdge Debugger provides a comprehensive REST API for programmatic testing and debugging of FastEdge applications. This API enables AI agents, CI/CD pipelines, and automated testing tools to interact with the debugger.
+## Base URL
 
-**Base URL**: `http://localhost:5179`
+```
+http://localhost:5179
+```
 
-**Default Port**: `5179` (REST API, Web UI, and WebSocket at `/ws`)
+The port can be overridden via the `PORT` environment variable. When `WORKSPACE_PATH` is set, the active port is written to `$WORKSPACE_PATH/.debug-port` on startup and deleted on shutdown.
 
-## Authentication
+## Common Headers
 
-Currently, no authentication is required. The debugger is intended for local development use only.
+### X-Source Header
 
-## API Endpoints
+The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
-### Health Check
+| Value | Description |
+|---|---|
+| `ui` | Request originated from the web UI (default if omitted) |
+| `ai_agent` | Request originated from an AI agent |
+| `api` | Request originated from direct API usage |
+| `system` | Request originated from an automated system |
 
-Check if the debugger server is running and healthy.
+```http
+X-Source: ai_agent
+```
 
-**Endpoint**: `GET /health`
+---
 
-**Response**:
+## Health
+
+### GET /health
+
+Returns the server status and service identity.
+
+**Response**
+
+```typescript
+{
+  status: "ok";
+  service: "fastedge-debugger";
+}
+```
+
+**Example**
+
+```bash
+curl http://localhost:5179/health
+```
+
 ```json
 {
   "status": "ok",
@@ -28,553 +57,923 @@ Check if the debugger server is running and healthy.
 }
 ```
 
-**Status Codes**:
-- `200 OK`: Server is healthy and running
+---
 
-**Example**:
+### GET /api/client-count
+
+Returns the number of currently connected WebSocket clients. Useful in CI tooling to wait until the UI has connected before proceeding.
+
+**Response**
+
+```typescript
+{
+  count: number;
+}
+```
+
+**Example**
+
 ```bash
-curl http://localhost:5179/health
+curl http://localhost:5179/api/client-count
+```
+
+```json
+{
+  "count": 1
+}
 ```
 
 ---
 
-### Load WASM Module
+## WASM Loading
 
-Load a WebAssembly module into the debugger. This must be called before executing any requests.
+### POST /api/load
 
-**Endpoint**: `POST /api/load`
+Loads a WASM binary into the runner. Accepts either a file path or a base64-encoded binary. Automatically detects whether the module is HTTP-WASM or Proxy-WASM.
 
-**Request Body**:
-```json
+**Request Body**
+
+Exactly one of `wasmPath` or `wasmBase64` must be provided.
+
+```typescript
 {
-  "wasmBase64": "string",      // Base64-encoded WASM binary (provide this OR wasmPath)
-  "wasmPath": "string",        // Absolute path to WASM file on disk (provide this OR wasmBase64)
-  "dotenv": {                  // Dotenv configuration (optional)
-    "enabled": boolean,        //   Whether to load .env files (default: false)
-    "path": "string"           //   Directory to load .env files from (optional, default: CWD)
-  }
+  wasmPath?: string;      // Absolute path to a .wasm file on the server filesystem
+  wasmBase64?: string;    // Base64-encoded WASM binary
+  dotenv?: {
+    enabled: boolean;     // Whether to load .env files for this module
+    path?: string;        // Directory containing .env files (defaults to server CWD)
+  };
 }
 ```
 
-**Response**:
-```json
+**Response**
+
+```typescript
 {
-  "ok": true,
-  "wasmType": "http-wasm" | "proxy-wasm"
+  ok: true;
+  wasmType: "http-wasm" | "proxy-wasm";
+  resolvedPath?: string;  // Absolute path used when wasmPath was provided
 }
 ```
 
-**Status Codes**:
-- `200 OK`: WASM loaded successfully
-- `400 Bad Request`: Missing or invalid wasmBase64
-- `500 Internal Server Error`: Failed to load WASM
+**Example — load from path**
 
-**Example**:
 ```bash
-# Read WASM file and encode to base64
-WASM_BASE64=$(base64 -w 0 ./dist/app.wasm)
-
-# Load into debugger
 curl -X POST http://localhost:5179/api/load \
   -H "Content-Type: application/json" \
-  -d "{\"wasmBase64\": \"$WASM_BASE64\", \"dotenv\": {\"enabled\": true}}"
-```
-
-**Notes**:
-- The debugger automatically detects whether the WASM is HTTP or CDN (proxy-wasm) type
-- Previous WASM modules are automatically cleaned up when loading a new one
-- Set `X-Source` header to track the source of the load (e.g., "cli", "vscode", "ci")
-
----
-
-### Execute Request
-
-Execute an HTTP request or CDN full flow against the loaded WASM module.
-
-**Endpoint**: `POST /api/execute`
-
-**Request Body**:
-
-For **HTTP WASM**:
-```json
-{
-  "url": "string",              // Full URL or path (required)
-  "method": "string",           // HTTP method (optional, default: "GET")
-  "headers": object,            // Request headers (optional)
-  "body": "string"              // Request body (optional)
-}
-```
-
-For **CDN (Proxy WASM)**:
-```json
-{
-  "url": "string",              // Target URL (required)
-  "request": {
-    "method": "string",         // HTTP method (optional, default: "GET")
-    "headers": object,          // Request headers (optional)
-    "body": "string"            // Request body (optional)
-  },
-  "response": {
-    "body": "string",           // Origin response body (optional)
-    "status": number,           // HTTP status code (optional, default: 200)
-    "statusText": "string",     // Status text (optional)
-    "headers": object           // Response headers (optional)
-  },
-  "properties": object          // CDN properties (optional)
-}
-```
-
-**Response**:
-
-For **HTTP WASM**:
-```json
-{
-  "ok": true,
-  "status": number,
-  "statusText": "string",
-  "headers": object,
-  "body": "string",
-  "contentType": "string",
-  "isBase64": boolean
-}
-```
-
-For **CDN (Proxy WASM)**:
-```json
-{
-  "ok": true,
-  "hookResults": {
-    "onRequestHeader": object,
-    "onRequestBody": object,
-    "onResponseHeader": object,
-    "onResponseBody": object
-  },
-  "finalResponse": {
-    "status": number,
-    "statusText": "string",
-    "headers": object,
-    "body": "string"
-  },
-  "calculatedProperties": object
-}
-```
-
-**Status Codes**:
-- `200 OK`: Request executed successfully
-- `400 Bad Request`: No WASM loaded or invalid request
-- `500 Internal Server Error`: Execution failed
-
-**Examples**:
-
-**HTTP WASM** - Simple GET:
-```bash
-curl -X POST http://localhost:5179/api/execute \
-  -H "Content-Type: application/json" \
   -d '{
-    "url": "http://localhost/api/test",
-    "method": "GET"
+    "wasmPath": "/home/user/project/build/module.wasm",
+    "dotenv": { "enabled": true }
   }'
 ```
 
-**HTTP WASM** - POST with body:
-```bash
-curl -X POST http://localhost:5179/api/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "http://localhost/api/data",
-    "method": "POST",
-    "headers": {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer token123"
-    },
-    "body": "{\"key\": \"value\"}"
-  }'
-```
-
-**CDN (Proxy WASM)** - Full flow:
-```bash
-curl -X POST http://localhost:5179/api/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://example.com/page",
-    "request": {
-      "method": "GET",
-      "headers": {
-        "User-Agent": "Mozilla/5.0"
-      }
-    },
-    "response": {
-      "body": "<html>Original content</html>",
-      "status": 200,
-      "headers": {
-        "Content-Type": "text/html"
-      }
-    },
-    "properties": {
-      "client.ip": "1.2.3.4",
-      "request.path": "/page"
-    }
-  }'
-```
-
----
-
-### Get Configuration
-
-Retrieve the current test configuration including environment variables and properties.
-
-**Endpoint**: `GET /api/config`
-
-**Response**:
 ```json
 {
   "ok": true,
-  "config": {
-    "envVars": object,
-    "secrets": object,
-    "properties": object
-  }
+  "wasmType": "proxy-wasm",
+  "resolvedPath": "/home/user/project/build/module.wasm"
 }
 ```
 
-**Status Codes**:
-- `200 OK`: Configuration retrieved
-- `404 Not Found`: No configuration file exists
+**Example — load from base64**
 
-**Example**:
 ```bash
-curl http://localhost:5179/api/config
+curl -X POST http://localhost:5179/api/load \
+  -H "Content-Type: application/json" \
+  -d '{
+    "wasmBase64": "AGFzbQEAAAA...",
+    "dotenv": { "enabled": false }
+  }'
 ```
+
+```json
+{
+  "ok": true,
+  "wasmType": "http-wasm"
+}
+```
+
+**Error Responses**
+
+| Status | Condition |
+|---|---|
+| `400` | Validation failed, missing both `wasmPath` and `wasmBase64`, invalid path, or path does not end in `.wasm` |
+| `500` | WASM load failed or runner initialization error |
 
 ---
 
-### Update Configuration
+### PATCH /api/dotenv
 
-Update the test configuration including environment variables, secrets, and properties.
+Applies updated dotenv settings to the currently loaded WASM module without reloading the binary. For Proxy-WASM, this resets stores and reloads dotenv files in-place. For HTTP-WASM, this restarts the underlying process with updated flags.
 
-**Endpoint**: `POST /api/config`
+Requires a WASM module to already be loaded via `POST /api/load`.
 
-**Request Body**:
-```json
+**Request Body**
+
+```typescript
 {
-  "config": {
-    "envVars": {
-      "DEBUG": "true",
-      "API_URL": "https://api.example.com"
-    },
-    "secrets": {
-      "api_key": "secret_name"
-    },
-    "properties": {
-      "client.ip": "1.2.3.4",
-      "request.path": "/test"
-    }
-  }
+  dotenv: {
+    enabled: boolean;   // Whether dotenv loading should be enabled
+    path?: string;      // Directory containing .env files (defaults to server CWD)
+  };
 }
 ```
 
-**Response**:
+**Response**
+
+```typescript
+{
+  ok: true;
+}
+```
+
+**Example**
+
+```bash
+curl -X PATCH http://localhost:5179/api/dotenv \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dotenv": { "enabled": true, "path": "/home/user/project" }
+  }'
+```
+
 ```json
 {
   "ok": true
 }
 ```
 
-**Status Codes**:
-- `200 OK`: Configuration updated
-- `400 Bad Request`: Missing config in request body
-- `500 Internal Server Error`: Failed to save configuration
+**Error Responses**
 
-**Example**:
-```bash
-curl -X POST http://localhost:5179/api/config \
-  -H "Content-Type: application/json" \
-  -d '{
-    "config": {
-      "envVars": {
-        "DEBUG": "true",
-        "LOG_LEVEL": "verbose"
-      }
-    }
-  }'
-```
-
-**Notes**:
-- Configuration is saved to `fastedge-config.test.json` in the project root
-- Environment variables are available to the WASM module via `getEnv()`
-- Properties are used for CDN (proxy-wasm) applications
-- Configuration must be set BEFORE loading the WASM module to take effect
+| Status | Condition |
+|---|---|
+| `400` | `dotenv.enabled` is not a boolean, or no WASM module is loaded |
+| `500` | Failed to apply dotenv settings |
 
 ---
 
-## WebSocket API
+## Test Execution
 
-The debugger provides real-time log streaming via WebSocket.
+### POST /api/execute
 
-**Endpoint**: `ws://localhost:5179/ws`
+Executes a request through the loaded WASM module. Behavior differs based on the detected runner type.
 
-**Events**:
+Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`X-Source`](#x-source-header) request header.
 
-### WASM Loaded
+**Request Body**
+
+For **HTTP-WASM**, the top-level `url`, `method`, `headers`, and `body` fields are used directly as the request:
+
+```typescript
+{
+  url: string;                          // Full URL (scheme + host + path used for path extraction)
+  method?: string;                      // HTTP method (default: "GET")
+  headers?: Record<string, string>;     // Request headers
+  body?: string;                        // Request body
+}
+```
+
+For **Proxy-WASM**, the same top-level `url` field is required for URL parsing. The full CDN flow is controlled via nested `request`, `response`, and `properties` fields:
+
+```typescript
+{
+  url: string;                          // Request URL (required)
+  method?: string;                      // Unused for Proxy-WASM (use request.method)
+  headers?: Record<string, string>;     // Unused for Proxy-WASM (use request.headers)
+  body?: string;                        // Unused for Proxy-WASM (use request.body)
+  request?: {
+    method?: string;                    // HTTP method (default: "GET")
+    headers?: Record<string, string>;   // Request headers (default: {})
+    body?: string;                      // Request body (default: "")
+  };
+  response?: {
+    headers?: Record<string, string>;   // Simulated upstream response headers (default: {})
+    body?: string;                      // Simulated upstream response body (default: "")
+    status?: number;                    // Simulated upstream response status (default: 200)
+    statusText?: string;                // Simulated upstream response status text (default: "OK")
+  };
+  properties?: Record<string, unknown>; // CDN properties (default: {})
+}
+```
+
+**Response — HTTP-WASM**
+
+```typescript
+{
+  ok: true;
+  result: {
+    status: number;
+    statusText: string;
+    headers: Record<string, string>;
+    body: string;
+    contentType: string | null;
+    isBase64?: boolean;
+    logs: Array<{ level: number; message: string }>;
+  };
+}
+```
+
+**Response — Proxy-WASM**
+
+```typescript
+{
+  ok: true;
+  hookResults: Record<string, HookResult>;
+  finalResponse: {
+    status: number;
+    statusText: string;
+    headers: Record<string, string>;
+    body: string;
+    contentType: string;
+    isBase64?: boolean;
+  };
+  calculatedProperties?: Record<string, unknown>;
+}
+```
+
+Where `HookResult` is:
+
+```typescript
+type HookResult = {
+  returnCode: number | null;
+  logs: Array<{ level: number; message: string }>;
+  input: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  output: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  properties: Record<string, unknown>;
+};
+```
+
+`hookResults` is keyed by hook name (e.g. `"onRequestHeaders"`, `"onResponseHeaders"`). `calculatedProperties` is present only when the runner derives request-derived properties; keys follow the `request.*` pattern (e.g. `request.url`, `request.host`, `request.path`, `request.query`, `request.scheme`, `request.extension`, `request.method`).
+
+**Example — HTTP-WASM**
+
+```bash
+curl -X POST http://localhost:5179/api/execute \
+  -H "Content-Type: application/json" \
+  -H "X-Source: api" \
+  -d '{
+    "url": "http://example.com/api/data",
+    "method": "GET",
+    "headers": { "accept": "application/json" }
+  }'
+```
+
 ```json
 {
-  "type": "wasm_loaded",
-  "data": {
-    "name": "binary.wasm",
-    "size": 123456,
-    "timestamp": "2025-01-15T10:30:00Z",
-    "source": "ui" | "cli" | "vscode"
+  "ok": true,
+  "result": {
+    "status": 200,
+    "statusText": "OK",
+    "headers": { "content-type": "application/json" },
+    "body": "{\"hello\":\"world\"}",
+    "contentType": "application/json",
+    "isBase64": false,
+    "logs": [
+      { "level": 2, "message": "request received" }
+    ]
   }
 }
 ```
 
-### HTTP Request Completed
-```json
-{
-  "type": "http_request_completed",
-  "data": {
-    "response": {
-      "status": 200,
-      "statusText": "OK",
-      "headers": {...},
-      "body": "...",
-      "contentType": "text/html"
+**Example — Proxy-WASM**
+
+```bash
+curl -X POST http://localhost:5179/api/execute \
+  -H "Content-Type: application/json" \
+  -H "X-Source: api" \
+  -d '{
+    "url": "https://example.com/page",
+    "request": {
+      "method": "GET",
+      "headers": { "host": "example.com" },
+      "body": ""
     },
-    "timestamp": "2025-01-15T10:30:01Z",
-    "source": "ui"
-  }
-}
+    "response": {
+      "headers": { "content-type": "text/html" },
+      "body": "<html/>",
+      "status": 200,
+      "statusText": "OK"
+    },
+    "properties": {}
+  }'
 ```
 
-### CDN Request Completed
 ```json
 {
-  "type": "request_completed",
-  "data": {
-    "hookResults": {...},
-    "finalResponse": {...},
-    "calculatedProperties": {...},
-    "timestamp": "2025-01-15T10:30:01Z",
-    "source": "ui"
+  "ok": true,
+  "hookResults": {
+    "onRequestHeaders": {
+      "returnCode": 0,
+      "logs": [{ "level": 2, "message": "onRequestHeaders called" }],
+      "input": {
+        "request": { "headers": { "host": "example.com" }, "body": "" },
+        "response": { "headers": {}, "body": "" },
+        "properties": {}
+      },
+      "output": {
+        "request": { "headers": { "host": "example.com", "x-added": "1" }, "body": "" },
+        "response": { "headers": {}, "body": "" }
+      },
+      "properties": {}
+    }
+  },
+  "finalResponse": {
+    "status": 200,
+    "statusText": "OK",
+    "headers": { "content-type": "text/html" },
+    "body": "<html/>",
+    "contentType": "text/html"
+  },
+  "calculatedProperties": {
+    "request.url": "https://example.com/page",
+    "request.host": "example.com",
+    "request.path": "/page",
+    "request.query": "",
+    "request.scheme": "https",
+    "request.extension": "",
+    "request.method": "GET"
   }
 }
 ```
 
-### Request Failed
-```json
-{
-  "type": "request_failed",
-  "data": {
-    "message": "Error message",
-    "error": "Error details",
-    "timestamp": "2025-01-15T10:30:01Z",
-    "source": "ui"
-  }
-}
-```
+**Error Responses**
 
-### Properties Updated
-```json
-{
-  "type": "properties_updated",
-  "data": {
-    "properties": {...},
-    "timestamp": "2025-01-15T10:30:01Z",
-    "source": "ui"
-  }
-}
-```
-
-### Console Log
-```json
-{
-  "type": "console_log",
-  "data": {
-    "message": "Log message from WASM",
-    "level": "info" | "warn" | "error",
-    "timestamp": "2025-01-15T10:30:01Z"
-  }
-}
-```
-
-**Example WebSocket Client** (Node.js):
-```javascript
-import WebSocket from 'ws';
-
-const ws = new WebSocket('ws://localhost:5179/ws');
-
-ws.on('open', () => {
-  console.log('Connected to debugger WebSocket');
-});
-
-ws.on('message', (data) => {
-  const event = JSON.parse(data.toString());
-  console.log('Event:', event.type, event.data);
-});
-
-ws.on('error', (error) => {
-  console.error('WebSocket error:', error);
-});
-```
+| Status | Condition |
+|---|---|
+| `400` | No WASM module loaded, or `url` is missing |
+| `500` | Execution failed |
 
 ---
 
-## Common Workflows
+### POST /api/call
 
-### Complete Test Workflow
+Calls a specific Proxy-WASM CDN hook directly. Only valid for Proxy-WASM modules.
+
+Requires a WASM module to be loaded via `POST /api/load`.
+
+**Request Body**
+
+```typescript
+{
+  hook: "onRequestHeaders" | "onRequestBody" | "onResponseHeaders" | "onResponseBody";
+  request?: {
+    headers: Record<string, string>;
+    body: string;
+  };
+  response?: {
+    headers: Record<string, string>;
+    body: string;
+  };
+  properties: Record<string, unknown>;
+}
+```
+
+`request` and `response` default to `{ headers: {}, body: "" }` if omitted.
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  result: HookResult;
+}
+```
+
+Where `HookResult` is:
+
+```typescript
+type HookResult = {
+  returnCode: number | null;
+  logs: Array<{ level: number; message: string }>;
+  input: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  output: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  properties: Record<string, unknown>;
+};
+```
+
+**Example**
 
 ```bash
-#!/bin/bash
-set -e
-
-# 1. Check health
-curl -f http://localhost:5179/health || exit 1
-
-# 2. Update configuration
-curl -X POST http://localhost:5179/api/config \
+curl -X POST http://localhost:5179/api/call \
   -H "Content-Type: application/json" \
   -d '{
+    "hook": "onRequestHeaders",
+    "request": {
+      "headers": { "host": "example.com", "user-agent": "curl/8.0" },
+      "body": ""
+    },
+    "response": {
+      "headers": {},
+      "body": ""
+    },
+    "properties": {
+      "client.geo.country": "US"
+    }
+  }'
+```
+
+```json
+{
+  "ok": true,
+  "result": {
+    "returnCode": 0,
+    "logs": [
+      { "level": 2, "message": "processing request headers" }
+    ],
+    "input": {
+      "request": {
+        "headers": { "host": "example.com", "user-agent": "curl/8.0" },
+        "body": ""
+      },
+      "response": { "headers": {}, "body": "" },
+      "properties": { "client.geo.country": "US" }
+    },
+    "output": {
+      "request": {
+        "headers": { "host": "example.com", "user-agent": "curl/8.0", "x-country": "US" },
+        "body": ""
+      },
+      "response": { "headers": {}, "body": "" }
+    },
+    "properties": { "client.geo.country": "US" }
+  }
+}
+```
+
+**Error Responses**
+
+| Status | Condition |
+|---|---|
+| `400` | Validation failed (invalid hook name, missing `properties`), or no WASM module loaded |
+| `500` | Hook execution failed |
+
+---
+
+### POST /api/send
+
+Executes the full Proxy-WASM CDN request/response flow. Equivalent to `POST /api/execute` for Proxy-WASM, but uses stricter schema validation. Only valid for Proxy-WASM modules.
+
+Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`X-Source`](#x-source-header) request header.
+
+**Request Body**
+
+```typescript
+{
+  url: string;                            // Full request URL (required)
+  request?: {
+    method?: string;                      // HTTP method (default: "GET")
+    url?: string;
+    headers?: Record<string, string>;     // Request headers (default: {})
+    body?: string;                        // Request body (default: "")
+  };
+  response?: {
+    headers?: Record<string, string>;     // Simulated upstream response headers (default: {})
+    body?: string;                        // Simulated upstream response body (default: "")
+  };
+  properties: Record<string, unknown>;    // CDN properties (required, use {} if none)
+}
+```
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  hookResults: Record<string, HookResult>;
+  finalResponse: {
+    status: number;
+    statusText: string;
+    headers: Record<string, string>;
+    body: string;
+    contentType: string;
+    isBase64?: boolean;
+  };
+  calculatedProperties?: Record<string, unknown>;
+}
+```
+
+`HookResult` has the same shape as documented in [`POST /api/call`](#post-apicall). `hookResults` is keyed by hook name. `calculatedProperties` keys follow the `request.*` pattern.
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/send \
+  -H "Content-Type: application/json" \
+  -H "X-Source: ai_agent" \
+  -d '{
+    "url": "https://example.com/api/resource",
+    "request": {
+      "method": "POST",
+      "headers": { "content-type": "application/json" },
+      "body": "{\"key\":\"value\"}"
+    },
+    "response": {
+      "headers": { "content-type": "application/json" },
+      "body": "{\"result\":\"ok\"}"
+    },
+    "properties": {
+      "client.geo.country": "DE"
+    }
+  }'
+```
+
+```json
+{
+  "ok": true,
+  "hookResults": {
+    "onRequestHeaders": {
+      "returnCode": 0,
+      "logs": [],
+      "input": {
+        "request": { "headers": { "content-type": "application/json" }, "body": "" },
+        "response": { "headers": {}, "body": "" },
+        "properties": { "client.geo.country": "DE" }
+      },
+      "output": {
+        "request": { "headers": { "content-type": "application/json" }, "body": "" },
+        "response": { "headers": {}, "body": "" }
+      },
+      "properties": { "client.geo.country": "DE" }
+    },
+    "onResponseHeaders": {
+      "returnCode": 0,
+      "logs": [],
+      "input": {
+        "request": { "headers": { "content-type": "application/json" }, "body": "" },
+        "response": { "headers": { "content-type": "application/json" }, "body": "" },
+        "properties": { "client.geo.country": "DE" }
+      },
+      "output": {
+        "request": { "headers": { "content-type": "application/json" }, "body": "" },
+        "response": { "headers": { "content-type": "application/json" }, "body": "" }
+      },
+      "properties": { "client.geo.country": "DE" }
+    }
+  },
+  "finalResponse": {
+    "status": 200,
+    "statusText": "OK",
+    "headers": { "content-type": "application/json" },
+    "body": "{\"result\":\"ok\"}",
+    "contentType": "application/json"
+  },
+  "calculatedProperties": {
+    "request.url": "https://example.com/api/resource",
+    "request.host": "example.com",
+    "request.path": "/api/resource",
+    "request.query": "",
+    "request.scheme": "https",
+    "request.extension": "",
+    "request.method": "POST"
+  }
+}
+```
+
+**Error Responses**
+
+| Status | Condition |
+|---|---|
+| `400` | Validation failed (missing `url` or `properties`), or no WASM module loaded |
+| `500` | Execution failed |
+
+---
+
+## Configuration
+
+### GET /api/config
+
+Reads the `fastedge-config.test.json` file from the project root and returns it along with a validation result.
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  config: TestConfig;
+  valid: boolean;
+  validationErrors?: {
+    formErrors: string[];
+    fieldErrors: Record<string, string[]>;
+  };
+}
+```
+
+Where `TestConfig` is:
+
+```typescript
+type TestConfig = {
+  $schema?: string;
+  description?: string;
+  wasm?: {
+    path: string;
+    description?: string;
+  };
+  request: {
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    body: string;
+  };
+  response?: {
+    headers: Record<string, string>;
+    body: string;
+  };
+  properties: Record<string, unknown>;
+  dotenv?: {
+    enabled?: boolean;
+    path?: string;
+  };
+};
+```
+
+**Example**
+
+```bash
+curl http://localhost:5179/api/config
+```
+
+```json
+{
+  "ok": true,
+  "config": {
+    "$schema": "http://localhost:5179/api/schema/fastedge-config.test",
+    "request": {
+      "method": "GET",
+      "url": "https://example.com/",
+      "headers": {},
+      "body": ""
+    },
+    "response": {
+      "headers": {},
+      "body": ""
+    },
+    "properties": {}
+  },
+  "valid": true
+}
+```
+
+**Error Responses**
+
+| Status | Condition |
+|---|---|
+| `404` | `fastedge-config.test.json` does not exist |
+
+---
+
+### POST /api/config
+
+Saves the provided configuration object to `fastedge-config.test.json` in the project root. If the config includes a `properties` field, a WebSocket event is broadcast to connected clients.
+
+Accepts an optional [`X-Source`](#x-source-header) request header.
+
+**Request Body**
+
+```typescript
+{
+  config: {
+    $schema?: string;
+    description?: string;
+    wasm?: {
+      path: string;
+      description?: string;
+    };
+    request: {
+      method: string;
+      url: string;
+      headers: Record<string, string>;
+      body: string;
+    };
+    response?: {
+      headers: Record<string, string>;
+      body: string;
+    };
+    properties: Record<string, unknown>;
+    dotenv?: {
+      enabled?: boolean;
+      path?: string;
+    };
+  };
+}
+```
+
+`request` and `properties` are required within `config`.
+
+**Response**
+
+```typescript
+{
+  ok: true;
+}
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/config \
+  -H "Content-Type: application/json" \
+  -H "X-Source: api" \
+  -d '{
     "config": {
-      "envVars": {
-        "DEBUG": "true",
-        "API_URL": "https://api.example.com"
+      "$schema": "http://localhost:5179/api/schema/fastedge-config.test",
+      "request": {
+        "method": "GET",
+        "url": "https://example.com/",
+        "headers": { "accept": "text/html" },
+        "body": ""
+      },
+      "response": {
+        "headers": {},
+        "body": ""
+      },
+      "properties": {
+        "client.geo.country": "US"
       }
     }
   }'
-
-# 3. Load WASM
-WASM_BASE64=$(base64 -w 0 ./dist/app.wasm)
-curl -X POST http://localhost:5179/api/load \
-  -H "Content-Type: application/json" \
-  -d "{\"wasmBase64\": \"$WASM_BASE64\"}"
-
-# 4. Execute test requests
-curl -X POST http://localhost:5179/api/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "http://localhost/",
-    "method": "GET"
-  }' | jq .
-
-curl -X POST http://localhost:5179/api/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "http://localhost/api/data",
-    "method": "POST",
-    "headers": {"Content-Type": "application/json"},
-    "body": "{\"test\": \"data\"}"
-  }' | jq .
-
-echo "Tests completed successfully!"
 ```
 
-### CI/CD Integration
-
-```yaml
-# .github/workflows/test.yml
-- name: Test with FastEdge Debugger
-  run: |
-    # Start debugger
-    cd fastedge-debugger
-    npm start &
-    DEBUGGER_PID=$!
-
-    # Wait for health check
-    timeout 30 bash -c 'until curl -f http://localhost:5179/health; do sleep 1; done'
-
-    # Build and test application
-    cd ../my-app
-    npm run build
-
-    # Run automated tests
-    ./test-scripts/run-tests.sh
-
-    # Cleanup
-    kill $DEBUGGER_PID
+```json
+{
+  "ok": true
+}
 ```
+
+**Error Responses**
+
+| Status | Condition |
+|---|---|
+| `400` | Validation failed (missing `config.request` or `config.properties`) |
+| `500` | File write failed |
+
+---
+
+### POST /api/config/save-as
+
+Saves the provided configuration to an arbitrary file path. The path can be absolute or relative to the project root. Creates intermediate directories as needed. Appends `.json` if the path does not already end in `.json`.
+
+**Request Body**
+
+```typescript
+{
+  config: object;     // The configuration object to serialize as JSON
+  filePath: string;   // Target file path (absolute or relative to project root)
+}
+```
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  savedPath: string;  // Resolved absolute path where the file was written
+}
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/config/save-as \
+  -H "Content-Type: application/json" \
+  -d '{
+    "config": {
+      "request": {
+        "method": "GET",
+        "url": "https://example.com/",
+        "headers": {},
+        "body": ""
+      },
+      "properties": {}
+    },
+    "filePath": "configs/staging.test"
+  }'
+```
+
+```json
+{
+  "ok": true,
+  "savedPath": "/home/user/project/configs/staging.test.json"
+}
+```
+
+**Error Responses**
+
+| Status | Condition |
+|---|---|
+| `400` | Missing `config` or `filePath` |
+| `500` | File write or directory creation failed |
+
+---
+
+## Schema
+
+### GET /api/schema/:name
+
+Serves a JSON Schema file by name. Use these schemas for request validation in test tooling or editor integrations.
+
+The `:name` parameter is the schema name without the `.schema.json` suffix.
+
+**Response**
+
+Returns the JSON Schema document with `Content-Type: application/json`.
+
+**Available Schemas**
+
+#### Request Schemas
+
+| Name | Description |
+|---|---|
+| `api-load` | Request body schema for `POST /api/load` |
+| `api-send` | Request body schema for `POST /api/send` |
+| `api-call` | Request body schema for `POST /api/call` |
+| `api-config` | Request body schema for `POST /api/config` |
+
+#### Response / Type Schemas
+
+| Name | Description |
+|---|---|
+| `fastedge-config.test` | Schema for `fastedge-config.test.json` config files |
+| `hook-result` | Shape of a single `HookResult` object |
+| `hook-call` | Shape of a `HookCall` input object |
+| `full-flow-result` | Shape of the `FullFlowResult` returned by full-flow endpoints |
+| `http-request` | Shape of an `HttpRequest` for HTTP-WASM execution |
+| `http-response` | Shape of an `HttpResponse` returned by HTTP-WASM execution |
+
+**Example**
+
+```bash
+curl http://localhost:5179/api/schema/api-send
+```
+
+```bash
+curl http://localhost:5179/api/schema/fastedge-config.test
+```
+
+**Using the schema in a config file**
+
+```json
+{
+  "$schema": "http://localhost:5179/api/schema/fastedge-config.test",
+  "request": {
+    "method": "GET",
+    "url": "https://example.com/",
+    "headers": {},
+    "body": ""
+  },
+  "properties": {}
+}
+```
+
+**Error Responses**
+
+| Status | Condition |
+|---|---|
+| `404` | Schema name not found |
 
 ---
 
 ## Error Handling
 
-All API endpoints return consistent error responses:
+All error responses follow a consistent shape:
 
-```json
+```typescript
 {
-  "ok": false,
-  "error": "Error message describing what went wrong"
+  ok: false;
+  error: string | { formErrors: string[]; fieldErrors: Record<string, string[]> };
 }
 ```
 
-**Common Error Scenarios**:
+When a request body fails schema validation (Zod), `error` is the flattened Zod error object with `formErrors` and `fieldErrors`. For runtime errors, `error` is a plain string.
 
-1. **WASM not loaded**:
-   - Status: `400`
-   - Message: "No WASM module loaded. Call /api/load first."
+**Common status codes**
 
-2. **Invalid parameters**:
-   - Status: `400`
-   - Message: Specific parameter that's missing or invalid
-
-3. **Execution failure**:
-   - Status: `500`
-   - Message: Error from WASM execution
-
-4. **Configuration error**:
-   - Status: `404` or `500`
-   - Message: Configuration file issue
+| Status | Meaning |
+|---|---|
+| `400` | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded) |
+| `404` | Resource not found (config file, schema file) |
+| `500` | Internal server error during execution or I/O |
 
 ---
 
-## Rate Limiting
+## See Also
 
-Currently, no rate limiting is enforced. The debugger is designed for local development use.
-
----
-
-## Best Practices
-
-1. **Always check health** before running tests
-2. **Set configuration BEFORE loading WASM** - env vars must be set before module initialization
-3. **Use descriptive X-Source headers** - helps with debugging and tracking
-4. **Clean shutdown** - ensure proper cleanup in CI/CD scripts
-5. **Monitor WebSocket** for real-time logs and debugging
-6. **Test incrementally** - test simple endpoints before complex flows
-7. **Use absolute paths** for WASM files to avoid path resolution issues
-
----
-
-## Environment Variables
-
-Configure the debugger server:
-
-- `PORT` - HTTP server port (default: 5179)
-- `PROXY_RUNNER_DEBUG` - Enable debug logging (set to "1")
-
-Example:
-```bash
-PORT=3000 npm start
-```
-
----
-
-## Version
-
-**API Version**: 1.0.0
-**Debugger Version**: See package.json
-
----
-
-## Support
-
-For issues, questions, or contributions:
-- Repository: https://github.com/G-Core/fastedge-debugger
-- Issues: https://github.com/G-Core/fastedge-debugger/issues
-
----
-
-## Related Documentation
-
-- **User Guide**: See README.md for web UI usage
-- **Development**: See DEVELOPMENT.md for contributing
-- **Architecture**: See context/architecture/ for implementation details
+- [WEBSOCKET.md](./WEBSOCKET.md) — WebSocket protocol and event types
+- [DEBUGGER.md](./DEBUGGER.md) — Server startup, configuration, and environment variables
+- [TEST_FRAMEWORK.md](./TEST_FRAMEWORK.md) — Programmatic test framework API
+- [RUNNER.md](./RUNNER.md) — Runner API and WASM type detection

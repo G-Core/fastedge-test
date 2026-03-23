@@ -29,3 +29,10 @@ wasm/**/*.wasm.map
 
 # Using pnpm
 package-lock.json
+
+# Agent workspaces
+.codex
+.claude
+.specify
+specs/*
+!.specify/memory/constitution.md
