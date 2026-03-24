@@ -5,20 +5,6 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
-      mode:
-        description: Run mode for doctor pipeline
-        required: false
-        type: string
-        default: auto
-      target_version:
-        description: Exact source tag to use (for example v0.1.0)
-        required: false
-        type: string
-      allow_breaking_update:
-        description: Allow breaking update during version resolution
-        required: false
-        type: boolean
-        default: false
       force_analyze:
         description: Force analyze outside configured analyze day
         required: false
@@ -42,8 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_act: ${{ steps.collect.outputs.should_act }}
-      resolved_version: ${{ steps.collect.outputs.resolved_version }}
-      installed_version: ${{ steps.collect.outputs.installed_version }}
+      source_sha: ${{ steps.collect.outputs.source_sha }}
+      installed_source_sha: ${{ steps.collect.outputs.installed_source_sha }}
+      installed_runtime_sha: ${{ steps.collect.outputs.installed_runtime_sha }}
       act_reason: ${{ steps.collect.outputs.act_reason }}
       analyze_day: ${{ steps.collect.outputs.analyze_day }}
       report_tz: ${{ steps.collect.outputs.report_tz }}
@@ -73,46 +60,6 @@ jobs:
             const path = require("path");
 
             const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
-            const [sourceOwner, sourceRepo] = process.env.SOURCE_REPO.split("/");
-            const sourceToken = process.env.SOURCE_GITHUB_TOKEN;
-
-            const listSourceTags = async () => {
-              const tags = [];
-              let page = 1;
-
-              while (true) {
-                const response = await fetch(
-                  `https://api.github.com/repos/${sourceOwner}/${sourceRepo}/tags?per_page=100&page=${page}`,
-                  {
-                    headers: {
-                      Accept: "application/vnd.github+json",
-                      Authorization: `Bearer ${sourceToken}`,
-                      "User-Agent": "doctor-workflow",
-                      "X-GitHub-Api-Version": "2022-11-28",
-                    },
-                  }
-                );
-
-                if (!response.ok) {
-                  const payload = await response.text();
-                  throw new Error(
-                    `Failed to list source tags for ${sourceOwner}/${sourceRepo}: ${response.status} ${payload}`
-                  );
-                }
-
-                const pageItems = await response.json();
-                tags.push(...pageItems);
-
-                if (pageItems.length < 100) {
-                  break;
-                }
-
-                page += 1;
-              }
-
-              return tags;
-            };
-
             const repoMeta = await github.rest.repos.get({ owner, repo });
             const repoDefaultBranch = repoMeta.data.default_branch;
             const issuesEnabled = repoMeta.data.has_issues ? "true" : "false";
@@ -123,9 +70,6 @@ jobs:
             const windowTo = reportDateStart.toISOString();
             const windowFrom = new Date(reportDateStart.getTime() - 24 * 60 * 60 * 1000).toISOString();
             const collectedAt = now.toISOString();
-
-            const sourceTags = await listSourceTags();
-            const sourceTagNames = sourceTags.map((item) => item.name);
 
             const commits = await github.paginate(github.rest.repos.listCommits, {
               owner,
@@ -229,22 +173,6 @@ jobs:
                 ),
               }));
 
-            // TODO: populate managed_files and reference_files from agent-toolkit
-            // when act integration starts using the real bundle manifest.
-            const expectedManifest = {
-              managed_files: {},
-              reference_files: {},
-              bootstrap_files: ["AGENTS.md", "CLAUDE.md", "DOCS.md"],
-              observed_paths: [
-                "docs/",
-                "docs/quickstart.md",
-                "docs/INDEX.md",
-                ".specify/memory/constitution.md",
-                ".gitignore",
-              ],
-              required_gitignore_rules: [".codex", ".claude", ".specify", "specs/*"],
-            };
-
             const activityPayload = {
               commits: dailyCommits,
               prs: dailyPRs,
@@ -255,17 +183,9 @@ jobs:
 
             const workDir = path.join(process.env.RUNNER_TEMP, "doctor-inputs");
             fs.mkdirSync(workDir, { recursive: true });
-
-            const expectedManifestPath = path.join(workDir, "expected-manifest.json");
-            const sourceTagsPath = path.join(workDir, "source-tags.json");
             const activityPath = path.join(workDir, "activity.json");
-
-            fs.writeFileSync(expectedManifestPath, JSON.stringify(expectedManifest));
-            fs.writeFileSync(sourceTagsPath, JSON.stringify(sourceTagNames));
             fs.writeFileSync(activityPath, JSON.stringify(activityPayload));
 
-            core.setOutput("expected_manifest_path", expectedManifestPath);
-            core.setOutput("source_tags_path", sourceTagsPath);
             core.setOutput("activity_path", activityPath);
             core.setOutput("repo_default_branch", repoDefaultBranch);
             core.setOutput("issues_enabled", issuesEnabled);
@@ -274,91 +194,26 @@ jobs:
             core.setOutput("window_from", windowFrom);
             core.setOutput("window_to", windowTo);
 
-      - name: Checkout toolkit source for collect manifest
+      - name: Checkout toolkit source
         uses: actions/checkout@v4
         with:
           repository: ${{ env.SOURCE_REPO }}
+          ref: main
           path: .doctor-source
           token: ${{ secrets.TOOLKIT_READ_TOKEN || secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Build expected manifest
-        id: build_manifest
-        env:
-          DOCTOR_REPO_ROOT: ${{ github.workspace }}
-          DOCTOR_SOURCE_ROOT: ${{ github.workspace }}/.doctor-source
-          DOCTOR_SOURCE_TAGS_PATH: ${{ steps.collect_inputs.outputs.source_tags_path }}
-          DOCTOR_TARGET_VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_version || '' }}
-          DOCTOR_ALLOW_BREAKING_UPDATE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.allow_breaking_update || 'false' }}
-        run: |
-          python - <<'PY'
-          import importlib.util
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
-
-          repo_root = Path(os.environ["DOCTOR_REPO_ROOT"]).resolve()
-          source_root = Path(os.environ["DOCTOR_SOURCE_ROOT"]).resolve()
-          source_tags = json.loads(Path(os.environ["DOCTOR_SOURCE_TAGS_PATH"]).read_text(encoding="utf-8"))
-          target_version = os.environ.get("DOCTOR_TARGET_VERSION") or None
-          allow_breaking_update = os.environ.get("DOCTOR_ALLOW_BREAKING_UPDATE", "false").lower() == "true"
-
-          spec = importlib.util.spec_from_file_location(
-              "doctor_collect",
-              repo_root / ".github" / "workflows" / "collect.py",
-          )
-          assert spec is not None and spec.loader is not None
-
-          module = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(module)
-
-          version_state = module.resolve_version_state(
-              repo_root=repo_root,
-              target_version=target_version,
-              source_tags=source_tags,
-              allow_breaking_update=allow_breaking_update,
-          )
-
-          if version_state["resolved_version"] and not version_state["fatal_error"]:
-              subprocess.run(
-                  ["git", "checkout", "--force", version_state["resolved_version"]],
-                  cwd=source_root,
-                  check=True,
-                  stdout=subprocess.DEVNULL,
-                  stderr=subprocess.DEVNULL,
-              )
-              expected_manifest = module.build_expected_manifest_from_source(
-                  source_root=source_root,
-                  resolved_version=version_state["resolved_version"],
-              )
-          else:
-              expected_manifest = module.build_expected_manifest_stub()
-
-          work_dir = Path(os.environ["RUNNER_TEMP"]) / "doctor-inputs"
-          work_dir.mkdir(parents=True, exist_ok=True)
-          output_path = work_dir / "expected-manifest.json"
-          output_path.write_text(json.dumps(expected_manifest), encoding="utf-8")
-
-          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as handle:
-              handle.write(f"expected_manifest_path={output_path}\n")
-          PY
 
       - name: Run collect
         id: collect
         env:
           DOCTOR_REPO_ROOT: ${{ github.workspace }}
           DOCTOR_OUTPUT_DIR: ${{ runner.temp }}/doctor
-          DOCTOR_EXPECTED_MANIFEST_PATH: ${{ steps.build_manifest.outputs.expected_manifest_path }}
-          DOCTOR_SOURCE_TAGS_PATH: ${{ steps.collect_inputs.outputs.source_tags_path }}
+          DOCTOR_SOURCE_ROOT: ${{ github.workspace }}/.doctor-source
           DOCTOR_ACTIVITY_PATH: ${{ steps.collect_inputs.outputs.activity_path }}
-          DOCTOR_TARGET_VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_version || '' }}
-          DOCTOR_ALLOW_BREAKING_UPDATE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.allow_breaking_update || 'false' }}
           DOCTOR_ISSUES_ENABLED: ${{ steps.collect_inputs.outputs.issues_enabled }}
           DOCTOR_REPO_FULL_NAME: ${{ github.repository }}
           DOCTOR_REPO_DEFAULT_BRANCH: ${{ steps.collect_inputs.outputs.repo_default_branch }}
-          DOCTOR_MODE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.mode || 'auto' }}
           DOCTOR_SOURCE_REPO: ${{ env.SOURCE_REPO }}
+          DOCTOR_SOURCE_BRANCH: main
           DOCTOR_COLLECTED_AT: ${{ steps.collect_inputs.outputs.collected_at }}
           DOCTOR_REPORT_DATE: ${{ steps.collect_inputs.outputs.report_date }}
           DOCTOR_WINDOW_FROM: ${{ steps.collect_inputs.outputs.window_from }}
@@ -407,7 +262,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.SOURCE_REPO }}
-          ref: ${{ needs.collect.outputs.resolved_version }}
+          ref: ${{ needs.collect.outputs.source_sha }}
           path: .doctor-source
           token: ${{ secrets.TOOLKIT_READ_TOKEN || secrets.GITHUB_TOKEN }}
 
@@ -422,8 +277,9 @@ jobs:
           DOCTOR_REPO_ROOT: ${{ github.workspace }}
           DOCTOR_SOURCE_ROOT: ${{ github.workspace }}/.doctor-source
           DOCTOR_FINDINGS_PATH: ${{ runner.temp }}/doctor-findings/doctor-findings.json
-          DOCTOR_RESOLVED_VERSION: ${{ needs.collect.outputs.resolved_version }}
-          DOCTOR_INSTALLED_VERSION: ${{ needs.collect.outputs.installed_version }}
+          DOCTOR_SOURCE_SHA: ${{ needs.collect.outputs.source_sha }}
+          DOCTOR_INSTALLED_SOURCE_SHA: ${{ needs.collect.outputs.installed_source_sha }}
+          DOCTOR_INSTALLED_RUNTIME_SHA: ${{ needs.collect.outputs.installed_runtime_sha }}
           DOCTOR_ACT_REASON: ${{ needs.collect.outputs.act_reason }}
           DOCTOR_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           DOCTOR_SOURCE_REPO: ${{ env.SOURCE_REPO }}
@@ -452,9 +308,6 @@ jobs:
     uses: ./.github/workflows/doctor-analyze.lock.yml
     secrets: inherit
     with:
-      mode: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.mode || 'auto' }}
-      target_version: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_version || '' }}
-      allow_breaking_update: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.allow_breaking_update == 'true' }}
       force_analyze: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force_analyze == 'true' }}
       analyze_day: ${{ needs.collect.outputs.analyze_day }}
       report_tz: ${{ needs.collect.outputs.report_tz }}
@@ -462,5 +315,6 @@ jobs:
       observed_findings_present: ${{ needs.collect.outputs.observed_findings_present }}
       stats_artifact_name: ${{ needs.collect.outputs.stats_artifact_name }}
       findings_artifact_name: ${{ needs.collect.outputs.findings_artifact_name }}
-      resolved_version: ${{ needs.collect.outputs.resolved_version }}
-      installed_version: ${{ needs.collect.outputs.installed_version }}
+      source_sha: ${{ needs.collect.outputs.source_sha }}
+      installed_source_sha: ${{ needs.collect.outputs.installed_source_sha }}
+      installed_runtime_sha: ${{ needs.collect.outputs.installed_runtime_sha }}

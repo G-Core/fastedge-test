@@ -23,15 +23,12 @@
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
 #
-# frontmatter-hash: a5a227715b771c40bf0a9e7b2ec33e20580013d52fdb04dcd136357bafc4eb8a
+# frontmatter-hash: 26ed66316fc76b55ddfd8e9b55e3ebebba4ee98bbbea3e8d33c3f45a23ed4a52
 
 name: "doctor-analyze"
 "on":
   workflow_call:
     inputs:
-      allow_breaking_update:
-        required: false
-        type: boolean
       analyze_day:
         required: true
         type: string
@@ -41,14 +38,14 @@ name: "doctor-analyze"
       force_analyze:
         required: false
         type: boolean
-      installed_version:
+      installed_runtime_sha:
+        required: false
+        type: string
+      installed_source_sha:
         required: false
         type: string
       issues_enabled:
         required: true
-        type: string
-      mode:
-        required: false
         type: string
       observed_findings_present:
         required: true
@@ -56,14 +53,11 @@ name: "doctor-analyze"
       report_tz:
         required: true
         type: string
-      resolved_version:
+      source_sha:
         required: false
         type: string
       stats_artifact_name:
         required: true
-        type: string
-      target_version:
-        required: false
         type: string
 
 permissions: {}
@@ -777,12 +771,12 @@ jobs:
           - **observed_findings_present**: __GH_AW_INPUTS_OBSERVED_FINDINGS_PRESENT__
           - **stats_artifact_name**: __GH_AW_INPUTS_STATS_ARTIFACT_NAME__
           - **findings_artifact_name**: __GH_AW_INPUTS_FINDINGS_ARTIFACT_NAME__
-          - **resolved_version**: __GH_AW_INPUTS_RESOLVED_VERSION__
-          - **installed_version**: __GH_AW_INPUTS_INSTALLED_VERSION__
+          - **source_sha**: __GH_AW_INPUTS_SOURCE_SHA__
+          - **installed_source_sha**: __GH_AW_INPUTS_INSTALLED_SOURCE_SHA__
+          - **installed_runtime_sha**: __GH_AW_INPUTS_INSTALLED_RUNTIME_SHA__
           - **analyze_day**: __GH_AW_INPUTS_ANALYZE_DAY__
           - **report_tz**: __GH_AW_INPUTS_REPORT_TZ__
           - **force_analyze**: __GH_AW_INPUTS_FORCE_ANALYZE__
-          - **mode**: __GH_AW_INPUTS_MODE__
           - **run_id**: __GH_AW_GITHUB_RUN_ID__
           - **actor**: __GH_AW_GITHUB_ACTOR__
           - **workflow-run-url**: __GH_AW_GITHUB_SERVER_URL__/__GH_AW_GITHUB_REPOSITORY__/actions/runs/__GH_AW_GITHUB_RUN_ID__
@@ -793,7 +787,7 @@ jobs:
           </system>
           GH_AW_PROMPT_EOF
           cat << 'GH_AW_PROMPT_EOF' >> "$GH_AW_PROMPT"
-          {{#runtime-import doctor-analyze.md}}
+          {{#runtime-import doctor-analyze.prompt.md}}
           GH_AW_PROMPT_EOF
       - name: Substitute placeholders
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
@@ -811,12 +805,12 @@ jobs:
           GH_AW_INPUTS_ANALYZE_DAY: ${{ inputs.analyze_day }}
           GH_AW_INPUTS_FINDINGS_ARTIFACT_NAME: ${{ inputs.findings_artifact_name }}
           GH_AW_INPUTS_FORCE_ANALYZE: ${{ inputs.force_analyze }}
-          GH_AW_INPUTS_INSTALLED_VERSION: ${{ inputs.installed_version }}
+          GH_AW_INPUTS_INSTALLED_RUNTIME_SHA: ${{ inputs.installed_runtime_sha }}
+          GH_AW_INPUTS_INSTALLED_SOURCE_SHA: ${{ inputs.installed_source_sha }}
           GH_AW_INPUTS_ISSUES_ENABLED: ${{ inputs.issues_enabled }}
-          GH_AW_INPUTS_MODE: ${{ inputs.mode }}
           GH_AW_INPUTS_OBSERVED_FINDINGS_PRESENT: ${{ inputs.observed_findings_present }}
           GH_AW_INPUTS_REPORT_TZ: ${{ inputs.report_tz }}
-          GH_AW_INPUTS_RESOLVED_VERSION: ${{ inputs.resolved_version }}
+          GH_AW_INPUTS_SOURCE_SHA: ${{ inputs.source_sha }}
           GH_AW_INPUTS_STATS_ARTIFACT_NAME: ${{ inputs.stats_artifact_name }}
         with:
           script: |
@@ -838,12 +832,12 @@ jobs:
                 GH_AW_INPUTS_ANALYZE_DAY: process.env.GH_AW_INPUTS_ANALYZE_DAY,
                 GH_AW_INPUTS_FINDINGS_ARTIFACT_NAME: process.env.GH_AW_INPUTS_FINDINGS_ARTIFACT_NAME,
                 GH_AW_INPUTS_FORCE_ANALYZE: process.env.GH_AW_INPUTS_FORCE_ANALYZE,
-                GH_AW_INPUTS_INSTALLED_VERSION: process.env.GH_AW_INPUTS_INSTALLED_VERSION,
+                GH_AW_INPUTS_INSTALLED_RUNTIME_SHA: process.env.GH_AW_INPUTS_INSTALLED_RUNTIME_SHA,
+                GH_AW_INPUTS_INSTALLED_SOURCE_SHA: process.env.GH_AW_INPUTS_INSTALLED_SOURCE_SHA,
                 GH_AW_INPUTS_ISSUES_ENABLED: process.env.GH_AW_INPUTS_ISSUES_ENABLED,
-                GH_AW_INPUTS_MODE: process.env.GH_AW_INPUTS_MODE,
                 GH_AW_INPUTS_OBSERVED_FINDINGS_PRESENT: process.env.GH_AW_INPUTS_OBSERVED_FINDINGS_PRESENT,
                 GH_AW_INPUTS_REPORT_TZ: process.env.GH_AW_INPUTS_REPORT_TZ,
-                GH_AW_INPUTS_RESOLVED_VERSION: process.env.GH_AW_INPUTS_RESOLVED_VERSION,
+                GH_AW_INPUTS_SOURCE_SHA: process.env.GH_AW_INPUTS_SOURCE_SHA,
                 GH_AW_INPUTS_STATS_ARTIFACT_NAME: process.env.GH_AW_INPUTS_STATS_ARTIFACT_NAME,
               }
             });
