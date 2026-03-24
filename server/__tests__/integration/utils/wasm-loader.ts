@@ -82,6 +82,9 @@ export const WASM_TEST_BINARIES = {
     headers: {
       headersChange: 'headers-change.wasm',
     },
+    redirect: {
+      redirect: 'redirect.wasm',
+    },
     variablesAndSecrets: {
       variablesAndSecrets: 'variables-and-secrets.wasm',
     },

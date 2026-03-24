@@ -37,6 +37,12 @@ cd frontend && vitest run --coverage  # Frontend coverage only
 vitest --ui                     # Visual test interface
 ```
 
+### ⚠️ Test Framework Dogfooding (MANDATORY)
+
+All CDN integration tests **must** use the test framework API from `server/test-framework/` (`runFlow`, `assertFinalStatus`, `assertFinalHeader`, `assertReturnCode`, `assertLog`, etc.) instead of raw vitest `expect()` + `callFullFlow()`. This dogfoods our own public API — every integration test validates both the feature AND the framework.
+
+**Full details, import list, and migration table:** See the "Dogfood the Test Framework" section in `development/INTEGRATION_TESTING.md`.
+
 ### Test Organization
 
 All backend tests are co-located under `server/__tests__/`, split into `unit/` and `integration/` subdirectories. This mirrors the source structure but keeps tests separate from implementation files.

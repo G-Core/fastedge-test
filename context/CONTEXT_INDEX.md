@@ -47,6 +47,7 @@ This index helps you discover relevant documentation without reading thousands o
 - `CONFIG_SHARING.md` (281 lines) - fastedge-config.test.json sharing system
 - `DOTENV.md` (~210 lines) - Environment variable system, dotenvPath support (CDN + HTTP)
 - `CDN_VARIABLES_AND_SECRETS.md` (~120 lines) - ✅ CDN env var/secret integration test (7 tests); requires proxy-wasm-sdk-as@^1.2.2
+- `SEND_HTTP_RESPONSE.md` (~100 lines) - ✅ send_http_response local response short-circuit: runner impl, cdn-redirect test app, 5 integration tests (dogfoods test framework)
 - `DOTENV_TOGGLE_IMPLEMENTATION.md` (294 lines) - UI toggle for .env variables
 - `LOG_FILTERING.md` (147 lines) - Log filtering and display
 - `HYBRID_LOADING.md` (~550 lines) - WASM path vs buffer loading: performance benchmarks, Runner internals, temp file handling, migration guide
@@ -195,6 +196,7 @@ Applies when: tests fail because HTTP apps are run as proxy-wasm (or vice versa)
 ### Working with Integration Tests
 
 1. Read `development/INTEGRATION_TESTING.md` (comprehensive integration testing guide)
+   - **⚠️ MANDATORY**: Read the "Dogfood the Test Framework" section — all CDN integration tests must use `runFlow()` + assertion helpers from `server/test-framework/`, not raw `callFullFlow()` + `expect()`
 2. Read `TESTING_GUIDE.md` (overall testing approach)
 3. Read `TEST_PATTERNS.md` (testing patterns and conventions)
 4. Read relevant feature doc for what you're testing (e.g., `PROPERTY_IMPLEMENTATION_COMPLETE.md`)
@@ -206,6 +208,14 @@ Applies when: tests fail because HTTP apps are run as proxy-wasm (or vice versa)
 Test file: `server/__tests__/integration/cdn-apps/variables-and-secrets/variables-and-secrets.test.ts`
 WASM app: `test-applications/cdn-apps/cdn-variables-and-secrets/`
 WASM output: `wasm/cdn-apps/variables-and-secrets/variables-and-secrets.wasm`
+
+### Working with send_http_response / Local Response Short-Circuit
+
+1. Read `features/SEND_HTTP_RESPONSE.md` — full design, runner implementation, test app, integration tests
+2. See `server/runner/ProxyWasmRunner.ts:279` for the short-circuit check after `onRequestHeaders`
+3. See `server/runner/HostFunctions.ts:58` for `localResponse` state and `proxy_send_local_response` host function
+4. Test app: `test-applications/cdn-apps/cdn-redirect/` — redirect example
+5. Integration tests: `server/__tests__/integration/cdn-apps/redirect/cdn-redirect.test.ts`
 
 ### Working with Properties System
 

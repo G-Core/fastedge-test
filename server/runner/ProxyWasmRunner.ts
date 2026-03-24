@@ -275,6 +275,25 @@ export class ProxyWasmRunner implements IWasmRunner {
       );
     }
 
+    // Check if WASM sent a local response (e.g., 302 redirect) — skip origin fetch
+    if (results.onRequestHeaders.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
+      const local = this.hostFunctions.getLocalResponse()!;
+      const responseHeaders = results.onRequestHeaders.output.response.headers;
+      this.hostFunctions.resetLocalResponse();
+
+      return {
+        hookResults: results,
+        finalResponse: {
+          status: local.statusCode,
+          statusText: local.statusText,
+          headers: responseHeaders,
+          body: local.body,
+          contentType: responseHeaders['content-type'] || 'text/plain',
+        },
+        calculatedProperties: this.propertyResolver.getCalculatedProperties(),
+      };
+    }
+
     // Pass modified headers from onRequestHeaders to onRequestBody
     const headersAfterRequestHeaders =
       results.onRequestHeaders.output.request.headers;
@@ -303,6 +322,25 @@ export class ProxyWasmRunner implements IWasmRunner {
         results.onRequestBody.output,
         "system",
       );
+    }
+
+    // Check if WASM sent a local response from onRequestBody
+    if (results.onRequestBody.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
+      const local = this.hostFunctions.getLocalResponse()!;
+      const responseHeaders = results.onRequestBody.output.response.headers;
+      this.hostFunctions.resetLocalResponse();
+
+      return {
+        hookResults: results,
+        finalResponse: {
+          status: local.statusCode,
+          statusText: local.statusText,
+          headers: responseHeaders,
+          body: local.body,
+          contentType: responseHeaders['content-type'] || 'text/plain',
+        },
+        calculatedProperties: this.propertyResolver.getCalculatedProperties(),
+      };
     }
 
     // Get modified request data from hooks
