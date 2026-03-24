@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - fastedge-plugin-source/manifest.json
+      - fastedge-plugin-source/check-copilot-sync.sh
       - .github/copilot-instructions.md
+      - .github/workflows/copilot-sync.yml
 
 jobs:
   check-sync:

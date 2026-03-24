@@ -20,7 +20,10 @@ if [ ! -f "$COPILOT" ]; then
   exit 1
 fi
 
-# --- Check 1: manifest doc files are referenced in copilot-instructions ---
+# --- Check 1: manifest doc files appear in the mapping table ---
+
+# Extract doc/schema paths that appear in mapping table rows (lines starting with '|')
+mapping_table_docs=$(grep '^|' "$COPILOT" | grep -oP '`((?:docs|schemas)/[^`]+)`' | tr -d '`' | sort -u)
 
 if [ -f "$MANIFEST" ]; then
   doc_files=$(node -e "
@@ -38,7 +41,7 @@ if [ -f "$MANIFEST" ]; then
 
   missing=()
   for doc in $doc_files; do
-    if ! grep -qF "$doc" "$COPILOT"; then
+    if ! echo "$mapping_table_docs" | grep -qF "$doc"; then
       missing+=("$doc")
     fi
   done
@@ -58,14 +61,14 @@ fi
 
 # --- Check 2: doc files referenced in mapping table exist on disk ---
 
-# Extract doc file paths from the markdown mapping table rows only.
-# Table rows start with '|' and we extract docs/schemas paths from the last column.
+# Reuse mapping_table_docs extracted above for check 2
 stale=()
 while IFS= read -r doc_path; do
+  [ -z "$doc_path" ] && continue
   if [ ! -f "$doc_path" ]; then
     stale+=("$doc_path")
   fi
-done < <(grep '^|' "$COPILOT" | grep -oP '`((?:docs|schemas)/[^`]+)`' | tr -d '`' | sort -u)
+done <<< "$mapping_table_docs"
 
 if [ ${#stale[@]} -gt 0 ]; then
   echo "FAIL: Doc files referenced in $COPILOT mapping table do not exist:"
