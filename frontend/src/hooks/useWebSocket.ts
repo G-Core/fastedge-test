@@ -47,9 +47,11 @@ export function useWebSocket(
         ? "127.0.0.1"
         : window.location.hostname;
 
-    // In dev mode (Vite on 5173), proxy handles routing to 5179
-    // In production (Express on 5179), connect directly
-    const port = window.location.port ? `:${window.location.port}` : ":5179";
+    // Use the port from the current URL — works for:
+    // - Dev mode (Vite on 5173, proxy routes to 5179)
+    // - Local production (Express on 5179, port is in URL)
+    // - Codespaces forwarded URLs (port is embedded in hostname, location.port is empty)
+    const port = window.location.port ? `:${window.location.port}` : "";
     return `${protocol}//${hostname}${port}/ws`;
   })();
 
