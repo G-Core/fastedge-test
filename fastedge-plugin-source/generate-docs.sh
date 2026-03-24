@@ -71,8 +71,6 @@ generate_file() {
   local target="$1"
   local sources="${SOURCE_FILES[$target]}"
 
-  echo "Generating docs/$target ..."
-
   # Build the source files content block
   local source_content=""
   for src in $sources; do
@@ -98,13 +96,36 @@ $(cat "$full_path")
     found { print }
   ' "$CONFIG_FILE")
 
+  # Check for existing doc to enable incremental updates
+  local existing_doc=""
+  local existing_path="$DOCS_DIR/$target"
+  local mode="Generate"
+  if [ -f "$existing_path" ]; then
+    existing_doc=$(cat "$existing_path")
+    mode="Update"
+  fi
+
+  if [ "$mode" = "Update" ]; then
+    echo "Updating docs/$target ..."
+  else
+    echo "Generating docs/$target ..."
+  fi
+
+  local existing_section=""
+  if [ -n "$existing_doc" ]; then
+    existing_section="
+# Existing Content for docs/$target
+Use this as the baseline. Preserve all accurate content and manual additions. Only change what is incorrect, incomplete, or missing per the source code. Keep sections not covered by the instructions above. Apply table formatting rules to all tables.
+
+<existing>
+$existing_doc
+</existing>
+"
+  fi
+
   local prompt
   prompt="$(cat <<PROMPT
-You are a documentation generator. Your output will be piped directly to a file.
-You MUST output ONLY the raw markdown content. No conversational text. No preamble.
-No "here is the file" or "I'll generate". No questions. No explanations before or after.
-Do not ask for permissions. Do not mention files or directories.
-Start your output with the level-1 heading and end with the last line of markdown.
+OUTPUT CONSTRAINT: Your output is piped directly to a file. Output ONLY raw markdown. No conversational text. No preamble. No "here is" or "I'll generate". No questions. No explanation. No permission requests. Start your very first character with # (the level-1 heading). End with the last line of markdown.
 
 Generate docs/$target for the @gcoredev/fastedge-test npm package.
 
@@ -116,6 +137,8 @@ $section
 
 # Source Code to Reference
 $source_content
+$existing_section
+REMINDER: Output raw markdown only. First character must be #. No conversational text.
 PROMPT
 )"
 
