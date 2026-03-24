@@ -614,6 +614,9 @@ export class ProxyWasmRunner implements IWasmRunner {
     // Set current hook context for property access control
     this.currentHook = this.getHookContext(call.hook);
 
+    // Clear stale local response from any previous hook execution
+    this.hostFunctions.resetLocalResponse();
+
     // Create fresh instance for this hook call (isolated context)
     const imports = this.createImports();
     this.instance = await WebAssembly.instantiate(this.module, imports);

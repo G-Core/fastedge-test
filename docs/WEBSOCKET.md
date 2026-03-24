@@ -57,7 +57,7 @@ Fired when a WASM binary has been loaded and is ready to handle requests.
 interface WasmLoadedEvent {
   type: 'wasm_loaded';
   timestamp: number;
-  source: EventSource;
+  source: 'ui' | 'ai_agent' | 'api' | 'system';
   data: {
     filename: string;
     size: number;
@@ -68,13 +68,13 @@ interface WasmLoadedEvent {
 }
 ```
 
-| Field          | Type                          | Description                                                 |
-| -------------- | ----------------------------- | ----------------------------------------------------------- |
-| `filename`     | `string`                      | Name of the loaded WASM file                                |
-| `size`         | `number`                      | File size in bytes                                          |
-| `runnerPort?`  | `number \| null`              | Port the runner is listening on, if applicable. Omitted when not set. |
-| `wasmType`     | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type                                                  |
-| `resolvedPath?`| `string \| null`              | Absolute filesystem path to the loaded binary. Omitted when not set.  |
+| Field           | Type                          | Description                                                          |
+| --------------- | ----------------------------- | -------------------------------------------------------------------- |
+| `filename`      | `string`                      | Name of the loaded WASM file                                         |
+| `size`          | `number`                      | File size in bytes                                                   |
+| `runnerPort`    | `number \| null \| undefined` | Port the runner is listening on, if applicable. Omitted when not set |
+| `wasmType`      | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type                                                 |
+| `resolvedPath`  | `string \| null \| undefined` | Absolute filesystem path to the loaded binary. Omitted when not set  |
 
 **Example:**
 
@@ -103,7 +103,7 @@ Fired when the server begins processing an incoming request through the WASM fil
 interface RequestStartedEvent {
   type: 'request_started';
   timestamp: number;
-  source: EventSource;
+  source: 'ui' | 'ai_agent' | 'api' | 'system';
   data: {
     url: string;
     method: string;
@@ -148,7 +148,7 @@ Hook names are camelCase: `onRequestHeaders`, `onRequestBody`, `onResponseHeader
 interface HookExecutedEvent {
   type: 'hook_executed';
   timestamp: number;
-  source: EventSource;
+  source: 'ui' | 'ai_agent' | 'api' | 'system';
   data: {
     hook: string;
     returnCode: number | null;
@@ -220,7 +220,7 @@ Fired when all hook phases have completed and a final response is available.
 interface RequestCompletedEvent {
   type: 'request_completed';
   timestamp: number;
-  source: EventSource;
+  source: 'ui' | 'ai_agent' | 'api' | 'system';
   data: {
     hookResults: Record<string, any>;
     finalResponse: {
@@ -282,7 +282,7 @@ Fired when request processing fails before a response can be produced.
 interface RequestFailedEvent {
   type: 'request_failed';
   timestamp: number;
-  source: EventSource;
+  source: 'ui' | 'ai_agent' | 'api' | 'system';
   data: {
     error: string;
     details?: string;
@@ -319,7 +319,7 @@ Fired when the set of active properties changes (e.g. after a properties configu
 interface PropertiesUpdatedEvent {
   type: 'properties_updated';
   timestamp: number;
-  source: EventSource;
+  source: 'ui' | 'ai_agent' | 'api' | 'system';
   data: {
     properties: Record<string, string>;
   };
@@ -356,7 +356,7 @@ Fired when an http-wasm filter finishes processing a request and a response is a
 interface HttpWasmRequestCompletedEvent {
   type: 'http_wasm_request_completed';
   timestamp: number;
-  source: EventSource;
+  source: 'ui' | 'ai_agent' | 'api' | 'system';
   data: {
     response: {
       status: number;
@@ -409,7 +409,7 @@ Fired in real-time as the http-wasm filter emits log lines during both execute a
 interface HttpWasmLogEvent {
   type: 'http_wasm_log';
   timestamp: number;
-  source: EventSource;
+  source: 'ui' | 'ai_agent' | 'api' | 'system';
   data: {
     level: number;
     message: string;
