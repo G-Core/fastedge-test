@@ -1,0 +1,18 @@
+name: Copilot Instructions Sync
+
+on:
+  pull_request:
+    paths:
+      - fastedge-plugin-source/manifest.json
+      - .github/copilot-instructions.md
+
+jobs:
+  check-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check manifest ↔ copilot-instructions sync
+        run: bash fastedge-plugin-source/check-copilot-sync.sh

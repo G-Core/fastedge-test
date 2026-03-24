@@ -53,6 +53,7 @@ Full constitution: `.specify/memory/constitution.md`
 | `server/server.ts` (startup, port, health) | `docs/DEBUGGER.md` |
 | `bin/fastedge-debug.js` | `docs/DEBUGGER.md` |
 | `package.json` (exports) | `docs/INDEX.md` |
+| `fastedge-plugin-source/manifest.json` | `.github/copilot-instructions.md` |
 
 ### Violation example
 
