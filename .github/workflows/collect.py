@@ -3,11 +3,34 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
-_SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+SOURCE_BRANCH = "main"
+TOOLKIT_SOURCE_DIR = "toolkit"
+RUNTIME_SOURCE_DIR = "workflows/runtime"
+TOOLKIT_TARGET_ROOT = ".toolkit"
+RUNTIME_TARGET_ROOT = ".github/workflows"
+TOOLKIT_SOURCE_SHA_PATH = ".toolkit/SOURCE_SHA"
+RUNTIME_SOURCE_SHA_PATH = ".toolkit/DOCTOR_RUNTIME_SHA"
+TOOLKIT_REQUIRED_DIRECTORIES = {
+    "claude": ".toolkit/claude",
+    "scripts": ".toolkit/scripts",
+    "workflows": ".toolkit/workflows",
+    "examples": ".toolkit/examples",
+}
+REQUIRED_RUNTIME_SOURCE_FILES = [
+    "doctor.yml",
+    "collect.py",
+    "doctor-analyze.md",
+    "doctor-analyze.prompt.md",
+    "doctor-analyze.lock.yml",
+]
+HYGIENE_EXCLUDED_FILE_NAMES = {".DS_Store"}
+HYGIENE_EXCLUDED_DIR_NAMES = {"__pycache__"}
+HYGIENE_EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
 _TRAILER_PATTERNS = {
     "method": re.compile(r"^Method:\s*(.+)$", re.IGNORECASE),
     "agent": re.compile(r"^Agent:\s*(.+)$", re.IGNORECASE),
@@ -15,56 +38,13 @@ _TRAILER_PATTERNS = {
     "refs": re.compile(r"^Refs:\s*(.+)$", re.IGNORECASE),
     "closes": re.compile(r"^Closes:\s*(.+)$", re.IGNORECASE),
 }
-_MANAGED_TREE_MAPPINGS = {
-    "commands": ".toolkit/claude/commands",
-    "hooks": ".toolkit/claude/hooks",
-    "rules": ".toolkit/claude/rules",
-    "skills": ".toolkit/claude/skills",
-}
-_MANAGED_FILE_MAPPINGS = {
-    "AGENTS.md": ".toolkit/AGENTS.md",
-    "CLAUDE.md": ".toolkit/CLAUDE.md",
-    "DOCS.md": ".toolkit/DOCS.md",
-    "DOCS.md.EXAMPLE": ".toolkit/DOCS.md.EXAMPLE",
-}
-_BOOTSTRAP_FILES = ["AGENTS.md", "CLAUDE.md", "DOCS.md"]
-_TARGET_RUNTIME_FILES = [
-    ".github/workflows/doctor.yml",
-    ".github/workflows/collect.py",
-    ".github/workflows/doctor-analyze.md",
-    ".github/workflows/doctor-analyze.lock.yml",
-]
-_OBSERVED_PATHS = [
-    ".specify/",
-    "specs/",
-    "docs/",
-    "docs/quickstart.md",
-    "docs/INDEX.md",
+PRESENCE_ONLY_PATHS = [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "DOCS.md",
     ".specify/memory/constitution.md",
-    ".toolkit/workflows/docs/",
-    *_TARGET_RUNTIME_FILES,
-    ".gitignore",
+    "docs/quickstart.md",
 ]
-_REQUIRED_GITIGNORE_RULES = [".codex", ".claude", ".specify", "specs/*"]
-
-
-def _parse_semver(value: str) -> tuple[int, int, int] | None:
-    match = _SEMVER_RE.match(value.strip())
-    if not match:
-        return None
-    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
-
-
-def _format_semver(version_tuple: tuple[int, int, int]) -> str:
-    major, minor, patch = version_tuple
-    return f"v{major}.{minor}.{patch}"
-
-
-def _normalize_tag(value: str) -> str | None:
-    parsed = _parse_semver(value)
-    if parsed is None:
-        return None
-    return _format_semver(parsed)
 
 
 def _path_to_id(path: str) -> str:
@@ -72,19 +52,32 @@ def _path_to_id(path: str) -> str:
 
 
 def _path_exists(repo_root: Path, relative_path: str) -> bool:
-    candidate = repo_root / relative_path
-    if relative_path.endswith("/"):
-        return candidate.is_dir()
-    return candidate.exists()
+    return (repo_root / relative_path).exists()
 
 
-def _read_gitignore_rules(repo_root: Path) -> set[str]:
-    gitignore_path = repo_root / ".gitignore"
-    if not gitignore_path.exists():
-        return set()
+def _path_state(repo_root: Path, relative_path: str) -> str:
+    path = repo_root / relative_path
+    if path.exists():
+        return "present"
+    if os.path.lexists(path):
+        return "broken_link"
+    return "missing"
 
-    raw_rules = [line.strip() for line in gitignore_path.read_text(encoding="utf-8").splitlines()]
-    return {line for line in raw_rules if line and not line.startswith("#")}
+
+def _path_present(repo_root: Path, relative_path: str) -> bool:
+    return _path_state(repo_root, relative_path) == "present"
+
+
+def _is_hygiene_ignored(candidate: Path) -> bool:
+    return (
+        candidate.name in HYGIENE_EXCLUDED_FILE_NAMES
+        or candidate.suffix in HYGIENE_EXCLUDED_SUFFIXES
+        or any(part in HYGIENE_EXCLUDED_DIR_NAMES for part in candidate.parts)
+    )
+
+
+def _is_managed_source_file(candidate: Path) -> bool:
+    return candidate.is_file() and not _is_hygiene_ignored(candidate)
 
 
 def _new_finding(
@@ -112,583 +105,333 @@ def _new_finding(
     }
 
 
-def _read_installed_version(repo_root: Path) -> tuple[str | None, tuple[int, int, int] | None, bool]:
-    version_path = repo_root / ".toolkit" / "VERSION"
-    if not version_path.exists():
-        return None, None, False
-
-    raw = version_path.read_text(encoding="utf-8").strip()
-    parsed = _parse_semver(raw)
-    if parsed is None:
-        return raw, None, True
-
-    return _format_semver(parsed), parsed, False
+def _read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
 
 
-def _resolve_latest(tags: Iterable[str]) -> tuple[str, tuple[int, int, int]] | None:
-    parsed: list[tuple[tuple[int, int, int], str]] = []
-    for tag in tags:
-        semver = _parse_semver(tag)
-        if semver is not None:
-            parsed.append((semver, tag))
-
-    if not parsed:
+def _read_sha_marker(repo_root: Path, relative_path: str) -> str | None:
+    marker_path = repo_root / relative_path
+    if not marker_path.exists():
         return None
 
-    highest = max(parsed, key=lambda item: item[0])
-    return _format_semver(highest[0]), highest[0]
+    raw = marker_path.read_text(encoding="utf-8").strip()
+    return raw or None
 
 
-def _resolve_latest_compatible(
-    tags: Iterable[str],
-    installed: tuple[int, int, int],
-) -> tuple[str, tuple[int, int, int]] | None:
-    installed_major, installed_minor, _ = installed
+def _resolve_source_sha(source_root: Path, explicit_source_sha: str | None) -> str:
+    if explicit_source_sha:
+        return explicit_source_sha.strip()
 
-    compatible: list[tuple[tuple[int, int, int], str]] = []
-    for tag in tags:
-        semver = _parse_semver(tag)
-        if semver is None:
-            continue
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=source_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Unable to resolve source SHA from {source_root}")
 
-        major, minor, _patch = semver
-        if installed_major >= 1:
-            if major == installed_major:
-                compatible.append((semver, tag))
-        else:
-            if major == installed_major and minor == installed_minor:
-                compatible.append((semver, tag))
-
-    if not compatible:
-        return None
-
-    highest = max(compatible, key=lambda item: item[0])
-    return _format_semver(highest[0]), highest[0]
+    return result.stdout.strip()
 
 
 def build_expected_manifest_stub() -> dict[str, Any]:
     return {
+        "source_branch": SOURCE_BRANCH,
+        "source_sha": "",
+        "managed_root": TOOLKIT_TARGET_ROOT,
+        "managed_directories": list(TOOLKIT_REQUIRED_DIRECTORIES.values()),
         "managed_files": {},
-        "reference_files": {},
-        "bootstrap_files": list(_BOOTSTRAP_FILES),
-        "observed_paths": list(_OBSERVED_PATHS),
-        "required_gitignore_rules": list(_REQUIRED_GITIGNORE_RULES),
+        "runtime_root": RUNTIME_TARGET_ROOT,
+        "runtime_files": {},
+        "presence_paths": list(PRESENCE_ONLY_PATHS),
     }
 
 
 def build_expected_manifest_from_source(
     *,
     source_root: Path,
-    resolved_version: str,
+    source_sha: str | None = None,
+    source_branch: str = SOURCE_BRANCH,
 ) -> dict[str, Any]:
     source_root = Path(source_root)
+    if not source_root.exists():
+        raise FileNotFoundError(f"Source root is missing: {source_root}")
+
+    resolved_source_sha = _resolve_source_sha(source_root, source_sha)
+    toolkit_source_root = source_root / TOOLKIT_SOURCE_DIR
+    runtime_source_root = source_root / RUNTIME_SOURCE_DIR
+    if not toolkit_source_root.exists():
+        raise FileNotFoundError(f"Toolkit source root is missing: {toolkit_source_root}")
+    if not runtime_source_root.exists():
+        raise FileNotFoundError(f"Runtime source root is missing: {runtime_source_root}")
+
     managed_files: dict[str, str] = {}
-    reference_files: dict[str, str] = {}
-
-    for source_relative, target_relative in _MANAGED_TREE_MAPPINGS.items():
-        source_dir = source_root / source_relative
-        if not source_dir.exists():
-            continue
-
-        for source_file in sorted(candidate for candidate in source_dir.rglob("*") if candidate.is_file()):
-            relative_path = source_file.relative_to(source_dir).as_posix()
-            managed_files[f"{target_relative}/{relative_path}"] = source_file.read_text(
-                encoding="utf-8"
-            )
-
-    for source_relative, target_relative in _MANAGED_FILE_MAPPINGS.items():
-        source_file = source_root / source_relative
-        if source_file.exists():
-            managed_files[target_relative] = source_file.read_text(encoding="utf-8")
-
-    workflows_root = source_root / "workflows"
-    if workflows_root.exists():
-        for source_file in sorted(candidate for candidate in workflows_root.rglob("*") if candidate.is_file()):
-            relative_path = source_file.relative_to(workflows_root).as_posix()
-            reference_files[f".toolkit/workflows/{relative_path}"] = source_file.read_text(
-                encoding="utf-8"
-            )
-
-    managed_files[".toolkit/VERSION"] = f"{resolved_version}\n"
-
-    return {
-        "managed_files": managed_files,
-        "reference_files": reference_files,
-        "bootstrap_files": list(_BOOTSTRAP_FILES),
-        "observed_paths": list(_OBSERVED_PATHS),
-        "required_gitignore_rules": list(_REQUIRED_GITIGNORE_RULES),
-    }
-
-
-def build_compliance_checks(
-    *,
-    repo_root: Path,
-    required_gitignore_rules: list[str],
-) -> dict[str, dict[str, bool]]:
-    repo_root = Path(repo_root)
-    gitignore_rules = _read_gitignore_rules(repo_root)
-    required_rules = set(required_gitignore_rules)
-
-    return {
-        "bootstrap": {
-            "agents_present": (repo_root / "AGENTS.md").exists(),
-            "claude_present": (repo_root / "CLAUDE.md").exists(),
-            "docs_md_present": (repo_root / "DOCS.md").exists(),
-        },
-        "agent_workspace": {
-            "specify_dir_present": (repo_root / ".specify").is_dir(),
-            "constitution_present": (repo_root / ".specify" / "memory" / "constitution.md").exists(),
-            "specs_dir_present": (repo_root / "specs").is_dir(),
-        },
-        "docs": {
-            "docs_dir_present": (repo_root / "docs").is_dir(),
-            "index_present": (repo_root / "docs" / "INDEX.md").exists(),
-            "quickstart_present": (repo_root / "docs" / "quickstart.md").exists(),
-        },
-        "toolkit": {
-            "root_present": (repo_root / ".toolkit").is_dir(),
-            "version_present": (repo_root / ".toolkit" / "VERSION").exists(),
-            "workflow_docs_present": (repo_root / ".toolkit" / "workflows" / "docs").is_dir(),
-        },
-        "policy": {
-            "gitignore_has_codex_rule": ".codex" in required_rules and ".codex" in gitignore_rules,
-            "gitignore_has_claude_rule": ".claude" in required_rules and ".claude" in gitignore_rules,
-            "gitignore_has_specify_rule": ".specify" in required_rules and ".specify" in gitignore_rules,
-            "gitignore_has_specs_glob": "specs/*" in required_rules and "specs/*" in gitignore_rules,
-            "constitution_not_ignored": ".specify/memory/constitution.md" not in gitignore_rules,
-        },
-        "doctor_runtime": {
-            "doctor_yml_present": (repo_root / ".github" / "workflows" / "doctor.yml").exists(),
-            "collect_py_present": (repo_root / ".github" / "workflows" / "collect.py").exists(),
-            "analyze_md_present": (repo_root / ".github" / "workflows" / "doctor-analyze.md").exists(),
-            "analyze_lock_present": (
-                repo_root / ".github" / "workflows" / "doctor-analyze.lock.yml"
-            ).exists(),
-        },
-    }
-
-
-def _source_tag_unavailable_finding(requested_tag: str | None = None) -> dict[str, Any]:
-    message = "No valid source tags are available"
-    if requested_tag:
-        message = f"Requested source tag is unavailable: {requested_tag}"
-
-    return _new_finding(
-        "operational.source_version_unavailable",
-        category="operational",
-        severity="error",
-        path=None,
-        state="source_version_unavailable",
-        auto_action="none",
-        message=message,
-        actual=requested_tag,
+    runtime_files: dict[str, str] = {}
+    managed_directories = sorted(
+        f"{TOOLKIT_TARGET_ROOT}/{candidate.name}"
+        for candidate in toolkit_source_root.iterdir()
+        if candidate.is_dir() and candidate.name not in HYGIENE_EXCLUDED_FILE_NAMES
     )
 
+    for source_file in sorted(candidate for candidate in toolkit_source_root.rglob("*") if _is_managed_source_file(candidate)):
+        relative_path = source_file.relative_to(toolkit_source_root).as_posix()
+        managed_files[f"{TOOLKIT_TARGET_ROOT}/{relative_path}"] = _read_text(source_file)
 
-def resolve_version_state(
-    *,
-    repo_root: Path,
-    target_version: str | None,
-    source_tags: list[str],
-    allow_breaking_update: bool,
-) -> dict[str, Any]:
-    repo_root = Path(repo_root)
-    findings: list[dict[str, Any]] = []
+    managed_files[TOOLKIT_SOURCE_SHA_PATH] = f"{resolved_source_sha}\n"
+    managed_files[RUNTIME_SOURCE_SHA_PATH] = f"{resolved_source_sha}\n"
 
-    installed_version, installed_tuple, invalid_installed_version = _read_installed_version(repo_root)
-    latest_overall = _resolve_latest(source_tags)
-    latest_tag = latest_overall[0] if latest_overall is not None else None
-    normalized_source_tags = {
-        normalized
-        for tag in source_tags
-        if (normalized := _normalize_tag(tag)) is not None
-    }
+    missing_runtime_sources: list[str] = []
+    for required_relative in REQUIRED_RUNTIME_SOURCE_FILES:
+        source_file = runtime_source_root / required_relative
+        if not source_file.exists():
+            missing_runtime_sources.append(required_relative)
 
-    if invalid_installed_version:
-        findings.append(
-            _new_finding(
-                "operational.invalid_version",
-                category="operational",
-                severity="error",
-                path=".toolkit/VERSION",
-                state="invalid_version",
-                auto_action="none",
-                message=".toolkit/VERSION is not a valid semantic version",
-                actual=installed_version,
-            )
-        )
+    for source_file in sorted(candidate for candidate in runtime_source_root.rglob("*") if _is_managed_source_file(candidate)):
+        relative_path = source_file.relative_to(runtime_source_root).as_posix()
+        runtime_files[f"{RUNTIME_TARGET_ROOT}/{relative_path}"] = _read_text(source_file)
 
-    if target_version:
-        requested_target = target_version.strip()
-        normalized_target = _normalize_tag(requested_target)
-        if normalized_target is None or normalized_target not in normalized_source_tags:
-            findings.append(_source_tag_unavailable_finding(normalized_target or requested_target))
-            return {
-                "installed_version": installed_version,
-                "resolved_version": normalized_target or requested_target,
-                "resolved_from": "workflow_input",
-                "compatibility_blocked": False,
-                "latest_tag": latest_tag,
-                "should_act": False,
-                "act_reason": "operational_error",
-                "fatal_error": True,
-                "findings": findings,
-            }
-
-        should_act = bool(installed_version is None or installed_version != normalized_target)
-        act_reason = "version_outdated" if should_act else "healthy"
-
-        return {
-            "installed_version": installed_version,
-            "resolved_version": normalized_target,
-            "resolved_from": "workflow_input",
-            "compatibility_blocked": False,
-            "latest_tag": latest_tag,
-            "should_act": should_act,
-            "act_reason": act_reason,
-            "fatal_error": False,
-            "findings": findings,
-        }
-
-    if latest_overall is None:
-        findings.append(_source_tag_unavailable_finding())
-        return {
-            "installed_version": installed_version,
-            "resolved_version": installed_version,
-            "resolved_from": "installed_version" if installed_version else None,
-            "compatibility_blocked": False,
-            "latest_tag": None,
-            "should_act": False,
-            "act_reason": "operational_error",
-            "fatal_error": True,
-            "findings": findings,
-        }
-
-    latest_overall_version, latest_overall_tuple = latest_overall
-
-    if invalid_installed_version:
-        return {
-            "installed_version": installed_version,
-            "resolved_version": latest_overall_version,
-            "resolved_from": "latest_compatible_tag",
-            "compatibility_blocked": False,
-            "latest_tag": latest_tag,
-            "should_act": False,
-            "act_reason": "operational_error",
-            "fatal_error": False,
-            "findings": findings,
-        }
-
-    if installed_tuple is None:
-        return {
-            "installed_version": None,
-            "resolved_version": latest_overall_version,
-            "resolved_from": "latest_compatible_tag",
-            "compatibility_blocked": False,
-            "latest_tag": latest_tag,
-            "should_act": True,
-            "act_reason": "version_missing",
-            "fatal_error": False,
-            "findings": findings,
-        }
-
-    if allow_breaking_update:
-        resolved_version = latest_overall_version
-        resolved_tuple = latest_overall_tuple
-        compatibility_blocked = False
-    else:
-        latest_compatible = _resolve_latest_compatible(source_tags, installed_tuple)
-        if latest_compatible is None:
-            resolved_version = _format_semver(installed_tuple)
-            resolved_tuple = installed_tuple
-            compatibility_blocked = latest_overall_tuple > installed_tuple
-        else:
-            resolved_version, resolved_tuple = latest_compatible
-            compatibility_blocked = latest_overall_tuple > resolved_tuple
-
-    if compatibility_blocked and resolved_tuple == installed_tuple:
-        should_act = False
-        act_reason = "breaking_update_blocked"
-    elif resolved_tuple > installed_tuple:
-        should_act = True
-        act_reason = "version_outdated"
-    else:
-        should_act = False
-        act_reason = "healthy"
+    if missing_runtime_sources:
+        missing_list = ", ".join(missing_runtime_sources)
+        raise FileNotFoundError(f"Required doctor runtime source files are missing: {missing_list}")
 
     return {
-        "installed_version": _format_semver(installed_tuple),
-        "resolved_version": resolved_version,
-        "resolved_from": "latest_compatible_tag",
-        "compatibility_blocked": compatibility_blocked,
-        "latest_tag": latest_tag,
-        "should_act": should_act,
-        "act_reason": act_reason,
-        "fatal_error": False,
-        "findings": findings,
+        "source_branch": source_branch,
+        "source_sha": resolved_source_sha,
+        "managed_root": TOOLKIT_TARGET_ROOT,
+        "managed_directories": managed_directories,
+        "managed_files": managed_files,
+        "runtime_root": RUNTIME_TARGET_ROOT,
+        "runtime_files": runtime_files,
+        "presence_paths": list(PRESENCE_ONLY_PATHS),
     }
 
 
-def _iter_relative_files(repo_root: Path, subtree_root: str) -> set[str]:
+def build_compliance_checks(*, repo_root: Path) -> dict[str, dict[str, bool]]:
+    repo_root = Path(repo_root)
+
+    return {
+        "required_paths": {
+            "agents_present": _path_present(repo_root, "AGENTS.md"),
+            "claude_present": _path_present(repo_root, "CLAUDE.md"),
+            "docs_md_present": _path_present(repo_root, "DOCS.md"),
+            "constitution_present": _path_present(repo_root, ".specify/memory/constitution.md"),
+            "quickstart_present": _path_present(repo_root, "docs/quickstart.md"),
+        },
+        "toolkit": {
+            "root_present": (repo_root / TOOLKIT_TARGET_ROOT).is_dir(),
+            "source_sha_present": _path_exists(repo_root, TOOLKIT_SOURCE_SHA_PATH),
+            "runtime_sha_present": _path_exists(repo_root, RUNTIME_SOURCE_SHA_PATH),
+            "claude_present": (repo_root / TOOLKIT_REQUIRED_DIRECTORIES["claude"]).is_dir(),
+            "scripts_present": (repo_root / TOOLKIT_REQUIRED_DIRECTORIES["scripts"]).is_dir(),
+            "workflows_present": (repo_root / TOOLKIT_REQUIRED_DIRECTORIES["workflows"]).is_dir(),
+            "examples_present": (repo_root / TOOLKIT_REQUIRED_DIRECTORIES["examples"]).is_dir(),
+        },
+        "doctor_runtime": {
+            "doctor_yml_present": _path_exists(repo_root, f"{RUNTIME_TARGET_ROOT}/doctor.yml"),
+            "collect_py_present": _path_exists(repo_root, f"{RUNTIME_TARGET_ROOT}/collect.py"),
+            "analyze_md_present": _path_exists(repo_root, f"{RUNTIME_TARGET_ROOT}/doctor-analyze.md"),
+            "analyze_prompt_present": _path_exists(
+                repo_root, f"{RUNTIME_TARGET_ROOT}/doctor-analyze.prompt.md"
+            ),
+            "analyze_lock_present": _path_exists(repo_root, f"{RUNTIME_TARGET_ROOT}/doctor-analyze.lock.yml"),
+        },
+    }
+
+
+def _iter_relative_entries(repo_root: Path, subtree_root: str) -> dict[str, str]:
     root = repo_root / subtree_root
     if not root.exists():
-        return set()
+        return {}
 
-    files: set[str] = set()
+    entries: dict[str, str] = {}
     for candidate in root.rglob("*"):
+        if _is_hygiene_ignored(candidate):
+            continue
         if candidate.is_file():
-            files.add(candidate.relative_to(repo_root).as_posix())
-    return files
+            entries[candidate.relative_to(repo_root).as_posix()] = "present"
+            continue
+        if candidate.is_symlink() and not candidate.exists():
+            entries[candidate.relative_to(repo_root).as_posix()] = "broken_link"
+    return entries
 
 
-def _managed_subtree_roots(paths: Iterable[str]) -> set[str]:
-    roots: set[str] = set()
-    for relative_path in paths:
-        path = Path(relative_path)
-        parts = path.parts
-        if len(parts) >= 4 and parts[0] == ".toolkit" and parts[1] == "claude":
-            roots.add(Path(*parts[:3]).as_posix())
-    return roots
+def _compare_expected_files(
+    *,
+    repo_root: Path,
+    expected_files: dict[str, str],
+    category: str,
+    change_message_prefix: str,
+) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
 
+    for relative_path, expected_content in expected_files.items():
+        file_state = _path_state(repo_root, relative_path)
+        if file_state == "missing":
+            findings.append(
+                _new_finding(
+                    f"{category}.{_path_to_id(relative_path)}.missing",
+                    category=category,
+                    severity="error",
+                    path=relative_path,
+                    state="missing",
+                    auto_action="act",
+                    message=f"{change_message_prefix} is missing: {relative_path}",
+                    expected=expected_content,
+                )
+            )
+            continue
+        if file_state == "broken_link":
+            findings.append(
+                _new_finding(
+                    f"{category}.{_path_to_id(relative_path)}.broken_link",
+                    category=category,
+                    severity="error",
+                    path=relative_path,
+                    state="broken_link",
+                    auto_action="act",
+                    message=f"{change_message_prefix} is a broken symlink: {relative_path}",
+                    expected=expected_content,
+                )
+            )
+            continue
 
-def _reference_subtree_roots(paths: Iterable[str]) -> set[str]:
-    roots: set[str] = set()
-    for relative_path in paths:
-        path = Path(relative_path)
-        parts = path.parts
-        if len(parts) >= 3 and parts[0] == ".toolkit" and parts[1] == "workflows":
-            roots.add(Path(*parts[:2]).as_posix())
-    return roots
+        file_path = repo_root / relative_path
+        actual_content = file_path.read_text(encoding="utf-8").rstrip("\n")
+        if actual_content != str(expected_content).rstrip("\n"):
+            findings.append(
+                _new_finding(
+                    f"{category}.{_path_to_id(relative_path)}.changed",
+                    category=category,
+                    severity="warning",
+                    path=relative_path,
+                    state="changed",
+                    auto_action="act",
+                    message=f"{change_message_prefix} content differs: {relative_path}",
+                    expected=str(expected_content),
+                    actual=actual_content,
+                )
+            )
+
+    return findings
 
 
 def scan_repository_files(*, repo_root: Path, expected_manifest: dict[str, Any]) -> dict[str, Any]:
     repo_root = Path(repo_root)
-    findings: list[dict[str, Any]] = []
+    managed_files: dict[str, str] = dict(expected_manifest.get("managed_files", {}))
+    runtime_files: dict[str, str] = dict(expected_manifest.get("runtime_files", {}))
+    managed_root = str(expected_manifest.get("managed_root") or TOOLKIT_TARGET_ROOT)
+    runtime_root = str(expected_manifest.get("runtime_root") or RUNTIME_TARGET_ROOT)
+    presence_paths: list[str] = list(expected_manifest.get("presence_paths", PRESENCE_ONLY_PATHS))
+    checks = build_compliance_checks(repo_root=repo_root)
 
-    managed_files: dict[str, str] = expected_manifest.get("managed_files", {})
-    reference_files: dict[str, str] = expected_manifest.get("reference_files", {})
-    bootstrap_files: list[str] = expected_manifest.get("bootstrap_files", [])
-    observed_paths: list[str] = expected_manifest.get("observed_paths", [])
-    required_gitignore_rules: list[str] = expected_manifest.get("required_gitignore_rules", [])
-    checks = build_compliance_checks(
-        repo_root=repo_root,
-        required_gitignore_rules=required_gitignore_rules,
-    )
-
-    for relative_path, expected_content in managed_files.items():
-        file_path = repo_root / relative_path
-        if not file_path.exists():
-            findings.append(
-                _new_finding(
-                    f"managed.{_path_to_id(relative_path)}.missing",
-                    category="managed",
-                    severity="error",
-                    path=relative_path,
-                    state="missing",
-                    auto_action="act",
-                    message=f"Managed path is missing: {relative_path}",
-                    expected=expected_content,
-                    actual=None,
-                )
-            )
-            continue
-
-        actual_content = file_path.read_text(encoding="utf-8").rstrip("\n")
-        if actual_content != str(expected_content).rstrip("\n"):
-            findings.append(
-                _new_finding(
-                    f"managed.{_path_to_id(relative_path)}.changed",
-                    category="managed",
-                    severity="warning",
-                    path=relative_path,
-                    state="changed",
-                    auto_action="act",
-                    message=f"Managed path content differs: {relative_path}",
-                    expected=str(expected_content),
-                    actual=actual_content,
-                )
-            )
+    findings = [
+        *_compare_expected_files(
+            repo_root=repo_root,
+            expected_files=managed_files,
+            category="managed",
+            change_message_prefix="Managed path",
+        ),
+        *_compare_expected_files(
+            repo_root=repo_root,
+            expected_files=runtime_files,
+            category="runtime",
+            change_message_prefix="Doctor runtime path",
+        ),
+    ]
 
     managed_expected_paths = set(managed_files)
-    for subtree_root in sorted(_managed_subtree_roots(managed_expected_paths)):
-        for actual_path in sorted(_iter_relative_files(repo_root, subtree_root) - managed_expected_paths):
+    managed_actual_entries = _iter_relative_entries(repo_root, managed_root)
+    for actual_path in sorted(set(managed_actual_entries) - managed_expected_paths):
+        actual_state = managed_actual_entries[actual_path]
+        if actual_state == "broken_link":
             findings.append(
                 _new_finding(
-                    f"managed.{_path_to_id(actual_path)}.unexpected_extra",
+                    f"managed.{_path_to_id(actual_path)}.broken_link",
                     category="managed",
-                    severity="warning",
-                    path=actual_path,
-                    state="unexpected_extra",
-                    auto_action="act",
-                    message=f"Unexpected extra managed path present: {actual_path}",
-                )
-            )
-
-    for relative_path, expected_content in reference_files.items():
-        file_path = repo_root / relative_path
-        if not file_path.exists():
-            findings.append(
-                _new_finding(
-                    f"reference.{_path_to_id(relative_path)}.missing",
-                    category="reference",
                     severity="error",
-                    path=relative_path,
-                    state="missing",
-                    auto_action="act",
-                    message=f"Reference-only bundle path is missing: {relative_path}",
-                    expected=expected_content,
-                    actual=None,
-                )
-            )
-            continue
-
-        actual_content = file_path.read_text(encoding="utf-8").rstrip("\n")
-        if actual_content != str(expected_content).rstrip("\n"):
-            findings.append(
-                _new_finding(
-                    f"reference.{_path_to_id(relative_path)}.changed",
-                    category="reference",
-                    severity="warning",
-                    path=relative_path,
-                    state="changed",
-                    auto_action="act",
-                    message=f"Reference-only bundle path content differs: {relative_path}",
-                    expected=str(expected_content),
-                    actual=actual_content,
-                )
-            )
-
-    reference_expected_paths = set(reference_files)
-    for subtree_root in sorted(_reference_subtree_roots(reference_expected_paths)):
-        for actual_path in sorted(_iter_relative_files(repo_root, subtree_root) - reference_expected_paths):
-            findings.append(
-                _new_finding(
-                    f"reference.{_path_to_id(actual_path)}.unexpected_extra",
-                    category="reference",
-                    severity="warning",
                     path=actual_path,
-                    state="unexpected_extra",
+                    state="broken_link",
                     auto_action="act",
-                    message=f"Unexpected extra reference-only path present: {actual_path}",
-                )
-            )
-
-    marker = "Managed-by: agent-toolkit-doctor"
-    for relative_path in bootstrap_files:
-        file_path = repo_root / relative_path
-        if not file_path.exists():
-            findings.append(
-                _new_finding(
-                    f"bootstrap.{_path_to_id(relative_path)}.missing",
-                    category="bootstrap",
-                    severity="warning",
-                    path=relative_path,
-                    state="missing",
-                    auto_action="act",
-                    message=f"Bootstrap file is missing: {relative_path}",
+                    message=f"Unexpected extra managed path is a broken symlink: {actual_path}",
                 )
             )
             continue
-
-        content = file_path.read_text(encoding="utf-8")
-        if marker in content:
-            findings.append(
-                _new_finding(
-                    f"bootstrap.{_path_to_id(relative_path)}.managed_by_marker",
-                    category="bootstrap",
-                    severity="info",
-                    path=relative_path,
-                    state="managed_by_marker",
-                    auto_action="act",
-                    message=f"Bootstrap file is marker-managed: {relative_path}",
-                )
-            )
-        else:
-            findings.append(
-                _new_finding(
-                    f"bootstrap.{_path_to_id(relative_path)}.local_owned",
-                    category="bootstrap",
-                    severity="info",
-                    path=relative_path,
-                    state="local_owned",
-                    auto_action="none",
-                    message=f"Bootstrap file is local-owned: {relative_path}",
-                )
-            )
-
-    for observed_path in observed_paths:
-        if observed_path == ".gitignore":
-            continue
-
-        if not _path_exists(repo_root, observed_path):
-            findings.append(
-                _new_finding(
-                    f"observed.{_path_to_id(observed_path)}.missing",
-                    category="observed",
-                    severity="warning",
-                    path=observed_path,
-                    state="missing",
-                    auto_action="analyze",
-                    message=f"Observed-only path is missing: {observed_path}",
-                )
-            )
-
-    gitignore_path = repo_root / ".gitignore"
-    if not gitignore_path.exists():
         findings.append(
             _new_finding(
-                "observed.gitignore.missing",
-                category="observed",
+                f"managed.{_path_to_id(actual_path)}.unexpected_extra",
+                category="managed",
                 severity="warning",
-                path=".gitignore",
-                state="missing",
-                auto_action="analyze",
-                message=".gitignore is missing",
+                path=actual_path,
+                state="unexpected_extra",
+                auto_action="act",
+                message=f"Unexpected extra managed path present: {actual_path}",
             )
         )
-    else:
-        rules = _read_gitignore_rules(repo_root)
 
-        for required_rule in required_gitignore_rules:
-            if required_rule not in rules:
-                findings.append(
-                    _new_finding(
-                        f"observed.gitignore.policy_violation.{_path_to_id(required_rule)}",
-                        category="observed",
-                        severity="warning",
-                        path=".gitignore",
-                        state="policy_violation",
-                        auto_action="analyze",
-                        message=f"Required .gitignore rule is missing: {required_rule}",
-                        expected=required_rule,
-                        actual=None,
-                    )
-                )
-
-        forbidden_rule = ".specify/memory/constitution.md"
-        if forbidden_rule in rules:
+    runtime_expected_paths = set(runtime_files)
+    runtime_actual_entries = _iter_relative_entries(repo_root, runtime_root)
+    for actual_path in sorted(set(runtime_actual_entries) - runtime_expected_paths):
+        actual_state = runtime_actual_entries[actual_path]
+        if actual_state == "broken_link":
             findings.append(
                 _new_finding(
-                    "observed.gitignore.policy_violation.constitution_ignored",
-                    category="observed",
-                    severity="warning",
-                    path=".gitignore",
-                    state="policy_violation",
-                    auto_action="analyze",
-                    message="Forbidden .gitignore rule present for constitution file",
-                    expected=None,
-                    actual=forbidden_rule,
+                    f"runtime.{_path_to_id(actual_path)}.broken_link",
+                    category="runtime",
+                    severity="error",
+                    path=actual_path,
+                    state="broken_link",
+                    auto_action="act",
+                    message=f"Unexpected extra runtime path is a broken symlink: {actual_path}",
                 )
             )
+            continue
+        findings.append(
+            _new_finding(
+                f"runtime.{_path_to_id(actual_path)}.unexpected_extra",
+                category="runtime",
+                severity="warning",
+                path=actual_path,
+                state="unexpected_extra",
+                auto_action="act",
+                message=f"Unexpected extra runtime path present: {actual_path}",
+            )
+        )
+
+    for presence_path in presence_paths:
+        presence_state = _path_state(repo_root, presence_path)
+        if presence_state == "present":
+            continue
+        if presence_state == "broken_link":
+            findings.append(
+                _new_finding(
+                    f"observed.{_path_to_id(presence_path)}.broken_link",
+                    category="observed",
+                    severity="warning",
+                    path=presence_path,
+                    state="broken_link",
+                    auto_action="analyze",
+                    message=f"Required path is a broken symlink: {presence_path}",
+                )
+            )
+            continue
+        findings.append(
+            _new_finding(
+                f"observed.{_path_to_id(presence_path)}.missing",
+                category="observed",
+                severity="warning",
+                path=presence_path,
+                state="missing",
+                auto_action="analyze",
+                message=f"Required path is missing: {presence_path}",
+            )
+        )
 
     return {
         "checks": checks,
         "findings": findings,
         "managed_drift_present": any(item["category"] == "managed" for item in findings),
-        "reference_bundle_drift_present": any(item["category"] == "reference" for item in findings),
-        "bootstrap_missing_present": any(
-            item["category"] == "bootstrap" and item["state"] == "missing" for item in findings
-        ),
+        "runtime_drift_present": any(item["category"] == "runtime" for item in findings),
         "observed_findings_present": any(item["category"] == "observed" for item in findings),
     }
 
@@ -696,11 +439,10 @@ def scan_repository_files(*, repo_root: Path, expected_manifest: dict[str, Any])
 def select_act_reason(flags: dict[str, bool]) -> str:
     priority = [
         "toolkit_missing",
-        "version_missing",
-        "version_outdated",
+        "source_sha_missing",
+        "runtime_sha_missing",
         "managed_drift",
-        "reference_bundle_drift",
-        "bootstrap_missing",
+        "runtime_drift",
     ]
 
     for reason in priority:
@@ -708,8 +450,6 @@ def select_act_reason(flags: dict[str, bool]) -> str:
             return reason
     if flags.get("operational_error", False):
         return "operational_error"
-    if flags.get("breaking_update_blocked", False):
-        return "breaking_update_blocked"
     return "healthy"
 
 
@@ -751,7 +491,6 @@ def enrich_commit_record_with_trailers(commit_payload: dict[str, Any]) -> dict[s
         closes_match = _TRAILER_PATTERNS["closes"].match(line)
         if closes_match:
             closes.append(closes_match.group(1).strip())
-            continue
 
     return {
         "sha": commit_payload.get("sha"),
@@ -834,7 +573,6 @@ def _load_json_source(
     env_var: str,
     path_env_var: str,
     default: Any,
-    comma_separated_fallback: bool = False,
 ) -> Any:
     path_value = os.getenv(path_env_var)
     if path_value:
@@ -842,21 +580,46 @@ def _load_json_source(
 
     raw_value = os.getenv(env_var)
     if raw_value:
-        try:
-            return json.loads(raw_value)
-        except json.JSONDecodeError:
-            if comma_separated_fallback:
-                return [item.strip() for item in raw_value.split(",") if item.strip()]
-            raise
+        return json.loads(raw_value)
 
     return default
+
+
+def resolve_source_state(*, repo_root: Path, expected_manifest: dict[str, Any]) -> dict[str, Any]:
+    repo_root = Path(repo_root)
+    source_branch = str(expected_manifest.get("source_branch") or SOURCE_BRANCH)
+    source_sha = str(expected_manifest.get("source_sha") or "").strip()
+    findings: list[dict[str, Any]] = []
+
+    if not source_sha:
+        findings.append(
+            _new_finding(
+                "operational.source_manifest_unavailable",
+                category="operational",
+                severity="error",
+                path=None,
+                state="source_manifest_unavailable",
+                auto_action="none",
+                message="Collect did not receive a valid source manifest from current main",
+            )
+        )
+
+    return {
+        "source_branch": source_branch,
+        "source_sha": source_sha,
+        "installed_source_sha": _read_sha_marker(repo_root, TOOLKIT_SOURCE_SHA_PATH),
+        "installed_runtime_sha": _read_sha_marker(repo_root, RUNTIME_SOURCE_SHA_PATH),
+        "fatal_error": not bool(source_sha),
+        "findings": findings,
+    }
 
 
 def build_job_outputs(
     *,
     report_date: str,
-    resolved_version: str | None,
-    installed_version: str | None,
+    source_sha: str | None,
+    installed_source_sha: str | None,
+    installed_runtime_sha: str | None,
     should_act: bool,
     act_reason: str,
     issues_enabled: bool,
@@ -866,8 +629,9 @@ def build_job_outputs(
 ) -> dict[str, str]:
     outputs = {
         "should_act": _stringify_bool(should_act),
-        "resolved_version": resolved_version or "",
-        "installed_version": installed_version or "",
+        "source_sha": source_sha or "",
+        "installed_source_sha": installed_source_sha or "",
+        "installed_runtime_sha": installed_runtime_sha or "",
         "act_reason": act_reason,
         "issues_enabled": _stringify_bool(issues_enabled),
         "observed_findings_present": _stringify_bool(observed_findings_present),
@@ -887,9 +651,6 @@ def assemble_collect_result(
     *,
     repo_root: Path,
     expected_manifest: dict[str, Any],
-    source_tags: list[str],
-    target_version: str | None,
-    allow_breaking_update: bool,
     issues_enabled: bool,
     repo_full_name: str,
     repo_default_branch: str,
@@ -898,7 +659,6 @@ def assemble_collect_result(
     workflow_run_attempt: int,
     workflow_event_name: str,
     workflow_actor: str,
-    workflow_mode: str,
     source_repo_full_name: str,
     analyze_day: str | None,
     report_tz: str | None,
@@ -913,51 +673,41 @@ def assemble_collect_result(
     snapshot_issues: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     repo_root = Path(repo_root)
-    version_state = resolve_version_state(
-        repo_root=repo_root,
-        target_version=target_version,
-        source_tags=source_tags,
-        allow_breaking_update=allow_breaking_update,
-    )
+    source_state = resolve_source_state(repo_root=repo_root, expected_manifest=expected_manifest)
     scan_result = scan_repository_files(repo_root=repo_root, expected_manifest=expected_manifest)
     environment_findings = _build_environment_findings(issues_enabled=issues_enabled)
 
     flags = {
-        "toolkit_missing": not (repo_root / ".toolkit").exists(),
-        "version_missing": not (repo_root / ".toolkit" / "VERSION").exists(),
-        "version_outdated": version_state["act_reason"] == "version_outdated",
+        "toolkit_missing": not (repo_root / TOOLKIT_TARGET_ROOT).is_dir(),
+        "source_sha_missing": not _path_exists(repo_root, TOOLKIT_SOURCE_SHA_PATH),
+        "runtime_sha_missing": not _path_exists(repo_root, RUNTIME_SOURCE_SHA_PATH),
         "managed_drift": scan_result["managed_drift_present"],
-        "reference_bundle_drift": scan_result["reference_bundle_drift_present"],
-        "bootstrap_missing": scan_result["bootstrap_missing_present"],
-        "breaking_update_blocked": version_state["act_reason"] == "breaking_update_blocked",
-        "operational_error": version_state["act_reason"] == "operational_error",
+        "runtime_drift": scan_result["runtime_drift_present"],
+        "operational_error": source_state["fatal_error"],
     }
 
     should_act = any(
         flags[name]
         for name in (
             "toolkit_missing",
-            "version_missing",
-            "version_outdated",
+            "source_sha_missing",
+            "runtime_sha_missing",
             "managed_drift",
-            "reference_bundle_drift",
-            "bootstrap_missing",
+            "runtime_drift",
         )
     )
-    if flags["breaking_update_blocked"] or flags["operational_error"]:
+    if flags["operational_error"]:
         should_act = False
 
     if should_act:
         act_reason = select_act_reason(flags)
     elif flags["operational_error"]:
         act_reason = "operational_error"
-    elif flags["breaking_update_blocked"]:
-        act_reason = "breaking_update_blocked"
     else:
         act_reason = "healthy"
 
     findings = [
-        *version_state["findings"],
+        *source_state["findings"],
         *scan_result["findings"],
         *environment_findings,
     ]
@@ -978,8 +728,9 @@ def assemble_collect_result(
 
     job_outputs = build_job_outputs(
         report_date=report_date,
-        resolved_version=version_state["resolved_version"],
-        installed_version=version_state["installed_version"],
+        source_sha=source_state["source_sha"],
+        installed_source_sha=source_state["installed_source_sha"],
+        installed_runtime_sha=source_state["installed_runtime_sha"],
         should_act=should_act,
         act_reason=act_reason,
         issues_enabled=issues_enabled,
@@ -988,10 +739,20 @@ def assemble_collect_result(
         report_tz=report_tz,
     )
 
+    contract_payload = {
+        "managed_root": str(expected_manifest.get("managed_root") or TOOLKIT_TARGET_ROOT),
+        "managed_directories": list(
+            expected_manifest.get("managed_directories", TOOLKIT_REQUIRED_DIRECTORIES.values())
+        ),
+        "runtime_root": str(expected_manifest.get("runtime_root") or RUNTIME_TARGET_ROOT),
+        "runtime_files": sorted(expected_manifest.get("runtime_files", {}).keys()),
+        "presence_paths": list(expected_manifest.get("presence_paths", PRESENCE_ONLY_PATHS)),
+    }
+
     stats_payload: dict[str, Any] | None = None
-    if not version_state["fatal_error"]:
+    if not source_state["fatal_error"]:
         stats_payload = {
-            "schema_version": "doctor-stats/v1",
+            "schema_version": "doctor-stats/v3",
             "collected_at": collected_at,
             "report_date": report_date,
             "window": {
@@ -1008,27 +769,24 @@ def assemble_collect_result(
                 "run_attempt": workflow_run_attempt,
                 "event_name": workflow_event_name,
                 "actor": workflow_actor,
-                "inputs": {
-                    "mode": workflow_mode,
-                    "target_version": target_version,
-                    "allow_breaking_update": allow_breaking_update,
-                },
             },
             "source_repo": {
                 "full_name": source_repo_full_name,
-                "resolved_version": version_state["resolved_version"],
-                "resolved_from": version_state["resolved_from"],
-                "compatibility_blocked": version_state["compatibility_blocked"],
-                "latest_tag": version_state["latest_tag"],
+                "source_branch": source_state["source_branch"],
+                "source_sha": source_state["source_sha"],
             },
             "toolkit": {
-                "installed_version": version_state["installed_version"],
+                "installed_source_sha": source_state["installed_source_sha"],
             },
+            "doctor_runtime": {
+                "installed_source_sha": source_state["installed_runtime_sha"],
+            },
+            "contract": contract_payload,
             **activity_sections,
         }
 
     findings_payload = {
-        "schema_version": "doctor-findings/v1",
+        "schema_version": "doctor-findings/v4",
         "collected_at": collected_at,
         "report_date": report_date,
         "repo": {
@@ -1036,22 +794,30 @@ def assemble_collect_result(
             "default_branch": repo_default_branch,
         },
         "source_repo": {
-            "resolved_version": version_state["resolved_version"] or "",
+            "full_name": source_repo_full_name,
+            "source_branch": source_state["source_branch"],
+            "source_sha": source_state["source_sha"],
+        },
+        "toolkit": {
+            "installed_source_sha": source_state["installed_source_sha"],
+        },
+        "doctor_runtime": {
+            "installed_source_sha": source_state["installed_runtime_sha"],
         },
         "decision": {
             "should_act": should_act,
             "act_reason": act_reason,
             "managed_drift_present": scan_result["managed_drift_present"],
-            "reference_bundle_drift_present": scan_result["reference_bundle_drift_present"],
-            "bootstrap_missing_present": scan_result["bootstrap_missing_present"],
+            "runtime_drift_present": scan_result["runtime_drift_present"],
             "observed_findings_present": scan_result["observed_findings_present"],
         },
+        "contract": contract_payload,
         "checks": scan_result["checks"],
         "findings": findings,
     }
 
     return {
-        "fatal_error": version_state["fatal_error"],
+        "fatal_error": source_state["fatal_error"],
         "job_outputs": job_outputs,
         "stats_payload": stats_payload,
         "findings_payload": findings_payload,
@@ -1081,17 +847,20 @@ def main() -> int:
     report_date = os.getenv("DOCTOR_REPORT_DATE", collected_at[:10])
     default_window_from, default_window_to = _default_window(report_date)
 
-    expected_manifest = _load_json_source(
-        env_var="DOCTOR_EXPECTED_MANIFEST",
-        path_env_var="DOCTOR_EXPECTED_MANIFEST_PATH",
-        default={},
-    )
-    source_tags = _load_json_source(
-        env_var="DOCTOR_SOURCE_TAGS",
-        path_env_var="DOCTOR_SOURCE_TAGS_PATH",
-        default=[],
-        comma_separated_fallback=True,
-    )
+    source_root = os.getenv("DOCTOR_SOURCE_ROOT")
+    if source_root:
+        expected_manifest = build_expected_manifest_from_source(
+            source_root=Path(source_root).resolve(),
+            source_sha=os.getenv("DOCTOR_SOURCE_SHA") or None,
+            source_branch=os.getenv("DOCTOR_SOURCE_BRANCH", SOURCE_BRANCH),
+        )
+    else:
+        expected_manifest = _load_json_source(
+            env_var="DOCTOR_EXPECTED_MANIFEST",
+            path_env_var="DOCTOR_EXPECTED_MANIFEST_PATH",
+            default={},
+        )
+
     activity_payload = _load_json_source(
         env_var="DOCTOR_ACTIVITY",
         path_env_var="DOCTOR_ACTIVITY_PATH",
@@ -1101,9 +870,6 @@ def main() -> int:
     result = assemble_collect_result(
         repo_root=repo_root,
         expected_manifest=expected_manifest,
-        source_tags=list(source_tags),
-        target_version=os.getenv("DOCTOR_TARGET_VERSION") or None,
-        allow_breaking_update=_parse_bool(os.getenv("DOCTOR_ALLOW_BREAKING_UPDATE")),
         issues_enabled=_parse_bool(os.getenv("DOCTOR_ISSUES_ENABLED"), default=True),
         repo_full_name=os.getenv("DOCTOR_REPO_FULL_NAME", os.getenv("GITHUB_REPOSITORY", "")),
         repo_default_branch=os.getenv("DOCTOR_REPO_DEFAULT_BRANCH", "main"),
@@ -1112,7 +878,6 @@ def main() -> int:
         workflow_run_attempt=int(os.getenv("GITHUB_RUN_ATTEMPT", "0")),
         workflow_event_name=os.getenv("GITHUB_EVENT_NAME", "workflow_dispatch"),
         workflow_actor=os.getenv("GITHUB_ACTOR", ""),
-        workflow_mode=os.getenv("DOCTOR_MODE", "auto"),
         source_repo_full_name=os.getenv("DOCTOR_SOURCE_REPO", "G-Core/agent-toolkit"),
         analyze_day=os.getenv("DOCTOR_ANALYZE_DAY"),
         report_tz=os.getenv("DOCTOR_REPORT_TZ"),
