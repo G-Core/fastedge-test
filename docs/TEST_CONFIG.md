@@ -8,35 +8,35 @@ Each test scenario is described by a `fastedge-config.test.json` file. The file 
 
 **Required fields** (per JSON Schema `required` array): `request` and `properties` at the top level; `method`, `url`, `headers`, and `body` within `request`.
 
-**Runtime defaults**: The Zod runtime fills in `method`, `headers`, and `body` if absent, so those fields are optional in practice. The JSON Schema marks them as required because it cannot express Zod's default-filling behaviour. Supplying explicit values avoids editor warnings.
+**Runtime defaults**: The Zod runtime fills in `method`, `headers`, and `body` if absent, so those fields are optional in practice. Similarly, `properties` defaults to `{}` at runtime even though the JSON Schema marks it required. The JSON Schema marks them as required because it cannot express Zod's default-filling behaviour. Supplying explicit values avoids editor warnings.
 
 ## Schema Reference
 
 ### Top-Level Fields
 
-| JSON Path | Type | Required (Schema) | Default | Description |
-|---|---|---|---|---|
-| `$schema` | `string` | No | — | URI pointing to the JSON Schema file for IDE autocompletion and validation. |
-| `description` | `string` | No | — | Human-readable label for this test scenario. |
-| `wasm` | `object` | No | — | WASM binary configuration. Required when running without a programmatic `wasmBuffer`. |
-| `wasm.path` | `string` | Yes (if `wasm` present) | — | Path to the compiled `.wasm` binary, relative to the config file or absolute. |
-| `wasm.description` | `string` | No | — | Human-readable label for the WASM binary. |
-| `request` | `object` | **Yes** | — | Incoming HTTP request to simulate. |
-| `request.method` | `string` | Yes (schema) / runtime default | `"GET"` | HTTP method (e.g. `"GET"`, `"POST"`). |
-| `request.url` | `string` | **Yes** | — | Full URL or path for the simulated request (e.g. `"https://example.com/api"`). |
-| `request.headers` | `object` | Yes (schema) / runtime default | `{}` | Key/value map of request headers. All keys and values must be strings. |
-| `request.body` | `string` | Yes (schema) / runtime default | `""` | Request body as a plain string. Use an empty string for requests with no body. |
-| `response` | `object` | No | — | Mock origin response for CDN mode. Not applicable to HTTP-WASM. |
-| `response.headers` | `object` | Yes (if `response` present) | `{}` | Key/value map of mock origin response headers. |
-| `response.body` | `string` | Yes (if `response` present) | `""` | Mock origin response body as a plain string. |
-| `properties` | `object` | **Yes** | `{}` | CDN property key/value pairs passed to the WASM execution context. Values may be any JSON type. |
-| `dotenv` | `object` | No | — | Dotenv file loading configuration. |
-| `dotenv.enabled` | `boolean` | No | — | Whether to load a `.env` file before execution. |
-| `dotenv.path` | `string` | No | — | Path to the `.env` file. If omitted, resolves `.env` relative to the config file. |
+| JSON Path           | Type      | Required (Schema)                  | Default | Description                                                                                      |
+| ------------------- | --------- | ---------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `$schema`           | `string`  | No                                 | —       | URI pointing to the JSON Schema file for IDE autocompletion and validation.                      |
+| `description`       | `string`  | No                                 | —       | Human-readable label for this test scenario.                                                     |
+| `wasm`              | `object`  | No                                 | —       | WASM binary configuration. Required when running without a programmatic `wasmBuffer`.            |
+| `wasm.path`         | `string`  | Yes (if `wasm` present)            | —       | Path to the compiled `.wasm` binary, relative to the config file or absolute.                   |
+| `wasm.description`  | `string`  | No                                 | —       | Human-readable label for the WASM binary.                                                        |
+| `request`           | `object`  | **Yes**                            | —       | Incoming HTTP request to simulate.                                                               |
+| `request.method`    | `string`  | Yes (schema) / runtime default     | `"GET"` | HTTP method (e.g. `"GET"`, `"POST"`).                                                            |
+| `request.url`       | `string`  | **Yes**                            | —       | Full URL or path for the simulated request (e.g. `"https://example.com/api"`).                  |
+| `request.headers`   | `object`  | Yes (schema) / runtime default     | `{}`    | Key/value map of request headers. All keys and values must be strings.                           |
+| `request.body`      | `string`  | Yes (schema) / runtime default     | `""`    | Request body as a plain string. Use an empty string for requests with no body.                   |
+| `response`          | `object`  | No                                 | —       | Mock origin response for CDN mode. Not applicable to HTTP-WASM.                                  |
+| `response.headers`  | `object`  | Yes (if `response` present)        | `{}`    | Key/value map of mock origin response headers.                                                   |
+| `response.body`     | `string`  | Yes (if `response` present)        | `""`    | Mock origin response body as a plain string.                                                     |
+| `properties`        | `object`  | **Yes** (schema) / runtime default | `{}`    | CDN property key/value pairs passed to the WASM execution context. Values may be any JSON type. |
+| `dotenv`            | `object`  | No                                 | —       | Dotenv file loading configuration.                                                               |
+| `dotenv.enabled`    | `boolean` | No                                 | —       | Whether to load a `.env` file before execution.                                                  |
+| `dotenv.path`       | `string`  | No                                 | —       | Path to the `.env` file. If omitted, resolves `.env` relative to the config file.               |
 
 ### Required vs. Default Distinction
 
-The JSON Schema's `required` arrays drive editor validation. Fields like `request.method`, `request.headers`, and `request.body` appear in the schema's `required` array, so a strict JSON Schema validator will flag them as missing. At runtime, the Zod schema fills in their defaults (`"GET"`, `{}`, `""` respectively), so the test runner accepts configs that omit them.
+The JSON Schema's `required` arrays drive editor validation. Fields like `request.method`, `request.headers`, `request.body`, and `properties` appear in the schema's `required` array (or top-level `required`), so a strict JSON Schema validator will flag them as missing. At runtime, the Zod schema fills in their defaults (`"GET"`, `{}`, `""`, and `{}` respectively), so the test runner accepts configs that omit them.
 
 To avoid editor warnings while keeping configs concise, either supply the fields explicitly or add the `$schema` field and accept that your editor may warn on omission.
 
@@ -118,7 +118,7 @@ DEBUG_MODE=false
 
 ### HTTP-WASM Configuration
 
-An HTTP-WASM scenario simulating a `POST` request with a JSON body. The `response` and `properties` fields are not relevant to HTTP-WASM execution but `properties` is still required by the schema.
+An HTTP-WASM scenario simulating a `POST` request with a JSON body. The `response` field is not relevant to HTTP-WASM execution; `properties` is still required by the schema and defaults to `{}` at runtime.
 
 ```json
 {
@@ -218,14 +218,14 @@ type TestConfig = {
     description?: string;
   };
   request: {
-    method: string;      // default: "GET"
+    method: string;                    // default: "GET"
     url: string;
     headers: Record<string, string>;   // default: {}
-    body: string;        // default: ""
+    body: string;                      // default: ""
   };
   response?: {
     headers: Record<string, string>;   // default: {}
-    body: string;        // default: ""
+    body: string;                      // default: ""
   };
   properties: Record<string, unknown>; // default: {}
   dotenv?: {

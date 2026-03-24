@@ -37,12 +37,12 @@ type TestSuite =
   | (TestSuiteBase & { wasmBuffer: Buffer; wasmPath?: never });
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `wasmPath` | `string` | One of | Filesystem path to the `.wasm` file |
-| `wasmBuffer` | `Buffer` | One of | Pre-loaded WASM binary |
-| `tests` | `TestCase[]` | Yes | Test cases to execute; must be non-empty |
-| `runnerConfig` | `RunnerConfig` | No | Optional runner configuration (see [RUNNER.md](RUNNER.md)) |
+| Field          | Type           | Required | Description                                                 |
+| -------------- | -------------- | -------- | ----------------------------------------------------------- |
+| `wasmPath`     | `string`       | One of   | Filesystem path to the `.wasm` file                         |
+| `wasmBuffer`   | `Buffer`       | One of   | Pre-loaded WASM binary                                      |
+| `tests`        | `TestCase[]`   | Yes      | Test cases to execute; must be non-empty                    |
+| `runnerConfig` | `RunnerConfig` | No       | Optional runner configuration (see [RUNNER.md](RUNNER.md)) |
 
 ### TestCase
 
@@ -93,18 +93,18 @@ interface FlowOptions {
 }
 ```
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `url` | — | Full URL including scheme and host; used to derive pseudo-headers |
-| `method` | `"GET"` | HTTP method |
-| `requestHeaders` | `{}` | Additional request headers; pseudo-headers here override derived values |
-| `requestBody` | `""` | Request body string |
-| `responseStatus` | `200` | Simulated upstream response status code |
-| `responseStatusText` | `"OK"` | Simulated upstream response status text |
-| `responseHeaders` | `{}` | Simulated upstream response headers |
-| `responseBody` | `""` | Simulated upstream response body |
-| `properties` | `{}` | Proxy-wasm properties to inject |
-| `enforceProductionPropertyRules` | `true` | When true, denies access to properties not available in production FastEdge |
+| Field                            | Default | Description                                                                 |
+| -------------------------------- | ------- | --------------------------------------------------------------------------- |
+| `url`                            | —       | Full URL including scheme and host; used to derive pseudo-headers           |
+| `method`                         | `"GET"` | HTTP method                                                                 |
+| `requestHeaders`                 | `{}`    | Additional request headers; pseudo-headers here override derived values     |
+| `requestBody`                    | `""`    | Request body string                                                         |
+| `responseStatus`                 | `200`   | Simulated upstream response status code                                     |
+| `responseStatusText`             | `"OK"`  | Simulated upstream response status text                                     |
+| `responseHeaders`                | `{}`    | Simulated upstream response headers                                         |
+| `responseBody`                   | `""`    | Simulated upstream response body                                            |
+| `properties`                     | `{}`    | Proxy-wasm properties to inject                                             |
+| `enforceProductionPropertyRules` | `true`  | When true, denies access to properties not available in production FastEdge |
 
 ### RunnerConfig
 
@@ -208,12 +208,12 @@ interface FullFlowResult {
 
 Hook results are accessed by camelCase key:
 
-| Key | Hook |
-|-----|------|
-| `onRequestHeaders` | `on_request_headers` hook |
-| `onRequestBody` | `on_request_body` hook |
+| Key                 | Hook                       |
+| ------------------- | -------------------------- |
+| `onRequestHeaders`  | `on_request_headers` hook  |
+| `onRequestBody`     | `on_request_body` hook     |
 | `onResponseHeaders` | `on_response_headers` hook |
-| `onResponseBody` | `on_response_body` hook |
+| `onResponseBody`    | `on_response_body` hook    |
 
 ```typescript
 const result = await runFlow(runner, {
@@ -263,9 +263,9 @@ function assertNoRequestHeader(result: HookResult, name: string): void
 ```typescript
 const hookResult = result.hookResults.onRequestHeaders;
 
-assertRequestHeader(hookResult, "x-forwarded-for");                   // exists
-assertRequestHeader(hookResult, "x-country-code", "DE");              // exists with value
-assertNoRequestHeader(hookResult, "x-internal-secret");               // absent
+assertRequestHeader(hookResult, "x-forwarded-for");          // exists
+assertRequestHeader(hookResult, "x-country-code", "DE");     // exists with value
+assertNoRequestHeader(hookResult, "x-internal-secret");      // absent
 ```
 
 ### Response Headers
@@ -299,7 +299,7 @@ function assertFinalHeader(result: FullFlowResult, name: string, expected?: stri
 ```typescript
 assertFinalStatus(result, 200);
 assertFinalHeader(result, "x-cache", "HIT");
-assertFinalHeader(result, "content-encoding");                        // exists, any value
+assertFinalHeader(result, "content-encoding");               // exists, any value
 ```
 
 ### Return Code

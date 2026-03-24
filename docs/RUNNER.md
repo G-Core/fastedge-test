@@ -42,10 +42,10 @@ function createRunner(
 
 **Parameters**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `wasmPath` | `string` | Absolute or relative path to the `.wasm` file |
-| `config` | `RunnerConfig` | Optional configuration (dotenv, type override) |
+| Parameter  | Type           | Description                                    |
+| ---------- | -------------- | ---------------------------------------------- |
+| `wasmPath` | `string`       | Absolute or relative path to the `.wasm` file  |
+| `config`   | `RunnerConfig` | Optional configuration (dotenv, type override) |
 
 **Returns** `Promise<IWasmRunner>` — a loaded runner ready for execution.
 
@@ -70,10 +70,10 @@ function createRunnerFromBuffer(
 
 **Parameters**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `buffer` | `Buffer` | WASM binary content |
-| `config` | `RunnerConfig` | Optional configuration |
+| Parameter | Type           | Description            |
+| --------- | -------------- | ---------------------- |
+| `buffer`  | `Buffer`       | WASM binary content    |
+| `config`  | `RunnerConfig` | Optional configuration |
 
 **Returns** `Promise<IWasmRunner>` — a loaded runner ready for execution.
 
@@ -167,18 +167,18 @@ callFullFlow(
 
 **Parameters**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `url` | `string` | Full request URL (e.g. `https://example.com/path`) |
-| `method` | `string` | HTTP method |
-| `headers` | `Record<string, string>` | Request headers |
-| `body` | `string` | Request body |
-| `responseHeaders` | `Record<string, string>` | Upstream response headers (used as initial state for response hooks) |
-| `responseBody` | `string` | Upstream response body |
-| `responseStatus` | `number` | Upstream response status code |
-| `responseStatusText` | `string` | Upstream response status text |
-| `properties` | `Record<string, unknown>` | Shared properties passed to all hooks |
-| `enforceProductionPropertyRules` | `boolean` | When `true`, restricts property access to match CDN production behavior |
+| Parameter                        | Type                      | Description                                                             |
+| -------------------------------- | ------------------------- | ----------------------------------------------------------------------- |
+| `url`                            | `string`                  | Full request URL (e.g. `https://example.com/path`)                      |
+| `method`                         | `string`                  | HTTP method                                                             |
+| `headers`                        | `Record<string, string>`  | Request headers                                                         |
+| `body`                           | `string`                  | Request body                                                            |
+| `responseHeaders`                | `Record<string, string>`  | Upstream response headers (used as initial state for response hooks)    |
+| `responseBody`                   | `string`                  | Upstream response body                                                  |
+| `responseStatus`                 | `number`                  | Upstream response status code                                           |
+| `responseStatusText`             | `string`                  | Upstream response status text                                           |
+| `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                                   |
+| `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior |
 
 Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fetch)* → `onResponseHeaders` → `onResponseBody`.
 
@@ -277,12 +277,12 @@ interface RunnerConfig {
 }
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `dotenv.enabled` | `boolean` | `true` | Whether to load `.env` files |
-| `dotenv.path` | `string` | `undefined` | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. test fixture directories). |
-| `enforceProductionPropertyRules` | `boolean` | `true` | Restrict property access to match CDN production behavior |
-| `runnerType` | `WasmType` | auto-detected | Override WASM type detection |
+| Field                            | Type       | Default       | Description                                                                                                                                                                                                                                                    |
+| -------------------------------- | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`  | `false`       | Whether to load `.env` files                                                                                                                                                                                                                                   |
+| `dotenv.path`                    | `string`   | `undefined`   | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. test fixture directories). |
+| `enforceProductionPropertyRules` | `boolean`  | `true`        | Restrict property access to match CDN production behavior                                                                                                                                                                                                      |
+| `runnerType`                     | `WasmType` | auto-detected | Override WASM type detection                                                                                                                                                                                                                                   |
 
 ### HttpRequest & HttpResponse
 
@@ -335,12 +335,13 @@ type HookCall = {
 };
 ```
 
-| Field | Description |
-|-------|-------------|
-| `hook` | Hook name: `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"` |
-| `request` | Request state passed to the hook |
-| `response` | Response state passed to the hook |
-| `properties` | Shared properties (e.g. `request.path`, `vm_config`, `plugin_config`) |
+| Field                            | Description                                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `hook`                           | Hook name: `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`       |
+| `request`                        | Request state passed to the hook                                                                    |
+| `response`                       | Response state passed to the hook                                                                   |
+| `properties`                     | Shared properties (e.g. `request.path`, `vm_config`, `plugin_config`)                              |
+| `dotenvEnabled`                  | Optional per-call dotenv override. Use `applyDotenv()` for persistent changes.                      |
 | `enforceProductionPropertyRules` | Defaults to `true`. Set to `false` to allow property reads that would be blocked on production CDN. |
 
 ### HookResult
@@ -363,13 +364,13 @@ type HookResult = {
 };
 ```
 
-| Field | Description |
-|-------|-------------|
-| `returnCode` | The numeric value returned by the WASM hook export, or `null` if the export was not found |
-| `logs` | Log entries emitted via `proxy_log` during hook execution |
-| `input` | Request/response state as seen by the hook before execution |
-| `output` | Request/response state after hook execution (reflects WASM mutations) |
-| `properties` | All shared properties after hook execution |
+| Field        | Description                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| `returnCode` | The numeric value returned by the WASM hook export, or `null` if the export was not found  |
+| `logs`       | Log entries emitted via `proxy_log` during hook execution                                   |
+| `input`      | Request/response state as seen by the hook before execution                                 |
+| `output`     | Request/response state after hook execution (reflects WASM mutations)                       |
+| `properties` | All shared properties after hook execution                                                  |
 
 ### FullFlowResult
 
@@ -388,11 +389,11 @@ type FullFlowResult = {
 };
 ```
 
-| Field | Description |
-|-------|-------------|
-| `hookResults` | A `Record` keyed by hook name (`"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`), each containing a `HookResult` |
-| `finalResponse` | The final response after all hooks have executed. `body` is base64-encoded when `isBase64` is `true`. |
-| `calculatedProperties` | Runtime properties computed from the request URL (e.g. `request.path`, `request.host`) |
+| Field                  | Description                                                                                                                                                |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hookResults`          | A `Record` keyed by hook name (`"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`), each containing a `HookResult`         |
+| `finalResponse`        | The final response after all hooks have executed. `body` is base64-encoded when `isBase64` is `true`.                                                      |
+| `calculatedProperties` | Runtime properties computed from the request URL (e.g. `request.path`, `request.host`)                                                                    |
 
 ### Supporting Types
 
@@ -454,19 +455,19 @@ async function testCdnApp() {
   try {
     // Execute the full CDN request/response lifecycle
     const result: FullFlowResult = await runner.callFullFlow(
-      'https://example.com/api/data', // request URL
-      'GET',                           // method
-      { 'accept': 'application/json' }, // request headers
-      '',                              // request body
-      { 'content-type': 'application/json' }, // upstream response headers
-      '{"key":"value"}',               // upstream response body
-      200,                             // upstream response status
-      'OK',                            // upstream response status text
+      'https://example.com/api/data',          // request URL
+      'GET',                                    // method
+      { 'accept': 'application/json' },         // request headers
+      '',                                       // request body
+      { 'content-type': 'application/json' },   // upstream response headers
+      '{"key":"value"}',                        // upstream response body
+      200,                                      // upstream response status
+      'OK',                                     // upstream response status text
       {
         'request.path': '/api/data',
         'request.host': 'example.com',
-      },                               // shared properties
-      true,                            // enforce production property rules
+      },                                        // shared properties
+      true,                                     // enforce production property rules
     );
 
     // Inspect hook results

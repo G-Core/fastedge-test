@@ -40,12 +40,12 @@ interface BaseEvent {
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `type` | `string` | Event discriminant — one of the values listed below |
-| `timestamp` | `number` | Unix epoch in milliseconds |
-| `source` | `'ui' \| 'ai_agent' \| 'api' \| 'system'` | What triggered the event |
-| `data` | `object` | Event-specific payload |
+| Field       | Type                                       | Description                                         |
+| ----------- | ------------------------------------------ | --------------------------------------------------- |
+| `type`      | `string`                                   | Event discriminant — one of the values listed below |
+| `timestamp` | `number`                                   | Unix epoch in milliseconds                          |
+| `source`    | `'ui' \| 'ai_agent' \| 'api' \| 'system'` | What triggered the event                            |
+| `data`      | `object`                                   | Event-specific payload                              |
 
 ## Event Types
 
@@ -61,20 +61,20 @@ interface WasmLoadedEvent {
   data: {
     filename: string;
     size: number;
-    runnerPort: number | null | undefined;
+    runnerPort?: number | null;
     wasmType: 'proxy-wasm' | 'http-wasm';
-    resolvedPath: string | null | undefined;
+    resolvedPath?: string | null;
   };
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `filename` | `string` | Name of the loaded WASM file |
-| `size` | `number` | File size in bytes |
-| `runnerPort` | `number \| null` | Port the runner is listening on, if applicable |
-| `wasmType` | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type |
-| `resolvedPath` | `string \| null` | Absolute filesystem path to the loaded binary, if available |
+| Field          | Type                          | Description                                                 |
+| -------------- | ----------------------------- | ----------------------------------------------------------- |
+| `filename`     | `string`                      | Name of the loaded WASM file                                |
+| `size`         | `number`                      | File size in bytes                                          |
+| `runnerPort?`  | `number \| null`              | Port the runner is listening on, if applicable. Omitted when not set. |
+| `wasmType`     | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type                                                  |
+| `resolvedPath?`| `string \| null`              | Absolute filesystem path to the loaded binary. Omitted when not set.  |
 
 **Example:**
 
@@ -112,11 +112,11 @@ interface RequestStartedEvent {
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `url` | `string` | Full request URL |
-| `method` | `string` | HTTP method (`GET`, `POST`, etc.) |
-| `headers` | `Record<string, string>` | Request headers |
+| Field     | Type                     | Description                       |
+| --------- | ------------------------ | --------------------------------- |
+| `url`     | `string`                 | Full request URL                  |
+| `method`  | `string`                 | HTTP method (`GET`, `POST`, etc.) |
+| `headers` | `Record<string, string>` | Request headers                   |
 
 **Example:**
 
@@ -165,13 +165,13 @@ interface HookExecutedEvent {
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `hook` | `string` | Hook name (e.g. `onRequestHeaders`) |
+| Field        | Type             | Description                                                |
+| ------------ | ---------------- | ---------------------------------------------------------- |
+| `hook`       | `string`         | Hook name (e.g. `onRequestHeaders`)                        |
 | `returnCode` | `number \| null` | Return code from the WASM filter, or `null` if unavailable |
-| `logCount` | `number` | Number of log lines emitted during this hook |
-| `input` | `object` | Request and response state passed into the hook |
-| `output` | `object` | Request and response state after the hook ran |
+| `logCount`   | `number`         | Number of log lines emitted during this hook               |
+| `input`      | `object`         | Request and response state passed into the hook            |
+| `output`     | `object`         | Request and response state after the hook ran              |
 
 **Example:**
 
@@ -236,16 +236,16 @@ interface RequestCompletedEvent {
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `hookResults` | `Record<string, any>` | Per-hook execution results, keyed by hook name |
-| `finalResponse.status` | `number` | HTTP status code |
-| `finalResponse.statusText` | `string` | HTTP status text |
-| `finalResponse.headers` | `Record<string, string>` | Response headers |
-| `finalResponse.body` | `string` | Response body (may be base64 if `isBase64` is `true`) |
-| `finalResponse.contentType` | `string` | Content-Type of the response |
-| `finalResponse.isBase64` | `boolean \| undefined` | Whether `body` is base64-encoded |
-| `calculatedProperties` | `Record<string, unknown> \| undefined` | Properties computed during execution, if any |
+| Field                       | Type                                   | Description                                           |
+| --------------------------- | -------------------------------------- | ----------------------------------------------------- |
+| `hookResults`               | `Record<string, any>`                  | Per-hook execution results, keyed by hook name        |
+| `finalResponse.status`      | `number`                               | HTTP status code                                      |
+| `finalResponse.statusText`  | `string`                               | HTTP status text                                      |
+| `finalResponse.headers`     | `Record<string, string>`               | Response headers                                      |
+| `finalResponse.body`        | `string`                               | Response body (may be base64 if `isBase64` is `true`) |
+| `finalResponse.contentType` | `string`                               | Content-Type of the response                          |
+| `finalResponse.isBase64`    | `boolean \| undefined`                 | Whether `body` is base64-encoded                      |
+| `calculatedProperties`      | `Record<string, unknown> \| undefined` | Properties computed during execution, if any          |
 
 **Example:**
 
@@ -290,9 +290,9 @@ interface RequestFailedEvent {
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `error` | `string` | Short error message |
+| Field     | Type                  | Description                                        |
+| --------- | --------------------- | -------------------------------------------------- |
+| `error`   | `string`              | Short error message                                |
 | `details` | `string \| undefined` | Extended error detail or stack trace, if available |
 
 **Example:**
@@ -326,8 +326,8 @@ interface PropertiesUpdatedEvent {
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
+| Field        | Type                     | Description                                |
+| ------------ | ------------------------ | ------------------------------------------ |
 | `properties` | `Record<string, string>` | Full current property map after the update |
 
 **Example:**
@@ -370,14 +370,14 @@ interface HttpWasmRequestCompletedEvent {
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `response.status` | `number` | HTTP status code |
-| `response.statusText` | `string` | HTTP status text |
-| `response.headers` | `Record<string, string>` | Response headers |
-| `response.body` | `string` | Response body (may be base64 if `isBase64` is `true`) |
-| `response.contentType` | `string \| null` | Content-Type, or `null` if absent |
-| `response.isBase64` | `boolean \| undefined` | Whether `body` is base64-encoded |
+| Field                  | Type                     | Description                                           |
+| ---------------------- | ------------------------ | ----------------------------------------------------- |
+| `response.status`      | `number`                 | HTTP status code                                      |
+| `response.statusText`  | `string`                 | HTTP status text                                      |
+| `response.headers`     | `Record<string, string>` | Response headers                                      |
+| `response.body`        | `string`                 | Response body (may be base64 if `isBase64` is `true`) |
+| `response.contentType` | `string \| null`         | Content-Type, or `null` if absent                     |
+| `response.isBase64`    | `boolean \| undefined`   | Whether `body` is base64-encoded                      |
 
 **Example:**
 
@@ -417,10 +417,10 @@ interface HttpWasmLogEvent {
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `level` | `number` | Log level (follows proxy-wasm log level conventions) |
-| `message` | `string` | Log message text |
+| Field     | Type     | Description                                          |
+| --------- | -------- | ---------------------------------------------------- |
+| `level`   | `number` | Log level (follows proxy-wasm log level conventions) |
+| `message` | `string` | Log message text                                     |
 
 **Example:**
 
@@ -458,10 +458,10 @@ interface ConnectionStatusEvent {
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `connected` | `boolean` | Always `true` when received (indicates this client is connected) |
-| `clientCount` | `number` | Total number of currently connected clients including this one |
+| Field         | Type      | Description                                                      |
+| ------------- | --------- | ---------------------------------------------------------------- |
+| `connected`   | `boolean` | Always `true` when received (indicates this client is connected) |
+| `clientCount` | `number`  | Total number of currently connected clients including this one   |
 
 **Example:**
 
