@@ -85,10 +85,16 @@ This index helps you discover relevant documentation without reading thousands o
 
 **When to read**: Updating the npm package API, adding new public exports, or checking what's documented for users
 
-- `docs/TEST_FRAMEWORK.md` — User guide for `@gcoredev/fastedge-test`: test suites, runner API, assertions, CI usage
-- `docs/LOCAL_SERVER.md` — Local debugger server: launch, UI, REST endpoints summary
-- `docs/TEST_CONFIG.md` — `fastedge-config.test.json` schema, dotenv runtime secrets, CDN and HTTP-WASM examples
-- `docs/API.md` — Full REST API reference (custom tooling / CI use cases)
+Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Incremental updates preserve manual edits; only incorrect or missing content is changed. See `.generation-config.md` for per-file source mappings and rules.
+
+- `docs/INDEX.md` — Navigation hub, package exports, quick links to all docs
+- `docs/quickstart.md` — Getting started: install, interactive debugger, programmatic tests, low-level runner
+- `docs/API.md` — Full REST API reference (11 consumer-facing endpoints)
+- `docs/WEBSOCKET.md` — WebSocket protocol, 9 event types, connection lifecycle
+- `docs/TEST_FRAMEWORK.md` — Test framework API: suites, assertions, CI integration
+- `docs/RUNNER.md` — Low-level runner API: factory functions, IWasmRunner interface, type definitions
+- `docs/TEST_CONFIG.md` — `fastedge-config.test.json` schema, dotenv, CDN and HTTP-WASM examples
+- `docs/DEBUGGER.md` — Debugger server CLI, programmatic startup, port config, health check
 
 ### 🗄️ Legacy/Archived (rarely needed)
 

@@ -1,5 +1,41 @@
 # Proxy-WASM Runner - Changelog
 
+## March 24, 2026 - generate-docs.sh: incremental updates + table formatting
+
+### Overview
+Two improvements to `fastedge-plugin-source/generate-docs.sh`:
+1. **Incremental update mode** — when `docs/<file>` already exists, the existing content is passed as context. The generator preserves accurate content and manual additions, only changing what is incorrect, incomplete, or missing per the source code. New files still generate from scratch.
+2. **Table formatting rule** — added to `.generation-config.md` Global Rules requiring padded aligned columns in all markdown tables for raw readability.
+
+### 🎯 What Was Completed
+
+#### 1. Incremental Update Mode
+- `generate-docs.sh` checks if target file exists before generation
+- Existing content wrapped in `<existing>` tags and appended to the prompt
+- Update rules: preserve accurate content, preserve manual additions, only fix what's wrong
+- Log output shows "Updating docs/X ..." vs "Generating docs/X ..." based on mode
+
+#### 2. Table Formatting
+- Added explicit table padding rule to `.generation-config.md` Global Rules > Style
+- Good/bad examples included in the rule for model clarity
+
+#### 3. Prompt Robustness
+- Output constraint placed at both start and end of prompt (sandwich pattern) to prevent conversational output on large prompts
+- "No permission requests" added to constraint after observing that failure mode
+
+**Files Modified:**
+- `fastedge-plugin-source/generate-docs.sh` — incremental update logic, mode logging, sandwich output constraint
+- `fastedge-plugin-source/.generation-config.md` — table formatting rule in Global Rules
+
+**Files Modified (context — not in this repo):**
+- `context/CONTEXT_INDEX.md` — updated User-Facing Documentation section (was stale, listed non-existent LOCAL_SERVER.md)
+
+### 📝 Notes
+- API.md is the largest doc (~980 lines existing + ~986 lines source code). It is most prone to conversational output failures due to prompt size. The sandwich constraint mitigates this but may still occasionally require retries.
+- The `$mode` variable is used for log output only — the prompt always says "Generate" to avoid priming conversational responses.
+
+---
+
 ## March 20, 2026 - DragDropZone: removed debug logging
 
 ### Overview
