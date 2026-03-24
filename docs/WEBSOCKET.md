@@ -61,9 +61,9 @@ interface WasmLoadedEvent {
   data: {
     filename: string;
     size: number;
-    runnerPort: number | null | undefined;
+    runnerPort?: number | null;
     wasmType: 'proxy-wasm' | 'http-wasm';
-    resolvedPath: string | null | undefined;
+    resolvedPath?: string | null;
   };
 }
 ```
@@ -72,9 +72,9 @@ interface WasmLoadedEvent {
 | -------------- | ----------------------------- | ----------------------------------------------------------- |
 | `filename`     | `string`                      | Name of the loaded WASM file                                |
 | `size`         | `number`                      | File size in bytes                                          |
-| `runnerPort`   | `number \| null \| undefined` | Port the runner is listening on, if applicable              |
-| `wasmType`     | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type                                        |
-| `resolvedPath` | `string \| null \| undefined` | Absolute filesystem path to the loaded binary, if available |
+| `runnerPort?`  | `number \| null`              | Port the runner is listening on, if applicable. Omitted when not set. |
+| `wasmType`     | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type                                                  |
+| `resolvedPath?`| `string \| null`              | Absolute filesystem path to the loaded binary. Omitted when not set.  |
 
 **Example:**
 
