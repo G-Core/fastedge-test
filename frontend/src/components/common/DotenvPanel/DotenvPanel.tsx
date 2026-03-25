@@ -44,6 +44,7 @@ export function DotenvPanel({
   useEffect(() => {
     if (!isVSCode()) return;
     const handler = (event: MessageEvent) => {
+      if (event.source !== window.parent) return;
       if (event.data?.command !== "appRootResult") return;
       window.removeEventListener("message", handler);
       const appRoot = event.data.appRoot ?? null;
@@ -80,6 +81,7 @@ export function DotenvPanel({
         window.removeEventListener("message", listenerRef.current);
       }
       const handler = (event: MessageEvent) => {
+        if (event.source !== window.parent) return;
         if (event.data?.command !== "folderPickerResult") return;
         window.removeEventListener("message", handler);
         listenerRef.current = null;
