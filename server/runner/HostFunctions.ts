@@ -55,6 +55,13 @@ export class HostFunctions {
   } | null = null;
   private streamClosed = false;
 
+  // Local response state (from proxy_send_local_response / send_http_response)
+  private localResponse: {
+    statusCode: number;
+    statusText: string;
+    body: Uint8Array;
+  } | null = null;
+
   // FastEdge extensions
   private secretStore: SecretStore;
   private dictionary: Dictionary;
@@ -139,6 +146,19 @@ export class HostFunctions {
 
   resetStreamClosed(): void {
     this.streamClosed = false;
+  }
+
+  // Local response accessors (called by ProxyWasmRunner after callHook)
+  hasLocalResponse(): boolean {
+    return this.localResponse !== null;
+  }
+
+  getLocalResponse(): { statusCode: number; statusText: string; body: Uint8Array } | null {
+    return this.localResponse;
+  }
+
+  resetLocalResponse(): void {
+    this.localResponse = null;
   }
 
   getRequestHeaders(): HeaderMap {
@@ -507,16 +527,30 @@ export class HostFunctions {
         statusCodeLen: number,
         bodyPtr: number,
         bodyLen: number,
+        headerPairsPtr: number,
+        headerPairsLen: number,
         grpcStatus: number,
       ) => {
         this.setLastHostCall(
           `proxy_send_local_response status=${statusCode} bodyLen=${bodyLen}`,
         );
         const statusText = this.memory.readString(statusCodePtr, statusCodeLen);
-        const body = this.memory.readString(bodyPtr, bodyLen);
+        const body = this.memory.readBytes(bodyPtr, bodyLen);
+
+        // Parse header pairs from binary format (stored for debugging, not merged into response)
+        // On the real CDN, only headers set via stream_context.headers.response.add() matter.
+        if (headerPairsLen > 0) {
+          const headerBytes = this.memory.readBytes(headerPairsPtr, headerPairsLen);
+          const headers = HeaderManager.deserializeBinary(headerBytes);
+          this.logDebug(`send_local_response headers (not merged): ${JSON.stringify(headers)}`);
+        }
+
+        // Store local response as raw bytes — ProxyWasmRunner handles encoding
+        this.localResponse = { statusCode, statusText, body };
+
         this.logs.push({
           level: 1,
-          message: `local_response status=${statusCode} ${statusText} body=${body} grpc=${grpcStatus}`,
+          message: `local_response status=${statusCode} ${statusText} bodyLen=${body.byteLength} grpc=${grpcStatus}`,
         });
         return ProxyStatus.Ok;
       },

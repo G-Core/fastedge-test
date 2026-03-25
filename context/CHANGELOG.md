@@ -1,5 +1,49 @@
 # Proxy-WASM Runner - Changelog
 
+## March 24, 2026 - send_http_response: CDN Redirect Test App + Integration Tests
+
+### Overview
+Added a CDN redirect test application and 5 integration tests that dogfood the test framework API (`runFlow`, `assertFinalStatus`, `assertFinalHeader`, `assertReturnCode`) to verify the `send_http_response` short-circuit path end-to-end.
+
+### 🎯 What Was Completed
+
+#### 1. CDN Redirect Test Application (`cdn-redirect`)
+- AssemblyScript app that reads `x-redirect-url` request header
+- If present: sets `Location` response header, calls `send_http_response(302)`, returns `StopIteration`
+- If absent: returns `Continue` (normal flow — enables testing both paths)
+- Pre-built WASM output at `wasm/cdn-apps/redirect/redirect.wasm`
+
+#### 2. Integration Tests (5 tests)
+- 302 + Location header verification
+- Short-circuit verification: only `onRequestHeaders` runs, no origin fetch
+- StopIteration (1) return code from `onRequestHeaders`
+- Normal flow when `x-redirect-url` absent (Continue = 0)
+- Empty body on redirect response
+
+#### 3. Test Framework Dogfooding
+Tests use `runFlow()` + framework assertion helpers instead of raw `callFullFlow()` + `expect()`. This validates both the `send_http_response` feature AND the test framework API.
+
+#### 4. WASM Loader Registry
+Added `redirect` entry to `WASM_TEST_BINARIES.cdnApps` in `wasm-loader.ts`.
+
+**Files Created:**
+- `test-applications/cdn-apps/cdn-redirect/assembly/redirect.ts` — redirect WASM app
+- `test-applications/cdn-apps/cdn-redirect/package.json` — build scripts
+- `test-applications/cdn-apps/cdn-redirect/asconfig.json` — AS config
+- `wasm/cdn-apps/redirect/redirect.wasm` — pre-built binary
+- `server/__tests__/integration/cdn-apps/redirect/cdn-redirect.test.ts` — integration tests
+- `context/features/SEND_HTTP_RESPONSE.md` — feature documentation
+
+**Files Modified:**
+- `server/__tests__/integration/utils/wasm-loader.ts` — added redirect entry
+
+### 📝 Notes
+- `send_http_response` maps to the `proxy_send_local_response` ABI call. Runner support was implemented in HostFunctions.ts + ProxyWasmRunner.ts prior to this change; this adds the test coverage.
+- The `x-redirect-url` header pattern makes tests controllable — each test specifies a different redirect target, and the non-redirect path is tested by omitting the header.
+- Total CDN integration tests: 71 (was 66). Total integration tests: 96 (CDN 71 + HTTP 25).
+
+---
+
 ## March 24, 2026 - generate-docs.sh: incremental updates + table formatting
 
 ### Overview

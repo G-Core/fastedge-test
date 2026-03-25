@@ -275,6 +275,29 @@ export class ProxyWasmRunner implements IWasmRunner {
       );
     }
 
+    // Check if WASM sent a local response (e.g., 302 redirect) — skip origin fetch
+    if (results.onRequestHeaders.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
+      const local = this.hostFunctions.getLocalResponse()!;
+      const responseHeaders = results.onRequestHeaders.output.response.headers;
+      this.hostFunctions.resetLocalResponse();
+
+      const contentType = responseHeaders['content-type'] || 'text/plain';
+      const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
+
+      return {
+        hookResults: results,
+        finalResponse: {
+          status: local.statusCode,
+          statusText: local.statusText,
+          headers: responseHeaders,
+          body,
+          contentType,
+          isBase64,
+        },
+        calculatedProperties: this.propertyResolver.getCalculatedProperties(),
+      };
+    }
+
     // Pass modified headers from onRequestHeaders to onRequestBody
     const headersAfterRequestHeaders =
       results.onRequestHeaders.output.request.headers;
@@ -303,6 +326,29 @@ export class ProxyWasmRunner implements IWasmRunner {
         results.onRequestBody.output,
         "system",
       );
+    }
+
+    // Check if WASM sent a local response from onRequestBody
+    if (results.onRequestBody.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
+      const local = this.hostFunctions.getLocalResponse()!;
+      const responseHeaders = results.onRequestBody.output.response.headers;
+      this.hostFunctions.resetLocalResponse();
+
+      const contentType = responseHeaders['content-type'] || 'text/plain';
+      const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
+
+      return {
+        hookResults: results,
+        finalResponse: {
+          status: local.statusCode,
+          statusText: local.statusText,
+          headers: responseHeaders,
+          body,
+          contentType,
+          isBase64,
+        },
+        calculatedProperties: this.propertyResolver.getCalculatedProperties(),
+      };
     }
 
     // Get modified request data from hooks
@@ -575,6 +621,9 @@ export class ProxyWasmRunner implements IWasmRunner {
 
     // Set current hook context for property access control
     this.currentHook = this.getHookContext(call.hook);
+
+    // Clear stale local response from any previous hook execution
+    this.hostFunctions.resetLocalResponse();
 
     // Create fresh instance for this hook call (isolated context)
     const imports = this.createImports();
@@ -1115,4 +1164,24 @@ function ensureNullTerminated(value: string): string {
     return "";
   }
   return value.endsWith("\0") ? value : `${value}\0`;
+}
+
+/** Encode a local response body (raw bytes from WASM) for the finalResponse.
+ *  Mirrors the binary detection logic used for origin fetch responses. */
+function encodeLocalResponseBody(
+  body: Uint8Array,
+  contentType: string,
+): { body: string; isBase64: boolean } {
+  const isBinary =
+    contentType.startsWith("image/") ||
+    contentType.startsWith("video/") ||
+    contentType.startsWith("audio/") ||
+    contentType.includes("application/octet-stream") ||
+    contentType.includes("application/pdf") ||
+    contentType.includes("application/zip");
+
+  if (isBinary) {
+    return { body: Buffer.from(body).toString("base64"), isBase64: true };
+  }
+  return { body: new TextDecoder().decode(body), isBase64: false };
 }

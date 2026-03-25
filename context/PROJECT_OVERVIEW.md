@@ -62,7 +62,8 @@ Build a Postman-like test runner for debugging WASM binaries that run on FastEdg
 - Header serialization in G-Core SDK format
 - Complete property system with runtime calculation
 - FastEdge host functions (secrets, dictionaries, dotenv support)
-- **HTTP callouts (proxy_http_call)**: Full PAUSE/resume loop with real `fetch()` ✅ NEW
+- **HTTP callouts (proxy_http_call)**: Full PAUSE/resume loop with real `fetch()` ✅
+- **Local response (send_http_response)**: Short-circuit origin fetch from any request-phase hook ✅ NEW
 
 **HTTP WASM (Component Model):**
 - Process-based runner using FastEdge-run CLI
@@ -98,8 +99,8 @@ Build a Postman-like test runner for debugging WASM binaries that run on FastEdg
 - Zustand state management with Immer middleware
 - Component reuse (ResponseViewer, DictionaryInput, RequestBar)
 
-**Integration Testing:** ✨ NEW
-- **52 Integration Tests Total**: Comprehensive end-to-end WASM execution testing
+**Integration Testing:**
+- **96 Integration Tests Total**: Comprehensive end-to-end WASM execution testing
 
 **Property Access Control (35 tests)**:
 - **100% Property Coverage**: All 17 built-in FastEdge properties tested
@@ -118,9 +119,14 @@ Build a Postman-like test runner for debugging WASM binaries that run on FastEdg
 - **Production Parity**: Real HTTP communication with downstream services
 - **UI Output Validation**: Final response structure matches UI output exactly
 
+**send_http_response / Short-Circuit Testing (5 tests)**:
+- **Local Response**: CDN app returns 302 redirect without origin fetch
+- **Short-Circuit Verification**: Only onRequestHeaders runs; no downstream hooks execute
+- **Test Framework Dogfooding**: Uses `runFlow()` + `assertFinalStatus/Header/ReturnCode` instead of raw vitest assertions
+
 **Test Infrastructure**:
-- **368 Unit Tests**: Runner logic, PropertyResolver, test framework, standalone runner
-- **13+ Test Applications**: Compiled WASM binaries for different test scenarios
+- **374 Unit Tests**: Runner logic, PropertyResolver, test framework, standalone runner
+- **14+ Test Applications**: Compiled WASM binaries for different test scenarios
 - **Downstream Service Testing**: Spawn HTTP WASM apps as downstream targets
 - See [INTEGRATION_TESTING.md](./development/INTEGRATION_TESTING.md) for details
 
@@ -224,5 +230,5 @@ PROXY_RUNNER_DEBUG=1 pnpm start
 
 ---
 
-**Last Updated**: February 2026
-**Status**: Production-ready with complete feature set. proxy_http_call supported. npm package plan complete (Phases 1-4).
+**Last Updated**: March 2026
+**Status**: Production-ready with complete feature set. proxy_http_call + send_http_response supported. npm package plan complete (Phases 1-4).
