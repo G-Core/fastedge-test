@@ -132,7 +132,7 @@ await runAndExit(defineTestSuite({
 }));
 ```
 
-## HTTP-WASM Quick Example
+## HTTP-WASM Quick Example:
 
 ```typescript
 import { defineTestSuite, runAndExit } from '@gcoredev/fastedge-test/test';
