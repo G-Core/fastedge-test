@@ -5,7 +5,7 @@ runs:
   using: "composite"
   steps:
     - name: Download all CLI artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         pattern: fastedge-run-*-artifact
         path: cli-artifacts
