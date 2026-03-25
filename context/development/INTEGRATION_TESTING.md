@@ -1,7 +1,7 @@
 # Integration Testing
 
-**Status**: ✅ Complete - Full Property Coverage (17/17 Properties Tested) + HTTP WASM Suite
-**Last Updated**: March 5, 2026
+**Status**: ✅ Complete - Full Property Coverage (17/17 Properties Tested) + HTTP WASM Suite + send_http_response Short-Circuit
+**Last Updated**: March 24, 2026
 
 ---
 
@@ -18,9 +18,17 @@ The proxy-runner uses compiled WASM test applications for integration testing to
 ```
 test-applications/
 ├── cdn-apps/                     # Proxy-WASM CDN applications
-│   └── properties/               # Property access control testing
-│       ├── assembly/             # AssemblyScript source files (12 test apps)
-│       └── ...
+│   ├── properties/               # Property access control testing
+│   │   ├── assembly/             # AssemblyScript source files (12 test apps)
+│   │   └── ...
+│   ├── cdn-headers/              # Header manipulation testing
+│   │   └── assembly/
+│   ├── cdn-redirect/             # send_http_response short-circuit testing
+│   │   └── assembly/
+│   ├── cdn-http-call/            # proxy_http_call testing
+│   │   └── assembly/
+│   └── cdn-variables-and-secrets/ # Env var/secret injection testing
+│       └── assembly/
 └── http-apps/
     └── basic-examples/           # HTTP WASM (wasi-http) applications
         └── src/
@@ -32,7 +40,11 @@ test-applications/
 
 wasm/                             # Compiled WASM binaries (generated)
 ├── cdn-apps/
-│   └── properties/               # 12 CDN proxy-wasm binaries
+│   ├── properties/               # 12 CDN proxy-wasm binaries
+│   ├── headers/                  # Header manipulation binaries
+│   ├── redirect/                 # send_http_response redirect binary
+│   ├── http-call/                # proxy_http_call binaries
+│   └── variables-and-secrets/    # Env var/secret binaries
 └── http-apps/
     └── basic-examples/           # Compiled HTTP WASM binaries
         ├── basic.wasm
@@ -44,8 +56,10 @@ wasm/                             # Compiled WASM binaries (generated)
 server/__tests__/integration/     # Integration test files
 ├── cdn-apps/
 │   ├── property-access/          # Property access tests (35 tests)
-│   ├── full-flow/                # CDN + downstream HTTP service tests
-│   └── http-call/                # proxy_http_call tests
+│   ├── full-flow/                # CDN + downstream HTTP service tests (7 tests)
+│   ├── http-call/                # proxy_http_call tests (9 tests)
+│   ├── redirect/                 # send_http_response short-circuit tests (5 tests)
+│   └── variables-and-secrets/    # CDN env var/secret tests (7 tests)
 ├── http-apps/
 │   ├── sdk-basic/                # Basic HTTP execution (11 tests)
 │   ├── sdk-downstream-modify/    # Downstream fetch + modify (8 tests)
@@ -148,6 +162,20 @@ beforeAll(async () => {
 
 The CDN test suite includes **12 test applications** covering **17 properties** across **4 property access patterns**. See the full list in the original structure below.
 
+### CDN Redirect / send_http_response (5 tests)
+
+Tests that a CDN app can return a local response (e.g., 302 redirect) without contacting the origin. Uses `runFlow()` + framework assertions (dogfooding the test framework).
+
+**App** (`cdn-redirect`): Reads `x-redirect-url` header → sets `Location` → calls `send_http_response(302)` → returns `StopIteration`.
+
+**Key assertions:**
+- `assertFinalStatus(result, 302)` + `assertFinalHeader(result, 'location', ...)`
+- Only `onRequestHeaders` in `hookResults` (no origin fetch, no downstream hooks)
+- `assertReturnCode(result.hookResults.onRequestHeaders, 1)` (StopIteration)
+- Normal flow (Continue = 0) when header absent
+
+See `features/SEND_HTTP_RESPONSE.md` for full design details.
+
 ### CDN Test Helpers (`utils/test-helpers.ts`)
 
 #### `createTestRunner(fastEdgeConfig?)`
@@ -185,7 +213,12 @@ pnpm test
 - `sdk-downstream-modify/downstream-modify-response.test.ts` — 8 tests
 - `sdk-variables-and-secrets/variables-and-secrets.test.ts` — 6 tests
 
-**CDN (proxy-wasm)**: 35+ passing tests across 6 test files in `property-access/`, plus full-flow and http-call tests.
+**CDN (proxy-wasm)**: 71 passing tests across 11 test files:
+- `property-access/` — 43 tests (6 files)
+- `full-flow/` — 7 tests (1 file)
+- `http-call/` — 9 tests (2 files)
+- `redirect/` — 5 tests (1 file)
+- `variables-and-secrets/` — 7 tests (1 file)
 
 ---
 
@@ -287,6 +320,57 @@ pnpm test:integration:cdn
 ---
 
 ## Best Practices
+
+### ⚠️ RULE: Dogfood the Test Framework
+
+**All new CDN integration tests MUST use the test framework API** (`server/test-framework/`) instead of raw vitest `expect()` calls with manual `callFullFlow()` arguments. This is non-negotiable — our integration tests serve double duty:
+
+1. **Verify the feature** being tested
+2. **Validate the test framework itself** — every test that uses `runFlow()`, `assertFinalStatus()`, etc. is a real-world exercise of our public API
+
+**Use test-framework helpers:**
+
+| Instead of...                                               | Use...                                          |
+|-------------------------------------------------------------|-------------------------------------------------|
+| `runner.callFullFlow(url, method, headers, body, ...)`      | `runFlow(runner, { url, requestHeaders })`       |
+| `expect(result.finalResponse.status).toBe(302)`             | `assertFinalStatus(result, 302)`                 |
+| `expect(result.finalResponse.headers['location']).toBe(x)`  | `assertFinalHeader(result, 'location', x)`       |
+| `expect(result.hookResults.onRequestHeaders.returnCode)...` | `assertReturnCode(result.hookResults.onRequestHeaders, 1)` |
+| Manual log checking                                         | `assertLog(result.hookResults.onRequestHeaders, 'substring')` |
+| Manual header checking on hook result                       | `assertRequestHeader(result, 'name', 'value')`   |
+| Manual property violation checking                          | `assertPropertyDenied(result, 'path')`            |
+
+**Available imports from `server/test-framework/`:**
+```typescript
+import {
+  runFlow,                    // Object-based callFullFlow wrapper (auto pseudo-headers)
+  assertFinalStatus,          // Final HTTP response status
+  assertFinalHeader,          // Final response header exists/matches
+  assertRequestHeader,        // Hook output request header
+  assertNoRequestHeader,      // Hook output request header absent
+  assertResponseHeader,       // Hook output response header
+  assertNoResponseHeader,     // Hook output response header absent
+  assertReturnCode,           // Hook return code (0=Continue, 1=StopIteration)
+  assertLog,                  // Log contains substring
+  assertNoLog,                // Log does NOT contain substring
+  logsContain,                // Boolean check (for conditional logic)
+  assertPropertyAllowed,      // Property access was NOT denied
+  assertPropertyDenied,       // Property access WAS denied
+  hasPropertyAccessViolation, // Boolean check for property violations
+} from '../../../../test-framework';
+```
+
+**When vitest `expect()` is still appropriate:**
+- Structural assertions not covered by framework helpers (e.g., `expect(Object.keys(result.hookResults)).toEqual([...])`)
+- Undefined/defined checks (e.g., `expect(result.hookResults.onRequestBody).toBeUndefined()`)
+- JSON parsing and deep object matching
+- Test setup validation
+
+**When you add a new assertion to the framework** (`server/test-framework/assertions.ts`), write integration tests that exercise it. If existing tests use raw `expect()` for something the new helper covers, migrate them.
+
+**Reference implementation:** `server/__tests__/integration/cdn-apps/redirect/cdn-redirect.test.ts` — the first suite written with full dogfooding.
+
+### General Best Practices
 
 1. **Spawn once**: Use `beforeAll()` for runner setup, not `beforeEach()` — spawning `fastedge-run` takes ~2s
 2. **Port release delay**: Add `await new Promise(resolve => setTimeout(resolve, 2000))` at the start of `beforeAll()` when sequential test files share the port range

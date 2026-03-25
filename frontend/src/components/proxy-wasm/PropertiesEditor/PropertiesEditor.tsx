@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DictionaryInput } from "../../common/DictionaryInput";
 import styles from "./PropertiesEditor.module.css";
 
@@ -115,11 +115,41 @@ const getPropertiesForCountry = (countryKey: string) => {
   };
 };
 
+/** Extract the enabled, non-readOnly defaults as a flat dict for the store. */
+const getEnabledDefaults = (countryKey: string): Record<string, string> => {
+  const props = getPropertiesForCountry(countryKey);
+  const result: Record<string, string> = {};
+  for (const [key, val] of Object.entries(props)) {
+    if (typeof val === "string") {
+      result[key] = val;
+    } else {
+      const isEnabled = val.enabled ?? true;
+      const isReadOnly = val.readOnly ?? false;
+      if (isEnabled && !isReadOnly && val.value) {
+        result[key] = val.value;
+      }
+    }
+  }
+  return result;
+};
+
 export function PropertiesEditor({ value, onChange }: PropertiesEditorProps) {
   const [selectedCountry, setSelectedCountry] = useState<string>("luxembourg");
 
+  // Push default properties into the store on first mount only —
+  // skip if the store already has values (e.g., loaded from config or
+  // restored after CollapsiblePanel re-expands).
+  useEffect(() => {
+    if (Object.keys(value).length === 0) {
+      onChange(getEnabledDefaults(selectedCountry));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleCountryChange = (countryKey: string) => {
     setSelectedCountry(countryKey);
+    // Reset store to the new country's defaults
+    onChange(getEnabledDefaults(countryKey));
   };
 
   return (
@@ -140,6 +170,7 @@ export function PropertiesEditor({ value, onChange }: PropertiesEditorProps) {
         ))}
       </div>
       <DictionaryInput
+        key={selectedCountry}
         value={value}
         onChange={onChange}
         keyPlaceholder="Property path"

@@ -56,10 +56,10 @@ process.kill(process.pid, "SIGTERM");
 
 ## Port Configuration
 
-| Source          | Value                 |
-| --------------- | --------------------- |
-| Default         | `5179`                |
-| `PORT` env var  | Any valid port number |
+| Source         | Value                 |
+| -------------- | --------------------- |
+| Default        | `5179`                |
+| `PORT` env var | Any valid port number |
 
 ```bash
 PORT=8080 npx fastedge-debug
@@ -90,13 +90,12 @@ curl http://localhost:5179/health
 
 ## Environment Variables
 
-| Variable              | Type     | Default | Description                                                                                    |
-| --------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------- |
-| `PORT`                | `number` | `5179`  | Port the HTTP server listens on                                                                |
-| `PROXY_RUNNER_DEBUG`  | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity                                 |
-| `VSCODE_INTEGRATION`  | `"true"` | unset   | Signals the server is running inside the VSCode extension context                              |
-| `WORKSPACE_PATH`      | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement  |
-| `FASTEDGE_RUN_PATH`   | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules                |
+| Variable             | Type     | Default | Description                                                                                   |
+| -------------------- | -------- | ------- | --------------------------------------------------------------------------------------------- |
+| `PORT`               | `number` | `5179`  | Port the HTTP server listens on                                                               |
+| `PROXY_RUNNER_DEBUG` | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity                                |
+| `WORKSPACE_PATH`     | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement |
+| `FASTEDGE_RUN_PATH`  | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules               |
 
 ### Usage examples
 

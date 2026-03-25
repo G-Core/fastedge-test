@@ -144,7 +144,7 @@ export function DictionaryInput({
   const updateParent = (updatedRows: Row[]) => {
     const dict: Record<string, string> = {};
     updatedRows.forEach((row) => {
-      if (row.enabled && row.key.trim()) {
+      if (row.enabled && !row.readOnly && row.key.trim()) {
         dict[row.key.trim()] = row.value.trim();
       }
     });
