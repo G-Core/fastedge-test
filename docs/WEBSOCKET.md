@@ -13,9 +13,9 @@ ws://localhost:{port}/ws
 where `{port}` is the port the server is running on (default `5179`).
 
 ```javascript
-const ws = new WebSocket('ws://localhost:5179/ws');
+const ws = new WebSocket("ws://localhost:5179/ws");
 
-ws.addEventListener('message', (event) => {
+ws.addEventListener("message", (event) => {
   const msg = JSON.parse(event.data);
   console.log(msg.type, msg.data);
 });
@@ -33,19 +33,19 @@ Every event shares a common envelope:
 
 ```typescript
 interface BaseEvent {
-  type: string;       // event discriminant
-  timestamp: number;  // Unix ms
-  source: 'ui' | 'ai_agent' | 'api' | 'system';
-  data: object;       // event-specific payload
+  type: string; // event discriminant
+  timestamp: number; // Unix ms
+  source: "ui" | "ai_agent" | "api" | "system";
+  data: object; // event-specific payload
 }
 ```
 
-| Field       | Type                                       | Description                                         |
-| ----------- | ------------------------------------------ | --------------------------------------------------- |
-| `type`      | `string`                                   | Event discriminant — one of the values listed below |
-| `timestamp` | `number`                                   | Unix epoch in milliseconds                          |
+| Field       | Type                                      | Description                                         |
+| ----------- | ----------------------------------------- | --------------------------------------------------- |
+| `type`      | `string`                                  | Event discriminant — one of the values listed below |
+| `timestamp` | `number`                                  | Unix epoch in milliseconds                          |
 | `source`    | `'ui' \| 'ai_agent' \| 'api' \| 'system'` | What triggered the event                            |
-| `data`      | `object`                                   | Event-specific payload                              |
+| `data`      | `object`                                  | Event-specific payload                              |
 
 ## Event Types
 
@@ -55,14 +55,14 @@ Fired when a WASM binary has been loaded and is ready to handle requests.
 
 ```typescript
 interface WasmLoadedEvent {
-  type: 'wasm_loaded';
+  type: "wasm_loaded";
   timestamp: number;
-  source: 'ui' | 'ai_agent' | 'api' | 'system';
+  source: "ui" | "ai_agent" | "api" | "system";
   data: {
     filename: string;
     size: number;
     runnerPort?: number | null;
-    wasmType: 'proxy-wasm' | 'http-wasm';
+    wasmType: "proxy-wasm" | "http-wasm";
     resolvedPath?: string | null;
   };
 }
@@ -72,9 +72,9 @@ interface WasmLoadedEvent {
 | --------------- | ----------------------------- | -------------------------------------------------------------------- |
 | `filename`      | `string`                      | Name of the loaded WASM file                                         |
 | `size`          | `number`                      | File size in bytes                                                   |
-| `runnerPort`    | `number \| null \| undefined` | Port the runner is listening on, if applicable. Omitted when not set |
+| `runnerPort?`   | `number \| null `             | Port the runner is listening on, if applicable. Omitted when not set |
 | `wasmType`      | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type                                                 |
-| `resolvedPath`  | `string \| null \| undefined` | Absolute filesystem path to the loaded binary. Omitted when not set  |
+| `resolvedPath?` | `string \| null `             | Absolute filesystem path to the loaded binary. Omitted when not set  |
 
 **Example:**
 
@@ -101,9 +101,9 @@ Fired when the server begins processing an incoming request through the WASM fil
 
 ```typescript
 interface RequestStartedEvent {
-  type: 'request_started';
+  type: "request_started";
   timestamp: number;
-  source: 'ui' | 'ai_agent' | 'api' | 'system';
+  source: "ui" | "ai_agent" | "api" | "system";
   data: {
     url: string;
     method: string;
@@ -146,9 +146,9 @@ Hook names are camelCase: `onRequestHeaders`, `onRequestBody`, `onResponseHeader
 
 ```typescript
 interface HookExecutedEvent {
-  type: 'hook_executed';
+  type: "hook_executed";
   timestamp: number;
-  source: 'ui' | 'ai_agent' | 'api' | 'system';
+  source: "ui" | "ai_agent" | "api" | "system";
   data: {
     hook: string;
     returnCode: number | null;
@@ -218,9 +218,9 @@ Fired when all hook phases have completed and a final response is available.
 
 ```typescript
 interface RequestCompletedEvent {
-  type: 'request_completed';
+  type: "request_completed";
   timestamp: number;
-  source: 'ui' | 'ai_agent' | 'api' | 'system';
+  source: "ui" | "ai_agent" | "api" | "system";
   data: {
     hookResults: Record<string, any>;
     finalResponse: {
@@ -280,9 +280,9 @@ Fired when request processing fails before a response can be produced.
 
 ```typescript
 interface RequestFailedEvent {
-  type: 'request_failed';
+  type: "request_failed";
   timestamp: number;
-  source: 'ui' | 'ai_agent' | 'api' | 'system';
+  source: "ui" | "ai_agent" | "api" | "system";
   data: {
     error: string;
     details?: string;
@@ -317,9 +317,9 @@ Fired when the set of active properties changes (e.g. after a properties configu
 
 ```typescript
 interface PropertiesUpdatedEvent {
-  type: 'properties_updated';
+  type: "properties_updated";
   timestamp: number;
-  source: 'ui' | 'ai_agent' | 'api' | 'system';
+  source: "ui" | "ai_agent" | "api" | "system";
   data: {
     properties: Record<string, string>;
   };
@@ -354,9 +354,9 @@ Fired when an http-wasm filter finishes processing a request and a response is a
 
 ```typescript
 interface HttpWasmRequestCompletedEvent {
-  type: 'http_wasm_request_completed';
+  type: "http_wasm_request_completed";
   timestamp: number;
-  source: 'ui' | 'ai_agent' | 'api' | 'system';
+  source: "ui" | "ai_agent" | "api" | "system";
   data: {
     response: {
       status: number;
@@ -407,9 +407,9 @@ Fired in real-time as the http-wasm filter emits log lines during both execute a
 
 ```typescript
 interface HttpWasmLogEvent {
-  type: 'http_wasm_log';
+  type: "http_wasm_log";
   timestamp: number;
-  source: 'ui' | 'ai_agent' | 'api' | 'system';
+  source: "ui" | "ai_agent" | "api" | "system";
   data: {
     level: number;
     message: string;
@@ -448,9 +448,9 @@ Fired by the server in three situations:
 
 ```typescript
 interface ConnectionStatusEvent {
-  type: 'connection_status';
+  type: "connection_status";
   timestamp: number;
-  source: 'system';
+  source: "system";
   data: {
     connected: boolean;
     clientCount: number;

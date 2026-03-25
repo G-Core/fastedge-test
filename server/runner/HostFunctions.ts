@@ -59,7 +59,7 @@ export class HostFunctions {
   private localResponse: {
     statusCode: number;
     statusText: string;
-    body: string;
+    body: Uint8Array;
   } | null = null;
 
   // FastEdge extensions
@@ -153,7 +153,7 @@ export class HostFunctions {
     return this.localResponse !== null;
   }
 
-  getLocalResponse(): { statusCode: number; statusText: string; body: string } | null {
+  getLocalResponse(): { statusCode: number; statusText: string; body: Uint8Array } | null {
     return this.localResponse;
   }
 
@@ -535,7 +535,7 @@ export class HostFunctions {
           `proxy_send_local_response status=${statusCode} bodyLen=${bodyLen}`,
         );
         const statusText = this.memory.readString(statusCodePtr, statusCodeLen);
-        const body = this.memory.readString(bodyPtr, bodyLen);
+        const body = this.memory.readBytes(bodyPtr, bodyLen);
 
         // Parse header pairs from binary format (stored for debugging, not merged into response)
         // On the real CDN, only headers set via stream_context.headers.response.add() matter.
@@ -545,12 +545,12 @@ export class HostFunctions {
           this.logDebug(`send_local_response headers (not merged): ${JSON.stringify(headers)}`);
         }
 
-        // Store local response for short-circuit in callFullFlowLegacy
+        // Store local response as raw bytes — ProxyWasmRunner handles encoding
         this.localResponse = { statusCode, statusText, body };
 
         this.logs.push({
           level: 1,
-          message: `local_response status=${statusCode} ${statusText} body=${body} grpc=${grpcStatus}`,
+          message: `local_response status=${statusCode} ${statusText} bodyLen=${body.byteLength} grpc=${grpcStatus}`,
         });
         return ProxyStatus.Ok;
       },

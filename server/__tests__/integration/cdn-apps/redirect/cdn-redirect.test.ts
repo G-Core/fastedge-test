@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { runFlow, assertFinalStatus, assertFinalHeader, assertReturnCode } from '../../../../test-framework';
 import { loadCdnAppWasm, WASM_TEST_BINARIES } from '../../utils/wasm-loader';
 import { createTestRunner } from '../../utils/test-helpers';
@@ -15,6 +15,10 @@ describe('CDN Redirect: send_http_response short-circuit', () => {
     );
     await runner.load(Buffer.from(wasmBinary));
   }, 30000);
+
+  afterAll(async () => {
+    await runner.cleanup();
+  });
 
   it('should return 302 with Location header when x-redirect-url is set', async () => {
     const result = await runFlow(runner, {

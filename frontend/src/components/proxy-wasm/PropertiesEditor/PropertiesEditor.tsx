@@ -136,9 +136,13 @@ const getEnabledDefaults = (countryKey: string): Record<string, string> => {
 export function PropertiesEditor({ value, onChange }: PropertiesEditorProps) {
   const [selectedCountry, setSelectedCountry] = useState<string>("luxembourg");
 
-  // Push default properties into the store on mount
+  // Push default properties into the store on first mount only —
+  // skip if the store already has values (e.g., loaded from config or
+  // restored after CollapsiblePanel re-expands).
   useEffect(() => {
-    onChange(getEnabledDefaults(selectedCountry));
+    if (Object.keys(value).length === 0) {
+      onChange(getEnabledDefaults(selectedCountry));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

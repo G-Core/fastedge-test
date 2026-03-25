@@ -281,14 +281,18 @@ export class ProxyWasmRunner implements IWasmRunner {
       const responseHeaders = results.onRequestHeaders.output.response.headers;
       this.hostFunctions.resetLocalResponse();
 
+      const contentType = responseHeaders['content-type'] || 'text/plain';
+      const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
+
       return {
         hookResults: results,
         finalResponse: {
           status: local.statusCode,
           statusText: local.statusText,
           headers: responseHeaders,
-          body: local.body,
-          contentType: responseHeaders['content-type'] || 'text/plain',
+          body,
+          contentType,
+          isBase64,
         },
         calculatedProperties: this.propertyResolver.getCalculatedProperties(),
       };
@@ -330,14 +334,18 @@ export class ProxyWasmRunner implements IWasmRunner {
       const responseHeaders = results.onRequestBody.output.response.headers;
       this.hostFunctions.resetLocalResponse();
 
+      const contentType = responseHeaders['content-type'] || 'text/plain';
+      const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
+
       return {
         hookResults: results,
         finalResponse: {
           status: local.statusCode,
           statusText: local.statusText,
           headers: responseHeaders,
-          body: local.body,
-          contentType: responseHeaders['content-type'] || 'text/plain',
+          body,
+          contentType,
+          isBase64,
         },
         calculatedProperties: this.propertyResolver.getCalculatedProperties(),
       };
@@ -1156,4 +1164,24 @@ function ensureNullTerminated(value: string): string {
     return "";
   }
   return value.endsWith("\0") ? value : `${value}\0`;
+}
+
+/** Encode a local response body (raw bytes from WASM) for the finalResponse.
+ *  Mirrors the binary detection logic used for origin fetch responses. */
+function encodeLocalResponseBody(
+  body: Uint8Array,
+  contentType: string,
+): { body: string; isBase64: boolean } {
+  const isBinary =
+    contentType.startsWith("image/") ||
+    contentType.startsWith("video/") ||
+    contentType.startsWith("audio/") ||
+    contentType.includes("application/octet-stream") ||
+    contentType.includes("application/pdf") ||
+    contentType.includes("application/zip");
+
+  if (isBinary) {
+    return { body: Buffer.from(body).toString("base64"), isBase64: true };
+  }
+  return { body: new TextDecoder().decode(body), isBase64: false };
 }
