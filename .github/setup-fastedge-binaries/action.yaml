@@ -1,0 +1,35 @@
+name: "Setup FastEdge CLI Binaries"
+description: "Downloads CLI artifacts and merges all platform binaries into fastedge-run/"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download all CLI artifacts
+      uses: actions/download-artifact@v6
+      with:
+        pattern: fastedge-run-*-artifact
+        path: cli-artifacts
+        merge-multiple: false
+
+    - name: Merge all platform binaries into fastedge-run/
+      shell: bash
+      run: |
+        mkdir -p fastedge-run
+        find cli-artifacts -type f -name 'fastedge-run-linux-x64' -exec cp {} fastedge-run/ \;
+        find cli-artifacts -type f -name 'fastedge-run-darwin-arm64' -exec cp {} fastedge-run/ \;
+        find cli-artifacts -type f -name 'fastedge-run.exe' -exec cp {} fastedge-run/ \;
+        # Copy METADATA.json from any artifact (they're all the same)
+        find cli-artifacts -type f -name 'METADATA.json' -exec cp {} fastedge-run/ \; -quit
+
+        # Restore execute permissions (GitHub Actions artifacts strip execute bits)
+        chmod +x fastedge-run/fastedge-run-darwin-arm64
+        chmod +x fastedge-run/fastedge-run-linux-x64
+        echo "✅ Execute permissions set"
+
+        # Verify all platform binaries exist
+        echo "Verifying CLI binaries..."
+        ls -lh fastedge-run/
+        test -f fastedge-run/fastedge-run-linux-x64 || { echo "Missing Linux binary"; exit 1; }
+        test -f fastedge-run/fastedge-run-darwin-arm64 || { echo "Missing macOS binary"; exit 1; }
+        test -f fastedge-run/fastedge-run.exe || { echo "Missing Windows binary"; exit 1; }
+        echo "✅ All platform binaries present"

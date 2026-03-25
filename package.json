@@ -2,6 +2,10 @@
   "name": "@gcoredev/fastedge-test",
   "version": "0.0.1-beta.5",
   "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/G-Core/fastedge-test.git"
+  },
   "publishConfig": {
     "access": "public"
   },

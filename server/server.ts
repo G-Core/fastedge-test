@@ -25,10 +25,10 @@ import {
 // Try to import electron dialog if available
 let electronDialog: any = null;
 try {
-  // This will work if running in Electron context
+  // This will work if running in Electron context (VSCode extension), but will throw in a plain Node environment
   electronDialog = require("electron")?.dialog;
 } catch {
-  // Not in Electron, dialog features won't be available
+  // Not in Electron, dialog features won't be available, Do nothing
 }
 
 const app = express();
@@ -199,7 +199,9 @@ app.post("/api/load", async (req: Request, res: Response) => {
     // Buffer-based loading (fallback for web UI)
     else if (wasmBase64) {
       if (typeof wasmBase64 !== "string") {
-        res.status(400).json({ ok: false, error: "wasmBase64 must be a string" });
+        res
+          .status(400)
+          .json({ ok: false, error: "wasmBase64 must be a string" });
         return;
       }
 
@@ -209,7 +211,9 @@ app.post("/api/load", async (req: Request, res: Response) => {
       fileName = "binary.wasm";
     } else {
       // This shouldn't happen due to validation above, but TypeScript needs it
-      res.status(400).json({ ok: false, error: "Missing wasmBase64 or wasmPath" });
+      res
+        .status(400)
+        .json({ ok: false, error: "Missing wasmBase64 or wasmPath" });
       return;
     }
 
@@ -276,12 +280,10 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
   }
 
   if (!currentRunner) {
-    res
-      .status(400)
-      .json({
-        ok: false,
-        error: "No WASM module loaded. Call /api/load first.",
-      });
+    res.status(400).json({
+      ok: false,
+      error: "No WASM module loaded. Call /api/load first.",
+    });
     return;
   }
 
@@ -301,9 +303,10 @@ app.post("/api/execute", async (req: Request, res: Response) => {
   const { url, method, headers, body } = req.body ?? {};
 
   if (!currentRunner) {
-    res
-      .status(400)
-      .json({ ok: false, error: "No WASM module loaded. Call /api/load first." });
+    res.status(400).json({
+      ok: false,
+      error: "No WASM module loaded. Call /api/load first.",
+    });
     return;
   }
 
@@ -311,7 +314,9 @@ app.post("/api/execute", async (req: Request, res: Response) => {
     if (currentRunner.getType() === "http-wasm") {
       // HTTP WASM: Simple request/response
       if (!url || typeof url !== "string") {
-        res.status(400).json({ ok: false, error: "Missing url for HTTP WASM request" });
+        res
+          .status(400)
+          .json({ ok: false, error: "Missing url for HTTP WASM request" });
         return;
       }
 
@@ -393,9 +398,10 @@ app.post("/api/call", async (req: Request, res: Response) => {
   const { hook, request, response, properties } = parsed.data;
 
   if (!currentRunner) {
-    res
-      .status(400)
-      .json({ ok: false, error: "No WASM module loaded. Call /api/load first." });
+    res.status(400).json({
+      ok: false,
+      error: "No WASM module loaded. Call /api/load first.",
+    });
     return;
   }
 
@@ -422,9 +428,10 @@ app.post("/api/send", async (req: Request, res: Response) => {
   const { url, request, response, properties } = parsed.data;
 
   if (!currentRunner) {
-    res
-      .status(400)
-      .json({ ok: false, error: "No WASM module loaded. Call /api/load first." });
+    res.status(400).json({
+      ok: false,
+      error: "No WASM module loaded. Call /api/load first.",
+    });
     return;
   }
 
