@@ -25,7 +25,7 @@ import {
 // Try to import electron dialog if available
 let electronDialog: any = null;
 try {
-  // This will work if running in Electron context ( VSCode )
+  // This will work if running in Electron context (VSCode extension), but will throw in a plain Node environment
   electronDialog = require("electron")?.dialog;
 } catch {
   // Not in Electron, dialog features won't be available
