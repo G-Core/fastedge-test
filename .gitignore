@@ -3,6 +3,7 @@ coverage/
 node_modules/
 .DS_Store
 bin/
+!bin/fastedge-debug.js
 dist/
 lib/
 *.a
