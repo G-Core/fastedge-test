@@ -1,0 +1,32 @@
+name: Integration Tests
+
+on:
+  workflow_call:
+    inputs:
+      cli_version:
+        description: "FastEdge cli version"
+        required: false
+        type: string
+        default: "latest"
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node Environment
+        uses: ./.github/setup-node
+
+      - name: Setup FastEdge Run CLI
+        uses: ./.github/setup-fastedge-cli
+        with:
+          cli_version: ${{ inputs.cli_version }}
+          github_token: ${{ github.token }}
+
+      - name: Build (including WASM test apps)
+        run: pnpm run build:ci-test
+
+      - name: Run tests
+        run: pnpm test:unit
