@@ -2,6 +2,7 @@ name: Copilot Instructions Sync
 
 on:
   pull_request:
+    branches: ["*.*.x", "*.x", "main", "next", "next-major", "beta", "alpha"]
     paths:
       - fastedge-plugin-source/manifest.json
       - fastedge-plugin-source/check-copilot-sync.sh
