@@ -1,0 +1,46 @@
+Command files (.claude/commands/*.md) are slash commands.
+Users invoke them manually: /prdkit.interview, /speckit.plan, etc.
+Commands do not run automatically.
+
+Skills (.claude/skills/*/SKILL.md) use the same frontmatter.
+Skills can also have helper files in their directory.
+
+Frontmatter fields Claude Code reads:
+
+  description       — what the command does (recommended, not required;
+                      fallback: first paragraph of markdown body)
+  name              — display name (default: filename)
+  argument-hint     — hint text in autocomplete
+  allowed-tools     — tools available without permission prompt
+  model             — model override (sonnet, opus, haiku)
+  user-invocable    — show in / menu (default: true)
+  disable-model-invocation — prevent Claude from auto-invoking
+  context           — fork to run in isolated subagent
+  agent             — subagent type (with context: fork)
+  hooks             — command-scoped hooks
+
+All other fields (last_modified, copyright, etc.) are ignored
+by Claude Code.
+
+Lifecycle:
+
+  Session start — only descriptions are loaded into context.
+  Command invocation — full markdown content is loaded.
+  disable-model-invocation: true — description is NOT loaded
+    at start; full content loads only on manual /invoke.
+  user-invocable: false — hidden from / menu, Claude can
+    still invoke it automatically.
+
+Description budget: ~2% of context window (fallback 16k chars).
+Check with /context.
+
+Changes to command files may not be picked up during a session.
+Restart the session after editing commands.
+
+Example:
+
+  ---
+  description: What this command does.
+  ---
+
+  Your command prompt goes here...

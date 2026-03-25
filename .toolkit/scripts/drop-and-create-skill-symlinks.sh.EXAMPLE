@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Drop all existing skill symlinks in .claude/skills/ and create new ones
+# from .toolkit/claude/skills/.
+#
+# Each skill is a directory (e.g. changelog/, frontmatter-lint/).
+# Edit the SKILLS list below to control which skills are linked.
+
+set -Eeuo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+SOURCE_DIR=".toolkit/claude/skills"
+TARGET_DIR=".claude/skills"
+
+# relative prefix from TARGET_DIR to SOURCE_DIR (two levels up)
+REL_PREFIX="../../.toolkit/claude/skills"
+
+SKILLS=(
+  changelog
+  frontmatter-lint
+  markdown-lint
+  plain-english
+  translate
+)
+
+if [[ ! -d "$SOURCE_DIR" ]]; then
+  echo "error: $SOURCE_DIR not found" >&2
+  exit 1
+fi
+
+mkdir -p "$TARGET_DIR"
+
+# drop old symlinks (directories)
+find "$TARGET_DIR" -maxdepth 1 -type l -delete
+
+count=0
+for skill in "${SKILLS[@]}"; do
+  src="$SOURCE_DIR/$skill"
+
+  if [[ ! -d "$src" ]]; then
+    echo "warn: $src not found, skipping" >&2
+    continue
+  fi
+
+  ln -s "$REL_PREFIX/$skill" "$TARGET_DIR/$skill"
+  echo "  $skill -> $REL_PREFIX/$skill" >&2
+  ((count++))
+done
+
+echo "linked $count skills" >&2
