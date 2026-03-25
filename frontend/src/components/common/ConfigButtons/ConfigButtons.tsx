@@ -5,26 +5,24 @@ import type { TestConfig } from '../../../api';
 import styles from './ConfigButtons.module.css';
 
 export function ConfigButtons() {
-  const { loadFromConfig, exportConfig, loadWasm, dotenv } = useAppStore();
+  const { loadFromConfig, exportConfig, loadWasm } = useAppStore();
   const [showConfigEditor, setShowConfigEditor] = useState(false);
   const [configEditorInitial, setConfigEditorInitial] = useState<TestConfig | null>(null);
 
   // Shared handler for filePickerResult messages (from button click OR context menu)
   const handleFilePickerResult = useCallback((event: MessageEvent) => {
+    // Only accept messages from the parent frame (VSCode webview bridge)
+    if (event.source !== window.parent) return;
     if (event.data?.command !== 'filePickerResult') return;
     if (event.data.canceled) return;
     try {
-      const config = JSON.parse(event.data.content);
-
-      // Basic validation
-      if (!config.request || !config.properties || config.logLevel === undefined) {
-        throw new Error('Invalid config file structure');
-      }
-
+      const config: TestConfig = JSON.parse(event.data.content);
       loadFromConfig(config);
 
       if (config.wasm?.path) {
-        loadWasm(config.wasm.path, dotenv.enabled)
+        const configDotenvEnabled = config.dotenv?.enabled ?? false;
+        const configDotenvPath = config.dotenv?.path ?? null;
+        loadWasm(config.wasm.path, configDotenvEnabled, configDotenvPath)
           .then(() => alert(`✅ Configuration loaded from ${event.data.fileName}\n🚀 WASM auto-loaded: ${config.wasm.path}`))
           .catch((wasmError: unknown) => {
             const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
@@ -37,7 +35,7 @@ export function ConfigButtons() {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       alert(`❌ Failed to load config: ${msg}`);
     }
-  }, [loadFromConfig, loadWasm, dotenv.enabled]);
+  }, [loadFromConfig, loadWasm]);
 
   // Persistent listener so configs sent from the extension context menu
   // (before the user clicks "Load Config") are handled immediately.
@@ -67,20 +65,15 @@ export function ConfigButtons() {
         if (!file) return;
 
         const text = await file.text();
-        const config = JSON.parse(text);
-
-        // Basic validation
-        if (!config.request || !config.properties || config.logLevel === undefined) {
-          throw new Error('Invalid config file structure');
-        }
-
-        // Load config state
+        const config: TestConfig = JSON.parse(text);
         loadFromConfig(config);
 
         // Auto-load WASM if path is specified
         if (config.wasm?.path) {
           try {
-            await loadWasm(config.wasm.path, dotenv.enabled);
+            const configDotenvEnabled = config.dotenv?.enabled ?? false;
+            const configDotenvPath = config.dotenv?.path ?? null;
+            await loadWasm(config.wasm.path, configDotenvEnabled, configDotenvPath);
             alert(`✅ Configuration loaded from ${file.name}\n🚀 WASM auto-loaded: ${config.wasm.path}`);
           } catch (wasmError) {
             const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
