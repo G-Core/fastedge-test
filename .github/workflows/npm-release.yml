@@ -1,0 +1,134 @@
+name: Deploy to NPM
+
+on:
+  push:
+    # If you add a branch here, you **MUST** create a branch rule in Github settings
+    branches: ['*.*.x', '*.x', 'main', 'next', 'next-major', 'beta', 'alpha']
+    paths:
+      - 'server/**'
+      - 'frontend/**'
+      - 'esbuild/**'
+      - 'schemas/**'
+      - 'bin/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+
+  workflow_dispatch: # trigger manually
+    inputs:
+      dry_run:
+        description: 'NPM release dry-run'
+        required: true
+        default: 'true'
+
+jobs:
+  # Github Actions do not allow regex validation for numbers in *.*.x branch names
+  validate_branch_name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Validate branch name
+        run: |
+          branch_name=$(echo $GITHUB_REF | cut -d'/' -f3)
+          if [[ $branch_name =~ ^[0-9]+(\.[0-9]+)?\.x$ ]] || [[ $branch_name =~ ^[0-9]+\.x.x$ ]] || [[ $branch_name == "main" ]] || [[ $branch_name == "next" ]] || [[ $branch_name == "next-major" ]] || [[ $branch_name == "beta" ]] || [[ $branch_name == "alpha" ]]; then
+            echo "Branch name is valid"
+          else
+            echo "Branch name is invalid"
+            exit 1
+          fi
+
+  unit_tests:
+    needs: [validate_branch_name]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node Environment
+        uses: ./.github/setup-node
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Run unit tests
+        run: pnpm run test:unit
+
+  download_fastedge_cli:
+    needs: [validate_branch_name]
+    uses: ./.github/workflows/download-cli.yml
+
+  npm_release:
+    needs: [unit_tests, download_fastedge_cli]
+    name: NPM Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write # For npm provenance (Trusted Publishing)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node Environment
+        uses: ./.github/setup-node
+
+      - name: Download all CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fastedge-run-*-artifact
+          path: cli-artifacts
+          merge-multiple: false
+
+      - name: Merge all platform binaries into fastedge-run/
+        run: |
+          mkdir -p fastedge-run
+          find cli-artifacts -type f -name 'fastedge-run-linux-x64' -exec cp {} fastedge-run/ \;
+          find cli-artifacts -type f -name 'fastedge-run-darwin-arm64' -exec cp {} fastedge-run/ \;
+          find cli-artifacts -type f -name 'fastedge-run.exe' -exec cp {} fastedge-run/ \;
+          find cli-artifacts -type f -name 'METADATA.json' -exec cp {} fastedge-run/ \; -quit
+
+          chmod +x fastedge-run/fastedge-run-darwin-arm64
+          chmod +x fastedge-run/fastedge-run-linux-x64
+
+          echo "Verifying CLI binaries..."
+          ls -lh fastedge-run/
+          test -f fastedge-run/fastedge-run-linux-x64 || { echo "Missing Linux binary"; exit 1; }
+          test -f fastedge-run/fastedge-run-darwin-arm64 || { echo "Missing macOS binary"; exit 1; }
+          test -f fastedge-run/fastedge-run.exe || { echo "Missing Windows binary"; exit 1; }
+          echo "All platform binaries present"
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Verify build output
+        run: |
+          test -d "dist/lib" || { echo "Missing dist/lib/"; exit 1; }
+          test -f "dist/server.js" || { echo "Missing dist/server.js"; exit 1; }
+          test -d "dist/frontend" || { echo "Missing dist/frontend/"; exit 1; }
+          test -d "dist/fastedge-cli" || { echo "Missing dist/fastedge-cli/"; exit 1; }
+          echo "All build outputs verified"
+
+      - name: Dry Run Status
+        id: dry_run
+        run: |
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            echo "Running NPM release in dry-run mode"
+            echo "dry_run=--dry-run" >> $GITHUB_OUTPUT
+          else
+            echo "Running NPM release in production mode"
+            echo "dry_run=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Semantic Release
+        env:
+          # NPM_TOKEN is not set as we are using NPM's Trusted Publishing with OIDC
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CI: true
+        run: pnpm dlx semantic-release@25 ${{ steps.dry_run.outputs.dry_run }}

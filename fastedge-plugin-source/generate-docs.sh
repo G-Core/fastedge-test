@@ -69,10 +69,18 @@ SOURCE_FILES[DEBUGGER.md]="server/server.ts bin/fastedge-debug.js package.json"
 
 generate_file() {
   local target="$1"
+
+  # Validate that SOURCE_FILES has an entry for this target
+  if [ -z "${SOURCE_FILES[$target]+set}" ] || [ -z "${SOURCE_FILES[$target]}" ]; then
+    echo "  ERROR: no SOURCE_FILES entry for '$target' — add one to the CUSTOMIZE section"
+    return 1
+  fi
+
   local sources="${SOURCE_FILES[$target]}"
 
   # Build the source files content block
   local source_content=""
+  local loaded=0
   for src in $sources; do
     local full_path="$REPO_ROOT/$src"
     if [ ! -f "$full_path" ]; then
@@ -84,7 +92,13 @@ generate_file() {
 $(cat "$full_path")
 --- END FILE ---
 "
+    loaded=$((loaded + 1))
   done
+
+  if [ "$loaded" -eq 0 ]; then
+    echo "  ERROR: all source files for '$target' are missing (expected: $sources)"
+    return 1
+  fi
 
   # Extract the section for this target from generation-config
   # Use awk variable to avoid regex delimiter issues with /
@@ -95,6 +109,12 @@ $(cat "$full_path")
     found && /^## docs\// { exit }
     found { print }
   ' "$CONFIG_FILE")
+
+  # Validate that the config section exists and has content
+  if [ -z "$(echo "$section" | tr -d '[:space:]')" ]; then
+    echo "  ERROR: no instructions found for '$target' — add a '## docs/$target' section to $CONFIG_FILE"
+    return 1
+  fi
 
   # Check for existing doc to enable incremental updates
   local existing_doc=""
