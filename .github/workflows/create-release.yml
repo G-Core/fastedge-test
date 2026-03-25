@@ -46,28 +46,10 @@ jobs:
           echo "Determined release tag: $TAG_VERSION"
 
   test_release:
-    # runs-on: [self-hosted, ubuntu-22-04, regular]
     needs: [check_tags]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout this repository
-        uses: actions/checkout@v6
-
-      - name: Setup Node Environment
-        uses: ./.github/setup-node
-
-      - name: Setup FastEdge Run CLI (Linux x64)
-        uses: ./.github/setup-fastedge-cli
-        with:
-          cli_version: ${{ inputs.cli_version }}
-          github_token: ${{ github.token }}
-
-      - name: Build
-        run: pnpm run build
-
-      - name: Run unit tests
-        run: pnpm run test:unit
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      cli_version: ${{ inputs.cli_version }}
 
   download_fastedge_cli:
     uses: ./.github/workflows/download-cli.yml
@@ -87,34 +69,8 @@ jobs:
       - name: Setup Node Environment
         uses: ./.github/setup-node
 
-      - name: Download all CLI artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: fastedge-run-*-artifact
-          path: cli-artifacts
-          merge-multiple: false
-
-      - name: Merge all platform binaries into fastedge-run/
-        run: |
-          mkdir -p fastedge-run
-          find cli-artifacts -type f -name 'fastedge-run-linux-x64' -exec cp {} fastedge-run/ \;
-          find cli-artifacts -type f -name 'fastedge-run-darwin-arm64' -exec cp {} fastedge-run/ \;
-          find cli-artifacts -type f -name 'fastedge-run.exe' -exec cp {} fastedge-run/ \;
-          # Copy METADATA.json from any artifact (they're all the same)
-          find cli-artifacts -type f -name 'METADATA.json' -exec cp {} fastedge-run/ \; -quit
-
-          # Restore execute permissions (GitHub Actions artifacts strip execute bits)
-          chmod +x fastedge-run/fastedge-run-darwin-arm64
-          chmod +x fastedge-run/fastedge-run-linux-x64
-          echo "✅ Execute permissions set"
-
-          # Verify all platform binaries exist
-          echo "Verifying CLI binaries..."
-          ls -lh fastedge-run/
-          test -f fastedge-run/fastedge-run-linux-x64 || { echo "Missing Linux binary"; exit 1; }
-          test -f fastedge-run/fastedge-run-darwin-arm64 || { echo "Missing macOS binary"; exit 1; }
-          test -f fastedge-run/fastedge-run.exe || { echo "Missing Windows binary"; exit 1; }
-          echo "✅ All platform binaries present"
+      - name: Setup FastEdge CLI binaries
+        uses: ./.github/setup-fastedge-binaries
 
       - name: Build Debugger code
         run: |
