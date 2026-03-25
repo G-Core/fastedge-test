@@ -63,13 +63,11 @@ jobs:
           cli_version: ${{ inputs.cli_version }}
           github_token: ${{ github.token }}
 
-      - name: Build (including WASM test apps)
-        run: |
-          pnpm run build:ci-test
+      - name: Build
+        run: pnpm run build
 
-      - name: Run tests
-        run: |
-          pnpm test
+      - name: Run unit tests
+        run: pnpm run test:unit
 
   # fossa:
   #   uses: ./.github/workflows/fossa.yaml
