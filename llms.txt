@@ -2,7 +2,7 @@
 
 Test FastEdge WASM binaries programmatically — no server required. Supports CDN (proxy-wasm) and HTTP-WASM (component model) binaries. WASM type is detected automatically.
 
-Repository: https://github.com/G-Core/fastedge-debugger
+Repository: https://github.com/G-Core/fastedge-test
 
 ## Installation
 
@@ -10,26 +10,31 @@ Repository: https://github.com/G-Core/fastedge-debugger
 npm install @gcoredev/fastedge-test
 ```
 
-Requires Node.js 18+.
+Requires Node.js >=22.12.
 
 ## Entry Points
 
-- `@gcoredev/fastedge-test` — low-level runner (createRunner, createRunnerFromBuffer)
+- `@gcoredev/fastedge-test` — low-level runner (createRunner, createRunnerFromBuffer, WasmRunnerFactory, ProxyWasmRunner, HttpWasmRunner)
 - `@gcoredev/fastedge-test/test` — high-level test framework (defineTestSuite, runTestSuite, runAndExit, runFlow, all assertion helpers)
+- `@gcoredev/fastedge-test/server` — debugger server entry point
+- `@gcoredev/fastedge-test/schemas` — JSON schemas for config and API bodies
 
 ## Key Exports: @gcoredev/fastedge-test/test
 
 - `defineTestSuite(config)` — validates and returns a typed TestSuite; config has `wasmPath` OR `wasmBuffer`, optional `runnerConfig`, and `tests` array
 - `runTestSuite(suite)` → `SuiteResult` — runs all tests sequentially, each with a fresh runner; returns `{ passed, failed, total, durationMs, results }`
 - `runAndExit(suite)` — runs suite, prints summary, exits 0 (all pass) or 1 (any fail); use in CI scripts
-- `runFlow(runner, options)` → `FullFlowResult` — CDN full flow helper; options: `{ url, method?, requestHeaders?, requestBody?, responseStatus?, responseHeaders?, responseBody?, properties?, enforceProductionPropertyRules? }`
+- `runFlow(runner, options)` → `FullFlowResult` — CDN full flow helper; options: `{ url, method?, requestHeaders?, requestBody?, responseStatus?, responseStatusText?, responseHeaders?, responseBody?, properties?, enforceProductionPropertyRules? }`
 - `loadConfigFile(path)` → `TestConfig` — loads and validates a fastedge-config.test.json file
 
 ## Key Exports: @gcoredev/fastedge-test (low-level)
 
 - `createRunner(wasmPath: string)` → runner — loads WASM from file path
 - `createRunnerFromBuffer(buffer: Buffer)` → runner — loads WASM from buffer
-- runner methods: `callFullFlow(url, method, reqHeaders, reqBody, resHeaders, resBody, resStatus, resStatusText, properties, enforceRules)`, `execute({ path, method, headers, body? })`, `cleanup()`
+- `WasmRunnerFactory` — factory class for creating runners with explicit type/config
+- `ProxyWasmRunner` — CDN proxy-wasm runner class
+- `HttpWasmRunner` — HTTP-WASM component model runner class
+- runner methods: `callFullFlow(...)`, `execute({ path, method, headers, body? })`, `callHook(hookCall)`, `applyDotenv(enabled, path?)`, `cleanup()`, `getType()`
 
 ## Assertion Helpers (all from @gcoredev/fastedge-test/test)
 
@@ -68,9 +73,17 @@ type TestSuite =
   | { wasmBuffer: Buffer; runnerConfig?: RunnerConfig; tests: TestCase[] }
 
 interface RunnerConfig {
-  dotenvEnabled?: boolean;                  // default: false
+  dotenv?: {
+    enabled?: boolean;
+    /** Directory to load .env files from (defaults to process CWD) */
+    path?: string;
+  };
   enforceProductionPropertyRules?: boolean; // default: true
+  /** Override automatic WASM type detection */
+  runnerType?: WasmType;
 }
+
+type WasmType = 'http-wasm' | 'proxy-wasm';
 
 interface TestCase {
   name: string;
@@ -85,6 +98,26 @@ interface SuiteResult {
   results: TestResult[];
 }
 
+interface TestResult {
+  name: string;
+  passed: boolean;
+  error?: string;
+  durationMs: number;
+}
+
+interface FlowOptions {
+  url: string;
+  method?: string;
+  requestHeaders?: Record<string, string>;
+  requestBody?: string;
+  responseStatus?: number;
+  responseStatusText?: string;
+  responseHeaders?: Record<string, string>;
+  responseBody?: string;
+  properties?: Record<string, unknown>;
+  enforceProductionPropertyRules?: boolean; // default: true
+}
+
 interface FullFlowResult {
   hookResults: Record<string, HookResult>;
   finalResponse: { status: number; statusText: string; headers: Record<string, string>; body: string; contentType: string; isBase64?: boolean };
@@ -94,9 +127,34 @@ interface FullFlowResult {
 interface HookResult {
   returnCode: number | null;
   logs: { level: number; message: string }[];
-  input: { request: { headers: Record<string, string>; body: string }; response: { headers: Record<string, string>; body: string } };
-  output: { request: { headers: Record<string, string>; body: string }; response: { headers: Record<string, string>; body: string } };
+  input: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
+  output: {
+    request: { headers: Record<string, string>; body: string };
+    response: { headers: Record<string, string>; body: string };
+    properties?: Record<string, unknown>;
+  };
   properties: Record<string, unknown>;
+}
+
+interface HttpRequest {
+  path: string;
+  method: string;
+  headers: Record<string, string>;
+  body?: string;
+}
+
+interface HttpResponse {
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+  contentType: string | null;
+  isBase64?: boolean;
+  logs: { level: number; message: string }[];
 }
 ```
 

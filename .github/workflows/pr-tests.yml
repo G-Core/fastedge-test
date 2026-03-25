@@ -2,12 +2,11 @@ name: Integration Tests
 
 on:
   pull_request:
-    branches: [main-FIXME]
+    branches: ["*.*.x", "*.x", "main", "next", "next-major", "beta", "alpha"]
 
 jobs:
   integration-tests:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -25,3 +24,8 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+  fossa:
+    uses: ./.github/workflows/fossa.yaml
+    secrets:
+      FOSSA_PUB_API_KEY: ${{ secrets.FOSSA_PUB_API_KEY }}
