@@ -11,8 +11,7 @@ on:
 
 jobs:
   determine-cli-version:
-    # runs-on: [self-hosted, ubuntu-22-04, regular]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-22-04, regular]
     outputs:
       version: ${{ steps.determine-version.outputs.version }}
     steps:
@@ -29,8 +28,7 @@ jobs:
           fi
 
   download-and-verify:
-    # runs-on: [self-hosted, ubuntu-22-04, regular]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ubuntu-22-04, regular]
     needs: determine-cli-version
     strategy:
       matrix:
@@ -97,7 +95,7 @@ jobs:
           echo "{\"fastedge_run_version\": \"$VERSION\"}" > fastedge-run/METADATA.json
 
       - name: Upload fastedge-run Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fastedge-run-${{ matrix.os }}-artifact
           retention-days: 1

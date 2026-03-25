@@ -28,7 +28,7 @@ try {
   // This will work if running in Electron context (VSCode extension), but will throw in a plain Node environment
   electronDialog = require("electron")?.dialog;
 } catch {
-  // Not in Electron, dialog features won't be available
+  // Not in Electron, dialog features won't be available, Do nothing
 }
 
 const app = express();
