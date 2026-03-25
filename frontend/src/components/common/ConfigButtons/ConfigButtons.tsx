@@ -1,48 +1,55 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../../stores';
 import { ConfigEditorModal } from '../../ConfigEditorModal';
 import type { TestConfig } from '../../../api';
 import styles from './ConfigButtons.module.css';
 
 export function ConfigButtons() {
-  const { loadFromConfig, exportConfig, loadWasm, dotenv } = useAppStore();
+  const { loadFromConfig, exportConfig, loadWasm } = useAppStore();
   const [showConfigEditor, setShowConfigEditor] = useState(false);
   const [configEditorInitial, setConfigEditorInitial] = useState<TestConfig | null>(null);
+
+  // Shared handler for filePickerResult messages (from button click OR context menu)
+  const handleFilePickerResult = useCallback((event: MessageEvent) => {
+    // Only accept messages from the parent frame (VSCode webview bridge)
+    if (event.source !== window.parent) return;
+    if (event.data?.command !== 'filePickerResult') return;
+    if (event.data.canceled) return;
+    try {
+      const config: TestConfig = JSON.parse(event.data.content);
+      loadFromConfig(config);
+
+      if (config.wasm?.path) {
+        const configDotenvEnabled = config.dotenv?.enabled ?? false;
+        const configDotenvPath = config.dotenv?.path ?? null;
+        loadWasm(config.wasm.path, configDotenvEnabled, configDotenvPath)
+          .then(() => alert(`✅ Configuration loaded from ${event.data.fileName}\n🚀 WASM auto-loaded: ${config.wasm.path}`))
+          .catch((wasmError: unknown) => {
+            const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
+            alert(`✅ Configuration loaded from ${event.data.fileName}\n⚠️ Failed to auto-load WASM: ${wasmMsg}`);
+          });
+      } else {
+        alert(`✅ Configuration loaded from ${event.data.fileName}!`);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      alert(`❌ Failed to load config: ${msg}`);
+    }
+  }, [loadFromConfig, loadWasm]);
+
+  // Persistent listener so configs sent from the extension context menu
+  // (before the user clicks "Load Config") are handled immediately.
+  useEffect(() => {
+    if (window === window.top) return; // Only in VSCode iframe
+    window.addEventListener('message', handleFilePickerResult);
+    return () => window.removeEventListener('message', handleFilePickerResult);
+  }, [handleFilePickerResult]);
 
   const handleLoadConfig = () => {
     // In VSCode webview (running inside an iframe), delegate to the extension's
     // native file picker so it can open at the app root directory.
+    // The persistent useEffect listener above handles the filePickerResult response.
     if (window !== window.top) {
-      const handleResult = (event: MessageEvent) => {
-        if (event.data?.command !== 'filePickerResult') return;
-        window.removeEventListener('message', handleResult);
-        if (event.data.canceled) return;
-        try {
-          const config = JSON.parse(event.data.content);
-
-          // Basic validation
-          if (!config.request || !config.properties || config.logLevel === undefined) {
-            throw new Error('Invalid config file structure');
-          }
-
-          loadFromConfig(config);
-
-          if (config.wasm?.path) {
-            loadWasm(config.wasm.path, dotenv.enabled)
-              .then(() => alert(`✅ Configuration loaded from ${event.data.fileName}\n🚀 WASM auto-loaded: ${config.wasm.path}`))
-              .catch((wasmError: unknown) => {
-                const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
-                alert(`✅ Configuration loaded from ${event.data.fileName}\n⚠️ Failed to auto-load WASM: ${wasmMsg}`);
-              });
-          } else {
-            alert(`✅ Configuration loaded from ${event.data.fileName}!`);
-          }
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : 'Unknown error';
-          alert(`❌ Failed to load config: ${msg}`);
-        }
-      };
-      window.addEventListener('message', handleResult);
       window.parent.postMessage({ command: 'openFilePicker' }, '*');
       return;
     }
@@ -58,20 +65,15 @@ export function ConfigButtons() {
         if (!file) return;
 
         const text = await file.text();
-        const config = JSON.parse(text);
-
-        // Basic validation
-        if (!config.request || !config.properties || config.logLevel === undefined) {
-          throw new Error('Invalid config file structure');
-        }
-
-        // Load config state
+        const config: TestConfig = JSON.parse(text);
         loadFromConfig(config);
 
         // Auto-load WASM if path is specified
         if (config.wasm?.path) {
           try {
-            await loadWasm(config.wasm.path, dotenv.enabled);
+            const configDotenvEnabled = config.dotenv?.enabled ?? false;
+            const configDotenvPath = config.dotenv?.path ?? null;
+            await loadWasm(config.wasm.path, configDotenvEnabled, configDotenvPath);
             alert(`✅ Configuration loaded from ${file.name}\n🚀 WASM auto-loaded: ${config.wasm.path}`);
           } catch (wasmError) {
             const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';

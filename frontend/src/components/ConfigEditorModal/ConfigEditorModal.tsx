@@ -36,6 +36,7 @@ export function ConfigEditorModal({
       if (window !== window.top) {
         const filePath = await new Promise<string | null>((resolve) => {
           const handleResult = (event: MessageEvent) => {
+            if (event.source !== window.parent) return;
             if (event.data?.command !== "savePickerResult") return;
             window.removeEventListener("message", handleResult);
             resolve(event.data.canceled ? null : event.data.filePath);
