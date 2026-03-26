@@ -15,6 +15,52 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/.generation-config.md"
 DOCS_DIR="$REPO_ROOT/docs"
 
+# --- Cleanup on interrupt ---
+# Two mechanisms work together to ensure clean shutdown:
+#
+# 1. kill_tree() recursively kills each background subshell AND its children
+#    (the `claude` processes). Plain `kill $pid` only kills the subshell,
+#    leaving `claude` orphaned.
+#
+# 2. INTERRUPT_FLAG file signals subshells to stop retrying. Bash variables
+#    don't cross process boundaries, so a temp file is the reliable way to
+#    communicate "stop" to background jobs before their next retry iteration.
+ALL_PIDS=()
+INTERRUPT_FLAG=$(mktemp /tmp/.generate-docs-interrupt.XXXXXX)
+rm -f "$INTERRUPT_FLAG"  # absent = running; present = stop
+
+kill_tree() {
+  local pid=$1
+  local children
+  children=$(pgrep -P "$pid" 2>/dev/null || true)
+  for child in $children; do
+    kill_tree "$child"
+  done
+  kill "$pid" 2>/dev/null || true
+}
+
+cleanup() {
+  echo ""
+  echo "Interrupted — killing background processes..."
+  touch "$INTERRUPT_FLAG"  # tell subshells to stop retrying
+  trap - INT TERM          # prevent re-entry
+
+  for pid in "${ALL_PIDS[@]}"; do
+    kill_tree "$pid"
+  done
+
+  # Clean up temp files left by killed generate_file subshells
+  # Must happen BEFORE kill -- -$$ which kills this script too
+  rm -f "$DOCS_DIR"/.[A-Z]*.[a-zA-Z0-9]* 2>/dev/null || true
+  rm -f "$INTERRUPT_FLAG"
+
+  # Belt-and-suspenders: kill entire process group (including this script)
+  kill -- -$$ 2>/dev/null || true
+  exit 130
+}
+
+trap cleanup INT TERM
+
 # Dependency tiers for parallel execution:
 #   Tier 1: Core reference files (independent — read from source code only)
 #   Tier 2: quickstart.md (may reference patterns from tier 1 docs)
@@ -55,6 +101,9 @@ else
 fi
 
 mkdir -p "$DOCS_DIR"
+
+# Clean up stale temp files from previous interrupted runs
+rm -f "$DOCS_DIR"/.[A-Z]*.[a-zA-Z0-9]* 2>/dev/null || true
 
 # Source file mappings per doc file
 declare -A SOURCE_FILES
@@ -162,15 +211,30 @@ REMINDER: Output raw markdown only. First character must be #. No conversational
 PROMPT
 )"
 
+  # Write to a temp file first, only move to docs/ on success.
+  # This protects the existing file from being clobbered by a failed attempt,
+  # so re-running the script after a failure still has the original content
+  # available for incremental updates.
+  local tmpfile
+  tmpfile=$(mktemp "$DOCS_DIR/.${target}.XXXXXX")
+  trap "rm -f '$tmpfile'" RETURN
+
   local max_attempts=3
   local attempt=1
   while [ $attempt -le $max_attempts ]; do
-    claude -p --model "$MODEL" "$prompt" > "$DOCS_DIR/$target"
+    # Stop retrying if parent signalled interrupt
+    if [ -f "$INTERRUPT_FLAG" ]; then
+      rm -f "$tmpfile"
+      return 130
+    fi
+
+    claude -p --model "$MODEL" "$prompt" > "$tmpfile"
 
     # Validate: first non-empty line must start with #
     local first_line
-    first_line=$(grep -m1 '.' "$DOCS_DIR/$target" || true)
+    first_line=$(grep -m1 '.' "$tmpfile" || true)
     if [[ "$first_line" == \#* ]]; then
+      mv "$tmpfile" "$DOCS_DIR/$target"
       echo "  Done: docs/$target"
       return 0
     fi
@@ -179,6 +243,7 @@ PROMPT
     attempt=$((attempt + 1))
   done
 
+  rm -f "$tmpfile"
   echo "  FAILED after $max_attempts attempts: docs/$target"
   return 1
 }
@@ -196,6 +261,7 @@ run_tier() {
   for target in "${files[@]}"; do
     generate_file "$target" &
     pids+=($!)
+    ALL_PIDS+=($!)
   done
 
   # Wait for all and collect failures
@@ -239,6 +305,9 @@ if [ "$run_all" = true ]; then
     echo "Some files failed — check output above"
     exit 1
   fi
+
+  # Regenerate llms.txt from docs/ contents
+  "$SCRIPT_DIR/generate-llms-txt.sh"
 else
   # Specific files: run sequentially (user chose explicit order)
   failed=()
