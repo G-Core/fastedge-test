@@ -21,6 +21,7 @@ import {
   writeTempWasmFile,
   removeTempWasmFile,
 } from "../utils/temp-file-manager.js";
+import { isLegacySyncWasm } from "../utils/legacy-wasm-detect.js";
 
 /**
  * HttpWasmRunner implementation
@@ -38,6 +39,8 @@ export class HttpWasmRunner implements IWasmRunner {
   private portManager: PortManager;
   private dotenvEnabled: boolean = true;
   private dotenvPath: string | null = null;
+  /** @deprecated Legacy sync support — remove when #[fastedge::http] is retired */
+  private isLegacySync: boolean = false;
 
   constructor(portManager: PortManager, dotenvEnabled: boolean = true) {
     this.portManager = portManager;
@@ -78,10 +81,14 @@ export class HttpWasmRunner implements IWasmRunner {
       this.tempWasmPath = wasmPath; // Cleanup this temp file later
     }
 
+    // Detect legacy sync binaries (deprecated #[fastedge::http] pattern)
+    this.isLegacySync = await isLegacySyncWasm(bufferOrPath);
+
     // Allocate port — async OS check prevents cross-process port collisions
     this.port = await this.portManager.allocate();
 
     // Build command arguments
+    const wasi_http = !this.isLegacySync;
     const args = [
       "http",
       "-p",
@@ -89,7 +96,7 @@ export class HttpWasmRunner implements IWasmRunner {
       "-w",
       wasmPath,
       "--wasi-http",
-      "true",
+      String(wasi_http),
     ];
 
     // Add dotenv flag if enabled; pass explicit path when provided so fastedge-run
@@ -237,6 +244,7 @@ export class HttpWasmRunner implements IWasmRunner {
     await this.killProcess();
     this.process = null;
 
+    const wasi_http = !this.isLegacySync;
     const args = [
       "http",
       "-p",
@@ -244,7 +252,7 @@ export class HttpWasmRunner implements IWasmRunner {
       "-w",
       this.currentWasmPath,
       "--wasi-http",
-      "true",
+      String(wasi_http),
     ];
 
     if (this.dotenvEnabled) {

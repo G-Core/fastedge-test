@@ -17,7 +17,7 @@
     "copy:http-responder": "npx cross-env NAME=http-responder npm run mv:file",
     "copy:variables-and-secrets": "npx cross-env NAME=variables-and-secrets npm run mv:file",
     "lint": "eslint src/",
-    "mv:file": "mv build/$NAME.wasm ../../../wasm/http-apps/basic-examples/$NAME.wasm",
+    "mv:file": "mv build/$NAME.wasm ../../../wasm/http-apps/js/$NAME.wasm",
     "clean": "rm -rf build"
   },
   "dependencies": {},
