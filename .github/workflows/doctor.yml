@@ -198,7 +198,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.SOURCE_REPO }}
-          ref: main
+          ref: doctor-v1
           path: .doctor-source
           token: ${{ secrets.TOOLKIT_READ_TOKEN || secrets.GITHUB_TOKEN }}
 
@@ -213,14 +213,14 @@ jobs:
           DOCTOR_REPO_FULL_NAME: ${{ github.repository }}
           DOCTOR_REPO_DEFAULT_BRANCH: ${{ steps.collect_inputs.outputs.repo_default_branch }}
           DOCTOR_SOURCE_REPO: ${{ env.SOURCE_REPO }}
-          DOCTOR_SOURCE_BRANCH: main
+          DOCTOR_SOURCE_BRANCH: doctor-v1
           DOCTOR_COLLECTED_AT: ${{ steps.collect_inputs.outputs.collected_at }}
           DOCTOR_REPORT_DATE: ${{ steps.collect_inputs.outputs.report_date }}
           DOCTOR_WINDOW_FROM: ${{ steps.collect_inputs.outputs.window_from }}
           DOCTOR_WINDOW_TO: ${{ steps.collect_inputs.outputs.window_to }}
           DOCTOR_ANALYZE_DAY: ${{ env.ANALYZE_DAY }}
           DOCTOR_REPORT_TZ: ${{ env.REPORT_TZ }}
-        run: python .github/workflows/collect.py
+        run: python .doctor-source/workflows/runtime/collect.py
 
       - name: Upload doctor-stats artifact
         if: ${{ always() }}
@@ -262,7 +262,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.SOURCE_REPO }}
-          ref: ${{ needs.collect.outputs.source_sha }}
+          ref: doctor-v1
           path: .doctor-source
           token: ${{ secrets.TOOLKIT_READ_TOKEN || secrets.GITHUB_TOKEN }}
 
@@ -305,7 +305,7 @@ jobs:
       issues: write
       pull-requests: write
       discussions: write
-    uses: ./.github/workflows/doctor-analyze.lock.yml
+    uses: G-Core/agent-toolkit/.github/workflows/doctor-analyze.lock.yml@doctor-v1
     secrets: inherit
     with:
       force_analyze: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.force_analyze == 'true' }}
