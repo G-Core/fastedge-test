@@ -1,13 +1,15 @@
 # Integration Testing
 
-**Status**: ✅ Complete - Full Property Coverage (17/17 Properties Tested) + HTTP WASM Suite + send_http_response Short-Circuit
-**Last Updated**: March 24, 2026
+**Status**: ✅ Complete - Full Property Coverage (17/17 Properties Tested) + HTTP WASM Suite (JS + Rust sync + Rust async) + send_http_response Short-Circuit
+**Last Updated**: March 27, 2026
 
 ---
 
 ## Overview
 
 The proxy-runner uses compiled WASM test applications for integration testing to ensure production parity with FastEdge CDN behavior. Integration tests verify the complete flow from WASM execution through property access control, header manipulation, request/response handling, and env var/secret injection.
+
+HTTP WASM tests run against **three language variants** (JS, Rust sync, Rust async) using parameterized test execution. Each variant produces identical behavior — the same assertions run against all available WASM binaries.
 
 ---
 
@@ -30,15 +32,33 @@ test-applications/
 │   └── cdn-variables-and-secrets/ # Env var/secret injection testing
 │       └── assembly/
 └── http-apps/
-    └── basic-examples/           # HTTP WASM (wasi-http) applications
-        └── src/
-            ├── basic.ts                  # Simple request/response
-            ├── downstream-fetch.ts       # Fetches from downstream API
-            ├── variables-and-secrets.ts  # Reads env vars + secrets via dotenv
-            ├── headers.ts                # Header manipulation
-            └── http-responder.ts         # Downstream service for CDN tests
+    ├── js/                       # JavaScript HTTP WASM apps (TypeScript + fastedge-build)
+    │   ├── package.json
+    │   └── src/
+    │       ├── basic.ts
+    │       ├── downstream-fetch.ts
+    │       ├── variables-and-secrets.ts
+    │       ├── headers.ts
+    │       └── http-responder.ts
+    └── rust/                     # Rust HTTP WASM apps
+        ├── package.json          # pnpm build wrapper (builds both sync + async)
+        ├── .cargo/config.toml    # target = wasm32-wasip1 (shared by sync + async)
+        ├── sync/                 # Legacy #[fastedge::http] pattern (deprecated)
+        │   ├── Cargo.toml        # Workspace: 5 crates
+        │   ├── basic/
+        │   ├── http-responder/
+        │   ├── downstream-fetch/
+        │   ├── headers/
+        │   └── variables-and-secrets/
+        └── async/                # Modern #[wstd::http_server] pattern
+            ├── Cargo.toml        # Workspace: 5 crates
+            ├── basic/
+            ├── http-responder/
+            ├── downstream-fetch/
+            ├── headers/
+            └── variables-and-secrets/
 
-wasm/                             # Compiled WASM binaries (generated)
+wasm/                             # Compiled WASM binaries (gitignored, built by CI)
 ├── cdn-apps/
 │   ├── properties/               # 12 CDN proxy-wasm binaries
 │   ├── headers/                  # Header manipulation binaries
@@ -46,12 +66,10 @@ wasm/                             # Compiled WASM binaries (generated)
 │   ├── http-call/                # proxy_http_call binaries
 │   └── variables-and-secrets/    # Env var/secret binaries
 └── http-apps/
-    └── basic-examples/           # Compiled HTTP WASM binaries
-        ├── basic.wasm
-        ├── downstream-fetch.wasm
-        ├── variables-and-secrets.wasm
-        ├── headers.wasm
-        └── http-responder.wasm
+    ├── js/                       # JS WASM binaries
+    └── rust/
+        ├── sync/                 # Rust sync WASM binaries
+        └── async/                # Rust async WASM binaries
 
 server/__tests__/integration/     # Integration test files
 ├── cdn-apps/
@@ -61,9 +79,11 @@ server/__tests__/integration/     # Integration test files
 │   ├── redirect/                 # send_http_response short-circuit tests (5 tests)
 │   └── variables-and-secrets/    # CDN env var/secret tests (7 tests)
 ├── http-apps/
-│   ├── sdk-basic/                # Basic HTTP execution (11 tests)
-│   ├── sdk-downstream-modify/    # Downstream fetch + modify (8 tests)
-│   └── sdk-variables-and-secrets/    # Dotenv env var + secret injection (6 tests)
+│   ├── shared/
+│   │   └── variants.ts           # Variant definitions (js, rust-sync, rust-async)
+│   ├── basic/                    # Basic HTTP execution (parameterized, 3 variants)
+│   ├── downstream-fetch/         # Downstream fetch + modify (parameterized)
+│   └── variables-and-secrets/    # Dotenv env var + secret injection (parameterized)
 │       └── fixtures/
 │           └── .env              # Test fixture dotenv file
 └── utils/
@@ -79,40 +99,61 @@ server/__tests__/integration/     # Integration test files
 
 HTTP WASM tests exercise the `HttpWasmRunner`, which spawns `fastedge-run http` as a long-running process and forwards requests to it.
 
-### Test Suites
+### Parameterized Multi-Variant Testing
 
-#### `sdk-basic` (11 tests)
-Verifies basic HTTP WASM execution: request/response, content-type, body, logs, headers, POST.
+All HTTP WASM tests are **parameterized** across three language variants using `shared/variants.ts`:
 
-#### `sdk-downstream-modify` (8 tests)
-Verifies an HTTP app that fetches from a downstream API and transforms the response.
-
-#### `sdk-variables-and-secrets` (6 tests)
-Verifies that env vars and secrets loaded from dotenv files are accessible at runtime.
-
-**App** (`variables-and-secrets.ts`):
 ```typescript
-import { getEnv } from "fastedge::env";
-import { getSecret } from "fastedge::secret";
+// server/__tests__/integration/http-apps/shared/variants.ts
+export const HTTP_APP_VARIANTS = [
+  { name: 'js',         wasmDir: 'js' },
+  { name: 'rust-sync',  wasmDir: 'rust/sync' },
+  { name: 'rust-async',  wasmDir: 'rust/async' },
+];
+```
 
-async function eventHandler(event: FetchEvent): Promise<Response> {
-  const username = getEnv("USERNAME");
-  const password = getSecret("PASSWORD");
-  return new Response(`Username: ${username}, Password: ${password}`);
+Each test file loops over variants and skips any whose WASM binary doesn't exist (via `existsSync`). This means JS tests always run, and Rust tests activate once binaries are built.
+
+```typescript
+for (const variant of HTTP_APP_VARIANTS) {
+  const wasmPath = resolveWasmPath(variant, 'basic');
+  const describeFn = wasmExists(variant, 'basic') ? describe.sequential : describe.skip;
+
+  describeFn(`HTTP WASM - Basic Execution [${variant.name}]`, () => {
+    // ... same assertions for all variants
+  });
 }
 ```
+
+### Language Variants
+
+| Variant | Source | Build | Pattern | `--wasi-http` |
+|---------|--------|-------|---------|---------------|
+| **JS** | TypeScript + `fastedge-build` | `pnpm build` in `js/` | FetchEvent handler | `true` |
+| **Rust sync** | `#[fastedge::http]` (deprecated) | `cargo build` in `rust/sync/` | Sync `fn main(req)` | `false` (auto-detected) |
+| **Rust async** | `#[wstd::http_server]` | `cargo build` in `rust/async/` | Async `fn main(req)` | `true` |
+
+**Legacy sync detection**: `HttpWasmRunner` auto-detects legacy `#[fastedge::http]` binaries by inspecting WASM exports for the `process` function (via `server/utils/legacy-wasm-detect.ts`). Legacy binaries get `--wasi-http false`; all others get `--wasi-http true`. This detection is self-contained for easy removal when sync is retired.
+
+### Test Suites
+
+#### `basic/` (8 tests x 3 variants = 24 tests + 3 runner interface tests)
+Verifies basic HTTP WASM execution: request/response, content-type, body, logs, headers, POST.
+
+#### `downstream-fetch/` (8 tests x 3 variants = 24 tests)
+Verifies an HTTP app that fetches from a downstream API (jsonplaceholder) and transforms the response.
+
+#### `variables-and-secrets/` (6 tests x 3 variants = 18 tests)
+Verifies that env vars and secrets loaded from dotenv files are accessible at runtime.
 
 **Fixtures** (`fixtures/.env`):
 ```bash
 FASTEDGE_VAR_ENV_USERNAME=test-user
 FASTEDGE_VAR_SECRET_PASSWORD=test-secret
+FASTEDGE_VAR_ENV_PASSWORD=test-secret    # For async variant (wstd has no secret API)
 ```
 
-**Test** uses `createHttpWasmRunnerWithDotenv()` + passes `dotenvPath` to `load()`:
-```typescript
-runner = createHttpWasmRunnerWithDotenv();
-await runner.load(WASM_PATH, { dotenv: { path: FIXTURES_DIR } });
-```
+**Note**: The Rust async variant reads PASSWORD as an env var (not a secret) because `wstd` does not expose a secret API. The fixture includes both `FASTEDGE_VAR_SECRET_PASSWORD` and `FASTEDGE_VAR_ENV_PASSWORD` so both sync/JS (secret) and async (env var) paths resolve.
 
 ### HTTP WASM Test Helpers (`utils/http-wasm-helpers.ts`)
 
@@ -134,15 +175,15 @@ Log inspection helpers.
 
 ### Writing HTTP WASM Tests with Dotenv
 
-1. Create your test app source in `test-applications/http-apps/basic-examples/src/`
-2. Build with `pnpm run build:test-apps` → output to `wasm/http-apps/basic-examples/`
+1. Create your test app source in `test-applications/http-apps/js/src/`
+2. Build with `pnpm run build:test-apps` → output to `wasm/http-apps/js/`
 3. Create a `fixtures/` directory next to your test file
 4. Add a `.env` file using `FASTEDGE_VAR_ENV_<KEY>` and `FASTEDGE_VAR_SECRET_<KEY>` prefixes
 5. Use `createHttpWasmRunnerWithDotenv()` and pass `dotenv.path` to `load()`
 
 ```typescript
 const FIXTURES_DIR = join(process.cwd(), 'server/__tests__/integration/http-apps/my-suite/fixtures');
-const WASM_PATH = join(process.cwd(), 'wasm/http-apps/basic-examples/my-app.wasm');
+const WASM_PATH = join(process.cwd(), 'wasm/http-apps/js/my-app.wasm');
 
 beforeAll(async () => {
   runner = createHttpWasmRunnerWithDotenv();
@@ -208,10 +249,10 @@ pnpm test
 
 ### Current Test Coverage
 
-**HTTP WASM**: 25 passing tests across 3 test files:
-- `sdk-basic/basic-execution.test.ts` — 11 tests
-- `sdk-downstream-modify/downstream-modify-response.test.ts` — 8 tests
-- `sdk-variables-and-secrets/variables-and-secrets.test.ts` — 6 tests
+**HTTP WASM**: 69 passing tests across 3 test files (parameterized x3 variants):
+- `basic/basic-execution.test.ts` — 8 tests x 3 variants + 3 runner interface tests = 27
+- `downstream-fetch/downstream-fetch.test.ts` — 8 tests x 3 variants = 24
+- `variables-and-secrets/variables-and-secrets.test.ts` — 6 tests x 3 variants = 18
 
 **CDN (proxy-wasm)**: 71 passing tests across 11 test files:
 - `property-access/` — 43 tests (6 files)
@@ -224,63 +265,64 @@ pnpm test
 
 ## Adding New HTTP WASM Test Applications
 
-### Step 1: Create the source app
+New test apps should be added in all three variants (JS, Rust sync, Rust async) with identical behavior. Tests are parameterized — write once, run against all variants.
 
-Add a `.ts` file to `test-applications/http-apps/basic-examples/src/`:
+### Step 1: Create source apps in all variants
 
+**JS** (`test-applications/http-apps/js/src/my-app.ts`):
 ```typescript
-import { getEnv } from "fastedge::env";
 addEventListener("fetch", (event) => {
-  event.respondWith(new Response(`Hello ${getEnv("NAME")}`));
+  event.respondWith(new Response("Hello from my-app"));
 });
 ```
 
-### Step 2: Build WASM
+**Rust sync** (`test-applications/http-apps/rust/sync/my-app/src/lib.rs`):
+```rust
+#[fastedge::http]
+fn main(_req: Request<Body>) -> Result<Response<Body>> {
+    Response::builder().status(StatusCode::OK)
+        .body(Body::from("Hello from my-app")).map_err(Into::into)
+}
+```
+
+**Rust async** (`test-applications/http-apps/rust/async/my-app/src/lib.rs`):
+```rust
+#[wstd::http_server]
+async fn main(_request: Request<Body>) -> anyhow::Result<Response<Body>> {
+    Ok(Response::builder().status(200).body(Body::from("Hello from my-app"))?)
+}
+```
+
+### Step 2: Build all variants
 
 ```bash
-cd test-applications/http-apps/basic-examples
-pnpm run build
-# Output: wasm/http-apps/basic-examples/my-app.wasm
+pnpm run build:http-test-apps   # Builds JS + Rust (sync + async)
 ```
 
-### Step 3: Create test directory structure
-
-```
-server/__tests__/integration/http-apps/my-suite/
-├── fixtures/
-│   └── .env          # if dotenv needed
-└── my-suite.test.ts
-```
-
-### Step 4: Write the test
+### Step 3: Write parameterized test
 
 ```typescript
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { join } from 'path';
-import type { IWasmRunner } from '../../../../runner/IWasmRunner';
-import { createHttpWasmRunner, createHttpWasmRunnerWithDotenv, isSuccessResponse } from '../../utils/http-wasm-helpers';
+import { HTTP_APP_VARIANTS, resolveWasmPath, wasmExists } from '../shared/variants';
+import { createHttpWasmRunner, isSuccessResponse } from '../../utils/http-wasm-helpers';
 
-describe('My Suite', () => {
-  let runner: IWasmRunner;
+for (const variant of HTTP_APP_VARIANTS) {
+  const wasmPath = resolveWasmPath(variant, 'my-app');
+  const describeFn = wasmExists(variant, 'my-app') ? describe : describe.skip;
 
-  beforeAll(async () => {
-    await new Promise(resolve => setTimeout(resolve, 2000)); // port release delay
-    runner = createHttpWasmRunner(); // or createHttpWasmRunnerWithDotenv()
-    await runner.load(
-      join(process.cwd(), 'wasm/http-apps/basic-examples/my-app.wasm'),
-      // { dotenvPath: join(process.cwd(), 'server/__tests__/integration/http-apps/my-suite/fixtures') }
-    );
-  }, 30000);
+  describeFn(`My App [${variant.name}]`, () => {
+    let runner: IWasmRunner;
+    beforeAll(async () => {
+      runner = createHttpWasmRunner();
+      await runner.load(wasmPath);
+    }, 20000);
+    afterAll(async () => { await runner.cleanup(); });
 
-  afterAll(async () => {
-    await runner.cleanup();
+    it('should respond correctly', async () => {
+      const response = await runner.execute({ path: '/', method: 'GET', headers: {}, body: '' });
+      expect(isSuccessResponse(response)).toBe(true);
+    });
   });
-
-  it('should respond correctly', async () => {
-    const response = await runner.execute({ path: '/', method: 'GET', headers: {}, body: '' });
-    expect(isSuccessResponse(response)).toBe(true);
-  });
-});
+}
 ```
 
 ---

@@ -1,5 +1,79 @@
 # Proxy-WASM Runner - Changelog
 
+## March 27, 2026 - Rust Test Applications + Multi-Variant Parameterized Testing
+
+### Overview
+Added Rust sync (`#[fastedge::http]`) and Rust async (`#[wstd::http_server]`) test applications mirroring all 5 existing JS apps 1:1 in name and behavior. Refactored integration tests to parameterized execution across all 3 variants. Added silent auto-detection of legacy sync binaries for `--wasi-http` flag.
+
+### 🎯 What Was Completed
+
+#### 1. Directory Reorganization
+- Renamed `basic-examples` to `js` across all source, WASM output, and test directories
+- Updated all path references in test files, `wasm-loader.ts`, and `package.json`
+
+#### 2. Rust Sync Apps (5 apps — `test-applications/http-apps/rust/sync/`)
+- `basic`, `http-responder`, `downstream-fetch`, `headers`, `variables-and-secrets`
+- Cargo workspace with `fastedge` crate (git dep), builds with `cargo build --target wasm32-wasip1`
+- Uses deprecated `#[fastedge::http]` pattern — kept for backward compatibility
+
+#### 3. Rust Async Apps (5 apps — `test-applications/http-apps/rust/async/`)
+- Same 5 apps using `#[wstd::http_server]` async pattern with `wstd` 0.6
+- Builds with regular `cargo build` (no `cargo-component` needed)
+- `variables-and-secrets` reads PASSWORD as env var (wstd has no secret API)
+- `.cargo/config.toml` at `rust/` level shared by both sync and async
+
+#### 4. Parameterized Test Execution
+- Created `shared/variants.ts` defining JS, rust-sync, rust-async variants
+- Refactored all 3 test files to loop over variants with `existsSync` skip
+- Renamed test directories to match app names: `basic/`, `downstream-fetch/`, `variables-and-secrets/`
+- 69 total tests (22 per variant x 3 + 3 runner interface tests)
+
+#### 5. Legacy Sync Detection
+- `server/utils/legacy-wasm-detect.ts` — inspects WASM exports for `process` function
+- Legacy binaries (`#[fastedge::http]`) get `--wasi-http false`; all others get `--wasi-http true`
+- Self-contained, marked deprecated — delete when sync pattern is retired
+- Updated `HttpWasmRunner.ts` load() and applyDotenv() to use detection
+
+#### 6. Build Integration
+- `test-applications/http-apps/rust/package.json` — builds sync + async via pnpm filter
+- Added `test-applications/**/target/` to `.gitignore` for Cargo build artifacts
+- WASM output dirs: `wasm/http-apps/rust/sync/.gitkeep`, `wasm/http-apps/rust/async/.gitkeep`
+
+**Files Created:**
+- `test-applications/http-apps/rust/package.json`
+- `test-applications/http-apps/rust/.cargo/config.toml`
+- `test-applications/http-apps/rust/sync/Cargo.toml` + 5 crate dirs (Cargo.toml + src/lib.rs each)
+- `test-applications/http-apps/rust/async/Cargo.toml` + 5 crate dirs (Cargo.toml + src/lib.rs each)
+- `server/__tests__/integration/http-apps/shared/variants.ts`
+- `server/__tests__/integration/http-apps/downstream-fetch/downstream-fetch.test.ts`
+- `server/utils/legacy-wasm-detect.ts`
+- `wasm/http-apps/rust/sync/.gitkeep`, `wasm/http-apps/rust/async/.gitkeep`
+
+**Files Modified:**
+- `test-applications/http-apps/js/package.json` — updated wasm output path
+- `server/runner/HttpWasmRunner.ts` — legacy sync detection + conditional `--wasi-http`
+- `server/__tests__/integration/utils/wasm-loader.ts` — added rustSync/rustAsync entries
+- `server/__tests__/integration/http-apps/basic/basic-execution.test.ts` — parameterized
+- `server/__tests__/integration/http-apps/variables-and-secrets/variables-and-secrets.test.ts` — parameterized
+- `server/__tests__/integration/http-apps/variables-and-secrets/fixtures/.env` — added FASTEDGE_VAR_ENV_PASSWORD
+- `server/__tests__/integration/cdn-apps/full-flow/headers-change-with-downstream.test.ts` — updated path refs
+- `.gitignore` — added `test-applications/**/target/`
+- `context/development/INTEGRATION_TESTING.md` — full update
+- `context/features/HTTP_WASM_IMPLEMENTATION.md` — legacy detection section
+
+### 🧪 Testing
+```bash
+pnpm run build:http-test-apps   # Build all JS + Rust apps
+pnpm run test:integration:http  # 69 tests pass (3 variants x ~22 tests + 3 interface)
+```
+
+### 📝 Notes
+- `cargo-component` is NOT needed for async wstd apps — regular `cargo build --target wasm32-wasip1` works
+- Legacy detection exports: sync has `process` + `gcore:fastedge/http-handler#process`; async has `wasi:http/incoming-handler@0.2.9#handle`
+- The `#[fastedge::http]` sync pattern is deprecated; all sync support is isolated for easy removal
+
+---
+
 ## March 24, 2026 - send_http_response: CDN Redirect Test App + Integration Tests
 
 ### Overview

@@ -57,6 +57,26 @@ IWasmRunner (interface)
 
 `standalone.ts` (`createRunner` / `createRunnerFromBuffer`) is the entry point for headless test-framework use. It imports `detectWasmType` from `wasmTypeDetector.ts` and honors `config.runnerType` as an override.
 
+### Legacy Sync Detection (`--wasi-http` flag — March 2026)
+
+`HttpWasmRunner` auto-detects whether a binary is a legacy `#[fastedge::http]` sync app or a modern `#[wstd::http_server]` async app by inspecting WASM exports at load time.
+
+**Detection signal** (in `server/utils/legacy-wasm-detect.ts`):
+- Binary exports `process` → legacy sync → `--wasi-http false`
+- Binary does NOT export `process` (or fails `WebAssembly.compile`) → modern/JS → `--wasi-http true`
+
+**How it works**:
+```
+isLegacySyncWasm(buffer)
+  → WebAssembly.compile(buffer) succeeds + has "process" export  →  true (legacy)
+  → WebAssembly.compile(buffer) succeeds + no "process" export   →  false (modern)
+  → WebAssembly.compile(buffer) fails (component model)          →  false (modern)
+```
+
+**Deprecation**: The `#[fastedge::http]` sync pattern is deprecated. The `legacy-wasm-detect.ts` module and `isLegacySync` field in `HttpWasmRunner` are self-contained — delete them when sync support is retired.
+
+**Test apps**: 5 Rust sync + 5 Rust async apps in `test-applications/http-apps/rust/` mirror the 5 JS apps 1:1 in name and behavior. All build with `cargo build --target wasm32-wasip1` (no `cargo-component` needed).
+
 ---
 
 ## Outdated API Section (below)

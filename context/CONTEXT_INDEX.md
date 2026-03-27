@@ -37,7 +37,7 @@ This index helps you discover relevant documentation without reading thousands o
 - `features/CROSS_PLATFORM.md` (~100 lines) - ⚠️ **READ BEFORE writing any process, path, signal, or shell code** — platform rules for linux-x64 / darwin-arm64 / win32, what's already handled, known limitations
 - `features/HTTP_CALL_IMPLEMENTATION.md` (~200 lines) - ✅ proxy_http_call PAUSE/resume loop, binary header format, Rust SDK init order (NEW)
 - `features/NPM_PACKAGE_PLAN.md` (~250 lines) - ✅ Full 5-phase plan for @gcoredev/fastedge-test npm package (Phases 1-4 complete)
-- `features/HTTP_WASM_IMPLEMENTATION.md` (~400 lines) - ✅ HTTP WASM runner support, FastEdge-run CLI integration, process management; detection + `runnerType` override section is current (Mar 2026); API section is outdated
+- `features/HTTP_WASM_IMPLEMENTATION.md` (~400 lines) - ✅ HTTP WASM runner support, FastEdge-run CLI integration, process management; detection + `runnerType` override + legacy sync detection sections are current (Mar 2026); API section is outdated
 - `features/HTTP_WASM_UI.md` (~1,200 lines) - ✅ Postman-like UI for HTTP WASM, adaptive UI architecture, component organization (NEW - Feb 10, 2026)
 - `features/HTTP_WASM_PREVIEW.md` (~120 lines) - ✅ SPA preview: Live toggle (srcDoc vs src iframe), Open in Browser button, runner port via WebSocket, preview sizing fix, active tab hover fix (Mar 2026)
 - `WEBSOCKET_IMPLEMENTATION.md` (586 lines) - Real-time sync between clients, event broadcasting
@@ -59,7 +59,7 @@ This index helps you discover relevant documentation without reading thousands o
 
 - `IMPLEMENTATION_GUIDE.md` (1,102 lines) - Coding patterns, conventions, best practices
 - `TESTING_GUIDE.md` (350 lines) - How to test your changes
-- `development/INTEGRATION_TESTING.md` (450 lines) - ✅ Integration testing with compiled WASM applications
+- `development/INTEGRATION_TESTING.md` (~500 lines) - ✅ Integration testing with compiled WASM applications (JS + Rust sync + Rust async), parameterized multi-variant testing
 - `TEST_PATTERNS.md` (825 lines) - Testing patterns and examples
 - `AI_AGENT_API_GUIDE.md` - Agent-specific notes (X-Source header, log filtering, TDD pointer); links to `docs/API.md` for full reference
 - `COMPONENT_STYLING_PATTERN.md` (355 lines) - React component UI patterns
@@ -157,9 +157,17 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 
 ### Working with HTTP WASM (Component Model)
 
-1. Read `features/HTTP_WASM_IMPLEMENTATION.md` (HTTP WASM runner architecture — note: API section is outdated, detection section is current)
+1. Read `features/HTTP_WASM_IMPLEMENTATION.md` (HTTP WASM runner architecture — note: API section is outdated, detection + legacy sync sections are current)
 2. Read `BACKEND_ARCHITECTURE.md` (runner architecture section)
 3. Read `TESTING_GUIDE.md` if adding tests
+
+### Adding / Modifying Rust Test Applications
+
+1. Read `development/INTEGRATION_TESTING.md` — full structure, variant system, how to add apps
+2. Source: `test-applications/http-apps/rust/sync/` (deprecated `#[fastedge::http]`) and `rust/async/` (`#[wstd::http_server]`)
+3. Build: `cd rust/sync && cargo build --release` or `cd rust/async && cargo build --release` (both use `wasm32-wasip1` target)
+4. Tests: parameterized via `shared/variants.ts` — write once, runs against all variants
+5. Legacy detection: `server/utils/legacy-wasm-detect.ts` — self-contained, delete when sync is retired
 
 ### Working with HTTP WASM Preview / Live Mode / Logging
 
