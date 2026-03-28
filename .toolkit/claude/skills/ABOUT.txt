@@ -1,0 +1,52 @@
+Skill files (.claude/skills/*/SKILL.md) are like commands
+but with a directory for helper files (reference.md, scripts/, etc.).
+
+Skills and commands use the same frontmatter fields.
+When names conflict, the skill takes priority.
+
+Frontmatter fields Claude Code reads (all optional):
+
+  name              — slash-command name (default: directory name)
+  description       — what the skill does and when to use it
+                      (default: first paragraph of SKILL.md body)
+  argument-hint     — hint text in autocomplete
+  allowed-tools     — tools available without permission prompt
+  model             — model override (sonnet, opus, haiku)
+  user-invocable    — show in / menu (default: true)
+  disable-model-invocation — prevent Claude from auto-invoking
+  context           — fork to run in isolated subagent
+  agent             — subagent type (with context: fork)
+  hooks             — skill-scoped lifecycle hooks
+
+All other fields are ignored by Claude Code.
+
+Two-phase loading:
+
+  Session start — only name + description are loaded (~100 tokens
+    per skill). Full SKILL.md body is NOT loaded.
+  Skill invocation — full body is loaded (manual /name or auto).
+  disable-model-invocation: true — nothing is loaded until
+    manual /invoke. Description stays out of context.
+  user-invocable: false — hidden from / menu, but Claude can
+    still auto-invoke based on description.
+  After execution — body stays in context until session end
+    or /compact. Exception: context: fork runs in isolation.
+
+Helper files in the skill directory are NOT auto-loaded.
+Mention them in SKILL.md so Claude knows to read them.
+Scripts in scripts/ are executed via Bash, not loaded.
+
+Description budget: ~2% of context window (fallback 16k chars).
+Check with /context. Env override: SLASH_COMMAND_TOOL_CHAR_BUDGET.
+
+Changes to skills may require session restart to take effect.
+
+Example:
+
+  ---
+  name: my-skill
+  description: Does something useful when you ask for X.
+  allowed-tools: Read, Grep, Bash
+  ---
+
+  Your skill instructions here...

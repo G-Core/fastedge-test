@@ -1,0 +1,58 @@
+Hook scripts modify agent behavior at runtime. Hooks run on
+specific events (e.g. every prompt) and inject additional context
+into the agent's conversation. Copy the script, add config to
+.claude/settings.local.json, done.
+
+How hooks work:
+
+  Hooks are shell scripts triggered by Claude Code events. Each
+  hook is bound to an event type in .claude/settings.local.json.
+  When the event fires, Claude Code runs the script, reads its
+  stdout, and injects the returned additionalContext into the
+  agent's context for that turn.
+
+  The main event is UserPromptSubmit — it fires on every user
+  prompt before the agent starts processing. The script receives
+  the prompt on stdin and must return a JSON object on stdout:
+
+    {
+      "hookSpecificOutput": {
+        "hookEventName": "UserPromptSubmit",
+        "additionalContext": "Text injected into agent context"
+      }
+    }
+
+  The additionalContext string appears as a system reminder in the
+  agent's conversation — the agent sees it as an instruction it
+  must follow.
+
+Available hooks:
+
+  skill-eval.sh — injects a silent skill check into every prompt.
+    The agent checks if the prompt matches any available skill and
+    calls Skill() immediately if so, otherwise proceeds normally.
+    The check is silent — no evaluation output in the response.
+
+Installation:
+
+  mkdir -p .claude/hooks && cp hooks/skill-eval.sh .claude/hooks/
+
+  Add hook config to .claude/settings.local.json:
+
+    {
+      "hooks": {
+        "UserPromptSubmit": [
+          {
+            "matcher": "",
+            "hooks": [
+              {
+                "type": "command",
+                "command": ".claude/hooks/skill-eval.sh"
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+  Empty matcher matches all prompts. Set a pattern to limit scope.

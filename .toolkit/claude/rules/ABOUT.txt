@@ -1,0 +1,32 @@
+Rules files (.claude/rules/*.md) are loaded into Claude Code
+conversations automatically. Users do not invoke them.
+
+Claude Code reads one frontmatter field: paths.
+
+  paths — glob patterns for conditional loading
+          supports brace expansion: "src/**/*.{ts,tsx}"
+
+  No paths = rule loads unconditionally at session start.
+  With paths = rule loads when Claude reads a matching file.
+
+All other frontmatter fields are ignored by Claude Code.
+Custom fields (doc_type, tags, etc.) have no functional effect.
+
+Lifecycle:
+
+  Session start — rules without paths are loaded.
+  File read — rules with paths load when Claude reads
+    a file matching the pattern.
+  The entire file is loaded, including frontmatter.
+  Changes during a session are probably not picked up.
+  Restart the session after editing rules.
+  Recommended size: up to ~200 lines per file.
+
+Example:
+
+  ---
+  paths:
+    - "src/**/*.py"
+  ---
+
+  Your rule text goes here...
