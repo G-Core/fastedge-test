@@ -19,6 +19,11 @@ jobs:
       - name: Setup Node Environment
         uses: ./.github/setup-node
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: wasm32-wasip1
+
       - name: Setup FastEdge Run CLI
         uses: ./.github/setup-fastedge-cli
         with:
