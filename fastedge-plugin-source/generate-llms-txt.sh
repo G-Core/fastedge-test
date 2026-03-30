@@ -8,12 +8,8 @@ set -euo pipefail
 # LLM agents discover and navigate package documentation.
 #
 # Usage:
-#   ./fastedge-plugin-source/generate-llms-txt.sh
-#
-# Setup:
-#   1. Copy this file to <your-repo>/fastedge-plugin-source/generate-llms-txt.sh
-#   2. chmod +x fastedge-plugin-source/generate-llms-txt.sh
-#   3. Called automatically by generate-docs.sh after a full generation run
+#   ./fastedge-plugin-source/generate-llms-txt.sh   # standalone
+#   ./fastedge-plugin-source/generate-docs.sh        # calls this automatically after a full run
 #
 # Requirements: jq, bash 4+
 # No customization needed — package name and docs are discovered at runtime.
@@ -68,18 +64,30 @@ fi
   echo "## Documentation"
   echo ""
 
-  # INDEX.md first — it's the entry point
-  index_heading=$(head -1 "$DOCS_DIR/INDEX.md" | sed 's/^#\+ //')
-  echo "- [$index_heading](docs/INDEX.md)"
+  # Curated order: INDEX first (entry point), then quickstart, then rest alphabetically.
+  # This keeps the most useful docs near the top rather than relying on glob order
+  # (which puts lowercase filenames like quickstart.md last).
+  PRIORITY_FILES=("INDEX.md" "quickstart.md")
 
-  # Remaining docs alphabetically, skip INDEX.md
+  for pfile in "${PRIORITY_FILES[@]}"; do
+    if [ -f "$DOCS_DIR/$pfile" ]; then
+      heading=$(head -1 "$DOCS_DIR/$pfile" | sed 's/^#\+ //')
+      [ -z "$heading" ] && heading="${pfile%.md}"
+      echo "- [$heading](docs/$pfile)"
+    fi
+  done
+
+  # Remaining docs alphabetically, skip priority files
   for doc in "$DOCS_DIR"/*.md; do
     filename=$(basename "$doc")
-    [ "$filename" = "INDEX.md" ] && continue
+    skip=false
+    for pfile in "${PRIORITY_FILES[@]}"; do
+      [ "$filename" = "$pfile" ] && skip=true && break
+    done
+    [ "$skip" = true ] && continue
 
     heading=$(head -1 "$doc" | sed 's/^#\+ //')
     if [ -z "$heading" ]; then
-      # Fallback: use filename without extension
       heading="${filename%.md}"
     fi
 

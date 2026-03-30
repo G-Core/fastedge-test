@@ -5,9 +5,9 @@
 ## Documentation
 
 - [fastedge-test Documentation](docs/INDEX.md)
+- [Quickstart — @gcoredev/fastedge-test](docs/quickstart.md)
 - [REST API Reference](docs/API.md)
 - [Debugger Server](docs/DEBUGGER.md)
-- [Quickstart — @gcoredev/fastedge-test](docs/quickstart.md)
 - [Runner API](docs/RUNNER.md)
 - [Test Configuration](docs/TEST_CONFIG.md)
 - [Test Framework API](docs/TEST_FRAMEWORK.md)
