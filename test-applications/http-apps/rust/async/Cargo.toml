@@ -1,0 +1,8 @@
+[workspace]
+members = ["basic", "http-responder", "downstream-fetch", "headers", "variables-and-secrets"]
+resolver = "2"
+
+[workspace.dependencies]
+wstd = "0.6"
+anyhow = "1"
+serde_json = "1"

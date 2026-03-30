@@ -23,6 +23,9 @@ wasm/**/*.wasm
 wasm/**/*.wat
 wasm/**/*.wasm.map
 
+# Rust build artifacts (test application crates)
+test-applications/**/target/
+
 # DotEnv files
 .env
 .env.secrets

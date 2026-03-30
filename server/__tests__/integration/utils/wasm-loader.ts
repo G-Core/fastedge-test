@@ -94,15 +94,26 @@ export const WASM_TEST_BINARIES = {
     },
   },
   httpApps: {
-    sdkExamples: {
-      sdkBasic: 'sdk-basic.wasm',
-      sdkDownstreamFetch: 'sdk-downstream-fetch.wasm',
-      sdkDownstreamModifyResponse: 'sdk-downstream-modify-response.wasm',
-      sdkHeaders: 'sdk-headers.wasm',
-      sdkVariablesAndSecrets: 'sdk-variables-and-secrets.wasm',
-    },
-    basicExamples: {
+    js: {
+      basic: 'basic.wasm',
       httpResponder: 'http-responder.wasm',
+      downstreamFetch: 'downstream-fetch.wasm',
+      headers: 'headers.wasm',
+      variablesAndSecrets: 'variables-and-secrets.wasm',
+    },
+    rustSync: {
+      basic: 'basic.wasm',
+      httpResponder: 'http-responder.wasm',
+      downstreamFetch: 'downstream-fetch.wasm',
+      headers: 'headers.wasm',
+      variablesAndSecrets: 'variables-and-secrets.wasm',
+    },
+    rustAsync: {
+      basic: 'basic.wasm',
+      httpResponder: 'http-responder.wasm',
+      downstreamFetch: 'downstream-fetch.wasm',
+      headers: 'headers.wasm',
+      variablesAndSecrets: 'variables-and-secrets.wasm',
     },
   },
 } as const;

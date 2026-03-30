@@ -123,13 +123,17 @@ importers:
 
   test-applications/cdn-apps/cdn-properties: {}
 
+  test-applications/cdn-apps/cdn-redirect: {}
+
   test-applications/cdn-apps/cdn-variables-and-secrets: {}
 
-  test-applications/http-apps/basic-examples:
+  test-applications/http-apps/js:
     devDependencies:
       '@gcoredev/fastedge-sdk-js':
         specifier: '*'
         version: 2.2.0
+
+  test-applications/http-apps/rust: {}
 
 packages:
 

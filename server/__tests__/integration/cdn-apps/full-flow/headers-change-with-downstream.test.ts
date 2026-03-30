@@ -35,8 +35,8 @@ describe('Full-Flow: CDN Headers-Change with Downstream', () => {
   beforeAll(async () => {
     // Step 1: Spawn downstream HTTP responder service
     const httpResponderWasm = await loadHttpAppWasm(
-      'basic-examples',
-      WASM_TEST_BINARIES.httpApps.basicExamples.httpResponder
+      'js',
+      WASM_TEST_BINARIES.httpApps.js.httpResponder
     );
 
     const downstream = await spawnDownstreamHttpApp(httpResponderWasm, 8100);

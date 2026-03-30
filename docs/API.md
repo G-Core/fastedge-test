@@ -16,12 +16,12 @@ The port can be overridden via the `PORT` environment variable. When `WORKSPACE_
 
 The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
-| Value      | Description                                             |
-| ---------- | ------------------------------------------------------- |
-| `ui`       | Request originated from the web UI (default if omitted) |
-| `ai_agent` | Request originated from an AI agent                     |
-| `api`      | Request originated from direct API usage                |
-| `system`   | Request originated from an automated system             |
+| Value        | Description                                             |
+| ------------ | ------------------------------------------------------- |
+| `ui`         | Request originated from the web UI (default if omitted) |
+| `ai_agent`   | Request originated from an AI agent                     |
+| `api`        | Request originated from direct API usage                |
+| `system`     | Request originated from an automated system             |
 
 ```http
 X-Source: ai_agent
@@ -238,9 +238,6 @@ For **Proxy-WASM**, the same top-level `url` field is required for URL parsing. 
 ```typescript
 {
   url: string;                          // Request URL (required)
-  method?: string;                      // Unused for Proxy-WASM (use request.method)
-  headers?: Record<string, string>;     // Unused for Proxy-WASM (use request.headers)
-  body?: string;                        // Unused for Proxy-WASM (use request.body)
   request?: {
     method?: string;                    // HTTP method (default: "GET")
     headers?: Record<string, string>;   // Request headers (default: {})
@@ -518,16 +515,16 @@ curl -X POST http://localhost:5179/api/call \
 
 **Error Responses**
 
-| Status | Condition                                                                          |
-| ------ | ---------------------------------------------------------------------------------- |
+| Status | Condition                                                                              |
+| ------ | -------------------------------------------------------------------------------------- |
 | `400`  | Validation failed (invalid hook name, missing `properties`), or no WASM module loaded |
-| `500`  | Hook execution failed                                                              |
+| `500`  | Hook execution failed                                                                  |
 
 ---
 
 ### POST /api/send
 
-Executes the full Proxy-WASM CDN request/response flow. Equivalent to `POST /api/execute` for Proxy-WASM, but uses stricter Zod schema validation. Only valid for Proxy-WASM modules.
+Executes the full Proxy-WASM CDN request/response flow. Equivalent to `POST /api/execute` for Proxy-WASM, but uses stricter Zod schema validation on the request body. Only valid for Proxy-WASM modules.
 
 Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`X-Source`](#x-source-header) request header.
 
@@ -754,7 +751,7 @@ Accepts an optional [`X-Source`](#x-source-header) request header.
       path: string;
       description?: string;
     };
-    request: {          // Required
+    request: {                           // Required
       method: string;
       url: string;
       headers: Record<string, string>;
@@ -815,10 +812,10 @@ curl -X POST http://localhost:5179/api/config \
 
 **Error Responses**
 
-| Status | Condition                                                            |
-| ------ | -------------------------------------------------------------------- |
-| `400`  | Validation failed (missing `config.request` or `config.properties`)  |
-| `500`  | File write failed                                                    |
+| Status | Condition                                                           |
+| ------ | ------------------------------------------------------------------- |
+| `400`  | Validation failed (missing `config.request` or `config.properties`) |
+| `500`  | File write failed                                                   |
 
 ---
 
@@ -872,10 +869,10 @@ curl -X POST http://localhost:5179/api/config/save-as \
 
 **Error Responses**
 
-| Status | Condition                                       |
-| ------ | ----------------------------------------------- |
-| `400`  | Missing `config` or `filePath`                  |
-| `500`  | File write or directory creation failed         |
+| Status | Condition                               |
+| ------ | --------------------------------------- |
+| `400`  | Missing `config` or `filePath`          |
+| `500`  | File write or directory creation failed |
 
 ---
 
@@ -895,12 +892,12 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Request Schemas
 
-| Name         | Description                                |
-| ------------ | ------------------------------------------ |
-| `api-load`   | Request body schema for `POST /api/load`   |
-| `api-send`   | Request body schema for `POST /api/send`   |
-| `api-call`   | Request body schema for `POST /api/call`   |
-| `api-config` | Request body schema for `POST /api/config` |
+| Name           | Description                                |
+| -------------- | ------------------------------------------ |
+| `api-load`     | Request body schema for `POST /api/load`   |
+| `api-send`     | Request body schema for `POST /api/send`   |
+| `api-call`     | Request body schema for `POST /api/call`   |
+| `api-config`   | Request body schema for `POST /api/config` |
 
 #### Response / Type Schemas
 
@@ -961,11 +958,11 @@ When a request body fails schema validation (Zod), `error` is the flattened Zod 
 
 **Common status codes**
 
-| Status | Meaning                                                                                      |
-| ------ | -------------------------------------------------------------------------------------------- |
-| `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded) |
-| `404`  | Resource not found (config file, schema file)                                                |
-| `500`  | Internal server error during execution or I/O                                                |
+| Status | Meaning                                                                                       |
+| ------ | --------------------------------------------------------------------------------------------- |
+| `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded)  |
+| `404`  | Resource not found (config file, schema file)                                                 |
+| `500`  | Internal server error during execution or I/O                                                 |
 
 ---
 
