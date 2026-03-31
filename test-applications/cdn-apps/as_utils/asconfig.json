@@ -1,6 +1,0 @@
-{
-  "extends": "../../node_modules/@assemblyscript/wasi-shim/asconfig.json",
-  "options": {
-    "lib": "./assembly"
-  }
-}

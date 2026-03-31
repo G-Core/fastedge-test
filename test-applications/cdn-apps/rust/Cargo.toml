@@ -1,0 +1,7 @@
+[workspace]
+members = ["cdn-variables-and-secrets", "cdn-http-call"]
+resolver = "2"
+
+[workspace.dependencies]
+proxy-wasm = "0.2"
+fastedge = { version = "0.3", features = ["proxywasm"] }

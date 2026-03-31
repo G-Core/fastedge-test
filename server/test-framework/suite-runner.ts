@@ -2,9 +2,9 @@ import { readFile } from "fs/promises";
 import { createRunner, createRunnerFromBuffer } from "../runner/standalone.js";
 import { TestConfigSchema } from "../schemas/config.js";
 import type { TestConfig } from "../schemas/config.js";
-import type { IWasmRunner } from "../runner/IWasmRunner.js";
+import type { IWasmRunner, HttpResponse } from "../runner/IWasmRunner.js";
 import type { FullFlowResult } from "../runner/types.js";
-import type { TestSuite, SuiteResult, TestResult, FlowOptions } from "./types.js";
+import type { TestSuite, SuiteResult, TestResult, FlowOptions, HttpRequestOptions } from "./types.js";
 
 /**
  * Validate and return a typed TestSuite definition.
@@ -137,6 +137,28 @@ export async function runFlow(
     properties,
     enforceProductionPropertyRules,
   );
+}
+
+/**
+ * Object-based wrapper around runner.execute() for HTTP WASM apps.
+ *
+ * All fields except path are optional with sensible defaults:
+ * - method defaults to "GET"
+ * - headers defaults to {}
+ * - body defaults to ""
+ */
+export async function runHttpRequest(
+  runner: IWasmRunner,
+  options: HttpRequestOptions,
+): Promise<HttpResponse> {
+  const {
+    path,
+    method = "GET",
+    headers = {},
+    body = "",
+  } = options;
+
+  return runner.execute({ path, method, headers, body });
 }
 
 /**

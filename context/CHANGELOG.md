@@ -1,9 +1,202 @@
 # Proxy-WASM Runner - Changelog
 
+## March 31, 2026 - Rust CDN Test Apps + Parameterized CDN Testing
+
+### Overview
+Added Rust proxy-wasm CDN test applications (`cdn-variables-and-secrets`, `cdn-http-call`) alongside the existing AssemblyScript variants. Introduced a CDN variant system (`shared/variants.ts`) and parameterized the `variables-and-secrets` and `http-call` tests to run against both AS and Rust. CDN integration tests grew from 71 to 79.
+
+### 🎯 What Was Completed
+
+#### 1. Rust CDN Apps (`test-applications/cdn-apps/rust/`)
+- Cargo workspace with `proxy-wasm = "0.2"` and `fastedge = "0.3"` (with `proxywasm` feature)
+- `cdn-variables-and-secrets` — reads USERNAME from dictionary, PASSWORD from secret, adds as request headers (identical behavior to AS version)
+- `cdn-http-call` — dispatches proxy_http_call using request pseudo-headers as upstream target, adapted from FastEdge-sdk-rust example to match AS test app behavior
+- WASM output: `wasm/cdn-apps/rust/variables-and-secrets/`, `wasm/cdn-apps/rust/http-call/`
+
+#### 2. CDN Variant System (`server/__tests__/integration/cdn-apps/shared/variants.ts`)
+- `CDN_APP_VARIANTS` array: `as`, `rust`
+- `resolveCdnWasmPath(variant, category, filename)` — resolves WASM path for a variant
+- `cdnWasmExists(variant, category, filename)` — skips variants without compiled WASM
+
+#### 3. Parameterized CDN Tests
+- `variables-and-secrets.test.ts` — 7 tests x 2 variants = 14 (was 7)
+- `http-call.test.ts` — 1 test x 2 variants = 2 (was 1)
+- Both use `for (const variant of CDN_APP_VARIANTS)` loop with `describe.skip` for missing binaries
+
+**Files Created:**
+- `test-applications/cdn-apps/rust/Cargo.toml` — workspace with 2 members
+- `test-applications/cdn-apps/rust/.cargo/config.toml` — target = wasm32-wasip1
+- `test-applications/cdn-apps/rust/cdn-variables-and-secrets/` (Cargo.toml + src/lib.rs)
+- `test-applications/cdn-apps/rust/cdn-http-call/` (Cargo.toml + src/lib.rs)
+- `server/__tests__/integration/cdn-apps/shared/variants.ts`
+- `wasm/cdn-apps/rust/variables-and-secrets/`, `wasm/cdn-apps/rust/http-call/`
+
+**Files Modified:**
+- `server/__tests__/integration/cdn-apps/variables-and-secrets/variables-and-secrets.test.ts` — parameterized
+- `server/__tests__/integration/cdn-apps/http-call/http-call.test.ts` — parameterized
+
+### 🧪 Testing
+```bash
+pnpm run test:integration:cdn   # 79 tests pass (was 71)
+```
+
+### 📝 Notes
+- Rust CDN apps use `proxy-wasm` crate directly (same ABI as AS apps via `@gcoredev/proxy-wasm-sdk-as`)
+- `fastedge = "0.3"` with `features = ["proxywasm"]` enables `fastedge::proxywasm::dictionary` and `fastedge::proxywasm::secret`
+- The `http-call` Rust app was adapted from the SDK example to use request pseudo-headers (not hardcoded `httpbin.org`)
+- Other CDN tests (properties, headers, redirect, full-flow) remain AS-only for now — can be parameterized when Rust equivalents are added
+
+---
+
+## March 30, 2026 - CDN Test Apps Reorganized into `as/` Subdirectory
+
+### Overview
+Moved all CDN (AssemblyScript) test applications into a language-specific `as/` subdirectory, mirroring the HTTP apps pattern (`js/`, `rust/basic/`, `rust/wasi/`). Prepares the structure for future Rust CDN variants.
+
+### 🎯 What Was Completed
+
+#### 1. Source Directory Restructure
+- Moved all 6 packages from `test-applications/cdn-apps/` into `test-applications/cdn-apps/as/`
+- Includes: `as_utils`, `cdn-headers`, `cdn-http-call`, `cdn-properties`, `cdn-redirect`, `cdn-variables-and-secrets`
+
+#### 2. WASM Output Directory Restructure
+- Moved all output directories from `wasm/cdn-apps/` into `wasm/cdn-apps/as/`
+- Includes: `headers/`, `http-call/`, `properties/`, `redirect/`, `variables-and-secrets/`
+
+#### 3. Build Config Path Updates
+- Updated 6 `asconfig.json` files (one extra `../` for new depth)
+- Updated 5 `package.json` mv:file scripts to target `wasm/cdn-apps/as/{category}/`
+- Updated `pnpm-workspace.yaml`: `test-applications/cdn-apps/*` → `test-applications/cdn-apps/as/*`
+- Updated root `package.json` build filter to match
+
+#### 4. Test Loader Update
+- Updated `loadCdnAppWasm()` in `wasm-loader.ts` to insert `as/` into path
+- Zero changes to any CDN integration test files — the abstraction shields them
+- Fixed 2 hard-coded WASM paths: `standalone.test.ts`, `hybrid-loading.test.ts`
+
+**Files Modified:**
+- `pnpm-workspace.yaml` — workspace glob
+- `package.json` (root) — build filter
+- `server/__tests__/integration/utils/wasm-loader.ts` — `as/` prefix in loadCdnAppWasm
+- `server/__tests__/unit/runner/standalone.test.ts` — hard-coded WASM path
+- `server/__tests__/integration/http-apps/hybrid-loading.test.ts` — hard-coded WASM path
+- 6x `asconfig.json` — extend path depth
+- 5x `package.json` (cdn-apps) — mv:file output path
+
+### 🧪 Testing
+```bash
+pnpm test   # All 885 tests pass (398 unit + 345 frontend + 71 CDN + 71 HTTP)
+```
+
+### 📝 Notes
+- No CDN variant system added yet — deferred until Rust CDN apps are created
+- The `loadCdnAppWasm('properties', ...)` API is unchanged for callers
+- Structure is ready for `test-applications/cdn-apps/rust/` + `wasm/cdn-apps/rust/`
+
+---
+
+## March 30, 2026 - HTTP Test Framework + Echo-POST App + Test Consolidation
+
+### Overview
+Extended the test framework (`server/test-framework/`) with HTTP response assertions and a `runHttpRequest()` helper. Added a new `echo-post` test application (POST body round-trip). Consolidated redundant tests across all HTTP app suites. Migrated all 5 HTTP integration test files to dogfood the test framework. Fixed flaky hybrid-loading performance test. Switched Rust `fastedge` dependency from git to crates.io `"0.3"`. Updated Rust wasi `variables-and-secrets` to use `fastedge::secret` instead of env var fallback.
+
+### 🎯 What Was Completed
+
+#### 1. Test Framework: HTTP Assertions (`server/test-framework/assertions.ts`)
+New assertion helpers for HTTP WASM responses, complementing the existing CDN assertions:
+- `assertHttpStatus(response, expected)` — HTTP status code
+- `assertHttpHeader(response, name, expected?)` — case-insensitive header check
+- `assertHttpNoHeader(response, name)` — header absence
+- `assertHttpBody(response, expected)` — exact body match
+- `assertHttpBodyContains(response, substring)` — body substring
+- `assertHttpJson<T>(response)` — parse + validate JSON body, returns typed result
+- `assertHttpContentType(response, expected)` — content-type contains string
+- `assertHttpLog(response, substring)` / `assertHttpNoLog(response, substring)` — log assertions
+
+#### 2. Test Framework: `runHttpRequest()` Helper (`server/test-framework/suite-runner.ts`)
+Object-based wrapper around `runner.execute()` with sensible defaults (method=GET, headers={}, body=""). Analogous to `runFlow()` for CDN apps.
+
+New type: `HttpRequestOptions` in `server/test-framework/types.ts`.
+
+#### 3. Test Framework Exports (`server/test-framework/index.ts`)
+All new HTTP assertions and `runHttpRequest` exported via `@gcoredev/fastedge-test/test`.
+
+#### 4. New Test App: `echo-post` (POST Body Round-Trip)
+- Accepts POST with JSON body, parses it, adds `{ "processed": true }`, returns modified JSON
+- Returns 405 for non-POST methods
+- All 3 variants: JS, Rust basic, Rust wasi
+- 12 tests (4 per variant): load, POST body, nested JSON, 405 for GET
+
+#### 5. New Test App: `headers` (Header Echo)
+- Copies request headers to response, adds `my-custom-header` from env var
+- All 3 variants (WASM already existed, test file is new)
+- 9 tests (3 per variant): load, header echo, custom header presence
+
+#### 6. Test Consolidation
+Reduced redundant WASM executions by merging tests that made identical requests:
+- `downstream-fetch`: 6 separate GET tests → 1 combined test (14 → 9 total)
+- `variables-and-secrets`: 4 separate GET tests → 1 combined test
+
+#### 7. All HTTP Tests Migrated to Test Framework
+All 5 HTTP app test files now dogfood the test framework:
+- `hello-world-execution.test.ts` — uses `runHttpRequest`, `assertHttpStatus`, `assertHttpContentType`, `assertHttpBodyContains`, `assertHttpLog`
+- `headers.test.ts` — uses `runHttpRequest`, `assertHttpStatus`, `assertHttpHeader`, `assertHttpBody`
+- `echo-post.test.ts` — uses `runHttpRequest`, `assertHttpStatus`, `assertHttpContentType`, `assertHttpJson`
+- `downstream-fetch.test.ts` — uses `runHttpRequest`, `assertHttpStatus`, `assertHttpContentType`, `assertHttpJson`
+- `variables-and-secrets.test.ts` — uses `runHttpRequest`, `assertHttpStatus`, `assertHttpBody`
+
+#### 8. Rust Dependency: `fastedge` Switched to crates.io
+Both `rust/basic/Cargo.toml` and `rust/wasi/Cargo.toml` workspaces now use `fastedge = "0.3"` (resolves to v0.3.5) instead of `fastedge = { git = "..." }`.
+
+#### 9. Rust wasi `variables-and-secrets`: Uses `fastedge::secret`
+The wasi variant now uses `fastedge::secret::get("PASSWORD")` instead of the env var fallback. Both basic and wasi variants have identical behavior.
+
+#### 10. Flaky Performance Test Fix
+`hybrid-loading.test.ts` performance assertion changed from `timePath < timeBuffer` (fails on OS scheduling jitter) to `timePath < timeBuffer * 1.5` (tolerant of noise, still catches regressions).
+
+**Files Created:**
+- `server/test-framework/` — HTTP assertions + `runHttpRequest` + `HttpRequestOptions` type
+- `server/__tests__/integration/http-apps/echo-post/echo-post.test.ts`
+- `server/__tests__/integration/http-apps/headers/headers.test.ts`
+- `test-applications/http-apps/js/src/echo-post.ts`
+- `test-applications/http-apps/rust/basic/echo-post/` (Cargo.toml + src/lib.rs)
+- `test-applications/http-apps/rust/wasi/echo-post/` (Cargo.toml + src/lib.rs)
+- `wasm/http-apps/js/echo-post.wasm`, `wasm/http-apps/rust/basic/echo-post.wasm`, `wasm/http-apps/rust/wasi/echo-post.wasm`
+
+**Files Modified:**
+- `server/test-framework/assertions.ts` — added 9 HTTP assertion functions
+- `server/test-framework/suite-runner.ts` — added `runHttpRequest()`
+- `server/test-framework/types.ts` — added `HttpRequestOptions`
+- `server/test-framework/index.ts` — updated exports
+- `server/__tests__/unit/test-framework/assertions.test.ts` — 24 new unit tests (31→55)
+- `server/__tests__/integration/http-apps/hello-world/hello-world-execution.test.ts` — migrated to framework
+- `server/__tests__/integration/http-apps/downstream-fetch/downstream-fetch.test.ts` — consolidated + migrated
+- `server/__tests__/integration/http-apps/variables-and-secrets/variables-and-secrets.test.ts` — consolidated + migrated + fixed fixture values
+- `server/__tests__/integration/http-apps/hybrid-loading.test.ts` — tolerance fix
+- `test-applications/http-apps/js/package.json` — added echo-post build/copy scripts
+- `test-applications/http-apps/rust/basic/Cargo.toml` — added echo-post, fastedge = "0.3"
+- `test-applications/http-apps/rust/wasi/Cargo.toml` — added echo-post, fastedge = "0.3"
+- `test-applications/http-apps/rust/basic/variables-and-secrets/src/lib.rs` — added `use std::env`
+- `test-applications/http-apps/rust/wasi/variables-and-secrets/src/lib.rs` — uses `fastedge::secret`
+- `test-applications/http-apps/rust/wasi/variables-and-secrets/Cargo.toml` — added fastedge dep
+
+### 🧪 Testing
+```bash
+pnpm test   # 398 unit + 345 frontend + 71 CDN + 71 HTTP = 885 total
+```
+
+### 📝 Notes
+- HTTP assertions use `HttpResponse` type (not `HookResult`/`FullFlowResult`) — they're separate type families, not unified
+- `assertHttpHeader` does case-insensitive matching (HTTP headers are case-insensitive)
+- `assertHttpJson<T>()` both validates and returns typed JSON — eliminates separate `JSON.parse()` calls
+- The `echo-post` app is the first HTTP test app that exercises POST method and request body handling
+
+---
+
 ## March 27, 2026 - Rust Test Applications + Multi-Variant Parameterized Testing
 
 ### Overview
-Added Rust sync (`#[fastedge::http]`) and Rust async (`#[wstd::http_server]`) test applications mirroring all 5 existing JS apps 1:1 in name and behavior. Refactored integration tests to parameterized execution across all 3 variants. Added silent auto-detection of legacy sync binaries for `--wasi-http` flag.
+Added Rust basic (`#[fastedge::http]`) and Rust wasi (`#[wstd::http_server]`) test applications mirroring all 5 existing JS apps 1:1 in name and behavior. Refactored integration tests to parameterized execution across all 3 variants. Added silent auto-detection of legacy basic binaries for `--wasi-http` flag.
 
 ### 🎯 What Was Completed
 
@@ -11,21 +204,21 @@ Added Rust sync (`#[fastedge::http]`) and Rust async (`#[wstd::http_server]`) te
 - Renamed `basic-examples` to `js` across all source, WASM output, and test directories
 - Updated all path references in test files, `wasm-loader.ts`, and `package.json`
 
-#### 2. Rust Sync Apps (5 apps — `test-applications/http-apps/rust/sync/`)
-- `basic`, `http-responder`, `downstream-fetch`, `headers`, `variables-and-secrets`
+#### 2. Rust Basic Apps (5 apps — `test-applications/http-apps/rust/basic/`)
+- `hello-world`, `http-responder`, `downstream-fetch`, `headers`, `variables-and-secrets`
 - Cargo workspace with `fastedge` crate (git dep), builds with `cargo build --target wasm32-wasip1`
 - Uses deprecated `#[fastedge::http]` pattern — kept for backward compatibility
 
-#### 3. Rust Async Apps (5 apps — `test-applications/http-apps/rust/async/`)
+#### 3. Rust WASI Apps (5 apps — `test-applications/http-apps/rust/wasi/`)
 - Same 5 apps using `#[wstd::http_server]` async pattern with `wstd` 0.6
 - Builds with regular `cargo build` (no `cargo-component` needed)
 - `variables-and-secrets` reads PASSWORD as env var (wstd has no secret API)
-- `.cargo/config.toml` at `rust/` level shared by both sync and async
+- `.cargo/config.toml` at `rust/` level shared by both basic and wasi
 
 #### 4. Parameterized Test Execution
-- Created `shared/variants.ts` defining JS, rust-sync, rust-async variants
+- Created `shared/variants.ts` defining JS, rust-basic, rust-wasi variants
 - Refactored all 3 test files to loop over variants with `existsSync` skip
-- Renamed test directories to match app names: `basic/`, `downstream-fetch/`, `variables-and-secrets/`
+- Renamed test directories to match app names: `hello-world/`, `downstream-fetch/`, `variables-and-secrets/`
 - 69 total tests (22 per variant x 3 + 3 runner interface tests)
 
 #### 5. Legacy Sync Detection
@@ -35,25 +228,25 @@ Added Rust sync (`#[fastedge::http]`) and Rust async (`#[wstd::http_server]`) te
 - Updated `HttpWasmRunner.ts` load() and applyDotenv() to use detection
 
 #### 6. Build Integration
-- `test-applications/http-apps/rust/package.json` — builds sync + async via pnpm filter
+- `test-applications/http-apps/rust/package.json` — builds basic + wasi via pnpm filter
 - Added `test-applications/**/target/` to `.gitignore` for Cargo build artifacts
-- WASM output dirs: `wasm/http-apps/rust/sync/.gitkeep`, `wasm/http-apps/rust/async/.gitkeep`
+- WASM output dirs: `wasm/http-apps/rust/basic/.gitkeep`, `wasm/http-apps/rust/wasi/.gitkeep`
 
 **Files Created:**
 - `test-applications/http-apps/rust/package.json`
 - `test-applications/http-apps/rust/.cargo/config.toml`
-- `test-applications/http-apps/rust/sync/Cargo.toml` + 5 crate dirs (Cargo.toml + src/lib.rs each)
-- `test-applications/http-apps/rust/async/Cargo.toml` + 5 crate dirs (Cargo.toml + src/lib.rs each)
+- `test-applications/http-apps/rust/basic/Cargo.toml` + 5 crate dirs (Cargo.toml + src/lib.rs each)
+- `test-applications/http-apps/rust/wasi/Cargo.toml` + 5 crate dirs (Cargo.toml + src/lib.rs each)
 - `server/__tests__/integration/http-apps/shared/variants.ts`
 - `server/__tests__/integration/http-apps/downstream-fetch/downstream-fetch.test.ts`
 - `server/utils/legacy-wasm-detect.ts`
-- `wasm/http-apps/rust/sync/.gitkeep`, `wasm/http-apps/rust/async/.gitkeep`
+- `wasm/http-apps/rust/basic/.gitkeep`, `wasm/http-apps/rust/wasi/.gitkeep`
 
 **Files Modified:**
 - `test-applications/http-apps/js/package.json` — updated wasm output path
 - `server/runner/HttpWasmRunner.ts` — legacy sync detection + conditional `--wasi-http`
-- `server/__tests__/integration/utils/wasm-loader.ts` — added rustSync/rustAsync entries
-- `server/__tests__/integration/http-apps/basic/basic-execution.test.ts` — parameterized
+- `server/__tests__/integration/utils/wasm-loader.ts` — added rustBasic/rustWasi entries
+- `server/__tests__/integration/http-apps/hello-world/hello-world-execution.test.ts` — parameterized
 - `server/__tests__/integration/http-apps/variables-and-secrets/variables-and-secrets.test.ts` — parameterized
 - `server/__tests__/integration/http-apps/variables-and-secrets/fixtures/.env` — added FASTEDGE_VAR_ENV_PASSWORD
 - `server/__tests__/integration/cdn-apps/full-flow/headers-change-with-downstream.test.ts` — updated path refs

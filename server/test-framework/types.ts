@@ -49,6 +49,17 @@ export interface SuiteResult {
 }
 
 /**
+ * Options for runHttpRequest() — execute a request through an HTTP WASM app.
+ * Only path is required; method defaults to "GET", headers to {}, body to "".
+ */
+export interface HttpRequestOptions {
+  path: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+/**
  * Options for runFlow() — object-based alternative to the 10-arg callFullFlow().
  * Pseudo-headers (:method, :path, :authority, :scheme) are derived from url/method
  * automatically and can be overridden via requestHeaders.

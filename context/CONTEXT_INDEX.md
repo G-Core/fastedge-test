@@ -59,7 +59,7 @@ This index helps you discover relevant documentation without reading thousands o
 
 - `IMPLEMENTATION_GUIDE.md` (1,102 lines) - Coding patterns, conventions, best practices
 - `TESTING_GUIDE.md` (350 lines) - How to test your changes
-- `development/INTEGRATION_TESTING.md` (~500 lines) - ✅ Integration testing with compiled WASM applications (JS + Rust sync + Rust async), parameterized multi-variant testing
+- `development/INTEGRATION_TESTING.md` (~500 lines) - ✅ Integration testing with compiled WASM applications (JS + Rust basic + Rust wasi), parameterized multi-variant testing, HTTP test framework dogfooding
 - `TEST_PATTERNS.md` (825 lines) - Testing patterns and examples
 - `AI_AGENT_API_GUIDE.md` - Agent-specific notes (X-Source header, log filtering, TDD pointer); links to `docs/API.md` for full reference
 - `COMPONENT_STYLING_PATTERN.md` (355 lines) - React component UI patterns
@@ -164,8 +164,8 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 ### Adding / Modifying Rust Test Applications
 
 1. Read `development/INTEGRATION_TESTING.md` — full structure, variant system, how to add apps
-2. Source: `test-applications/http-apps/rust/sync/` (deprecated `#[fastedge::http]`) and `rust/async/` (`#[wstd::http_server]`)
-3. Build: `cd rust/sync && cargo build --release` or `cd rust/async && cargo build --release` (both use `wasm32-wasip1` target)
+2. Source: `test-applications/http-apps/rust/basic/` (deprecated `#[fastedge::http]`) and `rust/wasi/` (`#[wstd::http_server]`); both use `fastedge = "0.3"` from crates.io
+3. Build: `cd rust/basic && cargo build --release` or `cd rust/wasi && cargo build --release` (both use `wasm32-wasip1` target)
 4. Tests: parameterized via `shared/variants.ts` — write once, runs against all variants
 5. Legacy detection: `server/utils/legacy-wasm-detect.ts` — self-contained, delete when sync is retired
 
@@ -204,25 +204,25 @@ Applies when: tests fail because HTTP apps are run as proxy-wasm (or vice versa)
 ### Working with Integration Tests
 
 1. Read `development/INTEGRATION_TESTING.md` (comprehensive integration testing guide)
-   - **⚠️ MANDATORY**: Read the "Dogfood the Test Framework" section — all CDN integration tests must use `runFlow()` + assertion helpers from `server/test-framework/`, not raw `callFullFlow()` + `expect()`
+   - **⚠️ MANDATORY**: Read the "Dogfood the Test Framework" section — all integration tests (CDN and HTTP) must use framework helpers (`runFlow`/`runHttpRequest` + assertion helpers from `server/test-framework/`), not raw `expect()` calls
 2. Read `TESTING_GUIDE.md` (overall testing approach)
 3. Read `TEST_PATTERNS.md` (testing patterns and conventions)
 4. Read relevant feature doc for what you're testing (e.g., `PROPERTY_IMPLEMENTATION_COMPLETE.md`)
 
 ### CDN Variables and Secrets Integration Test
 
-✅ Complete — 7 tests passing. Requires `proxy-wasm-sdk-as@^1.2.2` (published, installed).
+✅ Complete — 14 tests passing (7 per variant: AS + Rust). Parameterized via `shared/variants.ts`.
 
 Test file: `server/__tests__/integration/cdn-apps/variables-and-secrets/variables-and-secrets.test.ts`
-WASM app: `test-applications/cdn-apps/cdn-variables-and-secrets/`
-WASM output: `wasm/cdn-apps/variables-and-secrets/variables-and-secrets.wasm`
+WASM apps: `test-applications/cdn-apps/as/cdn-variables-and-secrets/` + `test-applications/cdn-apps/rust/cdn-variables-and-secrets/`
+Variant system: `server/__tests__/integration/cdn-apps/shared/variants.ts`
 
 ### Working with send_http_response / Local Response Short-Circuit
 
 1. Read `features/SEND_HTTP_RESPONSE.md` — full design, runner implementation, test app, integration tests
 2. See `server/runner/ProxyWasmRunner.ts:279` for the short-circuit check after `onRequestHeaders`
 3. See `server/runner/HostFunctions.ts:58` for `localResponse` state and `proxy_send_local_response` host function
-4. Test app: `test-applications/cdn-apps/cdn-redirect/` — redirect example
+4. Test app: `test-applications/cdn-apps/as/cdn-redirect/` — redirect example
 5. Integration tests: `server/__tests__/integration/cdn-apps/redirect/cdn-redirect.test.ts`
 
 ### Working with Properties System
@@ -352,4 +352,4 @@ Time: 5-7 minutes of reading
 
 ---
 
-**Last Updated**: March 2026
+**Last Updated**: March 30, 2026

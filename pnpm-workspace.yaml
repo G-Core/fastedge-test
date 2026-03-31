@@ -1,5 +1,5 @@
 packages:
-  - test-applications/cdn-apps/*
+  - test-applications/cdn-apps/as/*
   - test-applications/http-apps/*
 
 onlyBuiltDependencies:

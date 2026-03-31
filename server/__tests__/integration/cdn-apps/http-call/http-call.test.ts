@@ -1,15 +1,31 @@
+/**
+ * CDN WASM Runner - proxy_http_call Tests
+ *
+ * Tests that proxy_http_call dispatch works correctly.
+ * Runs the same assertions against all language variants (AS, Rust).
+ *
+ * Spins up a local HTTP server as the dispatch target.
+ */
+
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { loadCdnAppWasm, WASM_TEST_BINARIES } from '../../utils/wasm-loader';
+import { readFile } from 'fs/promises';
 import { createTestRunner, createHookCall, logsContain } from '../../utils/test-helpers';
+import {
+  CDN_APP_VARIANTS,
+  resolveCdnWasmPath,
+  cdnWasmExists,
+} from '../shared/variants';
+
+const CATEGORY = 'http-call';
+const WASM_FILE = 'http-call.wasm';
 
 describe('http_call - proxy_http_call support', () => {
   let server: http.Server;
   let port: number;
 
   beforeAll(async () => {
-    // Start a lightweight local HTTP server as the http_call target
     server = http.createServer((_req, res) => {
       res.writeHead(200, {
         'content-type': 'application/json',
@@ -31,36 +47,33 @@ describe('http_call - proxy_http_call support', () => {
     });
   });
 
-  it('should dispatch http_call, receive response, and return Continue', async () => {
-    const runner = createTestRunner();
-    const wasmBinary = await loadCdnAppWasm(
-      'http-call',
-      WASM_TEST_BINARIES.cdnApps.httpCall.httpCall,
-    );
-    await runner.load(Buffer.from(wasmBinary));
+  for (const variant of CDN_APP_VARIANTS) {
+    const wasmPath = resolveCdnWasmPath(variant, CATEGORY, WASM_FILE);
+    const describeFn = cdnWasmExists(variant, CATEGORY, WASM_FILE)
+      ? describe
+      : describe.skip;
 
-    // Point :authority at the local test server so the WASM dispatches there
-    const result = await runner.callHook(createHookCall('onRequestHeaders', {
-      ':method': 'GET',
-      ':path': '/test',
-      ':authority': `127.0.0.1:${port}`,
-      ':scheme': 'http',
-    }));
+    describeFn(`[${variant.name}]`, () => {
+      it('should dispatch http_call, receive response, and return Continue', async () => {
+        const runner = createTestRunner();
+        const wasmBinary = new Uint8Array(await readFile(wasmPath));
+        await runner.load(Buffer.from(wasmBinary));
 
-    // After the PAUSE loop resolves, returnCode should be Continue (0), not PAUSE (1)
-    expect(result.returnCode).not.toBe(1);
-    expect(result.returnCode).toBe(0);
+        const result = await runner.callHook(createHookCall('onRequestHeaders', {
+          ':method': 'GET',
+          ':path': '/test',
+          ':authority': `127.0.0.1:${port}`,
+          ':scheme': 'http',
+        }));
 
-    // WASM logs "Received http call response with token id: 0, ..."
-    expect(logsContain(result, 'Received http call response with token id: 0')).toBe(true);
+        expect(result.returnCode).toBe(0);
+        expect(logsContain(result, 'Received http call response with token id: 0')).toBe(true);
+        expect(logsContain(result, 'User-Agent: Some(')).toBe(true);
+        expect(logsContain(result, 'Response body: Some(')).toBe(true);
+        expect(logsContain(result, 'HTTP call response was received successfully, resuming request.')).toBe(true);
 
-    // WASM logs "User-Agent: Some(...)" from the response header
-    expect(logsContain(result, 'User-Agent: Some(')).toBe(true);
-
-    // WASM logs the response body
-    expect(logsContain(result, 'Response body: Some(')).toBe(true);
-
-    // WASM logs the final state transition
-    expect(logsContain(result, 'HTTP call response was received successfully, resuming request.')).toBe(true);
-  });
+        await runner.cleanup();
+      });
+    });
+  }
 });

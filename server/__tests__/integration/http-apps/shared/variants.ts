@@ -20,8 +20,8 @@ export interface HttpAppVariant {
 
 export const HTTP_APP_VARIANTS: HttpAppVariant[] = [
   { name: 'js', wasmDir: 'js' },
-  { name: 'rust-sync', wasmDir: 'rust/sync' },
-  { name: 'rust-async', wasmDir: 'rust/async' },
+  { name: 'rust-basic', wasmDir: 'rust/basic' },
+  { name: 'rust-wasi', wasmDir: 'rust/wasi' },
 ];
 
 /**

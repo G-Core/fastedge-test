@@ -43,14 +43,14 @@ export async function loadCdnAppWasm(
   subCategory: string,
   filename: string
 ): Promise<Uint8Array> {
-  return loadWasmBinary('cdn-apps', subCategory, filename);
+  return loadWasmBinary('cdn-apps', `as/${subCategory}`, filename);
 }
 
 /**
  * Loads an HTTP app WASM binary from wasm/http-apps/{subCategory}/{filename}
  *
- * @param subCategory - The sub-category folder (e.g., 'sdk-examples')
- * @param filename - The WASM filename (e.g., 'sdk-basic.wasm')
+ * @param subCategory - The sub-category folder (e.g., 'js', 'rust/wasi')
+ * @param filename - The WASM filename (e.g., 'hello-world.wasm')
  * @returns The WASM binary as a Uint8Array
  */
 export async function loadHttpAppWasm(
@@ -95,21 +95,21 @@ export const WASM_TEST_BINARIES = {
   },
   httpApps: {
     js: {
-      basic: 'basic.wasm',
+      helloWorld: 'hello-world.wasm',
       httpResponder: 'http-responder.wasm',
       downstreamFetch: 'downstream-fetch.wasm',
       headers: 'headers.wasm',
       variablesAndSecrets: 'variables-and-secrets.wasm',
     },
-    rustSync: {
-      basic: 'basic.wasm',
+    rustBasic: {
+      helloWorld: 'hello-world.wasm',
       httpResponder: 'http-responder.wasm',
       downstreamFetch: 'downstream-fetch.wasm',
       headers: 'headers.wasm',
       variablesAndSecrets: 'variables-and-secrets.wasm',
     },
-    rustAsync: {
-      basic: 'basic.wasm',
+    rustWasi: {
+      helloWorld: 'hello-world.wasm',
       httpResponder: 'http-responder.wasm',
       downstreamFetch: 'downstream-fetch.wasm',
       headers: 'headers.wasm',

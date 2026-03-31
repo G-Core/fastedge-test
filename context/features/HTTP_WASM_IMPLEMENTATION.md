@@ -75,7 +75,7 @@ isLegacySyncWasm(buffer)
 
 **Deprecation**: The `#[fastedge::http]` sync pattern is deprecated. The `legacy-wasm-detect.ts` module and `isLegacySync` field in `HttpWasmRunner` are self-contained — delete them when sync support is retired.
 
-**Test apps**: 5 Rust sync + 5 Rust async apps in `test-applications/http-apps/rust/` mirror the 5 JS apps 1:1 in name and behavior. All build with `cargo build --target wasm32-wasip1` (no `cargo-component` needed).
+**Test apps**: 5 Rust basic + 5 Rust wasi apps in `test-applications/http-apps/rust/` mirror the 5 JS apps 1:1 in name and behavior. All build with `cargo build --target wasm32-wasip1` (no `cargo-component` needed).
 
 ---
 

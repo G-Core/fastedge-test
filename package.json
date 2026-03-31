@@ -43,7 +43,7 @@
     "build:backend": "node esbuild/bundle-server.js",
     "build:frontend": "cd frontend && pnpm exec vite build",
     "build:test-apps": "npm-run-all -p build:cdn-test-apps build:http-test-apps",
-    "build:cdn-test-apps": "pnpm -r --filter './test-applications/cdn-apps/*' build",
+    "build:cdn-test-apps": "pnpm -r --filter './test-applications/cdn-apps/as/*' build",
     "build:http-test-apps": "pnpm -r --filter './test-applications/http-apps/*' build",
     "check-types": "tsc -p server/tsconfig.json --noEmit",
     "dev": "npm-run-all -p dev:backend dev:frontend",

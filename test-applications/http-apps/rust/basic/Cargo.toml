@@ -1,0 +1,8 @@
+[workspace]
+members = ["hello-world", "http-responder", "downstream-fetch", "headers", "variables-and-secrets", "echo-post"]
+resolver = "2"
+
+[workspace.dependencies]
+fastedge = "0.3"
+anyhow = "1"
+serde_json = "1"

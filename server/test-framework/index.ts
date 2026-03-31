@@ -5,27 +5,37 @@
  * Import via: import { defineTestSuite, runTestSuite } from '@gcoredev/fastedge-test/test'
  */
 
-export { defineTestSuite, runTestSuite, runAndExit, runFlow, loadConfigFile } from "./suite-runner.js";
+export { defineTestSuite, runTestSuite, runAndExit, runFlow, runHttpRequest, loadConfigFile } from "./suite-runner.js";
 
 export {
-  // Header assertions
+  // CDN hook assertions
   assertRequestHeader,
   assertNoRequestHeader,
   assertResponseHeader,
   assertNoResponseHeader,
-  // Final response assertions
+  // CDN final response assertions
   assertFinalStatus,
   assertFinalHeader,
-  // Return code
+  // CDN return code
   assertReturnCode,
-  // Log assertions
+  // CDN log assertions
   assertLog,
   assertNoLog,
   logsContain,
-  // Property access
+  // CDN property access
   hasPropertyAccessViolation,
   assertPropertyAllowed,
   assertPropertyDenied,
+  // HTTP response assertions
+  assertHttpStatus,
+  assertHttpHeader,
+  assertHttpNoHeader,
+  assertHttpBody,
+  assertHttpBodyContains,
+  assertHttpJson,
+  assertHttpContentType,
+  assertHttpLog,
+  assertHttpNoLog,
 } from "./assertions.js";
 
 export type {
@@ -34,5 +44,6 @@ export type {
   TestResult,
   SuiteResult,
   FlowOptions,
+  HttpRequestOptions,
   RunnerConfig,
 } from "./types.js";

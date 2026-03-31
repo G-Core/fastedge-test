@@ -1,8 +1,0 @@
-[workspace]
-members = ["basic", "http-responder", "downstream-fetch", "headers", "variables-and-secrets"]
-resolver = "2"
-
-[workspace.dependencies]
-fastedge = { git = "https://github.com/G-Core/FastEdge-sdk-rust" }
-anyhow = "1"
-serde_json = "1"
