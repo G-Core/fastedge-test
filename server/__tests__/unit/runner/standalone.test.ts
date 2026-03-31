@@ -12,7 +12,7 @@ import { createRunner, createRunnerFromBuffer } from '../../../runner/standalone
 import { NullStateManager } from '../../../runner/NullStateManager';
 import type { IStateManager } from '../../../runner/IStateManager';
 
-const PROXY_WASM = resolve(__dirname, '../../../../wasm/cdn-apps/headers/headers-change.wasm');
+const PROXY_WASM = resolve(__dirname, '../../../../wasm/cdn-apps/as/headers/headers-change.wasm');
 
 describe('NullStateManager', () => {
   it('satisfies the IStateManager interface', () => {

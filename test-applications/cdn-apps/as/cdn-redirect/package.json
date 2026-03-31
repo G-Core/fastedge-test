@@ -1,0 +1,18 @@
+{
+  "name": "cdn_redirect",
+  "version": "0.0.1",
+  "description": "FastEdge CDN application for integration tests - send_http_response redirect",
+  "type": "module",
+  "scripts": {
+    "build": "npm-run-all -s clean build:all copy:all clean",
+    "build:all": "npm-run-all -p build:redirect",
+    "build:redirect": "asc assembly/redirect.ts --target release --outFile build/redirect.wasm --textFile build/redirect.wat --sourceMap --optimize",
+    "copy:all": "npm-run-all -p copy:redirect",
+    "copy:redirect": "npx cross-env NAME=redirect npm run mv:file",
+    "mv:file": "mv build/$NAME.wasm ../../../../wasm/cdn-apps/as/redirect/$NAME.wasm",
+    "clean": "rm -rf build && mkdir -p build"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "license": "ISC"
+}

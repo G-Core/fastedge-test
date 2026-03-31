@@ -115,17 +115,17 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@20.19.30)(@vitest/ui@4.0.18)(happy-dom@20.5.0)(jsdom@28.0.0)(terser@5.46.0)
 
-  test-applications/cdn-apps/as_utils: {}
+  test-applications/cdn-apps/as/as_utils: {}
 
-  test-applications/cdn-apps/cdn-headers: {}
+  test-applications/cdn-apps/as/cdn-headers: {}
 
-  test-applications/cdn-apps/cdn-http-call: {}
+  test-applications/cdn-apps/as/cdn-http-call: {}
 
-  test-applications/cdn-apps/cdn-properties: {}
+  test-applications/cdn-apps/as/cdn-properties: {}
 
-  test-applications/cdn-apps/cdn-redirect: {}
+  test-applications/cdn-apps/as/cdn-redirect: {}
 
-  test-applications/cdn-apps/cdn-variables-and-secrets: {}
+  test-applications/cdn-apps/as/cdn-variables-and-secrets: {}
 
   test-applications/http-apps/js:
     devDependencies:

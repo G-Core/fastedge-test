@@ -282,7 +282,7 @@ interface RunnerConfig {
 | Field                            | Type       | Default       | Description                                                                                                                                                                                                                                                    |
 | -------------------------------- | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `dotenv.enabled`                 | `boolean`  | `false`       | Whether to load `.env` files                                                                                                                                                                                                                                   |
-| `dotenv.path`                    | `string`   | `undefined`   | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. test fixture directories). |
+| `dotenv.path`                    | `string`   | `undefined`   | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory). |
 | `enforceProductionPropertyRules` | `boolean`  | `true`        | Restrict property access to match CDN production behavior                                                                                                                                                                                                      |
 | `runnerType`                     | `WasmType` | auto-detected | Override WASM type detection                                                                                                                                                                                                                                   |
 
@@ -410,9 +410,9 @@ type LogEntry = {
 };
 
 enum ProxyStatus {
-  Ok           = 0,
-  NotFound     = 1,
-  BadArgument  = 2,
+  Ok          = 0,
+  NotFound    = 1,
+  BadArgument = 2,
 }
 ```
 

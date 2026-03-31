@@ -13,8 +13,18 @@ import {
   hasPropertyAccessViolation,
   assertPropertyAllowed,
   assertPropertyDenied,
+  assertHttpStatus,
+  assertHttpHeader,
+  assertHttpNoHeader,
+  assertHttpBody,
+  assertHttpBodyContains,
+  assertHttpJson,
+  assertHttpContentType,
+  assertHttpLog,
+  assertHttpNoLog,
 } from '../../../test-framework/assertions';
 import type { HookResult, FullFlowResult } from '../../../runner/types';
+import type { HttpResponse } from '../../../runner/IWasmRunner';
 
 // ─── Minimal mock builders ────────────────────────────────────────────────────
 
@@ -239,5 +249,174 @@ describe('assertPropertyDenied', () => {
   it('throws when no denial log is present', () => {
     const result = makeHookResult();
     expect(() => assertPropertyDenied(result, 'request.id')).toThrow("access to be denied");
+  });
+});
+
+// ─── HTTP response assertion helpers ─────────────────────────────────────────
+
+function makeHttpResponse(overrides: Partial<HttpResponse> = {}): HttpResponse {
+  return {
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    body: '',
+    contentType: 'text/plain',
+    logs: [],
+    ...overrides,
+  };
+}
+
+// ─── assertHttpStatus ────────────────────────────────────────────────────────
+
+describe('assertHttpStatus', () => {
+  it('passes when status matches', () => {
+    const res = makeHttpResponse({ status: 201 });
+    expect(() => assertHttpStatus(res, 201)).not.toThrow();
+  });
+
+  it('throws when status does not match', () => {
+    const res = makeHttpResponse({ status: 200 });
+    expect(() => assertHttpStatus(res, 404)).toThrow('Expected HTTP status 404, got 200');
+  });
+});
+
+// ─── assertHttpHeader ────────────────────────────────────────────────────────
+
+describe('assertHttpHeader', () => {
+  it('passes when header is present', () => {
+    const res = makeHttpResponse({ headers: { 'x-foo': 'bar' } });
+    expect(() => assertHttpHeader(res, 'x-foo')).not.toThrow();
+  });
+
+  it('passes when header matches expected value', () => {
+    const res = makeHttpResponse({ headers: { 'x-foo': 'bar' } });
+    expect(() => assertHttpHeader(res, 'x-foo', 'bar')).not.toThrow();
+  });
+
+  it('matches headers case-insensitively', () => {
+    const res = makeHttpResponse({ headers: { 'Content-Type': 'text/html' } });
+    expect(() => assertHttpHeader(res, 'content-type', 'text/html')).not.toThrow();
+  });
+
+  it('throws when header is missing', () => {
+    const res = makeHttpResponse();
+    expect(() => assertHttpHeader(res, 'x-foo')).toThrow("header 'x-foo' to be set");
+  });
+
+  it('throws when header value does not match', () => {
+    const res = makeHttpResponse({ headers: { 'x-foo': 'actual' } });
+    expect(() => assertHttpHeader(res, 'x-foo', 'expected')).toThrow("'expected', got 'actual'");
+  });
+});
+
+// ─── assertHttpNoHeader ──────────────────────────────────────────────────────
+
+describe('assertHttpNoHeader', () => {
+  it('passes when header is absent', () => {
+    const res = makeHttpResponse();
+    expect(() => assertHttpNoHeader(res, 'x-secret')).not.toThrow();
+  });
+
+  it('throws when header is present', () => {
+    const res = makeHttpResponse({ headers: { 'x-secret': 'leak' } });
+    expect(() => assertHttpNoHeader(res, 'x-secret')).toThrow("'x-secret' to be absent");
+  });
+
+  it('matches case-insensitively', () => {
+    const res = makeHttpResponse({ headers: { 'X-Secret': 'leak' } });
+    expect(() => assertHttpNoHeader(res, 'x-secret')).toThrow("'x-secret' to be absent");
+  });
+});
+
+// ─── assertHttpBody ──────────────────────────────────────────────────────────
+
+describe('assertHttpBody', () => {
+  it('passes when body matches exactly', () => {
+    const res = makeHttpResponse({ body: 'hello world' });
+    expect(() => assertHttpBody(res, 'hello world')).not.toThrow();
+  });
+
+  it('throws when body does not match', () => {
+    const res = makeHttpResponse({ body: 'hello world' });
+    expect(() => assertHttpBody(res, 'goodbye')).toThrow("Expected HTTP body to be 'goodbye'");
+  });
+});
+
+// ─── assertHttpBodyContains ──────────────────────────────────────────────────
+
+describe('assertHttpBodyContains', () => {
+  it('passes when body contains substring', () => {
+    const res = makeHttpResponse({ body: 'hello world' });
+    expect(() => assertHttpBodyContains(res, 'world')).not.toThrow();
+  });
+
+  it('throws when body does not contain substring', () => {
+    const res = makeHttpResponse({ body: 'hello world' });
+    expect(() => assertHttpBodyContains(res, 'missing')).toThrow("to contain 'missing'");
+  });
+});
+
+// ─── assertHttpJson ──────────────────────────────────────────────────────────
+
+describe('assertHttpJson', () => {
+  it('parses valid JSON and returns it', () => {
+    const res = makeHttpResponse({ body: '{"name":"test","value":42}' });
+    const json = assertHttpJson(res);
+    expect(json).toEqual({ name: 'test', value: 42 });
+  });
+
+  it('throws when body is not valid JSON', () => {
+    const res = makeHttpResponse({ body: 'not json' });
+    expect(() => assertHttpJson(res)).toThrow('Expected HTTP body to be valid JSON');
+  });
+});
+
+// ─── assertHttpContentType ───────────────────────────────────────────────────
+
+describe('assertHttpContentType', () => {
+  it('passes when content-type contains expected string', () => {
+    const res = makeHttpResponse({ contentType: 'application/json; charset=utf-8' });
+    expect(() => assertHttpContentType(res, 'application/json')).not.toThrow();
+  });
+
+  it('matches case-insensitively', () => {
+    const res = makeHttpResponse({ contentType: 'Application/JSON' });
+    expect(() => assertHttpContentType(res, 'application/json')).not.toThrow();
+  });
+
+  it('throws when content-type does not match', () => {
+    const res = makeHttpResponse({ contentType: 'text/plain' });
+    expect(() => assertHttpContentType(res, 'application/json')).toThrow("to contain 'application/json'");
+  });
+
+  it('throws when content-type is null', () => {
+    const res = makeHttpResponse({ contentType: null });
+    expect(() => assertHttpContentType(res, 'text/plain')).toThrow("to contain 'text/plain'");
+  });
+});
+
+// ─── assertHttpLog / assertHttpNoLog ─────────────────────────────────────────
+
+describe('assertHttpLog', () => {
+  it('passes when a log contains the substring', () => {
+    const res = makeHttpResponse({ logs: [{ level: 2, message: 'request processed' }] });
+    expect(() => assertHttpLog(res, 'processed')).not.toThrow();
+  });
+
+  it('throws when no log contains the substring', () => {
+    const res = makeHttpResponse();
+    expect(() => assertHttpLog(res, 'missing')).toThrow("log message containing 'missing'");
+  });
+});
+
+describe('assertHttpNoLog', () => {
+  it('passes when no log contains the substring', () => {
+    const res = makeHttpResponse({ logs: [{ level: 2, message: 'ok' }] });
+    expect(() => assertHttpNoLog(res, 'error')).not.toThrow();
+  });
+
+  it('throws when a log contains the substring', () => {
+    const res = makeHttpResponse({ logs: [{ level: 4, message: 'fatal error' }] });
+    expect(() => assertHttpNoLog(res, 'error')).toThrow("no HTTP log containing 'error'");
   });
 });

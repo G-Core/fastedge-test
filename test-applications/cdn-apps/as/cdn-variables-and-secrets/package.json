@@ -1,0 +1,18 @@
+{
+  "name": "cdn_variables_and_secrets",
+  "version": "0.0.1",
+  "description": "FastEdge CDN application for integration tests - env vars and secrets access",
+  "type": "module",
+  "scripts": {
+    "build": "npm-run-all -s clean build:all copy:all clean",
+    "build:all": "npm-run-all -p build:variables-and-secrets",
+    "build:variables-and-secrets": "asc assembly/variables-and-secrets.ts --target release --outFile build/variables-and-secrets.wasm --textFile build/variables-and-secrets.wat --sourceMap --optimize",
+    "copy:all": "npm-run-all -p copy:variables-and-secrets",
+    "copy:variables-and-secrets": "npx cross-env NAME=variables-and-secrets npm run mv:file",
+    "mv:file": "mv build/$NAME.wasm ../../../../wasm/cdn-apps/as/variables-and-secrets/$NAME.wasm",
+    "clean": "rm -rf build && mkdir -p build"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "license": "ISC"
+}

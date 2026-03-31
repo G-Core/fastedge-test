@@ -16,12 +16,12 @@ The port can be overridden via the `PORT` environment variable. When `WORKSPACE_
 
 The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
-| Value        | Description                                             |
-| ------------ | ------------------------------------------------------- |
-| `ui`         | Request originated from the web UI (default if omitted) |
-| `ai_agent`   | Request originated from an AI agent                     |
-| `api`        | Request originated from direct API usage                |
-| `system`     | Request originated from an automated system             |
+| Value      | Description                                             |
+| ---------- | ------------------------------------------------------- |
+| `ui`       | Request originated from the web UI (default if omitted) |
+| `ai_agent` | Request originated from an AI agent                     |
+| `api`      | Request originated from direct API usage                |
+| `system`   | Request originated from an automated system             |
 
 ```http
 X-Source: ai_agent
@@ -892,12 +892,12 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Request Schemas
 
-| Name           | Description                                |
-| -------------- | ------------------------------------------ |
-| `api-load`     | Request body schema for `POST /api/load`   |
-| `api-send`     | Request body schema for `POST /api/send`   |
-| `api-call`     | Request body schema for `POST /api/call`   |
-| `api-config`   | Request body schema for `POST /api/config` |
+| Name         | Description                                |
+| ------------ | ------------------------------------------ |
+| `api-load`   | Request body schema for `POST /api/load`   |
+| `api-send`   | Request body schema for `POST /api/send`   |
+| `api-call`   | Request body schema for `POST /api/call`   |
+| `api-config` | Request body schema for `POST /api/config` |
 
 #### Response / Type Schemas
 
@@ -958,11 +958,11 @@ When a request body fails schema validation (Zod), `error` is the flattened Zod 
 
 **Common status codes**
 
-| Status | Meaning                                                                                       |
-| ------ | --------------------------------------------------------------------------------------------- |
-| `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded)  |
-| `404`  | Resource not found (config file, schema file)                                                 |
-| `500`  | Internal server error during execution or I/O                                                 |
+| Status | Meaning                                                                                      |
+| ------ | -------------------------------------------------------------------------------------------- |
+| `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded) |
+| `404`  | Resource not found (config file, schema file)                                                |
+| `500`  | Internal server error during execution or I/O                                                |
 
 ---
 

@@ -2,7 +2,7 @@
  * HTTP WASM Runner - Downstream Fetch & Modify Response Tests
  *
  * Tests for HTTP WASM apps that fetch from a downstream API and modify the response.
- * Runs the same assertions against all language variants (JS, Rust sync, Rust async).
+ * Runs the same assertions against all language variants (JS, Rust basic, Rust wasi).
  *
  * App behavior:
  * - Fetches from http://jsonplaceholder.typicode.com/users
@@ -11,12 +11,14 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import type { IWasmRunner, HttpResponse } from '../../../../runner/IWasmRunner';
+import type { IWasmRunner } from '../../../../runner/IWasmRunner';
+import { runHttpRequest } from '../../../../test-framework/suite-runner';
 import {
-  createHttpWasmRunner,
-  isSuccessResponse,
-  hasContentType,
-} from '../../utils/http-wasm-helpers';
+  assertHttpStatus,
+  assertHttpContentType,
+  assertHttpJson,
+} from '../../../../test-framework/assertions';
+import { createHttpWasmRunner } from '../../utils/http-wasm-helpers';
 import { HTTP_APP_VARIANTS, resolveWasmPath, wasmExists } from '../shared/variants';
 
 for (const variant of HTTP_APP_VARIANTS) {
@@ -42,75 +44,30 @@ for (const variant of HTTP_APP_VARIANTS) {
       expect(runner.getType()).toBe('http-wasm');
     });
 
-    it('should make downstream fetch and return modified JSON response', async () => {
-      const response = await runner.execute({
+    it('should fetch downstream, return JSON with 5 users and correct structure', async () => {
+      const response = await runHttpRequest(runner, {
         path: '/',
         method: 'GET',
-        headers: {},
-        body: '',
       });
 
-      expect(isSuccessResponse(response)).toBe(true);
-      expect(response.status).toBe(200);
-      expect(response.statusText).toBe('OK');
-    }, 10000);
+      // Response basics
+      assertHttpStatus(response, 200);
+      assertHttpContentType(response, 'application/json');
 
-    it('should return application/json content-type', async () => {
-      const response = await runner.execute({
-        path: '/',
-        method: 'GET',
-        headers: {},
-        body: '',
-      });
-
-      expect(hasContentType(response, 'application/json')).toBe(true);
-    }, 10000);
-
-    it('should return JSON with expected structure (users, total, skip, limit)', async () => {
-      const response = await runner.execute({
-        path: '/',
-        method: 'GET',
-        headers: {},
-        body: '',
-      });
-
-      const json = JSON.parse(response.body);
-
-      expect(json).toHaveProperty('users');
-      expect(json).toHaveProperty('total');
-      expect(json).toHaveProperty('skip');
-      expect(json).toHaveProperty('limit');
-
+      // JSON structure
+      const json = assertHttpJson<{
+        users: Array<{ id: number; name: string; username: string; email: string }>;
+        total: number;
+        skip: number;
+        limit: number;
+      }>(response);
       expect(Array.isArray(json.users)).toBe(true);
-      expect(typeof json.total).toBe('number');
-      expect(typeof json.skip).toBe('number');
-      expect(typeof json.limit).toBe('number');
-    }, 10000);
-
-    it('should return exactly 5 users (sliced from downstream response)', async () => {
-      const response = await runner.execute({
-        path: '/',
-        method: 'GET',
-        headers: {},
-        body: '',
-      });
-
-      const json = JSON.parse(response.body);
-
       expect(json.users).toHaveLength(5);
       expect(json.total).toBe(5);
-    }, 10000);
+      expect(json.skip).toBe(0);
+      expect(json.limit).toBe(30);
 
-    it('should return valid user objects with expected properties', async () => {
-      const response = await runner.execute({
-        path: '/',
-        method: 'GET',
-        headers: {},
-        body: '',
-      });
-
-      const json = JSON.parse(response.body);
-
+      // User object shape
       const firstUser = json.users[0];
       expect(firstUser).toHaveProperty('id');
       expect(firstUser).toHaveProperty('name');
@@ -118,40 +75,19 @@ for (const variant of HTTP_APP_VARIANTS) {
       expect(firstUser).toHaveProperty('email');
     }, 10000);
 
-    it('should set skip to 0 and limit to 30', async () => {
-      const response = await runner.execute({
-        path: '/',
-        method: 'GET',
-        headers: {},
-        body: '',
-      });
-
-      const json = JSON.parse(response.body);
-
-      expect(json.skip).toBe(0);
-      expect(json.limit).toBe(30);
-    }, 10000);
-
     it('should work consistently across multiple requests', async () => {
-      const responses: HttpResponse[] = [];
-
       for (let i = 0; i < 3; i++) {
-        const response = await runner.execute({
+        const response = await runHttpRequest(runner, {
           path: '/',
           method: 'GET',
-          headers: {},
-          body: '',
         });
-        responses.push(response);
-      }
 
-      responses.forEach((response, index) => {
-        expect(isSuccessResponse(response), `Request ${index + 1} failed`).toBe(true);
+        assertHttpStatus(response, 200);
 
-        const json = JSON.parse(response.body);
+        const json = assertHttpJson<{ users: unknown[]; total: number }>(response);
         expect(json.users).toHaveLength(5);
         expect(json.total).toBe(5);
-      });
+      }
     }, 30000);
   });
 }
