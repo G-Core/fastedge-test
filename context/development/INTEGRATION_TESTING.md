@@ -83,7 +83,7 @@ server/__tests__/integration/     # Integration test files
 │   ├── shared/
 │   │   └── variants.ts           # CDN variant definitions (as, rust)
 │   ├── property-access/          # Property access tests (35 tests, AS only)
-│   ├── full-flow/                # CDN + downstream HTTP service tests (7 tests, AS only)
+│   ├── full-flow/                # CDN full-flow tests (15 tests: 7 downstream + 8 built-in responder, AS only)
 │   ├── http-call/                # proxy_http_call tests (2 tests, parameterized AS + Rust)
 │   ├── redirect/                 # send_http_response short-circuit tests (5 tests, AS only)
 │   └── variables-and-secrets/    # CDN env var/secret tests (14 tests, parameterized AS + Rust)
@@ -254,6 +254,26 @@ Tests that a CDN app can return a local response (e.g., 302 redirect) without co
 
 See `features/SEND_HTTP_RESPONSE.md` for full design details.
 
+### CDN Built-In Responder (8 tests)
+
+Tests that don't need a real downstream origin can use `targetUrl === "built-in"` to generate a local response. This avoids spawning `http-responder`, allocating ports, and network I/O — tests run ~160x faster (46ms vs 7340ms).
+
+**Control headers** (set on request, stripped before response):
+- `x-debugger-status` — response status code (default `200`)
+- `x-debugger-content` — `"body-only"` (echo request body) or `"status-only"` (empty body)
+
+```typescript
+const result = await cdnRunner.callFullFlow(
+  'built-in',   // triggers built-in responder
+  'GET',
+  { 'x-debugger-status': '404' },
+  '', {}, '', 200, 'OK', {}, true
+);
+// result.finalResponse.status === 404
+```
+
+See `features/BUILT_IN_RESPONDER.md` for full design and all response modes.
+
 ### CDN Test Helpers (`utils/test-helpers.ts`)
 
 #### `createTestRunner(fastEdgeConfig?)`
@@ -294,9 +314,9 @@ pnpm test
 - `variables-and-secrets/variables-and-secrets.test.ts` — 3 tests x 3 variants = 9
 - `hybrid-loading.test.ts` — 14 tests (not parameterized)
 
-**CDN (proxy-wasm)**: 79 passing tests across 11 test files:
+**CDN (proxy-wasm)**: 87 passing tests across 12 test files:
 - `property-access/` — 43 tests (6 files, AS only)
-- `full-flow/` — 7 tests (1 file, AS only)
+- `full-flow/` — 15 tests (2 files: `headers-change-with-downstream` 7 tests + `built-in-responder` 8 tests, AS only)
 - `http-call/` — 10 tests (2 files; `http-call.test.ts` parameterized x2 variants, `all-hooks-http-call.test.ts` AS only)
 - `redirect/` — 5 tests (1 file, AS only)
 - `variables-and-secrets/` — 14 tests (1 file, parameterized x2 variants)

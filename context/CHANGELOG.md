@@ -1,5 +1,43 @@
 # Proxy-WASM Runner - Changelog
 
+## March 31, 2026 - Built-In Responder for CDN Runner
+
+### Overview
+Added a built-in origin responder to the CDN proxy-wasm runner. When `targetUrl === "built-in"` is passed to `callFullFlow()`, the runner generates a local response instead of making a real HTTP fetch. Two control headers (`x-debugger-status`, `x-debugger-content`) allow tests to customize the response status and body format without spinning up an external HTTP service.
+
+### What Was Completed
+
+#### 1. Built-In Responder Logic (`server/runner/ProxyWasmRunner.ts`)
+- Check for `targetUrl === "built-in"` after `onRequestBody`, before origin fetch
+- Three response modes: full JSON echo (default), `body-only` (mirrors request body + content-type), `status-only` (empty body)
+- Control headers `x-debugger-status` and `x-debugger-content` stripped before building response
+- All four hooks still fire normally — only the fetch is replaced
+- Shared response variables converge with the existing fetch path for response hooks
+
+#### 2. Integration Tests (`server/__tests__/integration/cdn-apps/full-flow/built-in-responder.test.ts`)
+- 8 tests covering: default echo, header stripping, custom status, body-only mode, status-only mode, all hooks firing, WASM response header injection, WASM request header injection in echo
+- Tests complete in ~46ms vs ~7340ms for downstream HTTP app tests (160x speedup)
+
+**Files Modified:**
+- `server/runner/ProxyWasmRunner.ts` — Built-in responder branch in `callFullFlowLegacy()`
+
+**Files Created:**
+- `server/__tests__/integration/cdn-apps/full-flow/built-in-responder.test.ts` — 8 integration tests
+- `context/features/BUILT_IN_RESPONDER.md` — Feature documentation
+
+### Testing
+```bash
+pnpm test   # 87 CDN tests pass (was 79), 71 HTTP tests pass — 0 regressions
+```
+
+### Notes
+- Only the exact string `"built-in"` triggers the responder — any other URL follows the normal fetch path
+- `x-debugger-*` prefix chosen over `x-response-*` to avoid collision with developer-defined headers
+- `http-responder` downstream tests kept alongside for production parity validation of the real fetch path
+- Only 2 test files use the external http-responder: `headers-change-with-downstream.test.ts` (real fetch validation) and `all-hooks-http-call.test.ts` (proxy_http_call from within WASM)
+
+---
+
 ## March 31, 2026 - Rust CDN Test Apps + Parameterized CDN Testing
 
 ### Overview

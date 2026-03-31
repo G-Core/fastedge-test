@@ -115,13 +115,20 @@ export async function runFlow(
     enforceProductionPropertyRules = true,
   } = options;
 
-  const parsed = new URL(url);
-  const pseudoDefaults: Record<string, string> = {
-    ":method": method,
-    ":path": parsed.pathname + parsed.search,
-    ":authority": parsed.host,
-    ":scheme": parsed.protocol.replace(":", ""),
-  };
+  // Derive pseudo-headers from URL when it's a valid URL.
+  // For non-URL targets (e.g. "built-in"), skip pseudo-header derivation.
+  let pseudoDefaults: Record<string, string> = {};
+  try {
+    const parsed = new URL(url);
+    pseudoDefaults = {
+      ":method": method,
+      ":path": parsed.pathname + parsed.search,
+      ":authority": parsed.host,
+      ":scheme": parsed.protocol.replace(":", ""),
+    };
+  } catch {
+    // Not a valid URL (e.g. "built-in") — no pseudo-headers to derive
+  }
 
   const requestHeaders = { ...pseudoDefaults, ...(options.requestHeaders ?? {}) };
 

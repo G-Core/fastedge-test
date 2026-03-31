@@ -360,110 +360,163 @@ export class ProxyWasmRunner implements IWasmRunner {
     );
     const requestMethod = call.request.method ?? "GET";
 
-    // Reconstruct target URL from potentially modified properties
-    // WASM can modify request.path, request.scheme, request.host, request.query
-    const modifiedScheme =
-      (propertiesAfterRequestBody["request.scheme"] as string) || "https";
-    const modifiedHost =
-      (propertiesAfterRequestBody["request.host"] as string) || "localhost";
-    const modifiedPath =
-      (propertiesAfterRequestBody["request.path"] as string) || "/";
-    const modifiedQuery =
-      (propertiesAfterRequestBody["request.query"] as string) || "";
+    // Phase 2: Obtain origin response (built-in responder or real HTTP fetch)
+    let responseHeaders: Record<string, string>;
+    let responseBody: string;
+    let responseStatus: number;
+    let responseStatusText: string;
+    let contentType: string;
+    let isBase64 = false;
 
-    const actualTargetUrl = `${modifiedScheme}://${modifiedHost}${modifiedPath}${modifiedQuery ? "?" + modifiedQuery : ""}`;
-
-    this.logDebug(`Original URL: ${targetUrl}`);
-    this.logDebug(`Modified URL: ${actualTargetUrl}`);
-
-    // Phase 2: Perform actual HTTP fetch
     try {
-      this.logDebug(`Fetching ${requestMethod} ${actualTargetUrl}`);
+      if (targetUrl === "built-in") {
+        // Built-in responder: generate response locally without a network fetch.
+        // Control headers (stripped before building the response):
+        //   x-debugger-status  — HTTP status code (default 200)
+        //   x-debugger-content — "body-only" | "status-only" (default: full JSON echo)
+        this.logDebug("Using built-in responder (targetUrl === 'built-in')");
 
-      // Preserve the host header as x-forwarded-host since fetch() will override it
-      const fetchHeaders: Record<string, string> = {
-        ...modifiedRequestHeaders,
-      };
+        responseStatus = parseInt(
+          modifiedRequestHeaders["x-debugger-status"] || "200",
+          10,
+        );
+        responseStatusText = responseStatus === 200 ? "OK" : String(responseStatus);
+        const responseContentMode =
+          modifiedRequestHeaders["x-debugger-content"] || "";
 
-      // If there's a host header, also add it as x-forwarded-host
-      const hostHeader = Object.entries(modifiedRequestHeaders).find(
-        ([key]) => key.toLowerCase() === "host",
-      );
+        // Strip debugger control headers so they don't leak into the echo or response hooks
+        const cleanedHeaders = { ...modifiedRequestHeaders };
+        delete cleanedHeaders["x-debugger-status"];
+        delete cleanedHeaders["x-debugger-content"];
 
-      if (hostHeader) {
-        fetchHeaders["x-forwarded-host"] = hostHeader[1];
-        this.logDebug(`Adding x-forwarded-host: ${hostHeader[1]}`);
-      }
+        if (responseContentMode === "status-only") {
+          responseBody = "";
+          contentType = "text/plain";
+        } else if (responseContentMode === "body-only") {
+          responseBody = modifiedRequestBody || "";
+          contentType = cleanedHeaders["content-type"] || "text/plain";
+        } else {
+          // Default: full JSON echo (similar to http-responder)
+          contentType = "application/json";
+          responseBody = JSON.stringify({
+            method: requestMethod,
+            reqHeaders: cleanedHeaders,
+            reqBody: modifiedRequestBody || "",
+            requestUrl: "built-in",
+          });
+        }
 
-      // Auto-inject standard proxy headers based on URL and properties
-      fetchHeaders["x-forwarded-proto"] = modifiedScheme;
-      this.logDebug(`Adding x-forwarded-proto: ${modifiedScheme}`);
+        responseHeaders = {
+          "content-type": contentType,
+          "content-length": String(Buffer.byteLength(responseBody)),
+        };
 
-      fetchHeaders["x-forwarded-port"] =
-        modifiedScheme === "https" ? "443" : "80";
-      this.logDebug(
-        `Adding x-forwarded-port: ${fetchHeaders["x-forwarded-port"]}`,
-      );
-
-      // Add X-Real-IP and X-Forwarded-For if set in properties
-      const realIp = this.propertyResolver.resolve("request.x_real_ip");
-      if (realIp && realIp !== "") {
-        fetchHeaders["x-real-ip"] = String(realIp);
-        fetchHeaders["x-forwarded-for"] = String(realIp);
-        this.logDebug(`Adding x-real-ip and x-forwarded-for: ${realIp}`);
-      }
-
-      const fetchOptions: RequestInit = {
-        method: requestMethod,
-        headers: fetchHeaders,
-      };
-
-      // Add body for methods that support it
-      if (
-        ["POST", "PUT", "PATCH"].includes(requestMethod.toUpperCase()) &&
-        modifiedRequestBody
-      ) {
-        fetchOptions.body = modifiedRequestBody;
-      }
-
-      const response = await fetch(actualTargetUrl, fetchOptions);
-
-      // Extract response headers
-      const responseHeaders: Record<string, string> = {};
-      response.headers.forEach((value, key) => {
-        responseHeaders[key] = value;
-      });
-
-      const contentType = response.headers.get("content-type") || "text/plain";
-      const responseStatus = response.status;
-      const responseStatusText = response.statusText;
-
-      // Check if response is binary (image, video, audio, etc.)
-      const isBinary =
-        contentType.startsWith("image/") ||
-        contentType.startsWith("video/") ||
-        contentType.startsWith("audio/") ||
-        contentType.includes("application/octet-stream") ||
-        contentType.includes("application/pdf") ||
-        contentType.includes("application/zip");
-
-      let responseBody: string;
-      let isBase64 = false;
-
-      if (isBinary) {
-        // For binary content, convert to base64
-        const arrayBuffer = await response.arrayBuffer();
-        responseBody = Buffer.from(arrayBuffer).toString("base64");
-        isBase64 = true;
         this.logDebug(
-          `Binary response converted to base64 (${arrayBuffer.byteLength} bytes)`,
+          `Built-in responder: ${responseStatus} ${responseStatusText}, mode=${responseContentMode || "full"}`,
         );
       } else {
-        // For text content, just get as text
-        responseBody = await response.text();
-      }
+        // Real HTTP fetch to origin
+        // Reconstruct target URL from potentially modified properties
+        // WASM can modify request.path, request.scheme, request.host, request.query
+        const modifiedScheme =
+          (propertiesAfterRequestBody["request.scheme"] as string) || "https";
+        const modifiedHost =
+          (propertiesAfterRequestBody["request.host"] as string) || "localhost";
+        const modifiedPath =
+          (propertiesAfterRequestBody["request.path"] as string) || "/";
+        const modifiedQuery =
+          (propertiesAfterRequestBody["request.query"] as string) || "";
 
-      this.logDebug(`Fetch completed: ${responseStatus} ${responseStatusText}`);
+        const actualTargetUrl = `${modifiedScheme}://${modifiedHost}${modifiedPath}${modifiedQuery ? "?" + modifiedQuery : ""}`;
+
+        this.logDebug(`Original URL: ${targetUrl}`);
+        this.logDebug(`Modified URL: ${actualTargetUrl}`);
+        this.logDebug(`Fetching ${requestMethod} ${actualTargetUrl}`);
+
+        // Preserve the host header as x-forwarded-host since fetch() will override it
+        const fetchHeaders: Record<string, string> = {
+          ...modifiedRequestHeaders,
+        };
+
+        // If there's a host header, also add it as x-forwarded-host
+        const hostHeader = Object.entries(modifiedRequestHeaders).find(
+          ([key]) => key.toLowerCase() === "host",
+        );
+
+        if (hostHeader) {
+          fetchHeaders["x-forwarded-host"] = hostHeader[1];
+          this.logDebug(`Adding x-forwarded-host: ${hostHeader[1]}`);
+        }
+
+        // Auto-inject standard proxy headers based on URL and properties
+        fetchHeaders["x-forwarded-proto"] = modifiedScheme;
+        this.logDebug(`Adding x-forwarded-proto: ${modifiedScheme}`);
+
+        fetchHeaders["x-forwarded-port"] =
+          modifiedScheme === "https" ? "443" : "80";
+        this.logDebug(
+          `Adding x-forwarded-port: ${fetchHeaders["x-forwarded-port"]}`,
+        );
+
+        // Add X-Real-IP and X-Forwarded-For if set in properties
+        const realIp = this.propertyResolver.resolve("request.x_real_ip");
+        if (realIp && realIp !== "") {
+          fetchHeaders["x-real-ip"] = String(realIp);
+          fetchHeaders["x-forwarded-for"] = String(realIp);
+          this.logDebug(`Adding x-real-ip and x-forwarded-for: ${realIp}`);
+        }
+
+        const fetchOptions: RequestInit = {
+          method: requestMethod,
+          headers: fetchHeaders,
+        };
+
+        // Add body for methods that support it
+        if (
+          ["POST", "PUT", "PATCH"].includes(requestMethod.toUpperCase()) &&
+          modifiedRequestBody
+        ) {
+          fetchOptions.body = modifiedRequestBody;
+        }
+
+        const response = await fetch(actualTargetUrl, fetchOptions);
+
+        // Extract response headers
+        responseHeaders = {};
+        response.headers.forEach((value, key) => {
+          responseHeaders[key] = value;
+        });
+
+        contentType = response.headers.get("content-type") || "text/plain";
+        responseStatus = response.status;
+        responseStatusText = response.statusText;
+
+        // Check if response is binary (image, video, audio, etc.)
+        const isBinary =
+          contentType.startsWith("image/") ||
+          contentType.startsWith("video/") ||
+          contentType.startsWith("audio/") ||
+          contentType.includes("application/octet-stream") ||
+          contentType.includes("application/pdf") ||
+          contentType.includes("application/zip");
+
+        if (isBinary) {
+          // For binary content, convert to base64
+          const arrayBuffer = await response.arrayBuffer();
+          responseBody = Buffer.from(arrayBuffer).toString("base64");
+          isBase64 = true;
+          this.logDebug(
+            `Binary response converted to base64 (${arrayBuffer.byteLength} bytes)`,
+          );
+        } else {
+          // For text content, just get as text
+          responseBody = await response.text();
+        }
+
+        this.logDebug(
+          `Fetch completed: ${responseStatus} ${responseStatusText}`,
+        );
+      }
 
       // Phase 3: Run response hooks with real response data
       // Use modified request headers from Phase 1, not original
