@@ -15,7 +15,7 @@ import { describe, it, expect } from "vitest";
 import { resolve } from "path";
 import { detectWasmType } from "../../../utils/wasmTypeDetector.js";
 
-const WASM_ROOT = resolve(import.meta.dirname, "../../../../wasm");
+const WASM_ROOT = resolve(__dirname, "../../../../wasm");
 
 describe("detectWasmType", () => {
   describe("JS Component Model binaries (compile fails → http-wasm)", () => {
