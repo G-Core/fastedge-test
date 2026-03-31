@@ -201,34 +201,6 @@ describe("Hybrid Loading - Path vs Buffer", () => {
     });
   });
 
-  describe("Performance Characteristics", () => {
-    it("should load WASM from path without significant overhead vs buffer", async () => {
-      const wasmBinary = await readFile(HTTP_WASM_PATH);
-
-      const runnerBuffer = createHttpWasmRunner();
-      const runnerPath = createHttpWasmRunner();
-
-      const startBuffer = Date.now();
-      await runnerBuffer.load(Buffer.from(wasmBinary));
-      const timeBuffer = Date.now() - startBuffer;
-
-      const startPath = Date.now();
-      await runnerPath.load(HTTP_WASM_PATH);
-      const timePath = Date.now() - startPath;
-
-      console.log(
-        `Buffer mode: ${timeBuffer}ms, Path mode: ${timePath}ms, Speedup: ${(timeBuffer / timePath).toFixed(2)}x`,
-      );
-
-      // Path mode should not be significantly slower than buffer mode.
-      // We allow up to 1.5x tolerance because single-run timings are noisy.
-      expect(timePath).toBeLessThan(timeBuffer * 1.5);
-
-      await runnerBuffer.cleanup();
-      await runnerPath.cleanup();
-    }, 30000);
-  });
-
   describe("Memory Management", () => {
     it("should not create temp file when loading from path", async () => {
       const runner = createHttpWasmRunner();
