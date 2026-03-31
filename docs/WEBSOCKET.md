@@ -68,13 +68,13 @@ interface WasmLoadedEvent {
 }
 ```
 
-| Field           | Type                            | Description                                                         |
-| --------------- | ------------------------------- | ------------------------------------------------------------------- |
-| `filename`      | `string`                        | Name of the loaded WASM file                                        |
-| `size`          | `number`                        | File size in bytes                                                  |
-| `runnerPort?`   | `number \| null`                | Port the runner is listening on, if applicable. Omitted when not set |
-| `wasmType`      | `'proxy-wasm' \| 'http-wasm'`   | The WASM filter type                                                |
-| `resolvedPath?` | `string \| null`                | Absolute filesystem path to the loaded binary. Omitted when not set |
+| Field           | Type                           | Description                                                          |
+| --------------- | ------------------------------ | -------------------------------------------------------------------- |
+| `filename`      | `string`                       | Name of the loaded WASM file                                         |
+| `size`          | `number`                       | File size in bytes                                                   |
+| `runnerPort?`   | `number \| null`               | Port the runner is listening on, if applicable. Omitted when not set |
+| `wasmType`      | `'proxy-wasm' \| 'http-wasm'`  | The WASM filter type                                                 |
+| `resolvedPath?` | `string \| null`               | Absolute filesystem path to the loaded binary. Omitted when not set  |
 
 **Example:**
 
@@ -236,16 +236,16 @@ interface RequestCompletedEvent {
 }
 ```
 
-| Field                       | Type                                    | Description                                           |
-| --------------------------- | --------------------------------------- | ----------------------------------------------------- |
-| `hookResults`               | `Record<string, any>`                   | Per-hook execution results, keyed by hook name        |
-| `finalResponse.status`      | `number`                                | HTTP status code                                      |
-| `finalResponse.statusText`  | `string`                                | HTTP status text                                      |
-| `finalResponse.headers`     | `Record<string, string>`                | Response headers                                      |
-| `finalResponse.body`        | `string`                                | Response body (may be base64 if `isBase64` is `true`) |
-| `finalResponse.contentType` | `string`                                | Content-Type of the response                          |
-| `finalResponse.isBase64`    | `boolean \| undefined`                  | Whether `body` is base64-encoded                      |
-| `calculatedProperties`      | `Record<string, unknown> \| undefined`  | Properties computed during execution, if any          |
+| Field                       | Type                                   | Description                                           |
+| --------------------------- | -------------------------------------- | ----------------------------------------------------- |
+| `hookResults`               | `Record<string, any>`                  | Per-hook execution results, keyed by hook name        |
+| `finalResponse.status`      | `number`                               | HTTP status code                                      |
+| `finalResponse.statusText`  | `string`                               | HTTP status text                                      |
+| `finalResponse.headers`     | `Record<string, string>`               | Response headers                                      |
+| `finalResponse.body`        | `string`                               | Response body (may be base64 if `isBase64` is `true`) |
+| `finalResponse.contentType` | `string`                               | Content-Type of the response                          |
+| `finalResponse.isBase64`    | `boolean \| undefined`                 | Whether `body` is base64-encoded                      |
+| `calculatedProperties`      | `Record<string, unknown> \| undefined` | Properties computed during execution, if any          |
 
 **Example:**
 
@@ -417,8 +417,8 @@ interface HttpWasmLogEvent {
 }
 ```
 
-| Field     | Type     | Description      |
-| --------- | -------- | ---------------- |
+| Field     | Type     | Description       |
+| --------- | -------- | ----------------- |
 | `level`   | `number` | Numeric log level |
 | `message` | `string` | Log message text  |
 

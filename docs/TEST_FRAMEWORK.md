@@ -10,14 +10,41 @@ import {
   runTestSuite,
   runAndExit,
   runFlow,
+  runHttpRequest,
   loadConfigFile,
   assertRequestHeader,
+  assertNoRequestHeader,
   assertResponseHeader,
+  assertNoResponseHeader,
   assertFinalStatus,
+  assertFinalHeader,
   assertReturnCode,
   assertLog,
+  assertNoLog,
+  logsContain,
+  hasPropertyAccessViolation,
+  assertPropertyAllowed,
+  assertPropertyDenied,
+  assertHttpStatus,
+  assertHttpHeader,
+  assertHttpNoHeader,
+  assertHttpBody,
+  assertHttpBodyContains,
+  assertHttpJson,
+  assertHttpContentType,
+  assertHttpLog,
+  assertHttpNoLog,
 } from "@gcoredev/fastedge-test/test";
-import type { TestSuite, TestCase, SuiteResult, FlowOptions } from "@gcoredev/fastedge-test/test";
+
+import type {
+  TestSuite,
+  TestCase,
+  TestResult,
+  SuiteResult,
+  FlowOptions,
+  HttpRequestOptions,
+  RunnerConfig,
+} from "@gcoredev/fastedge-test/test";
 ```
 
 ## Types
@@ -93,18 +120,38 @@ interface FlowOptions {
 }
 ```
 
-| Field                            | Default | Description                                                                 |
-| -------------------------------- | ------- | --------------------------------------------------------------------------- |
-| `url`                            | —       | Full URL including scheme and host; used to derive pseudo-headers           |
-| `method`                         | `"GET"` | HTTP method                                                                 |
-| `requestHeaders`                 | `{}`    | Additional request headers; pseudo-headers here override derived values     |
-| `requestBody`                    | `""`    | Request body string                                                         |
-| `responseStatus`                 | `200`   | Simulated upstream response status code                                     |
-| `responseStatusText`             | `"OK"`  | Simulated upstream response status text                                     |
-| `responseHeaders`                | `{}`    | Simulated upstream response headers                                         |
-| `responseBody`                   | `""`    | Simulated upstream response body                                            |
-| `properties`                     | `{}`    | Proxy-wasm properties to inject                                             |
-| `enforceProductionPropertyRules` | `true`  | When true, denies access to properties not available in production FastEdge |
+| Field                            | Default  | Description                                                                 |
+| -------------------------------- | -------- | --------------------------------------------------------------------------- |
+| `url`                            | —        | Full URL including scheme and host; used to derive pseudo-headers           |
+| `method`                         | `"GET"`  | HTTP method                                                                 |
+| `requestHeaders`                 | `{}`     | Additional request headers; pseudo-headers here override derived values     |
+| `requestBody`                    | `""`     | Request body string                                                         |
+| `responseStatus`                 | `200`    | Simulated upstream response status code                                     |
+| `responseStatusText`             | `"OK"`   | Simulated upstream response status text                                     |
+| `responseHeaders`                | `{}`     | Simulated upstream response headers                                         |
+| `responseBody`                   | `""`     | Simulated upstream response body                                            |
+| `properties`                     | `{}`     | Proxy-wasm properties to inject                                             |
+| `enforceProductionPropertyRules` | `true`   | When true, denies access to properties not available in production FastEdge |
+
+### HttpRequestOptions
+
+Object-based options for `runHttpRequest()`. Used with HTTP WASM apps (as opposed to CDN proxy-wasm filter apps).
+
+```typescript
+interface HttpRequestOptions {
+  path: string;
+  method?: string;                    // Default: "GET"
+  headers?: Record<string, string>;  // Default: {}
+  body?: string;                     // Default: ""
+}
+```
+
+| Field     | Type                      | Required | Default  | Description              |
+| --------- | ------------------------- | -------- | -------- | ------------------------ |
+| `path`    | `string`                  | Yes      | —        | Request path             |
+| `method`  | `string`                  | No       | `"GET"`  | HTTP method              |
+| `headers` | `Record<string, string>`  | No       | `{}`     | Request headers          |
+| `body`    | `string`                  | No       | `""`     | Request body string      |
 
 ### RunnerConfig
 
@@ -208,12 +255,12 @@ interface FullFlowResult {
 
 Hook results are accessed by camelCase key:
 
-| Key                 | Hook                       |
-| ------------------- | -------------------------- |
-| `onRequestHeaders`  | `on_request_headers` hook  |
-| `onRequestBody`     | `on_request_body` hook     |
-| `onResponseHeaders` | `on_response_headers` hook |
-| `onResponseBody`    | `on_response_body` hook    |
+| Key                   | Hook                         |
+| --------------------- | ---------------------------- |
+| `onRequestHeaders`    | `on_request_headers` hook    |
+| `onRequestBody`       | `on_request_body` hook       |
+| `onResponseHeaders`   | `on_response_headers` hook   |
+| `onResponseBody`      | `on_response_body` hook      |
 
 ```typescript
 const result = await runFlow(runner, {
@@ -231,6 +278,26 @@ const resHook = result.hookResults.onResponseHeaders;
 
 // Access final response
 console.log(result.finalResponse.status); // 201
+```
+
+### runHttpRequest
+
+```typescript
+function runHttpRequest(runner: IWasmRunner, options: HttpRequestOptions): Promise<HttpResponse>
+```
+
+Executes a single HTTP request through an HTTP WASM app. Object-based wrapper around the runner's `execute` method. Use this for WASM apps that handle HTTP requests directly, as opposed to CDN proxy-wasm filter apps tested with `runFlow`.
+
+```typescript
+const response = await runHttpRequest(runner, {
+  path: "/api/greet",
+  method: "GET",
+  headers: { accept: "application/json" },
+});
+
+assertHttpStatus(response, 200);
+assertHttpContentType(response, "application/json");
+const body = assertHttpJson(response);
 ```
 
 ### loadConfigFile
@@ -367,6 +434,55 @@ if (hasPropertyAccessViolation(hookResult)) {
 }
 ```
 
+### HTTP Response
+
+These assertions operate on an `HttpResponse` returned by `runHttpRequest`. Use them when testing HTTP WASM apps rather than CDN proxy-wasm filter apps.
+
+```typescript
+function assertHttpStatus(response: HttpResponse, expected: number): void
+function assertHttpHeader(response: HttpResponse, name: string, expected?: string): void
+function assertHttpNoHeader(response: HttpResponse, name: string): void
+function assertHttpBody(response: HttpResponse, expected: string): void
+function assertHttpBodyContains(response: HttpResponse, substring: string): void
+function assertHttpJson<T = unknown>(response: HttpResponse): T
+function assertHttpContentType(response: HttpResponse, expected: string): void
+function assertHttpLog(response: HttpResponse, messageSubstring: string): void
+function assertHttpNoLog(response: HttpResponse, messageSubstring: string): void
+```
+
+`assertHttpStatus` — asserts the response status code.
+
+`assertHttpHeader` — asserts the named header exists (case-insensitive). If `expected` is provided, also asserts the value matches exactly.
+
+`assertHttpNoHeader` — asserts the named header is absent (case-insensitive).
+
+`assertHttpBody` — asserts the response body matches exactly.
+
+`assertHttpBodyContains` — asserts the response body contains `substring`.
+
+`assertHttpJson` — parses the response body as JSON and returns it. Throws with a descriptive error if parsing fails.
+
+`assertHttpContentType` — asserts `response.contentType` contains `expected` (case-insensitive).
+
+`assertHttpLog` — asserts at least one log entry contains `messageSubstring`.
+
+`assertHttpNoLog` — asserts no log entry contains `messageSubstring`.
+
+```typescript
+const response = await runHttpRequest(runner, { path: "/api/items" });
+
+assertHttpStatus(response, 200);
+assertHttpHeader(response, "content-type", "application/json");
+assertHttpNoHeader(response, "x-internal-id");
+assertHttpBodyContains(response, "items");
+assertHttpContentType(response, "application/json");
+assertHttpLog(response, "handler invoked");
+assertHttpNoLog(response, "error");
+
+const data = assertHttpJson<{ items: unknown[] }>(response);
+console.log(data.items.length);
+```
+
 ## CI Integration
 
 `runAndExit` is the primary entry point for CI pipelines. It exits with code `0` on full pass and `1` on any failure, compatible with standard CI exit-code conventions.
@@ -409,6 +525,7 @@ import {
   defineTestSuite,
   runAndExit,
   runFlow,
+  runHttpRequest,
   assertRequestHeader,
   assertNoRequestHeader,
   assertResponseHeader,
@@ -418,6 +535,9 @@ import {
   assertLog,
   assertPropertyAllowed,
   assertPropertyDenied,
+  assertHttpStatus,
+  assertHttpJson,
+  assertHttpContentType,
 } from "@gcoredev/fastedge-test/test";
 
 const suite = defineTestSuite({
@@ -496,14 +616,17 @@ const suite = defineTestSuite({
     },
 
     {
-      name: "passes through with pre-loaded buffer",
+      name: "HTTP app returns JSON response",
       async run(runner) {
-        const result = await runFlow(runner, {
-          url: "https://cdn.example.com/",
-          responseStatus: 304,
+        const response = await runHttpRequest(runner, {
+          path: "/api/status",
+          headers: { accept: "application/json" },
         });
 
-        assertFinalStatus(result, 304);
+        assertHttpStatus(response, 200);
+        assertHttpContentType(response, "application/json");
+        const body = assertHttpJson<{ ok: boolean }>(response);
+        if (!body.ok) throw new Error("Expected ok: true in response body");
       },
     },
   ],
