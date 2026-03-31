@@ -15,18 +15,19 @@ The **API section** of this document is outdated (the `/api/load` endpoint no lo
 
 ### How Detection Works
 
-Detection lives in `server/utils/wasmTypeDetector.ts`. It uses `WebAssembly.compile()`:
+Detection lives in `server/utils/wasmTypeDetector.ts`. It uses `WebAssembly.compile()` plus export/import inspection:
 
 ```
 WebAssembly.compile(buffer)
   → fails (component model binaries always fail core compilation)  →  "http-wasm"
-  → succeeds → check exports:
-      has "http-handler" or "process" exports  →  "http-wasm"  (Rust http-wasm)
-      has "proxy_*" exports                    →  "proxy-wasm"
-      neither                                  →  "proxy-wasm"  (safe default)
+  → succeeds → check exports + imports:
+      has "http-handler", "process", or "incoming-handler" exports  →  "http-wasm"
+      has wasi:http/ or wasi:io/ imports                            →  "http-wasm"  (wstd async)
+      has "proxy_*" exports                                         →  "proxy-wasm"
+      neither                                                       →  "proxy-wasm"  (safe default)
 ```
 
-This is more reliable than byte-checking. An earlier version in `standalone.ts` checked `buffer[4] === 0x0a` but actual component-model binaries have `0x0d` at that position — causing HTTP apps to be misrouted to `ProxyWasmRunner`.
+The `incoming-handler` check catches modern Rust wstd binaries that export `wasi:http/incoming-handler@0.2.9#handle`. The import check is a fallback for any wstd binary whose exports change in future toolchain versions. Tests in `server/__tests__/unit/utils/wasmTypeDetector.test.ts` cover all four detection paths using real compiled binaries.
 
 **Rule**: Do not add WASM type detection logic anywhere except `wasmTypeDetector.ts`.
 
