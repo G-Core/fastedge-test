@@ -12,6 +12,8 @@ import {
   HttpWasmRunner,
   WasmRunnerFactory,
   NullStateManager,
+  BUILTIN_URL,
+  BUILTIN_SHORTHAND,
 } from '@gcoredev/fastedge-test';
 
 import type {
@@ -169,7 +171,7 @@ callFullFlow(
 
 | Parameter                        | Type                      | Description                                                             |
 | -------------------------------- | ------------------------- | ----------------------------------------------------------------------- |
-| `url`                            | `string`                  | Full request URL (e.g. `https://example.com/path`)                      |
+| `url`                            | `string`                  | Full request URL, or `BUILTIN_SHORTHAND` (`"built-in"`) to use the built-in responder instead of a real origin fetch |
 | `method`                         | `string`                  | HTTP method                                                             |
 | `headers`                        | `Record<string, string>`  | Request headers                                                         |
 | `body`                           | `string`                  | Request body                                                            |
@@ -180,7 +182,7 @@ callFullFlow(
 | `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                                   |
 | `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior |
 
-Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fetch)* → `onResponseHeaders` → `onResponseBody`.
+Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fetch or built-in responder)* → `onResponseHeaders` → `onResponseBody`.
 
 **Local response short-circuit:** If a WASM module calls `send_http_response` (proxy-wasm: `proxy_send_local_response`) during `onRequestHeaders` or `onRequestBody` and returns `StopIteration` (return code `1`), the remaining hooks and origin fetch are **skipped**. The `finalResponse` in the result is built from the locally-sent status, headers, and body — matching CDN production behavior. This is how redirect modules (e.g., geo-redirect) and early error responses work.
 
@@ -263,6 +265,34 @@ const runner = await createRunner('./my-app.wasm', {
   runnerType: 'proxy-wasm',
 });
 ```
+
+### Built-in Responder
+
+When testing proxy-wasm modules without a real origin server, pass `BUILTIN_SHORTHAND` (the string `"built-in"`) as the `url` argument to `callFullFlow`. The runner generates a response locally instead of making a network request.
+
+```typescript
+import { createRunner, BUILTIN_SHORTHAND } from '@gcoredev/fastedge-test';
+
+const runner = await createRunner('./my-cdn-app.wasm');
+const result = await runner.callFullFlow(
+  BUILTIN_SHORTHAND, // no origin fetch
+  'GET',
+  { 'accept': 'application/json' },
+  '',
+  {}, '', 200, 'OK', {}, true
+);
+```
+
+**Built-in responder behavior** — controlled by request headers set before the origin phase:
+
+| Header                  | Effect                                                                 |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `x-debugger-status`     | HTTP status code for the generated response (default: `200`)           |
+| `x-debugger-content`    | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default) |
+
+When `x-debugger-content` is omitted, the built-in responder returns a JSON echo of the request method, headers, body, and URL. Both control headers are stripped before response hooks execute so they do not appear in hook input state.
+
+`BUILTIN_URL` (`"http://fastedge-builtin.debug"`) is the canonical URL the runner substitutes internally when `BUILTIN_SHORTHAND` is passed. It appears in `calculatedProperties` (e.g. `request.host`) and in the JSON echo body.
 
 ## Type Definitions
 
@@ -511,6 +541,35 @@ async function testCdnApp() {
 }
 
 testCdnApp();
+```
+
+### Proxy-WASM with built-in responder
+
+```typescript
+import { createRunner, BUILTIN_SHORTHAND } from '@gcoredev/fastedge-test';
+import type { FullFlowResult } from '@gcoredev/fastedge-test';
+
+async function testCdnAppOffline() {
+  const runner = await createRunner('./my-cdn-app.wasm');
+
+  try {
+    // Use built-in responder — no origin server required
+    const result: FullFlowResult = await runner.callFullFlow(
+      BUILTIN_SHORTHAND,  // generates a local response instead of fetching
+      'GET',
+      { 'accept': 'application/json' },
+      '',
+      {}, '', 200, 'OK', {}, true,
+    );
+
+    console.log('Final status:', result.finalResponse.status);
+    console.log('Final body:', result.finalResponse.body);
+  } finally {
+    await runner.cleanup();
+  }
+}
+
+testCdnAppOffline();
 ```
 
 ### HTTP-WASM (standard HTTP application)

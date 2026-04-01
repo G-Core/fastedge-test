@@ -120,18 +120,18 @@ interface FlowOptions {
 }
 ```
 
-| Field                            | Default  | Description                                                                 |
-| -------------------------------- | -------- | --------------------------------------------------------------------------- |
-| `url`                            | —        | Full URL including scheme and host; used to derive pseudo-headers           |
-| `method`                         | `"GET"`  | HTTP method                                                                 |
-| `requestHeaders`                 | `{}`     | Additional request headers; pseudo-headers here override derived values     |
-| `requestBody`                    | `""`     | Request body string                                                         |
-| `responseStatus`                 | `200`    | Simulated upstream response status code                                     |
-| `responseStatusText`             | `"OK"`   | Simulated upstream response status text                                     |
-| `responseHeaders`                | `{}`     | Simulated upstream response headers                                         |
-| `responseBody`                   | `""`     | Simulated upstream response body                                            |
-| `properties`                     | `{}`     | Proxy-wasm properties to inject                                             |
-| `enforceProductionPropertyRules` | `true`   | When true, denies access to properties not available in production FastEdge |
+| Field                            | Default | Description                                                                 |
+| -------------------------------- | ------- | --------------------------------------------------------------------------- |
+| `url`                            | —       | Full URL including scheme and host; used to derive pseudo-headers           |
+| `method`                         | `"GET"` | HTTP method                                                                 |
+| `requestHeaders`                 | `{}`    | Additional request headers; pseudo-headers here override derived values     |
+| `requestBody`                    | `""`    | Request body string                                                         |
+| `responseStatus`                 | `200`   | Simulated upstream response status code                                     |
+| `responseStatusText`             | `"OK"`  | Simulated upstream response status text                                     |
+| `responseHeaders`                | `{}`    | Simulated upstream response headers                                         |
+| `responseBody`                   | `""`    | Simulated upstream response body                                            |
+| `properties`                     | `{}`    | Proxy-wasm properties to inject                                             |
+| `enforceProductionPropertyRules` | `true`  | When true, denies access to properties not available in production FastEdge |
 
 ### HttpRequestOptions
 
@@ -140,18 +140,18 @@ Object-based options for `runHttpRequest()`. Used with HTTP WASM apps (as oppose
 ```typescript
 interface HttpRequestOptions {
   path: string;
-  method?: string;                    // Default: "GET"
+  method?: string;                   // Default: "GET"
   headers?: Record<string, string>;  // Default: {}
   body?: string;                     // Default: ""
 }
 ```
 
-| Field     | Type                      | Required | Default  | Description              |
-| --------- | ------------------------- | -------- | -------- | ------------------------ |
-| `path`    | `string`                  | Yes      | —        | Request path             |
-| `method`  | `string`                  | No       | `"GET"`  | HTTP method              |
-| `headers` | `Record<string, string>`  | No       | `{}`     | Request headers          |
-| `body`    | `string`                  | No       | `""`     | Request body string      |
+| Field     | Type                     | Required | Default | Description         |
+| --------- | ------------------------ | -------- | ------- | ------------------- |
+| `path`    | `string`                 | Yes      | —       | Request path        |
+| `method`  | `string`                 | No       | `"GET"` | HTTP method         |
+| `headers` | `Record<string, string>` | No       | `{}`    | Request headers     |
+| `body`    | `string`                 | No       | `""`    | Request body string |
 
 ### RunnerConfig
 
@@ -255,12 +255,12 @@ interface FullFlowResult {
 
 Hook results are accessed by camelCase key:
 
-| Key                   | Hook                         |
-| --------------------- | ---------------------------- |
-| `onRequestHeaders`    | `on_request_headers` hook    |
-| `onRequestBody`       | `on_request_body` hook       |
-| `onResponseHeaders`   | `on_response_headers` hook   |
-| `onResponseBody`      | `on_response_body` hook      |
+| Key                 | Hook                       |
+| ------------------- | -------------------------- |
+| `onRequestHeaders`  | `on_request_headers` hook  |
+| `onRequestBody`     | `on_request_body` hook     |
+| `onResponseHeaders` | `on_response_headers` hook |
+| `onResponseBody`    | `on_response_body` hook    |
 
 ```typescript
 const result = await runFlow(runner, {
@@ -330,9 +330,9 @@ function assertNoRequestHeader(result: HookResult, name: string): void
 ```typescript
 const hookResult = result.hookResults.onRequestHeaders;
 
-assertRequestHeader(hookResult, "x-forwarded-for");          // exists
-assertRequestHeader(hookResult, "x-country-code", "DE");     // exists with value
-assertNoRequestHeader(hookResult, "x-internal-secret");      // absent
+assertRequestHeader(hookResult, "x-forwarded-for");        // exists
+assertRequestHeader(hookResult, "x-country-code", "DE");   // exists with value
+assertNoRequestHeader(hookResult, "x-internal-secret");    // absent
 ```
 
 ### Response Headers
@@ -366,7 +366,7 @@ function assertFinalHeader(result: FullFlowResult, name: string, expected?: stri
 ```typescript
 assertFinalStatus(result, 200);
 assertFinalHeader(result, "x-cache", "HIT");
-assertFinalHeader(result, "content-encoding");               // exists, any value
+assertFinalHeader(result, "content-encoding");             // exists, any value
 ```
 
 ### Return Code

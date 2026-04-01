@@ -40,12 +40,12 @@ interface BaseEvent {
 }
 ```
 
-| Field       | Type                                        | Description                                         |
-| ----------- | ------------------------------------------- | --------------------------------------------------- |
-| `type`      | `string`                                    | Event discriminant — one of the values listed below |
-| `timestamp` | `number`                                    | Unix epoch in milliseconds                          |
-| `source`    | `'ui' \| 'ai_agent' \| 'api' \| 'system'`  | What triggered the event                            |
-| `data`      | `object`                                    | Event-specific payload                              |
+| Field       | Type                                       | Description                                         |
+| ----------- | ------------------------------------------ | --------------------------------------------------- |
+| `type`      | `string`                                   | Event discriminant — one of the values listed below |
+| `timestamp` | `number`                                   | Unix epoch in milliseconds                          |
+| `source`    | `'ui' \| 'ai_agent' \| 'api' \| 'system'` | What triggered the event                            |
+| `data`      | `object`                                   | Event-specific payload                              |
 
 ## Event Types
 
@@ -68,13 +68,13 @@ interface WasmLoadedEvent {
 }
 ```
 
-| Field           | Type                           | Description                                                          |
-| --------------- | ------------------------------ | -------------------------------------------------------------------- |
-| `filename`      | `string`                       | Name of the loaded WASM file                                         |
-| `size`          | `number`                       | File size in bytes                                                   |
-| `runnerPort?`   | `number \| null`               | Port the runner is listening on, if applicable. Omitted when not set |
-| `wasmType`      | `'proxy-wasm' \| 'http-wasm'`  | The WASM filter type                                                 |
-| `resolvedPath?` | `string \| null`               | Absolute filesystem path to the loaded binary. Omitted when not set  |
+| Field           | Type                          | Description                                                          |
+| --------------- | ----------------------------- | -------------------------------------------------------------------- |
+| `filename`      | `string`                      | Name of the loaded WASM file                                         |
+| `size`          | `number`                      | File size in bytes                                                   |
+| `runnerPort?`   | `number \| null`              | Port the runner is listening on, if applicable. Omitted when not set |
+| `wasmType`      | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type                                                 |
+| `resolvedPath?` | `string \| null`              | Absolute filesystem path to the loaded binary. Omitted when not set  |
 
 **Example:**
 

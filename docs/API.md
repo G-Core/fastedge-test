@@ -16,12 +16,12 @@ The port can be overridden via the `PORT` environment variable. When `WORKSPACE_
 
 The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
-| Value      | Description                                             |
-| ---------- | ------------------------------------------------------- |
-| `ui`       | Request originated from the web UI (default if omitted) |
-| `ai_agent` | Request originated from an AI agent                     |
-| `api`      | Request originated from direct API usage                |
-| `system`   | Request originated from an automated system             |
+| Value        | Description                                             |
+| ------------ | ------------------------------------------------------- |
+| `ui`         | Request originated from the web UI (default if omitted) |
+| `ai_agent`   | Request originated from an AI agent                     |
+| `api`        | Request originated from direct API usage                |
+| `system`     | Request originated from an automated system             |
 
 ```http
 X-Source: ai_agent
@@ -173,8 +173,8 @@ Requires a WASM module to already be loaded via `POST /api/load`.
 ```typescript
 {
   dotenv: {
-    enabled: boolean;  // Whether dotenv loading should be enabled
-    path?: string;     // Directory containing .env files (defaults to server CWD)
+    enabled: boolean; // Whether dotenv loading should be enabled
+    path?: string;    // Directory containing .env files (defaults to server CWD)
   };
 }
 ```
@@ -226,10 +226,10 @@ For **HTTP-WASM**, the top-level `url`, `method`, `headers`, and `body` fields a
 
 ```typescript
 {
-  url: string;                        // Full URL (path and query extracted from this)
-  method?: string;                    // HTTP method (default: "GET")
-  headers?: Record<string, string>;   // Request headers
-  body?: string;                      // Request body
+  url: string;                       // Full URL (path and query extracted from this)
+  method?: string;                   // HTTP method (default: "GET")
+  headers?: Record<string, string>;  // Request headers
+  body?: string;                     // Request body
 }
 ```
 
@@ -532,18 +532,18 @@ Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`
 
 ```typescript
 {
-  url: string;                          // Full request URL (required)
+  url: string;                         // Full request URL (required)
   request?: {
-    method?: string;                    // HTTP method (default: "GET")
+    method?: string;                   // HTTP method (default: "GET")
     url?: string;
-    headers?: Record<string, string>;   // Request headers (default: {})
-    body?: string;                      // Request body (default: "")
+    headers?: Record<string, string>;  // Request headers (default: {})
+    body?: string;                     // Request body (default: "")
   };
   response?: {
-    headers?: Record<string, string>;   // Simulated upstream response headers (default: {})
-    body?: string;                      // Simulated upstream response body (default: "")
+    headers?: Record<string, string>;  // Simulated upstream response headers (default: {})
+    body?: string;                     // Simulated upstream response body (default: "")
   };
-  properties: Record<string, unknown>;  // CDN properties (required; use {} if none)
+  properties: Record<string, unknown>; // CDN properties (required; use {} if none)
 }
 ```
 
@@ -647,7 +647,7 @@ curl -X POST http://localhost:5179/api/send \
 | Status | Condition                                                                   |
 | ------ | --------------------------------------------------------------------------- |
 | `400`  | Validation failed (missing `url` or `properties`), or no WASM module loaded |
-| `500`  | Execution failed                                                            |
+| `500`  | Execution failed                                                             |
 
 ---
 
@@ -892,23 +892,23 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Request Schemas
 
-| Name         | Description                                |
-| ------------ | ------------------------------------------ |
-| `api-load`   | Request body schema for `POST /api/load`   |
-| `api-send`   | Request body schema for `POST /api/send`   |
-| `api-call`   | Request body schema for `POST /api/call`   |
-| `api-config` | Request body schema for `POST /api/config` |
+| Name           | Description                                |
+| -------------- | ------------------------------------------ |
+| `api-load`     | Request body schema for `POST /api/load`   |
+| `api-send`     | Request body schema for `POST /api/send`   |
+| `api-call`     | Request body schema for `POST /api/call`   |
+| `api-config`   | Request body schema for `POST /api/config` |
 
 #### Response / Type Schemas
 
-| Name                   | Description                                                   |
-| ---------------------- | ------------------------------------------------------------- |
-| `fastedge-config.test` | Schema for `fastedge-config.test.json` config files           |
-| `hook-result`          | Shape of a single `HookResult` object                         |
-| `hook-call`            | Shape of a `HookCall` input object                            |
-| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints |
-| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution             |
-| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
+| Name                     | Description                                                   |
+| ------------------------ | ------------------------------------------------------------- |
+| `fastedge-config.test`   | Schema for `fastedge-config.test.json` config files           |
+| `hook-result`            | Shape of a single `HookResult` object                         |
+| `hook-call`              | Shape of a `HookCall` input object                            |
+| `full-flow-result`       | Shape of the `FullFlowResult` returned by full-flow endpoints |
+| `http-request`           | Shape of an `HttpRequest` for HTTP-WASM execution             |
+| `http-response`          | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
 
 **Example**
 
@@ -958,11 +958,11 @@ When a request body fails schema validation (Zod), `error` is the flattened Zod 
 
 **Common status codes**
 
-| Status | Meaning                                                                                      |
-| ------ | -------------------------------------------------------------------------------------------- |
+| Status | Meaning                                                                                       |
+| ------ | --------------------------------------------------------------------------------------------- |
 | `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded) |
-| `404`  | Resource not found (config file, schema file)                                                |
-| `500`  | Internal server error during execution or I/O                                                |
+| `404`  | Resource not found (config file, schema file)                                                 |
+| `500`  | Internal server error during execution or I/O                                                 |
 
 ---
 

@@ -98,6 +98,12 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 - `docs/TEST_CONFIG.md` — `fastedge-config.test.json` schema, dotenv, CDN and HTTP-WASM examples
 - `docs/DEBUGGER.md` — Debugger server CLI, programmatic startup, port config, health check
 
+### 🚀 Future Enhancements (read when looking for "what's next")
+
+**When to read**: Planning new work, answering "what should we build next?", or picking up a new feature
+
+- `FUTURE_ENHANCEMENTS.md` (~50 lines) - Planned improvements and feature ideas (CLI config runner, batch mode, etc.)
+
 ### 🗄️ Legacy/Archived (rarely needed)
 
 - `legacy/starter.md` (20 lines) - Old starter documentation
@@ -232,6 +238,12 @@ Variant system: `server/__tests__/integration/cdn-apps/shared/variants.ts`
 3. See `server/runner/HostFunctions.ts:58` for `localResponse` state and `proxy_send_local_response` host function
 4. Test app: `test-applications/cdn-apps/as/cdn-redirect/` — redirect example
 5. Integration tests: `server/__tests__/integration/cdn-apps/redirect/cdn-redirect.test.ts`
+
+### Planning New Work / "What's Next?"
+
+1. Read `FUTURE_ENHANCEMENTS.md` — prioritized list of planned features
+2. Grep `CHANGELOG.md` for related prior work
+3. Read relevant feature docs for context on existing implementation
 
 ### Working with Properties System
 

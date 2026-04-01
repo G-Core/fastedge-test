@@ -145,4 +145,76 @@ describe('Built-In Responder', () => {
     const body = JSON.parse(result.finalResponse.body);
     expect(body.reqHeaders['x-custom-request']).toBe('I am injected from onRequestHeaders');
   }, 15000);
+
+  it('should accept the canonical URL directly', async () => {
+    const result = await runFlow(cdnRunner, { url: BUILTIN_URL });
+
+    assertFinalStatus(result, 200);
+    assertReturnCode(result.hookResults.onRequestHeaders, 0);
+
+    const body = JSON.parse(result.finalResponse.body);
+    expect(body.requestUrl).toBe(BUILTIN_URL);
+  }, 15000);
+
+  it('should default to 400 when x-debugger-status is invalid', async () => {
+    const result = await runFlow(cdnRunner, {
+      url: 'built-in',
+      requestHeaders: { 'x-debugger-status': 'garbage' },
+    });
+
+    assertFinalStatus(result, 400);
+  }, 15000);
+
+  it('should default to 200 when x-debugger-status is empty', async () => {
+    const result = await runFlow(cdnRunner, {
+      url: 'built-in',
+      requestHeaders: { 'x-debugger-status': '' },
+    });
+
+    assertFinalStatus(result, 200);
+  }, 15000);
+
+  it('should default to 200 when x-debugger-status is whitespace', async () => {
+    const result = await runFlow(cdnRunner, {
+      url: 'built-in',
+      requestHeaders: { 'x-debugger-status': '  ' },
+    });
+
+    assertFinalStatus(result, 200);
+  }, 15000);
+
+  it('should not leak x-debugger-* headers into response hooks', async () => {
+    const result = await runFlow(cdnRunner, {
+      url: 'built-in',
+      requestHeaders: {
+        'x-debugger-status': '201',
+        'x-debugger-content': '',
+        'x-visible': 'yes',
+      },
+    });
+
+    // onResponseHeaders receives request headers — debugger headers must be stripped
+    const responseHookRequestHeaders =
+      result.hookResults.onResponseHeaders.input.request.headers;
+    expect(responseHookRequestHeaders['x-debugger-status']).toBeUndefined();
+    expect(responseHookRequestHeaders['x-debugger-content']).toBeUndefined();
+    expect(responseHookRequestHeaders['x-visible']).toBe('yes');
+  }, 15000);
+
+  it('should keep finalResponse.contentType consistent with final headers', async () => {
+    const result = await runFlow(cdnRunner, { url: 'built-in' });
+
+    // contentType must match what's in the final response headers
+    expect(result.finalResponse.contentType).toBe(
+      result.finalResponse.headers['content-type'],
+    );
+  }, 15000);
+
+  it('should reject invalid URLs with a clear error', async () => {
+    await expect(
+      runFlow(cdnRunner, { url: 'not-a-url' }),
+    ).rejects.toThrow(
+      /Invalid URL: "not-a-url".*Use a full URL.*or "built-in"/,
+    );
+  }, 15000);
 });

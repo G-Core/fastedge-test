@@ -471,10 +471,18 @@ app.post("/api/send", async (req: Request, res: Response) => {
   }
 });
 
+/** Resolve the .fastedge-debug config directory.
+ *  Prefers WORKSPACE_PATH (VSCode integration) so the config lives next to
+ *  the developer's app, not inside the extension/package install folder. */
+function resolveConfigDir(): string {
+  const root = process.env.WORKSPACE_PATH || path.join(__dirname, "..");
+  return path.join(root, ".fastedge-debug");
+}
+
 // Get test configuration
 app.get("/api/config", async (req: Request, res: Response) => {
   try {
-    const configPath = path.join(__dirname, "..", ".fastedge-debug", "fastedge-config.test.json");
+    const configPath = path.join(resolveConfigDir(), "fastedge-config.test.json");
     const configData = await fs.readFile(configPath, "utf-8");
     const config = JSON.parse(configData);
     // Validate config against schema, include validation result in response
@@ -502,7 +510,7 @@ app.post("/api/config", async (req: Request, res: Response) => {
   const { config } = parsed.data;
 
   try {
-    const configDir = path.join(__dirname, "..", ".fastedge-debug");
+    const configDir = resolveConfigDir();
     mkdirSync(configDir, { recursive: true });
     const configPath = path.join(configDir, "fastedge-config.test.json");
     await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");

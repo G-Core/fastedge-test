@@ -57,7 +57,7 @@
     "dev:backend:esbuild": "node esbuild/watch-server.js",
     "dev:backend:server": "sleep 2 && node --watch dist/server.js",
     "dev:frontend": "cd frontend && pnpm exec vite",
-    "generate-docs": "./fastedge-plugin-source/generate-docs.sh",
+    "generate:docs": "./fastedge-plugin-source/generate-docs.sh",
     "start": "node dist/server.js",
     "test": "npm-run-all -s test:unit test:integration",
     "test:unit": "npm-run-all -p test:backend test:frontend",

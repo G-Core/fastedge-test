@@ -386,31 +386,38 @@ export class ProxyWasmRunner implements IWasmRunner {
         //   x-debugger-content — "body-only" | "status-only" (default: full JSON echo)
         this.logDebug("Using built-in responder");
 
-        responseStatus = parseInt(
-          modifiedRequestHeaders["x-debugger-status"] || "200",
-          10,
-        );
+        const rawStatus = (modifiedRequestHeaders["x-debugger-status"] || "").trim();
+        if (rawStatus === "") {
+          responseStatus = 200;
+        } else {
+          const parsed = parseInt(rawStatus, 10);
+          responseStatus = Number.isFinite(parsed) && parsed >= 100 && parsed <= 599
+            ? parsed
+            : 400;
+          if (responseStatus === 400 && rawStatus !== "400") {
+            this.logDebug(`Invalid x-debugger-status "${rawStatus}", defaulting to 400`);
+          }
+        }
         responseStatusText = responseStatus === 200 ? "OK" : String(responseStatus);
         const responseContentMode =
           modifiedRequestHeaders["x-debugger-content"] || "";
 
         // Strip debugger control headers so they don't leak into the echo or response hooks
-        const cleanedHeaders = { ...modifiedRequestHeaders };
-        delete cleanedHeaders["x-debugger-status"];
-        delete cleanedHeaders["x-debugger-content"];
+        delete modifiedRequestHeaders["x-debugger-status"];
+        delete modifiedRequestHeaders["x-debugger-content"];
 
         if (responseContentMode === "status-only") {
           responseBody = "";
           contentType = "text/plain";
         } else if (responseContentMode === "body-only") {
           responseBody = modifiedRequestBody || "";
-          contentType = cleanedHeaders["content-type"] || "text/plain";
+          contentType = modifiedRequestHeaders["content-type"] || "text/plain";
         } else {
           // Default: full JSON echo (similar to http-responder)
           contentType = "application/json";
           responseBody = JSON.stringify({
             method: requestMethod,
-            reqHeaders: cleanedHeaders,
+            reqHeaders: modifiedRequestHeaders,
             reqBody: modifiedRequestBody || "",
             requestUrl: BUILTIN_URL,
           });
@@ -607,6 +614,9 @@ export class ProxyWasmRunner implements IWasmRunner {
       const calculatedProperties =
         this.propertyResolver.getCalculatedProperties();
 
+      // Derive contentType from final headers (WASM may have changed it during response hooks)
+      const finalContentType = finalHeaders["content-type"] || contentType;
+
       return {
         hookResults: results,
         finalResponse: {
@@ -614,7 +624,7 @@ export class ProxyWasmRunner implements IWasmRunner {
           statusText: responseStatusText,
           headers: finalHeaders,
           body: finalBody,
-          contentType,
+          contentType: finalContentType,
           isBase64,
         },
         calculatedProperties,
