@@ -190,7 +190,7 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 
 Applies when: tests fail because HTTP apps are run as proxy-wasm (or vice versa), or you need to understand how runner selection works.
 
-1. **Detection lives in**: `server/utils/wasmTypeDetector.ts` — uses `WebAssembly.compile()` failure to identify component-model (HTTP) binaries. This is the canonical detector; do not add detection logic elsewhere.
+1. **Detection lives in**: `server/utils/wasmTypeDetector.ts` — uses `WebAssembly.compile()` failure for component-model binaries, plus export inspection (`incoming-handler`, `process`) and import inspection (`wasi:http/`, `wasi:io/`) for core-module HTTP binaries. Tests in `server/__tests__/unit/utils/wasmTypeDetector.test.ts`. Do not add detection logic elsewhere.
 2. **Override via `RunnerConfig`**: Add `runnerType: 'http-wasm'` or `runnerType: 'proxy-wasm'` to bypass detection entirely.
 3. **Two runner types**: `"http-wasm"` spawns `fastedge-run http` process; `"proxy-wasm"` uses Node WebAssembly API directly.
 4. Grep `CHANGELOG.md` for `"WASM Type Detection"` for full fix history (March 5, 2026).

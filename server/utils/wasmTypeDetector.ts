@@ -7,8 +7,9 @@
  * Detection Logic:
  * 1. Try WebAssembly.compile()
  *    - Fails (Component Model) → http-wasm
- *    - Succeeds → check exports:
- *      • Has http-handler exports → http-wasm (Rust)
+ *    - Succeeds → check exports + imports:
+ *      • Has http-handler/process/incoming-handler exports → http-wasm (Rust)
+ *      • Has wasi:http/ or wasi:io/ imports → http-wasm (wstd async)
  *      • Has proxy_* exports → proxy-wasm
  *      • Default → proxy-wasm
  */
@@ -41,11 +42,26 @@ export async function detectWasmType(bufferOrPath: Buffer | string): Promise<Was
     const exports = WebAssembly.Module.exports(module);
 
     // Check for HTTP handler exports (Rust HTTP WASM)
+    // Legacy sync: exports "process" or "gcore:fastedge/http-handler#process"
+    // Modern async (wstd): exports "wasi:http/incoming-handler@*#handle"
     const hasHttpHandler = exports.some(
-      (exp) => exp.name.includes("http-handler") || exp.name.includes("process"),
+      (exp) =>
+        exp.name.includes("http-handler") ||
+        exp.name.includes("process") ||
+        exp.name.includes("incoming-handler"),
     );
 
     if (hasHttpHandler) {
+      return "http-wasm";
+    }
+
+    // Check for WASI preview2 imports (wstd-compiled HTTP apps)
+    const imports = WebAssembly.Module.imports(module);
+    const hasWasiHttpImports = imports.some(
+      (imp) => imp.module.startsWith("wasi:http/") || imp.module.startsWith("wasi:io/"),
+    );
+
+    if (hasWasiHttpImports) {
       return "http-wasm";
     }
 
