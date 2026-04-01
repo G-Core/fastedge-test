@@ -8,7 +8,7 @@ The `@gcoredev/fastedge-test` debugger server exposes a REST API for loading WAS
 http://localhost:5179
 ```
 
-The port can be overridden via the `PORT` environment variable. When `WORKSPACE_PATH` is set, the active port is written to `$WORKSPACE_PATH/.debug-port` on startup and deleted on shutdown.
+The port can be overridden via the `PORT` environment variable. When `WORKSPACE_PATH` is set, the active port is written to `$WORKSPACE_PATH/.fastedge-debug/.debug-port` on startup and deleted on shutdown.
 
 ## Common Headers
 

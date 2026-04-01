@@ -22,6 +22,12 @@ import { loadDotenvFiles } from "../utils/dotenv-loader.js";
 
 const textEncoder = new TextEncoder();
 
+/** Canonical URL substituted for the "built-in" shorthand so all downstream
+ *  code (URL parsing, pseudo-header derivation, property extraction) works
+ *  with a valid URL instead of a bare keyword. */
+export const BUILTIN_URL = "http://fastedge-builtin.debug";
+export const BUILTIN_SHORTHAND = "built-in";
+
 export class ProxyWasmRunner implements IWasmRunner {
   private module: WebAssembly.Module | null = null; // Compiled module (reused)
   private instance: WebAssembly.Instance | null = null; // Current instance (transient per hook)
@@ -220,6 +226,14 @@ export class ProxyWasmRunner implements IWasmRunner {
       throw new Error("WASM module not loaded");
     }
 
+    // Normalise the "built-in" shorthand to a real URL so every downstream
+    // consumer (URL parsing, pseudo-headers, property extraction) just works.
+    const isBuiltIn = targetUrl === BUILTIN_SHORTHAND || targetUrl === BUILTIN_URL;
+    if (targetUrl === BUILTIN_SHORTHAND) {
+      targetUrl = BUILTIN_URL;
+      this.logDebug(`Substituted "${BUILTIN_SHORTHAND}" → ${BUILTIN_URL}`);
+    }
+
     const results: Record<string, HookResult> = {};
 
     // Extract runtime properties from target URL before executing hooks
@@ -232,18 +246,14 @@ export class ProxyWasmRunner implements IWasmRunner {
       (key) => key.toLowerCase() === "host",
     );
     if (!hasHost) {
-      try {
-        const urlObj = new URL(targetUrl);
-        const hostValue =
-          urlObj.port && urlObj.port !== "80" && urlObj.port !== "443"
-            ? `${urlObj.hostname}:${urlObj.port}`
-            : urlObj.hostname;
-        call.request.headers = call.request.headers ?? {};
-        call.request.headers["host"] = hostValue;
-        this.logDebug(`Auto-injected Host header: ${hostValue}`);
-      } catch (error) {
-        this.logDebug(`Failed to extract host from URL: ${String(error)}`);
-      }
+      const urlObj = new URL(targetUrl);
+      const hostValue =
+        urlObj.port && urlObj.port !== "80" && urlObj.port !== "443"
+          ? `${urlObj.hostname}:${urlObj.port}`
+          : urlObj.hostname;
+      call.request.headers = call.request.headers ?? {};
+      call.request.headers["host"] = hostValue;
+      this.logDebug(`Auto-injected Host header: ${hostValue}`);
     }
 
     // Emit request started event
@@ -369,12 +379,12 @@ export class ProxyWasmRunner implements IWasmRunner {
     let isBase64 = false;
 
     try {
-      if (targetUrl === "built-in") {
+      if (isBuiltIn) {
         // Built-in responder: generate response locally without a network fetch.
         // Control headers (stripped before building the response):
         //   x-debugger-status  — HTTP status code (default 200)
         //   x-debugger-content — "body-only" | "status-only" (default: full JSON echo)
-        this.logDebug("Using built-in responder (targetUrl === 'built-in')");
+        this.logDebug("Using built-in responder");
 
         responseStatus = parseInt(
           modifiedRequestHeaders["x-debugger-status"] || "200",
@@ -402,7 +412,7 @@ export class ProxyWasmRunner implements IWasmRunner {
             method: requestMethod,
             reqHeaders: cleanedHeaders,
             reqBody: modifiedRequestBody || "",
-            requestUrl: "built-in",
+            requestUrl: BUILTIN_URL,
           });
         }
 

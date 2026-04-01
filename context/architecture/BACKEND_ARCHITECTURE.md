@@ -209,7 +209,7 @@ Reads test configuration from `fastedge-config.test.json`:
 
 ```typescript
 app.get("/api/config", async (req, res) => {
-  const configPath = path.join(__dirname, "..", "fastedge-config.test.json");
+  const configPath = path.join(__dirname, "..", ".fastedge-debug", "fastedge-config.test.json");
   const configData = await fs.readFile(configPath, "utf-8");
   const config = JSON.parse(configData);
   res.json({ ok: true, config });
@@ -225,7 +225,7 @@ Saves test configuration to `fastedge-config.test.json`:
 ```typescript
 app.post("/api/config", async (req, res) => {
   const { config } = req.body;
-  const configPath = path.join(__dirname, "..", "fastedge-config.test.json");
+  const configPath = path.join(__dirname, "..", ".fastedge-debug", "fastedge-config.test.json");
   await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
 
   // Emit properties updated event if properties changed

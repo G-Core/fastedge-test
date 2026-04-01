@@ -187,13 +187,13 @@ Made `request.x_real_ip` property user-editable:
 **After Implementation:**
 
 ```
-[INFO]: #header -> host: cdn-origin-4732724.fastedge.cdn.gc.onl
+[INFO]: #header -> host: fastedge-builtin.debug
 [INFO]: #header -> user-agent: Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0
 [INFO]: #header -> accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
 [INFO]: #header -> accept-language: en-US,en;q=0.9
 [INFO]: #header -> accept-encoding: gzip, deflate, br, zstd
 [INFO]: #header -> content-type: application/json
-[INFO]: #header -> x-forwarded-host: cdn-origin-4732724.fastedge.cdn.gc.onl
+[INFO]: #header -> x-forwarded-host: fastedge-builtin.debug
 [INFO]: #header -> x-forwarded-proto: https
 [INFO]: #header -> x-forwarded-port: 443
 [INFO]: #header -> x-real-ip: 203.0.113.42

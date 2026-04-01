@@ -15,7 +15,7 @@ export const ApiLoadBodySchema = z.object({
 });
 
 export const ApiSendBodySchema = z.object({
-  url: z.string().url(),
+  url: z.union([z.literal("built-in"), z.string().url()]),
   request: RequestConfigSchema.partial().optional(),
   response: ResponseConfigSchema.partial().optional(),
   properties: z.record(z.string(), z.unknown()).optional().default({}),

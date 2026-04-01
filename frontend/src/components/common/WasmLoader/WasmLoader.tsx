@@ -155,7 +155,7 @@ export function WasmLoader({
               <input
                 type="text"
                 className={styles.pathInput}
-                placeholder="<workspace>/.fastedge/bin/debugger.wasm"
+                placeholder="<workspace>/.fastedge-debug/app.wasm"
                 value={wasmPath}
                 onChange={(e) => setWasmPath(e.target.value)}
                 onKeyDown={handlePathKeyDown}

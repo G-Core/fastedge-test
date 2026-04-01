@@ -83,7 +83,7 @@ Dev-only scripts (`dev:*`) may use Unix shell syntax (`sleep`, `&&`). Production
 
 ### Port file / graceful shutdown
 
-The server writes a `.debug-port` file on startup and deletes it on shutdown. Windows does not send `SIGTERM`, so `SIGTERM`/`SIGINT` signal handlers alone are insufficient for cleanup. Always pair signal handlers with a `process.on("exit")` handler:
+The server writes a `.fastedge-debug/.debug-port` file on startup and deletes it on shutdown. Windows does not send `SIGTERM`, so `SIGTERM`/`SIGINT` signal handlers alone are insufficient for cleanup. Always pair signal handlers with a `process.on("exit")` handler:
 
 ```typescript
 // Covers Windows where SIGTERM is never sent
@@ -116,4 +116,4 @@ The `exit` event fires for normal exits and unhandled exceptions on all platform
 ## Known Limitations
 
 - **`dev:backend` script**: Uses `sleep 2` (Unix only). Windows developers must run `dev:backend:esbuild` and `dev:backend:server` manually in separate terminals.
-- **Hard kill (TerminateProcess)**: A `.debug-port` file may persist after a hard kill on Windows. The VSCode extension's `DebuggerServerManager.resolvePort()` handles stale port files via health checks, so this is not a user-visible bug.
+- **Hard kill (TerminateProcess)**: A `.fastedge-debug/.debug-port` file may persist after a hard kill on Windows. The VSCode extension's `DebuggerServerManager.resolvePort()` handles stale port files via health checks, so this is not a user-visible bug.

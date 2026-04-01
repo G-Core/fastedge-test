@@ -11,6 +11,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { ProxyWasmRunner } from '../../../../runner/ProxyWasmRunner';
+import { BUILTIN_URL } from '../../../../runner/ProxyWasmRunner';
 import { loadCdnAppWasm, WASM_TEST_BINARIES } from '../../utils/wasm-loader';
 import { createTestRunner } from '../../utils/test-helpers';
 import {
@@ -50,7 +51,7 @@ describe('Built-In Responder', () => {
     expect(body.reqHeaders['x-test']).toBe('hello');
     expect(body.reqHeaders['content-type']).toBe('application/json');
     expect(body.reqBody).toBe('{"ping":"pong"}');
-    expect(body.requestUrl).toBe('built-in');
+    expect(body.requestUrl).toBe(BUILTIN_URL);
   }, 15000);
 
   it('should strip x-debugger-* headers from the echo response', async () => {

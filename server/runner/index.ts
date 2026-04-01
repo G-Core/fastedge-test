@@ -5,7 +5,7 @@
  * Import via the package root: import { createRunner } from '@gcoredev/fastedge-test'
  */
 
-export { ProxyWasmRunner } from "./ProxyWasmRunner.js";
+export { ProxyWasmRunner, BUILTIN_URL, BUILTIN_SHORTHAND } from "./ProxyWasmRunner.js";
 export { HttpWasmRunner } from "./HttpWasmRunner.js";
 export { WasmRunnerFactory } from "./WasmRunnerFactory.js";
 export { NullStateManager } from "./NullStateManager.js";

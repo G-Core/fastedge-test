@@ -47,7 +47,7 @@ env: {
 
 **GET `/api/workspace-wasm`**
 - Returns: `{ path: string | null }`
-- Checks if `.fastedge/bin/debugger.wasm` exists in `WORKSPACE_PATH`
+- Checks if `.fastedge-debug/app.wasm` exists in `WORKSPACE_PATH`
 - Only returns a path in VSCode environment
 
 **POST `/api/reload-workspace-wasm`**
@@ -82,7 +82,7 @@ interface WasmLoadedEvent {
 }
 ```
 
-**`resolvedPath`**: populated when the server received a file path (not a buffer). The extension always uses path-based loading, so this will be the absolute path to `debugger.wasm`. The UI uses this as `wasmPath` in the store so "Load from Path" works correctly.
+**`resolvedPath`**: populated when the server received a file path (not a buffer). The extension always uses path-based loading, so this will be the absolute path to `app.wasm`. The UI uses this as `wasmPath` in the store so "Load from Path" works correctly.
 
 ### `reload_workspace_wasm`
 
@@ -91,7 +91,7 @@ Emitted by `POST /api/reload-workspace-wasm`. Only used for subsequent F5 rebuil
 ```typescript
 interface ReloadWorkspaceWasmEvent {
   type: "reload_workspace_wasm";
-  data: { path: string };  // always "<workspace>/.fastedge/bin/debugger.wasm"
+  data: { path: string };  // always "<workspace>/.fastedge-debug/app.wasm"
 }
 ```
 
@@ -186,7 +186,7 @@ After the first load, F5 rebuilds use a different path:
    ↓
 2. Extension calls POST /api/reload-workspace-wasm
    ↓
-3. Server checks WORKSPACE_PATH/.fastedge/bin/debugger.wasm exists
+3. Server checks WORKSPACE_PATH/.fastedge-debug/app.wasm exists
    ↓
 4. Server emits reload_workspace_wasm WebSocket event
    ↓

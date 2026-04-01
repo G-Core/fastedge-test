@@ -79,16 +79,15 @@ app.get("/api/workspace-wasm", async (req: Request, res: Response) => {
   try {
     const wasmPath = path.join(
       workspacePath,
-      ".fastedge",
-      "bin",
-      "debugger.wasm",
+      ".fastedge-debug",
+      "app.wasm",
     );
 
     // Check if file exists
     try {
       await fs.stat(wasmPath);
       // Return path with <workspace> placeholder for cleaner display
-      res.json({ path: "<workspace>/.fastedge/bin/debugger.wasm" });
+      res.json({ path: "<workspace>/.fastedge-debug/app.wasm" });
     } catch {
       // File doesn't exist
       res.json({ path: null });
@@ -114,9 +113,8 @@ app.post("/api/reload-workspace-wasm", async (req: Request, res: Response) => {
   try {
     const wasmPath = path.join(
       workspacePath,
-      ".fastedge",
-      "bin",
-      "debugger.wasm",
+      ".fastedge-debug",
+      "app.wasm",
     );
 
     // Check if file exists
@@ -125,11 +123,11 @@ app.post("/api/reload-workspace-wasm", async (req: Request, res: Response) => {
 
       // Emit WebSocket event with <workspace> placeholder
       stateManager.emitReloadWorkspaceWasm(
-        "<workspace>/.fastedge/bin/debugger.wasm",
+        "<workspace>/.fastedge-debug/app.wasm",
         "system",
       );
 
-      res.json({ ok: true, path: "<workspace>/.fastedge/bin/debugger.wasm" });
+      res.json({ ok: true, path: "<workspace>/.fastedge-debug/app.wasm" });
     } catch {
       // File doesn't exist
       res.status(404).json({ error: "Workspace WASM file not found" });
@@ -476,7 +474,7 @@ app.post("/api/send", async (req: Request, res: Response) => {
 // Get test configuration
 app.get("/api/config", async (req: Request, res: Response) => {
   try {
-    const configPath = path.join(__dirname, "..", "fastedge-config.test.json");
+    const configPath = path.join(__dirname, "..", ".fastedge-debug", "fastedge-config.test.json");
     const configData = await fs.readFile(configPath, "utf-8");
     const config = JSON.parse(configData);
     // Validate config against schema, include validation result in response
@@ -504,7 +502,9 @@ app.post("/api/config", async (req: Request, res: Response) => {
   const { config } = parsed.data;
 
   try {
-    const configPath = path.join(__dirname, "..", "fastedge-config.test.json");
+    const configDir = path.join(__dirname, "..", ".fastedge-debug");
+    mkdirSync(configDir, { recursive: true });
+    const configPath = path.join(configDir, "fastedge-config.test.json");
     await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
 
     // Emit properties updated event if properties changed
@@ -627,19 +627,20 @@ app.get("*", (req: Request, res: Response) => {
 const defaultPort = process.env.PORT ? Number(process.env.PORT) : 5179;
 
 // Port file: written on startup, deleted on shutdown.
-// Placed as a direct sibling to fastedge-config.test.json (the per-app config root
-// / WORKSPACE_PATH), so port discovery is co-located with the config that anchors
+// Placed inside .fastedge-debug/ alongside the app's other debug artifacts,
+// so port discovery is co-located with the config and WASM that anchor
 // each app's identity.
 function getPortFilePath(): string | null {
   const appRoot = process.env.WORKSPACE_PATH;
   if (!appRoot) return null;
-  return path.join(appRoot, ".debug-port");
+  return path.join(appRoot, ".fastedge-debug", ".debug-port");
 }
 
 function writePortFile(port: number): void {
   const portFilePath = getPortFilePath();
   if (!portFilePath) return;
   try {
+    mkdirSync(path.dirname(portFilePath), { recursive: true });
     writeFileSync(portFilePath, String(port), "utf8");
   } catch (err) {
     console.warn(`Could not write port file: ${(err as Error).message}`);

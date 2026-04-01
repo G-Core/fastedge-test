@@ -1,7 +1,7 @@
 # Built-In Responder
 
 **Status**: Complete
-**Last Updated**: March 31, 2026
+**Last Updated**: April 1, 2026
 
 ---
 
@@ -9,9 +9,33 @@
 
 The built-in responder generates a local origin response inside the CDN proxy-wasm runner, eliminating the need to spawn an external HTTP service (like `http-responder`) for tests that only care about WASM hook behavior.
 
-**Trigger**: Pass `"built-in"` as the `targetUrl` to `callFullFlow()` / `callFullFlowLegacy()`.
+**Trigger**: Pass `"built-in"` (shorthand) or `"http://fastedge-builtin.debug"` (canonical URL) as the target URL.
 
-Any other URL value (including empty/undefined) follows the existing fetch path. This is a strict opt-in — only the exact string `"built-in"` activates it.
+The shorthand `"built-in"` is normalised to `http://fastedge-builtin.debug` early in the runner so all downstream code (URL parsing, pseudo-header derivation, property extraction) works with a valid URL. The canonical URL is defined as `BUILTIN_URL` and the shorthand as `BUILTIN_SHORTHAND` in `server/runner/ProxyWasmRunner.ts`, re-exported from `server/runner/index.ts`.
+
+---
+
+## URL Normalisation Flow
+
+```
+Developer types "built-in"
+        ↓
+API schema (Zod) accepts z.union([z.literal("built-in"), z.string().url()])
+        ↓
+callFullFlowLegacy() substitutes → "http://fastedge-builtin.debug"
+        ↓
+extractRuntimePropertiesFromUrl() parses valid URL (host=fastedge-builtin.debug, path=/)
+        ↓
+Pseudo-headers derived (:authority, :path, :scheme, :method)
+        ↓
+Host header auto-injected from URL
+        ↓
+WebSocket "request_started" event sends canonical URL back to UI
+        ↓
+UI URL bar updates to "http://fastedge-builtin.debug" (server is single source of truth)
+```
+
+After the first send, the UI shows the canonical URL. Subsequent sends use either form — both trigger the built-in responder.
 
 ---
 
@@ -26,6 +50,8 @@ Two request headers control the built-in responder's behavior. They are read fro
 
 **Why `x-debugger-*`?** Avoids collision with application headers. The `x-response-*` prefix was considered but rejected as too likely to clash with developer-defined headers.
 
+Both headers are available as unchecked defaults in the proxy-wasm request headers UI panel (`ProxyWasmView.tsx` `defaultHeaders`), so developers can discover and enable them without typing.
+
 ---
 
 ## Response Modes
@@ -37,9 +63,9 @@ No `x-debugger-content` header, or any unrecognized value.
 ```json
 {
   "method": "GET",
-  "reqHeaders": { "host": "localhost", "x-custom": "value" },
+  "reqHeaders": { "host": "fastedge-builtin.debug", "x-custom": "value" },
   "reqBody": "",
-  "requestUrl": "built-in"
+  "requestUrl": "http://fastedge-builtin.debug"
 }
 ```
 
@@ -73,7 +99,15 @@ onRequestHeaders  ->  onRequestBody  ->  [built-in response]  ->  onResponseHead
 
 The built-in responder replaces only the origin fetch (between `onRequestBody` and `onResponseHeaders`). The response variables (`responseHeaders`, `responseBody`, `responseStatus`, etc.) are set by the built-in logic instead of `fetch()`, then the shared response hook code runs identically.
 
-**PropertyResolver**: `extractRuntimePropertiesFromUrl("built-in")` hits the existing try-catch and falls back to `host=localhost`, `path=/`. This is harmless since the properties are only used for URL reconstruction in the fetch path.
+---
+
+## Key Implementation Details
+
+- **Constants**: `BUILTIN_URL = "http://fastedge-builtin.debug"` and `BUILTIN_SHORTHAND = "built-in"` in `ProxyWasmRunner.ts`
+- **Detection**: `isBuiltIn` flag matches both the shorthand and canonical URL
+- **API validation**: `server/schemas/api.ts` — `ApiSendBodySchema` uses `z.union([z.literal("built-in"), z.string().url()])` to accept the shorthand
+- **Test framework**: `server/test-framework/suite-runner.ts` — `runFlow()` normalises the shorthand before pseudo-header derivation, with a clear error message for invalid URLs
+- **UI defaults**: `x-debugger-status` and `x-debugger-content` appear as unchecked default headers in the proxy-wasm request panel
 
 ---
 
@@ -82,23 +116,22 @@ The built-in responder replaces only the origin fetch (between `onRequestBody` a
 ### In Integration Tests
 
 ```typescript
-const result = await cdnRunner.callFullFlow(
-  'built-in',        // <-- triggers built-in responder
-  'POST',
-  {
+const result = await runFlow(cdnRunner, {
+  url: 'built-in',
+  method: 'POST',
+  requestHeaders: {
     'content-type': 'application/json',
     'x-debugger-status': '201',
     'x-debugger-content': 'body-only',
   },
-  JSON.stringify({ data: 'test' }),
-  {}, '', 200, 'OK', {}, true
-);
+  requestBody: JSON.stringify({ data: 'test' }),
+});
 ```
 
 ### Via the API
 
 ```json
-POST /api/execute
+POST /api/send
 {
   "url": "built-in",
   "request": {

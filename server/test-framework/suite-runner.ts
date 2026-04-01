@@ -1,5 +1,6 @@
 import { readFile } from "fs/promises";
 import { createRunner, createRunnerFromBuffer } from "../runner/standalone.js";
+import { BUILTIN_SHORTHAND, BUILTIN_URL } from "../runner/ProxyWasmRunner.js";
 import { TestConfigSchema } from "../schemas/config.js";
 import type { TestConfig } from "../schemas/config.js";
 import type { IWasmRunner, HttpResponse } from "../runner/IWasmRunner.js";
@@ -115,11 +116,11 @@ export async function runFlow(
     enforceProductionPropertyRules = true,
   } = options;
 
-  // Derive pseudo-headers from URL when it's a valid URL.
-  // For non-URL targets (e.g. "built-in"), skip pseudo-header derivation.
+  // Normalise "built-in" shorthand so pseudo-header derivation works.
+  const resolvedUrl = url === BUILTIN_SHORTHAND ? BUILTIN_URL : url;
   let pseudoDefaults: Record<string, string> = {};
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(resolvedUrl);
     pseudoDefaults = {
       ":method": method,
       ":path": parsed.pathname + parsed.search,
@@ -127,7 +128,9 @@ export async function runFlow(
       ":scheme": parsed.protocol.replace(":", ""),
     };
   } catch {
-    // Not a valid URL (e.g. "built-in") — no pseudo-headers to derive
+    throw new Error(
+      `Invalid URL: "${url}". Use a full URL (e.g. "https://example.com/path") or "built-in" for the local responder.`,
+    );
   }
 
   const requestHeaders = { ...pseudoDefaults, ...(options.requestHeaders ?? {}) };

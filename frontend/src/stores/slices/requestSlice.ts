@@ -3,7 +3,7 @@ import { AppStore, RequestSlice, RequestState } from '../types';
 
 const DEFAULT_REQUEST_STATE: RequestState = {
   method: 'POST',
-  url: 'https://cdn-origin-4732724.fastedge.cdn.gc.onl/',
+  url: 'http://fastedge-builtin.debug',
   requestHeaders: {},
   requestBody: '{"message": "Hello"}',
   responseHeaders: { 'content-type': 'application/json' },

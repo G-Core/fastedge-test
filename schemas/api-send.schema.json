@@ -3,8 +3,16 @@
   "type": "object",
   "properties": {
     "url": {
-      "type": "string",
-      "format": "uri"
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "built-in"
+        },
+        {
+          "type": "string",
+          "format": "uri"
+        }
+      ]
     },
     "request": {
       "type": "object",
