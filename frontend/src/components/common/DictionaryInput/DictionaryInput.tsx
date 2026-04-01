@@ -80,11 +80,13 @@ export function DictionaryInput({
         id: generateRowId(),
         key,
         value: val,
-        // Use the enabled state from defaultsMap if this key came from defaults,
-        // otherwise check if it exists in value prop (if so, it's enabled)
-        enabled: defaultsMap.has(key)
-          ? defaultsMap.get(key)!
-          : value.hasOwnProperty(key),
+        // If the key exists in the value prop (e.g., loaded from config), it's enabled.
+        // Otherwise, use the default's enabled state (unchecked defaults stay unchecked).
+        enabled: value.hasOwnProperty(key)
+          ? true
+          : defaultsMap.has(key)
+            ? defaultsMap.get(key)!
+            : false,
         // Use the placeholder from placeholdersMap if available
         placeholder: placeholdersMap.get(key),
         // Use the readOnly state from readOnlyMap if available
@@ -111,7 +113,7 @@ export function DictionaryInput({
       const updatedRows = currentRows.map((row) => {
         // If this key exists in the new value prop, update it
         if (row.key && value.hasOwnProperty(row.key)) {
-          return { ...row, value: value[row.key] };
+          return { ...row, value: value[row.key], enabled: true };
         }
         return row;
       });
