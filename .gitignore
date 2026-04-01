@@ -12,6 +12,9 @@ fastedge-run/
 
 .vscode/
 
+# Rust build artifacts
+**/target/
+
 # Internal Rust code
 rust_host/
 

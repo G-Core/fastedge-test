@@ -51,7 +51,7 @@ cleanup() {
 
   # Clean up temp files left by killed generate_file subshells
   # Must happen BEFORE kill -- -$$ which kills this script too
-  rm -f "$DOCS_DIR"/.[A-Z]*.[a-zA-Z0-9]* 2>/dev/null || true
+  rm -f "$DOCS_DIR"/.*.md.[a-zA-Z0-9]* 2>/dev/null || true
   rm -f "$INTERRUPT_FLAG"
 
   # Belt-and-suspenders: kill entire process group (including this script)
@@ -103,7 +103,7 @@ fi
 mkdir -p "$DOCS_DIR"
 
 # Clean up stale temp files from previous interrupted runs
-rm -f "$DOCS_DIR"/.[A-Z]*.[a-zA-Z0-9]* 2>/dev/null || true
+rm -f "$DOCS_DIR"/.*.md.[a-zA-Z0-9]* 2>/dev/null || true
 
 # Source file mappings per doc file
 declare -A SOURCE_FILES
