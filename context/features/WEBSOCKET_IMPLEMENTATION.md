@@ -454,7 +454,7 @@ Clients automatically attempt reconnection when server restarts.
    curl -X POST http://localhost:5179/api/send \
      -H "Content-Type: application/json" \
      -H "X-Source: ai_agent" \
-     -d '{"url":"https://cdn-origin-4732724.fastedge.cdn.gc.onl/","request":{"method":"GET","headers":{},"body":""}}'
+     -d '{"url":"http://fastedge-builtin.debug","request":{"method":"GET","headers":{},"body":""}}'
    ```
 
    - Both browser tabs should show the request

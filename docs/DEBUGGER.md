@@ -56,16 +56,16 @@ process.kill(process.pid, "SIGTERM");
 
 ## Port Configuration
 
-| Source          | Value                 |
-| --------------- | --------------------- |
-| Default         | `5179`                |
-| `PORT` env var  | Any valid port number |
+| Source         | Value                 |
+| -------------- | --------------------- |
+| Default        | `5179`                |
+| `PORT` env var | Any valid port number |
 
 ```bash
 PORT=8080 npx fastedge-debug
 ```
 
-When `WORKSPACE_PATH` is set, the server writes the bound port number to `$WORKSPACE_PATH/.debug-port` on startup and deletes it on shutdown.
+When `WORKSPACE_PATH` is set, the server writes the bound port number to `$WORKSPACE_PATH/.fastedge-debug/.debug-port` on startup and deletes it on shutdown.
 
 ## Health Check
 
@@ -90,13 +90,13 @@ curl http://localhost:5179/health
 
 ## Environment Variables
 
-| Variable              | Type     | Default | Description                                                                                                                |
-| --------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`                | `number` | unset   | Port the HTTP server listens on. Defaults to `5179` when not set.                                                         |
-| `PROXY_RUNNER_DEBUG`  | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity.                                                            |
-| `VSCODE_INTEGRATION`  | `"true"` | unset   | Set to `"true"` when running in VSCode extension context; enables the `<workspace>` path placeholder in WASM path loading. |
-| `WORKSPACE_PATH`      | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement.                             |
-| `FASTEDGE_RUN_PATH`   | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules.                                          |
+| Variable             | Type     | Default | Description                                                                                                               |
+| -------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`               | `number` | unset   | Port the HTTP server listens on. Defaults to `5179` when not set.                                                        |
+| `PROXY_RUNNER_DEBUG` | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity.                                                           |
+| `VSCODE_INTEGRATION` | `"true"` | unset   | Set to `"true"` when running in VSCode extension context; enables the `<workspace>` path placeholder in WASM path loading. |
+| `WORKSPACE_PATH`     | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement.                            |
+| `FASTEDGE_RUN_PATH`  | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules.                                         |
 
 ### Usage examples
 
@@ -120,11 +120,11 @@ The server handles `SIGTERM` and `SIGINT`:
 1. Logs the received signal.
 2. Cleans up the active WASM runner (frees memory, closes child processes).
 3. Closes all WebSocket connections.
-4. Deletes the `.debug-port` file (if `WORKSPACE_PATH` is set).
+4. Deletes the `.fastedge-debug/.debug-port` file (if `WORKSPACE_PATH` is set).
 5. Closes the HTTP server.
 6. Exits with code `0`.
 
-The `.debug-port` file is also deleted on the Node.js `exit` event, which covers Windows environments where `SIGTERM` is not delivered.
+The `.fastedge-debug/.debug-port` file is also deleted on the Node.js `exit` event, which covers Windows environments where `SIGTERM` is not delivered.
 
 Send `SIGTERM` to trigger shutdown programmatically:
 

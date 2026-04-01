@@ -192,7 +192,7 @@ All scaffold is in place but blocked on `proxy-wasm-sdk-as` publishing `getEnv()
 
 ### ✅ Completed (March 18, 2026) — DotenvPanel: show resolved app root as default path label
 
-- Default display was showing hardcoded `"workspace root (default)"` — misleading, since the real default is the app root (nearest `fastedge-config.test.json`, or `package.json`/`Cargo.toml`)
+- Default display was showing hardcoded `"workspace root (default)"` — misleading, since the real default is the app root (nearest `.fastedge-debug/` directory, or `package.json`/`Cargo.toml`)
 - `DotenvPanel` now sends a `getAppRoot` message to the extension on mount and stores the response as `resolvedRoot`
 - When `path` is null, displays `resolvedRoot` (dimmed via `.defaultPath` style), falling back to `"app root (default)"` until the response arrives
 - All `"workspace root"` references updated to `"app root"` (display text, tooltips, non-VSCode placeholder)

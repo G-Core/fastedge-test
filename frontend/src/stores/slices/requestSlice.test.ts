@@ -31,7 +31,7 @@ describe('RequestSlice', () => {
       const { result } = renderHook(() => useAppStore());
 
       expect(result.current.method).toBe('POST');
-      expect(result.current.url).toBe('https://cdn-origin-4732724.fastedge.cdn.gc.onl/');
+      expect(result.current.url).toBe('http://fastedge-builtin.debug');
       expect(result.current.requestHeaders).toEqual({});
       expect(result.current.requestBody).toBe('{"message": "Hello"}');
       expect(result.current.responseHeaders).toEqual({ 'content-type': 'application/json' });
@@ -278,7 +278,7 @@ describe('RequestSlice', () => {
       });
 
       expect(result.current.method).toBe('POST');
-      expect(result.current.url).toBe('https://cdn-origin-4732724.fastedge.cdn.gc.onl/');
+      expect(result.current.url).toBe('http://fastedge-builtin.debug');
       expect(result.current.requestHeaders).toEqual({});
       expect(result.current.requestBody).toBe('{"message": "Hello"}');
       expect(result.current.responseHeaders).toEqual({ 'content-type': 'application/json' });

@@ -56,10 +56,7 @@ export function ProxyWasmView() {
 
   const handleSend = async () => {
     try {
-      const finalHeaders = applyDefaultContentType(
-        requestHeaders,
-        requestBody,
-      );
+      const finalHeaders = applyDefaultContentType(requestHeaders, requestBody);
 
       const { sendFullFlow } = await import("../../api");
       const {
@@ -77,10 +74,7 @@ export function ProxyWasmView() {
       setFinalResponse(response);
 
       // Merge calculated properties into the UI
-      console.log(
-        "[API] Received calculatedProperties:",
-        calculatedProperties,
-      );
+      console.log("[API] Received calculatedProperties:", calculatedProperties);
       if (calculatedProperties) {
         console.log("[API] Updating properties. Previous:", properties);
         const propsToMerge: Record<string, string> = {};
@@ -93,8 +87,7 @@ export function ProxyWasmView() {
       }
     } catch (err) {
       // Show error in all hooks
-      const errorMsg =
-        err instanceof Error ? err.message : "Unknown error";
+      const errorMsg = err instanceof Error ? err.message : "Unknown error";
       const errorResult = {
         logs: [],
         returnValue: undefined,
@@ -161,6 +154,16 @@ export function ProxyWasmView() {
             enabled: false,
             placeholder: "Bearer <token>",
           },
+          "x-debugger-status": {
+            value: "",
+            enabled: false,
+            placeholder: "HTTP status code for built-in responder",
+          },
+          "x-debugger-content": {
+            value: "",
+            enabled: false,
+            placeholder: "body-only | status-only for built-in responder",
+          },
         }}
         headersLabel="Request Headers"
         bodyLabel="Request Body"
@@ -173,8 +176,8 @@ export function ProxyWasmView() {
         onToggle={setDotenvEnabled}
         path={dotenv.path}
         onPathChange={setDotenvPath}
-        isExpanded={expandedPanels['dotenv'] ?? false}
-        onExpandedChange={(expanded) => setPanelExpanded('dotenv', expanded)}
+        isExpanded={expandedPanels["dotenv"] ?? false}
+        onExpandedChange={(expanded) => setPanelExpanded("dotenv", expanded)}
       />
 
       <ServerPropertiesPanel

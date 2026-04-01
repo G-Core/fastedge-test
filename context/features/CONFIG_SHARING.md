@@ -71,7 +71,7 @@ const testRequest = {
   },
   "request": {
     "method": "POST",
-    "url": "https://cdn-origin-4732724.fastedge.cdn.gc.onl/",
+    "url": "http://fastedge-builtin.debug",
     "headers": {
       "x-inject-req-body": "Injected WASM value onRequestBody",
       "x-inject-res-body": "Injected WASM value onResponseBody"

@@ -1,5 +1,71 @@
 # Proxy-WASM Runner - Changelog
 
+## April 1, 2026 - Built-In Responder URL Normalisation
+
+### Overview
+Fixed the built-in responder to use a valid canonical URL (`http://fastedge-builtin.debug`) instead of the bare string `"built-in"`. The shorthand `"built-in"` is normalised early in the runner so all downstream code (URL parsing, pseudo-headers, property extraction, Host header injection) works without try/catch workarounds.
+
+### What Changed
+
+#### 1. URL Normalisation (`server/runner/ProxyWasmRunner.ts`)
+- Added `BUILTIN_URL` and `BUILTIN_SHORTHAND` constants, re-exported from `server/runner/index.ts`
+- `callFullFlowLegacy()` substitutes `"built-in"` → `"http://fastedge-builtin.debug"` before any URL parsing
+- `isBuiltIn` flag matches both the shorthand and canonical URL (handles re-sends after UI update)
+- Removed try/catch around Host header auto-injection (URL is always valid now)
+
+#### 2. API Schema (`server/schemas/api.ts`)
+- `ApiSendBodySchema.url` changed from `z.string().url()` to `z.union([z.literal("built-in"), z.string().url()])` — accepts the shorthand through Zod validation
+
+#### 3. Test Framework (`server/test-framework/suite-runner.ts`)
+- `runFlow()` normalises `"built-in"` before pseudo-header derivation
+- Invalid URLs throw a clear error message suggesting valid URL format or `"built-in"`
+
+#### 4. UI Discoverability (`frontend/src/views/ProxyWasmView/ProxyWasmView.tsx`)
+- Added `x-debugger-status` and `x-debugger-content` as unchecked default headers in the request panel
+- Developers can discover and enable them without typing
+
+#### 5. UI URL Update
+- Server sends canonical URL back via WebSocket `request_started` event
+- Frontend URL bar updates automatically — server is the single source of truth
+
+**Files Modified:**
+- `server/runner/ProxyWasmRunner.ts` — Constants, URL normalisation, isBuiltIn detection
+- `server/runner/index.ts` — Re-exports `BUILTIN_URL`, `BUILTIN_SHORTHAND`
+- `server/schemas/api.ts` — Zod schema accepts `"built-in"` literal
+- `server/test-framework/suite-runner.ts` — Normalisation + error message for invalid URLs
+- `server/__tests__/integration/cdn-apps/full-flow/built-in-responder.test.ts` — Uses `BUILTIN_URL` constant
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx` — Debugger headers in default headers
+- `context/features/BUILT_IN_RESPONDER.md` — Updated documentation
+
+### Testing
+```bash
+pnpm test   # 398 tests pass — 0 regressions
+```
+
+---
+
+## March 31, 2026 - Built-In Responder for CDN Runner
+
+### Overview
+Added a built-in origin responder to the CDN proxy-wasm runner. When `"built-in"` is passed as the target URL to `callFullFlow()`, the runner generates a local response instead of making a real HTTP fetch. Two control headers (`x-debugger-status`, `x-debugger-content`) allow tests to customize the response status and body format without spinning up an external HTTP service.
+
+### What Was Completed
+
+#### 1. Built-In Responder Logic (`server/runner/ProxyWasmRunner.ts`)
+- Three response modes: full JSON echo (default), `body-only` (mirrors request body + content-type), `status-only` (empty body)
+- Control headers `x-debugger-status` and `x-debugger-content` stripped before building response
+- All four hooks still fire normally — only the fetch is replaced
+
+#### 2. Integration Tests (`server/__tests__/integration/cdn-apps/full-flow/built-in-responder.test.ts`)
+- 8 tests covering: default echo, header stripping, custom status, body-only mode, status-only mode, all hooks firing, WASM response header injection, WASM request header injection in echo
+- Tests complete in ~46ms vs ~7340ms for downstream HTTP app tests (160x speedup)
+
+### Notes
+- `x-debugger-*` prefix chosen over `x-response-*` to avoid collision with developer-defined headers
+- `http-responder` downstream tests kept alongside for production parity validation of the real fetch path
+
+---
+
 ## March 31, 2026 - Rust CDN Test Apps + Parameterized CDN Testing
 
 ### Overview
@@ -634,7 +700,7 @@ Two related changes in the same session:
 ## March 11, 2026 - Config File Rename + VSCode Native Load/Save Dialogs
 
 ### Overview
-Renamed `test-config.json` to `fastedge-config.test.json` across the entire codebase. The new name is intentional: it is the marker used by `resolveAppRoot()` in the VSCode extension to identify the app root directory, so keeping it consistent and predictable matters. The save dialog now always suggests `fastedge-config.test.json` (removed the previous WASM-name-derived suggestion). Additionally, load and save config dialogs now work correctly inside the VSCode debugger webview — previously all three save strategies failed silently in the sandboxed iframe context.
+Renamed `test-config.json` to `fastedge-config.test.json` across the entire codebase. The new name is intentional: it is recognized by `resolveAppRoot()` in the VSCode extension (which uses the `.fastedge-debug/` directory as the identity marker for the app root), so keeping it consistent and predictable matters. The save dialog now always suggests `fastedge-config.test.json` (removed the previous WASM-name-derived suggestion). Additionally, load and save config dialogs now work correctly inside the VSCode debugger webview — previously all three save strategies failed silently in the sandboxed iframe context.
 
 ### Background — Why the VSCode Dialogs Failed
 
@@ -764,7 +830,7 @@ The VSCode extension previously used a single global server shared across all ap
 
 1. **PortManager collision**: Each server process has its own `PortManager` instance tracking inner `fastedge-run` ports (8100–8199) in memory. With two processes running, both trackers start from 8100 — the second server's `fastedge-run` tried to bind 8100, found it taken, and exited with code 1. The fix is an OS-level `net.createServer().listen()` check that works across processes.
 
-2. **Server discovery**: Without a port file, the extension had to scan ports 5179–5188 looking for a healthy fastedge-debugger. With per-app servers, the extension needs to know exactly which port belongs to which app. The port file (`<appRoot>/.fastedge/.debug-port`) solves this: server writes it on `httpServer.listen()`, deletes it on SIGTERM/SIGINT.
+2. **Server discovery**: Without a port file, the extension had to scan ports 5179–5188 looking for a healthy fastedge-debugger. With per-app servers, the extension needs to know exactly which port belongs to which app. The port file (`<appRoot>/.fastedge-debug/.debug-port`) solves this: server writes it on `httpServer.listen()`, deletes it on SIGTERM/SIGINT.
 
 ### 🎯 What Was Completed
 
@@ -779,21 +845,21 @@ The VSCode extension previously used a single global server shared across all ap
 - No other changes to runner logic
 
 #### 3. Server port file (`server/server.ts`)
-- On `httpServer.listen()` success: writes port number to `<WORKSPACE_PATH>/.fastedge/.debug-port`
-- Creates `.fastedge/` directory if it doesn't exist
+- On `httpServer.listen()` success: writes port number to `<WORKSPACE_PATH>/.fastedge-debug/.debug-port`
+- Creates `.fastedge-debug/` directory if it doesn't exist
 - On SIGTERM: deletes port file before closing
 - On SIGINT: deletes port file before closing
 - If `WORKSPACE_PATH` is not set (standalone CLI mode): port file is silently skipped
 
 ### 🧪 Testing
 - Two apps open simultaneously: each gets its own `fastedge-run` on a distinct port in 8100–8199
-- Port file appears at `<appRoot>/.fastedge/.debug-port` when server starts; disappears on stop
+- Port file appears at `<appRoot>/.fastedge-debug/.debug-port` when server starts; disappears on stop
 - Closing VSCode (SIGTERM) cleans up port file correctly
 
 ### 📝 Notes
 - `WORKSPACE_PATH` is set by the VSCode extension (always the app root, not workspace root)
 - Standalone CLI users (`fastedge-debug` command) are unaffected — no `WORKSPACE_PATH` means no port file, PortManager OS check still works
-- `.fastedge/.debug-port` should be in `.gitignore` of each app (scaffolded by `create-fastedge-app`)
+- `.fastedge-debug/` should be in `.gitignore` of each app (scaffolded by `create-fastedge-app`)
 
 ---
 
@@ -1452,7 +1518,7 @@ proxy-wasm/              ← Only domain-specific components remain
 ## February 12, 2026 (Morning) - Workspace WASM Auto-Loading & Tab-Based UI
 
 ### Overview
-Implemented automatic workspace WASM detection and loading for VSCode integration, with tab-based UI for switching between path and upload modes. The debugger now seamlessly auto-loads `.fastedge/bin/debugger.wasm` on startup and supports F5 rebuild auto-reload.
+Implemented automatic workspace WASM detection and loading for VSCode integration, with tab-based UI for switching between path and upload modes. The debugger now seamlessly auto-loads `.fastedge-debug/app.wasm` on startup and supports F5 rebuild auto-reload.
 
 ### 🎯 What Was Completed
 
@@ -1466,7 +1532,7 @@ Implemented automatic workspace WASM detection and loading for VSCode integratio
 - Server detects VSCode vs Node environment via `VSCODE_INTEGRATION` env var
 - Frontend pings server on startup to determine environment
 - Workspace path passed from VSCode extension via `WORKSPACE_PATH` env var
-- Auto-detects `.fastedge/bin/debugger.wasm` in VSCode environment
+- Auto-detects `.fastedge-debug/app.wasm` in VSCode environment
 
 #### 2. Tab-Based Loader UI
 **Files Modified:**
@@ -1508,7 +1574,7 @@ Implemented automatic workspace WASM detection and loading for VSCode integratio
 
 **Integration Points:**
 - Extension passes workspace root path to server
-- Server uses path to locate `.fastedge/bin/debugger.wasm`
+- Server uses path to locate `.fastedge-debug/app.wasm`
 - Extension can trigger reload: `await debuggerServerManager.reloadWorkspaceWasm()`
 - Ready for F5 build completion hook integration
 
@@ -1518,7 +1584,7 @@ Implemented automatic workspace WASM detection and loading for VSCode integratio
 ```
 1. Press F5 to build WASM
 2. Open debugger
-3. ✅ WASM auto-loads from .fastedge/bin/debugger.wasm
+3. ✅ WASM auto-loads from .fastedge-debug/app.wasm
 4. ✅ File Path tab is active
 5. ✅ Load info shows in tab bar
 ```
@@ -1571,7 +1637,7 @@ Implemented automatic workspace WASM detection and loading for VSCode integratio
 
 **Expected Workspace WASM:**
 ```
-<workspace>/.fastedge/bin/debugger.wasm
+<workspace>/.fastedge-debug/app.wasm
 ```
 
 **Modified Files:**
@@ -4336,13 +4402,13 @@ This gap made it harder to test binaries that depend on these headers (e.g., use
 Test runner now provides much closer production parity:
 
 ```
-[INFO]: #header -> host: cdn-origin-4732724.fastedge.cdn.gc.onl
+[INFO]: #header -> host: fastedge-builtin.debug
 [INFO]: #header -> user-agent: Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0
 [INFO]: #header -> accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
 [INFO]: #header -> accept-language: en-US,en;q=0.9
 [INFO]: #header -> accept-encoding: gzip, deflate, br, zstd
 [INFO]: #header -> content-type: application/json
-[INFO]: #header -> x-forwarded-host: cdn-origin-4732724.fastedge.cdn.gc.onl
+[INFO]: #header -> x-forwarded-host: fastedge-builtin.debug
 [INFO]: #header -> x-forwarded-proto: https
 [INFO]: #header -> x-forwarded-port: 443
 [INFO]: #header -> x-real-ip: 203.0.113.42

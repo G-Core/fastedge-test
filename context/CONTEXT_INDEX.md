@@ -48,6 +48,7 @@ This index helps you discover relevant documentation without reading thousands o
 - `DOTENV.md` (~210 lines) - Environment variable system, dotenvPath support (CDN + HTTP)
 - `CDN_VARIABLES_AND_SECRETS.md` (~120 lines) - ✅ CDN env var/secret integration test (7 tests); requires proxy-wasm-sdk-as@^1.2.2
 - `SEND_HTTP_RESPONSE.md` (~100 lines) - ✅ send_http_response local response short-circuit: runner impl, cdn-redirect test app, 5 integration tests (dogfoods test framework)
+- `BUILT_IN_RESPONDER.md` (~120 lines) - ✅ Built-in origin responder: `targetUrl === "built-in"` skips fetch, `x-debugger-status`/`x-debugger-content` control headers, 3 modes (full echo, body-only, status-only), 8 tests
 - `DOTENV_TOGGLE_IMPLEMENTATION.md` (294 lines) - UI toggle for .env variables
 - `LOG_FILTERING.md` (147 lines) - Log filtering and display
 - `HYBRID_LOADING.md` (~550 lines) - WASM path vs buffer loading: performance benchmarks, Runner internals, temp file handling, migration guide
@@ -96,6 +97,12 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 - `docs/RUNNER.md` — Low-level runner API: factory functions, IWasmRunner interface, type definitions
 - `docs/TEST_CONFIG.md` — `fastedge-config.test.json` schema, dotenv, CDN and HTTP-WASM examples
 - `docs/DEBUGGER.md` — Debugger server CLI, programmatic startup, port config, health check
+
+### 🚀 Future Enhancements (read when looking for "what's next")
+
+**When to read**: Planning new work, answering "what should we build next?", or picking up a new feature
+
+- `FUTURE_ENHANCEMENTS.md` (~50 lines) - Planned improvements and feature ideas (CLI config runner, batch mode, etc.)
 
 ### 🗄️ Legacy/Archived (rarely needed)
 
@@ -217,6 +224,13 @@ Test file: `server/__tests__/integration/cdn-apps/variables-and-secrets/variable
 WASM apps: `test-applications/cdn-apps/as/cdn-variables-and-secrets/` + `test-applications/cdn-apps/rust/cdn-variables-and-secrets/`
 Variant system: `server/__tests__/integration/cdn-apps/shared/variants.ts`
 
+### Writing CDN Integration Tests (choosing origin strategy)
+
+1. **Default**: Use `"built-in"` as targetUrl — no port allocation, no process spawning, ~160x faster
+2. Read `features/BUILT_IN_RESPONDER.md` for control headers (`x-debugger-status`, `x-debugger-content`)
+3. **Only use http-responder** when you need to validate real HTTP fetch behavior (network headers, connection handling)
+4. **Only use a real URL** when testing against a specific external service
+
 ### Working with send_http_response / Local Response Short-Circuit
 
 1. Read `features/SEND_HTTP_RESPONSE.md` — full design, runner implementation, test app, integration tests
@@ -224,6 +238,12 @@ Variant system: `server/__tests__/integration/cdn-apps/shared/variants.ts`
 3. See `server/runner/HostFunctions.ts:58` for `localResponse` state and `proxy_send_local_response` host function
 4. Test app: `test-applications/cdn-apps/as/cdn-redirect/` — redirect example
 5. Integration tests: `server/__tests__/integration/cdn-apps/redirect/cdn-redirect.test.ts`
+
+### Planning New Work / "What's Next?"
+
+1. Read `FUTURE_ENHANCEMENTS.md` — prioritized list of planned features
+2. Grep `CHANGELOG.md` for related prior work
+3. Read relevant feature docs for context on existing implementation
 
 ### Working with Properties System
 

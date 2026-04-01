@@ -4,15 +4,15 @@
 
 ## Documentation Files
 
-| File                                    | Audience              | Description                                                                                      |
-| --------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------ |
-| [quickstart.md](quickstart.md)          | All users             | Install, configure, and run your first test in under five minutes                                |
-| [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md)  | Test authors          | High-level API (`defineTestSuite`, `runTestSuite`, assertions) for writing automated test suites |
-| [TEST_CONFIG.md](TEST_CONFIG.md)        | Test authors          | `fastedge-config.test.json` schema — all fields, defaults, and validation rules                  |
-| [RUNNER.md](RUNNER.md)                  | Advanced / CI tooling | Low-level programmatic API for direct runner lifecycle control                                   |
+| File                                   | Audience              | Description                                                                                      |
+| -------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------ |
+| [quickstart.md](quickstart.md)         | All users             | Install, configure, and run your first test in under five minutes                                |
+| [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) | Test authors          | High-level API (`defineTestSuite`, `runTestSuite`, assertions) for writing automated test suites |
+| [TEST_CONFIG.md](TEST_CONFIG.md)       | Test authors          | `fastedge-config.test.json` schema — all fields, defaults, and validation rules                  |
+| [RUNNER.md](RUNNER.md)                 | Advanced / CI tooling | Low-level programmatic API for direct runner lifecycle control                                   |
 | [DEBUGGER.md](DEBUGGER.md)             | All users             | `fastedge-debug` CLI — starting the interactive debugger server                                  |
-| [API.md](API.md)                        | Tooling integrators   | HTTP REST API exposed by the debugger server                                                     |
-| [WEBSOCKET.md](WEBSOCKET.md)            | Tooling integrators   | WebSocket event stream API for real-time server events                                           |
+| [API.md](API.md)                       | Tooling integrators   | HTTP REST API exposed by the debugger server                                                     |
+| [WEBSOCKET.md](WEBSOCKET.md)           | Tooling integrators   | WebSocket event stream API for real-time server events                                           |
 
 ## Quick Links
 
@@ -48,6 +48,8 @@ import { createRunner, createRunnerFromBuffer } from "@gcoredev/fastedge-test";
 | `createRunner`           | function | Creates a runner instance from a WASM file path           |
 | `createRunnerFromBuffer` | function | Creates a runner instance from a `Buffer` or `Uint8Array` |
 | `ProxyWasmRunner`        | class    | Runner implementation for proxy-wasm (CDN) modules        |
+| `BUILTIN_URL`            | const    | Canonical URL for the built-in mock origin responder      |
+| `BUILTIN_SHORTHAND`      | const    | Shorthand string for the built-in mock origin responder   |
 | `HttpWasmRunner`         | class    | Runner implementation for HTTP WASM modules               |
 | `WasmRunnerFactory`      | class    | Factory for creating the appropriate runner by WASM type  |
 | `NullStateManager`       | class    | No-op state manager for stateless runner use              |
@@ -75,6 +77,7 @@ import { defineTestSuite, runAndExit } from "@gcoredev/fastedge-test/test";
 | `runTestSuite`               | function | Executes a `TestSuite` and returns a `SuiteResult`                 |
 | `runAndExit`                 | function | Runs a suite and exits the process with a pass/fail code           |
 | `runFlow`                    | function | Executes a single request flow directly                            |
+| `runHttpRequest`             | function | Executes a single HTTP request directly                            |
 | `loadConfigFile`             | function | Loads and validates a `fastedge-config.test.json` file             |
 | `assertRequestHeader`        | function | Asserts a header is present on the outgoing request                |
 | `assertNoRequestHeader`      | function | Asserts a header is absent from the outgoing request               |
@@ -89,11 +92,21 @@ import { defineTestSuite, runAndExit } from "@gcoredev/fastedge-test/test";
 | `hasPropertyAccessViolation` | function | Returns whether any property access violation was recorded         |
 | `assertPropertyAllowed`      | function | Asserts that a WASM property read was allowed                      |
 | `assertPropertyDenied`       | function | Asserts that a WASM property read was denied                       |
+| `assertHttpStatus`           | function | Asserts the HTTP response status code                              |
+| `assertHttpHeader`           | function | Asserts a header is present on the HTTP response                   |
+| `assertHttpNoHeader`         | function | Asserts a header is absent from the HTTP response                  |
+| `assertHttpBody`             | function | Asserts the HTTP response body equals a value                      |
+| `assertHttpBodyContains`     | function | Asserts the HTTP response body contains a substring                |
+| `assertHttpJson`             | function | Asserts the HTTP response body matches a JSON value                |
+| `assertHttpContentType`      | function | Asserts the HTTP response Content-Type header                      |
+| `assertHttpLog`              | function | Asserts a log entry was emitted during HTTP request handling       |
+| `assertHttpNoLog`            | function | Asserts a log entry was not emitted during HTTP request handling   |
 | `TestSuite`                  | type     | Suite definition — one of `wasmPath` or `wasmBuffer` plus test cases |
 | `TestCase`                   | type     | A single test scenario with config and assertions                  |
 | `TestResult`                 | type     | Result of a single test case execution                             |
 | `SuiteResult`                | type     | Aggregated result returned by `runTestSuite`                       |
 | `FlowOptions`                | type     | Options accepted by `runFlow`                                      |
+| `HttpRequestOptions`         | type     | Options accepted by `runHttpRequest`                               |
 | `RunnerConfig`               | type     | Configuration options for the underlying runner                    |
 
 ### `@gcoredev/fastedge-test/server`

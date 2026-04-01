@@ -4,3 +4,8 @@ packages:
 
 onlyBuiltDependencies:
   - esbuild
+
+minimumReleaseAge: 4320 # 3 days
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+strictDepBuilds: true
