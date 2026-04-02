@@ -318,7 +318,15 @@ app.post("/api/execute", async (req: Request, res: Response) => {
       if (reqPath && typeof reqPath === "string") {
         resolvedPath = reqPath;
       } else if (url && typeof url === "string") {
-        const urlObj = new URL(url);
+        let urlObj: URL;
+        try {
+          urlObj = new URL(url);
+        } catch {
+          res
+            .status(400)
+            .json({ ok: false, error: `Invalid url: ${url} (must be an absolute URL)` });
+          return;
+        }
         resolvedPath = urlObj.pathname + urlObj.search;
       } else {
         res

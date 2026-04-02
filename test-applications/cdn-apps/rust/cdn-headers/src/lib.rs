@@ -66,7 +66,7 @@ impl HttpContext for HttpHeaders {
         self.add_http_request_header("new-header-03", "value-03");
         self.add_http_request_header_bytes("new-header-bytes-03", b"value-bytes-03");
 
-        //remove header new-headter-01, expected empty value
+        //remove header new-header-01, expected empty value
         self.set_http_request_header("new-header-01", None);
         self.set_http_request_header_bytes("new-header-bytes-01", None);
 
@@ -155,7 +155,7 @@ impl HttpContext for HttpHeaders {
 
         let diff_bytes = diff_bytes.difference(&expected_bytes).collect::<Vec<_>>();
         if !diff_bytes.is_empty() {
-            println!("different headers bytes: {:?}", diff);
+            println!("different headers bytes: {:?}", diff_bytes);
             self.send_http_response(552, vec![], None);
             return Action::Pause;
         }
@@ -233,7 +233,7 @@ impl HttpContext for HttpHeaders {
         self.add_http_response_header("new-header-03", "value-03");
         self.add_http_response_header_bytes("new-header-bytes-03", b"value-bytes-03");
 
-        //remove header new-headter-01, expected empty value
+        //remove header new-header-01, expected empty value
         self.set_http_response_header("new-header-01", None);
         self.set_http_response_header_bytes("new-header-bytes-01", None);
 
@@ -316,12 +316,12 @@ impl HttpContext for HttpHeaders {
 
         if expected_bytes != diff_bytes {
             let diff = diff_bytes.difference(&expected_bytes).collect::<Vec<_>>();
-            println!("different headers bytes: {:?}", diff);
+            println!("different headers bytes: {:?}", diff_bytes);
             self.send_http_response(552, vec![], None);
             return Action::Pause;
         }
 
-        // check if the reponse header is not returnd
+        // check if the response header is not returned
         let Some(value) = self.get_http_response_header("host") else {
             self.send_http_response(553, vec![], None);
             return Action::Pause;
