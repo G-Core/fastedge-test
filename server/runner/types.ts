@@ -1,4 +1,5 @@
 export type HeaderMap = Record<string, string>;
+export type HeaderTuples = [string, string][];
 
 export type HookCall = {
   hook: string;

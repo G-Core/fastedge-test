@@ -2,12 +2,12 @@ import { StateCreator } from 'zustand';
 import { AppStore, RequestSlice, RequestState } from '../types';
 
 const DEFAULT_REQUEST_STATE: RequestState = {
-  method: 'POST',
+  method: 'GET',
   url: 'http://fastedge-builtin.debug',
   requestHeaders: {},
-  requestBody: '{"message": "Hello"}',
-  responseHeaders: { 'content-type': 'application/json' },
-  responseBody: '{"response": "OK"}',
+  requestBody: '',
+  responseHeaders: {},
+  responseBody: '',
 };
 
 export const createRequestSlice: StateCreator<

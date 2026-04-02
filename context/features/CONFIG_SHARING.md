@@ -38,8 +38,10 @@ const config = await fetch("http://localhost:5179/api/config").then((r) =>
 );
 
 // Use settings with optional overrides
+// For CDN (proxy-wasm) configs, use request.url; for HTTP (http-wasm), use request.path
 const testRequest = {
-  url: config.config.request.url,
+  url: config.config.request.url,       // CDN configs
+  path: config.config.request.path,     // HTTP configs
   request: {
     method: config.config.request.method,
     headers: {
@@ -62,8 +64,13 @@ const testRequest = {
 
 ### Structure
 
+The config schema uses a discriminated union on `appType`. CDN (proxy-wasm) configs use `request.url` (full URL), while HTTP (http-wasm) configs use `request.path` (path only).
+
+**CDN / Proxy-WASM config** (`appType: "proxy-wasm"`):
+
 ```json
 {
+  "appType": "proxy-wasm",
   "description": "Test configuration for proxy-wasm debugging",
   "wasm": {
     "path": "wasm/cdn_header_change.wasm",
@@ -88,18 +95,40 @@ const testRequest = {
 }
 ```
 
+**HTTP / HTTP-WASM config** (`appType: "http-wasm"`):
+
+```json
+{
+  "appType": "http-wasm",
+  "description": "Test configuration for http-wasm app",
+  "wasm": {
+    "path": "wasm/http-apps/sdk-examples/sdk-basic.wasm",
+    "description": "Basic HTTP WASM app"
+  },
+  "request": {
+    "method": "GET",
+    "path": "/api/hello?q=1",
+    "headers": {},
+    "body": ""
+  },
+  "logLevel": 0
+}
+```
+
 ### Fields
 
 | Field              | Type   | Description                                                      |
 | ------------------ | ------ | ---------------------------------------------------------------- |
+| `appType`          | string | `"proxy-wasm"` or `"http-wasm"` — determines config shape        |
 | `description`      | string | Human-readable description of this config                        |
 | `wasm.path`        | string | Path to WASM file (relative to project root)                     |
 | `wasm.description` | string | Description of what this WASM does                               |
 | `request.method`   | string | HTTP method (GET, POST, etc.)                                    |
-| `request.url`      | string | Target URL for the request                                       |
+| `request.url`      | string | **(CDN only)** Full target URL for the request                   |
+| `request.path`     | string | **(HTTP only)** Request path (e.g. `/api/hello?q=1`)            |
 | `request.headers`  | object | Request headers (key-value pairs)                                |
 | `request.body`     | string | Request body content                                             |
-| `properties`       | object | Server properties (geo-location, country, etc.)                  |
+| `properties`       | object | **(CDN only)** Server properties (geo-location, country, etc.)   |
 | `logLevel`         | number | Log level: 0=Trace, 1=Debug, 2=Info, 3=Warn, 4=Error, 5=Critical |
 
 ## API Endpoints

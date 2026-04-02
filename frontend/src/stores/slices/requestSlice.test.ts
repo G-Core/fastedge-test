@@ -30,12 +30,12 @@ describe('RequestSlice', () => {
     it('should have correct default values', () => {
       const { result } = renderHook(() => useAppStore());
 
-      expect(result.current.method).toBe('POST');
+      expect(result.current.method).toBe('GET');
       expect(result.current.url).toBe('http://fastedge-builtin.debug');
       expect(result.current.requestHeaders).toEqual({});
-      expect(result.current.requestBody).toBe('{"message": "Hello"}');
-      expect(result.current.responseHeaders).toEqual({ 'content-type': 'application/json' });
-      expect(result.current.responseBody).toBe('{"response": "OK"}');
+      expect(result.current.requestBody).toBe('');
+      expect(result.current.responseHeaders).toEqual({});
+      expect(result.current.responseBody).toBe('');
     });
   });
 
@@ -277,12 +277,12 @@ describe('RequestSlice', () => {
         result.current.resetRequest();
       });
 
-      expect(result.current.method).toBe('POST');
+      expect(result.current.method).toBe('GET');
       expect(result.current.url).toBe('http://fastedge-builtin.debug');
       expect(result.current.requestHeaders).toEqual({});
-      expect(result.current.requestBody).toBe('{"message": "Hello"}');
-      expect(result.current.responseHeaders).toEqual({ 'content-type': 'application/json' });
-      expect(result.current.responseBody).toBe('{"response": "OK"}');
+      expect(result.current.requestBody).toBe('');
+      expect(result.current.responseHeaders).toEqual({});
+      expect(result.current.responseBody).toBe('');
     });
 
   });

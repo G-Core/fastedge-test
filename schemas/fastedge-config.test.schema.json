@@ -1,109 +1,208 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "$schema": {
-      "type": "string"
-    },
-    "description": {
-      "type": "string"
-    },
-    "wasm": {
+  "anyOf": [
+    {
       "type": "object",
       "properties": {
-        "path": {
+        "$schema": {
           "type": "string"
         },
         "description": {
           "type": "string"
-        }
-      },
-      "required": [
-        "path"
-      ],
-      "additionalProperties": false
-    },
-    "request": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "default": "GET",
-          "type": "string"
         },
-        "url": {
-          "type": "string"
+        "wasm": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
         },
-        "headers": {
+        "properties": {
           "default": {},
           "type": "object",
           "propertyNames": {
             "type": "string"
           },
-          "additionalProperties": {
-            "type": "string"
-          }
+          "additionalProperties": {}
         },
-        "body": {
-          "default": "",
-          "type": "string"
+        "dotenv": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "appType": {
+          "type": "string",
+          "const": "http-wasm"
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "default": "GET",
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "headers": {
+              "default": {},
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "body": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          "required": [
+            "method",
+            "path",
+            "headers",
+            "body"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
-        "method",
-        "url",
-        "headers",
-        "body"
+        "properties",
+        "appType",
+        "request"
       ],
       "additionalProperties": false
     },
-    "response": {
+    {
       "type": "object",
       "properties": {
-        "headers": {
+        "$schema": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "wasm": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "properties": {
           "default": {},
           "type": "object",
           "propertyNames": {
             "type": "string"
           },
-          "additionalProperties": {
-            "type": "string"
-          }
+          "additionalProperties": {}
         },
-        "body": {
-          "default": "",
-          "type": "string"
+        "dotenv": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "appType": {
+          "default": "proxy-wasm",
+          "type": "string",
+          "const": "proxy-wasm"
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "default": "GET",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "headers": {
+              "default": {},
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "body": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          "required": [
+            "method",
+            "url",
+            "headers",
+            "body"
+          ],
+          "additionalProperties": false
+        },
+        "response": {
+          "type": "object",
+          "properties": {
+            "headers": {
+              "default": {},
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "body": {
+              "default": "",
+              "type": "string"
+            }
+          },
+          "required": [
+            "headers",
+            "body"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
-        "headers",
-        "body"
+        "properties",
+        "appType",
+        "request"
       ],
-      "additionalProperties": false
-    },
-    "properties": {
-      "default": {},
-      "type": "object",
-      "propertyNames": {
-        "type": "string"
-      },
-      "additionalProperties": {}
-    },
-    "dotenv": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": "boolean"
-        },
-        "path": {
-          "type": "string"
-        }
-      },
       "additionalProperties": false
     }
-  },
-  "required": [
-    "request",
-    "properties"
-  ],
-  "additionalProperties": false
+  ]
 }

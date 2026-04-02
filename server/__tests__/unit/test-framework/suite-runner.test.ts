@@ -189,6 +189,39 @@ describe('loadConfigFile', () => {
     mockReadFile.mockResolvedValue(JSON.stringify({ wasm: { path: './app.wasm' } }));
     await expect(loadConfigFile('./fastedge-config.test.json')).rejects.toThrow('Invalid test config');
   });
+
+  it('resolves relative dotenv.path against the config file directory', async () => {
+    mockReadFile.mockResolvedValue(
+      JSON.stringify({
+        request: { url: 'https://example.com' },
+        dotenv: { enabled: true, path: './fixtures' },
+      })
+    );
+    const config = await loadConfigFile('/home/user/project/fastedge-config.test.json');
+    expect(config.dotenv?.path).toBe('/home/user/project/fixtures');
+  });
+
+  it('leaves absolute dotenv.path unchanged', async () => {
+    mockReadFile.mockResolvedValue(
+      JSON.stringify({
+        request: { url: 'https://example.com' },
+        dotenv: { enabled: true, path: '/abs/path/to/fixtures' },
+      })
+    );
+    const config = await loadConfigFile('/home/user/project/fastedge-config.test.json');
+    expect(config.dotenv?.path).toBe('/abs/path/to/fixtures');
+  });
+
+  it('resolves parent-relative dotenv.path correctly', async () => {
+    mockReadFile.mockResolvedValue(
+      JSON.stringify({
+        request: { url: 'https://example.com' },
+        dotenv: { enabled: true, path: '../shared/fixtures' },
+      })
+    );
+    const config = await loadConfigFile('/home/user/project/config/fastedge-config.test.json');
+    expect(config.dotenv?.path).toBe('/home/user/project/shared/fixtures');
+  });
 });
 
 // ─── runAndExit ───────────────────────────────────────────────────────────────

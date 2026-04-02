@@ -1,5 +1,183 @@
 # Proxy-WASM Runner - Changelog
 
+## April 2, 2026 - Config Schema Split: Discriminated Union on appType
+
+### Overview
+The config schema now uses a discriminated union on `appType` to differentiate CDN (proxy-wasm) and HTTP (http-wasm) configurations. HTTP configs use `request.path` (path only, e.g. `/api/hello?q=1`) instead of `request.url`. CDN configs continue to use `request.url` (full URL) unchanged.
+
+### What Changed
+- `TestConfigSchema` now discriminates on `appType`: `"proxy-wasm"` or `"http-wasm"`
+- Schema split: `CdnRequestConfigSchema` (has `url`) and `HttpRequestConfigSchema` (has `path`)
+- `RequestConfigSchema` kept as a backward-compat alias for `CdnRequestConfigSchema`
+- `/api/execute` endpoint now accepts both `path` (preferred for HTTP) and `url` (legacy/CDN)
+- Frontend API client (`executeHttpWasm`) now sends `{ path }` instead of `{ url }` for HTTP WASM calls
+
+### Notes
+- Proxy-wasm **property names** (e.g. `"request.url"`, `"request.host"` in the `properties` object) are unchanged -- those are CDN server properties, not config fields
+- Context documentation updated across 7 files to reflect the new schema
+
+---
+
+## April 1, 2026 - Calculated Properties, Built-in URL, Access Control & Bug Fixes
+
+### Overview
+Major session fixing multiple runner bugs discovered while running FastEdge-sdk-rust examples through the VSCode debugger. Added separated calculated properties for agent/developer side-by-side workflow, fixed built-in URL with query params, added missing property access control entry, and fixed stale property feedback loop.
+
+### 🎯 What Was Completed
+
+#### 1. Separated Calculated Properties (Agent/Developer Side-by-Side)
+URL-derived properties (`request.url`, `request.host`, `request.path`, `request.query`, `request.scheme`, `request.extension`) were being merged into the editable `properties` store after each Send, then sent BACK to the server on the next request — creating a stale feedback loop requiring two Sends to see URL changes.
+
+**Fix:** Added a separate `calculatedProperties` store field. Server-calculated values are stored there (via both API response and WebSocket `request_completed` event) for read-only display in the Properties panel. They are never sent back to the server, so the server always derives fresh values from the URL.
+
+- WebSocket handler in App.tsx updates `calculatedProperties` on `request_completed`
+- ProxyWasmView `handleSend` also updates `calculatedProperties` from API response
+- PropertiesEditor displays them in read-only rows via `defaultValues` overlay
+- `loadFromConfig` resets `calculatedProperties` to `{}` so read-only rows show `<Calculated>`
+- `exportConfig` does NOT include calculated properties (they're ephemeral)
+
+**Files Modified:**
+- `frontend/src/stores/types.ts` — Added `calculatedProperties` to ConfigState and `setCalculatedProperties` action
+- `frontend/src/stores/slices/configSlice.ts` — Added state, action, reset on config load
+- `frontend/src/App.tsx` — WebSocket handler stores calculated properties separately
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx` — API response stores calculated properties
+- `frontend/src/components/proxy-wasm/ServerPropertiesPanel/ServerPropertiesPanel.tsx` — Pass through
+- `frontend/src/components/proxy-wasm/PropertiesEditor/PropertiesEditor.tsx` — Display via `getDefaultsWithCalculated`, key-based remount on change
+
+#### 2. Built-in URL with Query Params
+`http://fastedge-builtin.debug?key=value` was not recognized as a built-in URL because `isBuiltIn` used strict equality. The runner tried a real HTTP fetch to `fastedge-builtin.debug`, which failed with `ENOTFOUND`.
+
+**Fix:** `isBuiltIn` now checks `startsWith(BUILTIN_URL + '?')` and `startsWith(BUILTIN_URL + '/')`.
+
+**Files Modified:**
+- `server/runner/ProxyWasmRunner.ts` — `isBuiltIn` detection in `callFullFlowLegacy`
+
+#### 3. `request.x_real_ip` Missing from Property Access Control
+The `BUILT_IN_PROPERTIES` whitelist was missing `request.x_real_ip`. When the WASM called `get_property("request.x_real_ip")`, access control treated it as an unknown custom property and denied access, returning `NotFound` (causing 557 error in the cdn/properties example).
+
+**Fix:** Added `request.x_real_ip` to `BUILT_IN_PROPERTIES` as read-only in all hooks.
+
+**Files Modified:**
+- `server/runner/PropertyAccessControl.ts` — Added `request.x_real_ip` entry
+
+#### 4. GET/HEAD Body Stripping in HTTP Callouts
+Node.js `fetch()` throws `TypeError: Request with GET/HEAD method cannot have body`. The FastEdge-sdk-rust `cdn/http_call` example passes `Some("body".as_bytes())` with a GET dispatch.
+
+**Fix:** PAUSE loop strips body for GET/HEAD methods.
+
+**Files Modified:**
+- `server/runner/ProxyWasmRunner.ts` — Conditional body in fetch call
+
+#### 5. Always Surface HTTP Call Failures in Logs
+Fetch errors in the PAUSE loop were only logged via `logDebug()` (requires `PROXY_RUNNER_DEBUG=1`). Failures were invisible in the UI.
+
+**Fix:** Failed fetches now push a WARN-level `[host]` prefixed log entry, always visible in the Logs panel.
+
+**Files Modified:**
+- `server/runner/ProxyWasmRunner.ts` — catch block pushes to `this.logs`
+
+#### 6. Log Level Filter Bug (undefined logLevel)
+Loading a config without a `logLevel` field set `state.logLevel = undefined`. The filter `log.level >= undefined` evaluated to `false` for all logs, hiding everything. The dropdown showed "Trace (0)" visually but the actual value was `undefined`.
+
+**Fix:** `loadFromConfig` defaults `config.logLevel ?? 0`.
+
+**Files Modified:**
+- `frontend/src/stores/slices/configSlice.ts` — Nullish coalescing default
+
+### 🧪 Testing
+- Load FastEdge-sdk-rust `cdn/http_call` example → should succeed with Return Code 0
+- Load FastEdge-sdk-rust `cdn/properties` example → all properties should resolve (no 55x errors)
+- Use `http://fastedge-builtin.debug?hello=world` → should work as built-in responder
+- Change URL query params, press Send ONCE → `request.query` should update immediately
+- Load a new config → read-only properties should reset to `<Calculated>`
+- Multi-tab: send from tab 1 → tab 2 should see calculated properties update via WebSocket
+
+### 📝 Notes
+- Examples in FastEdge-sdk-rust are source of truth — never modify them
+- `calculatedProperties` is display-only state; never sent to server, never exported
+- The `logLevel` default in `DEFAULT_CONFIG_STATE` remains 2 (INFO) for fresh sessions; `?? 0` only applies to loaded configs missing the field
+- Fixture/config loading CAN override URL-derived properties via `properties` field — these are sent to the server and take precedence in `resolve()`
+
+---
+
+## April 1, 2026 - Multi-Value Header Support (Proxy-WASM ABI Compliance)
+
+### Overview
+Fixed the proxy-wasm host function layer to support multi-valued headers. The internal header storage changed from `Record<string, string>` to `[string, string][]` (tuple array), enabling `add_header` with the same key to create separate entries rather than comma-concatenating. Also fixed `proxy_remove_header_map_value` to match nginx behavior (set to empty string, not delete). Added the FastEdge-sdk-rust `cdn/headers` example as both a Rust and AS integration test.
+
+### 🎯 What Was Completed
+
+#### 1. Internal Tuple Storage
+- `HostFunctions` internal storage changed from `Record<string, string>` to `[string, string][]`
+- All `proxy_*` header host functions updated to work with tuples
+- Boundary conversion: `recordToTuples()` on input, `tuplesToRecord()` on output (comma-join)
+- External interfaces (`HeaderMap`, API schemas, WebSocket events, frontend) unchanged
+
+#### 2. nginx Behavior Parity
+- `proxy_remove_header_map_value`: sets to empty string (not delete) when header exists; no-op when header doesn't exist
+- `proxy_get_header_map_value`: returns `Ok("")` for missing headers (matches nginx)
+- `proxy_add_header_map_value`: pushes separate tuple entry (not comma-concat)
+
+#### 3. Integration Tests (cdn-headers)
+- Added Rust test app: `test-applications/cdn-apps/rust/cdn-headers/` (from FastEdge-sdk-rust)
+- Updated AS test app: `proxy-wasm-sdk-as/examples/headers/` (aligned with nginx behavior)
+- 20 integration tests: 10 per variant (AS + Rust), covering add/replace/remove/multi-value/cross-map
+
+**Files Modified:**
+- `server/runner/types.ts` — Added `HeaderTuples` type
+- `server/runner/HeaderManager.ts` — 6 new tuple methods
+- `server/runner/HostFunctions.ts` — Internal storage + all proxy_* functions
+- `server/__tests__/unit/runner/HeaderManager.test.ts` — Tuple method tests
+- `test-applications/cdn-apps/rust/Cargo.toml` — Added cdn-headers to workspace
+
+**Files Created:**
+- `test-applications/cdn-apps/rust/cdn-headers/` — Rust test crate
+- `server/__tests__/integration/cdn-apps/headers/multi-value-headers.test.ts`
+
+**Cross-repo:**
+- `proxy-wasm-sdk-as/examples/headers/assembly/index.ts` — Updated to match nginx behavior
+
+### 📝 Notes
+- See `context/features/MULTI_VALUE_HEADERS.md` for full implementation details and error code reference
+- The `_bytes` header variants are Rust SDK only; AS tests skip those assertions via `hasBytesVariants` flag
+
+---
+
+## April 1, 2026 - Relative dotenv.path Resolution
+
+### Overview
+Config files can now use relative paths for `dotenv.path` (e.g., `"./fixtures"`). Previously, relative paths resolved against the server's CWD, which broke in VSCode (where CWD is `dist/debugger/`). Now relative paths consistently resolve against the config file's directory across all loading flows.
+
+### What Changed
+
+#### 1. Server (`server/server.ts`)
+- Added `resolveDotenvPath()` helper — resolves relative paths against `WORKSPACE_PATH` (or server root fallback); used as safety net in `/api/load` and `/api/dotenv` endpoints
+- `GET /api/config` now resolves relative `dotenv.path` against the config directory before returning
+
+#### 2. Test Framework (`server/test-framework/suite-runner.ts`)
+- `loadConfigFile()` resolves relative `dotenv.path` against the config file's parent directory before returning
+
+#### 3. Frontend (`frontend/src/components/common/ConfigButtons/ConfigButtons.tsx`, `frontend/src/App.tsx`)
+- VSCode flow: resolves relative `dotenv.path` using `configDir` sent by the extension in `filePickerResult` messages
+- Browser file drop: logs `console.warn` when relative dotenv.path detected (browser security prevents full path resolution)
+
+#### 4. VSCode Extension (FastEdge-vscode)
+- `DebuggerWebviewProvider.ts` — `filePickerResult` message now includes `configDir` (dirname of the picked file); `sendConfig()` accepts and forwards optional `configDir`
+- `runDebugger.ts` — passes `configDir` to `sendConfig()` for auto-load flow
+
+**Files Modified:**
+- `server/server.ts` — `resolveDotenvPath()`, `GET /api/config` resolution
+- `server/test-framework/suite-runner.ts` — relative path resolution in `loadConfigFile()`
+- `server/__tests__/unit/test-framework/suite-runner.test.ts` — 3 new tests for path resolution
+- `frontend/src/components/common/ConfigButtons/ConfigButtons.tsx` — VSCode configDir resolution + browser warning
+- `frontend/src/App.tsx` — browser drag-drop warning
+
+**Cross-repo (FastEdge-vscode):**
+- `src/debugger/DebuggerWebviewProvider.ts` — `configDir` in messages + `sendConfig()` signature
+- `src/commands/runDebugger.ts` — passes `configDir` to `sendConfig()`
+
+---
+
 ## April 1, 2026 - Built-In Responder URL Normalisation
 
 ### Overview

@@ -417,7 +417,7 @@ describe('ConfigSlice', () => {
 
       const config = result.current.exportConfig();
 
-      expect(config.request.method).toBe('POST');
+      expect(config.request.method).toBe('GET');
       expect(config.properties).toEqual({});
       expect(config.logLevel).toBe(2);
       expect(config.dotenv?.enabled).toBe(false);
@@ -492,7 +492,7 @@ describe('ConfigSlice', () => {
       const config = result.current.exportConfig();
 
       expect(config.request.method).toBe('DELETE');
-      expect(config.request.url).toBe('https://api.example.com');
+      expect((config.request as { url: string }).url).toBe('https://api.example.com');
     });
 
     it('should not affect request state when loading config', () => {

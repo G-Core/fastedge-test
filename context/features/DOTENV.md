@@ -236,6 +236,32 @@ let api_url = self.get_property(vec!["dictionary", "API_URL"]);
 
 ---
 
+## Relative Path Resolution (April 2026)
+
+Config files can specify `dotenv.path` as a relative path (e.g., `"./fixtures"`). Relative paths are resolved **against the config file's directory**, not the server's CWD. This ensures the same config file works identically across all loading flows.
+
+### Resolution by flow:
+
+| Flow | Resolution base | Implementation |
+|------|----------------|----------------|
+| **Test framework CLI** (`loadConfigFile`) | Config file's directory | `suite-runner.ts` resolves before returning |
+| **GET /api/config** (default .fastedge-debug) | Config file's directory | `server.ts` resolves before responding |
+| **VSCode file picker / auto-load** | Config file's directory | Extension sends `configDir`, frontend resolves before `loadFromConfig` |
+| **Browser file drop** | WORKSPACE_PATH (fallback) | Browser security hides full path; `resolveDotenvPath()` in server.ts catches remaining relative paths |
+
+### Example
+
+Given `geo_redirect/fastedge-config.test.json`:
+```json
+{
+  "dotenv": { "enabled": true, "path": "./fixtures" }
+}
+```
+
+The dotenv path resolves to `geo_redirect/fixtures/` regardless of which flow loads it.
+
+---
+
 ## Security Notes
 
 ⚠️ **Important**: Always add `.env*` files to your `.gitignore`:
@@ -268,13 +294,14 @@ For both runner types, CLI args/direct config takes priority over dotenv files:
 - `server/utils/dotenv-loader.ts` — Node.js dotenv parser (ProxyWasmRunner only)
 - `server/schemas/api.ts` — `dotenvPath` in `ApiLoadBodySchema`
 - `server/schemas/config.ts` — `dotenvPath` in `TestConfigSchema`
-- `server/server.ts` — precedence logic: client → `WORKSPACE_PATH` → CWD
+- `server/server.ts` — precedence logic: client → `WORKSPACE_PATH` → CWD; `resolveDotenvPath()` resolves relative paths to absolute; `GET /api/config` resolves dotenv.path against config directory before returning
 - `frontend/src/stores/types.ts` — `dotenvPath` in `ConfigState`, `ConfigActions`, `TestConfig`
 - `frontend/src/stores/slices/configSlice.ts` — `setDotenvPath`, restore/export
 - `frontend/src/stores/slices/wasmSlice.ts` — reads `dotenvPath` from store via `get()`
 - `frontend/src/api/index.ts` — `dotenvPath` forwarded in all relevant API calls
 - `frontend/src/components/common/DotenvPanel/` — shared toggle + path selector (VSCode browse / browser text input); used in both CDN and HTTP views
-- `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts` — `openFolderPicker` / `folderPickerResult` handler; `getAppRoot` / `appRootResult` handler for default path display
+- `server/test-framework/suite-runner.ts` — `loadConfigFile()` resolves relative dotenv.path against config file directory
+- `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts` — `openFolderPicker` / `folderPickerResult` handler; `getAppRoot` / `appRootResult` handler for default path display; sends `configDir` in `filePickerResult` message for relative path resolution
 - `schemas/fastedge-config.test.schema.json` — IDE intellisense for config files
 - `schemas/api-load.schema.json` — `POST /api/load` request body schema
 - `schemas/api-config.schema.json` — `POST /api/config` config object schema

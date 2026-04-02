@@ -545,7 +545,7 @@ function handleServerEvent(event: ServerEvent) {
 **Signature**:
 ```typescript
 async function executeHttpWasm(
-  url: string,
+  path: string,
   method: string = 'GET',
   headers: Record<string, string> = {},
   body: string = ''
@@ -563,7 +563,7 @@ async function executeHttpWasm(
 **Implementation**:
 ```typescript
 export async function executeHttpWasm(
-  url: string,
+  path: string,
   method: string = 'GET',
   headers: Record<string, string> = {},
   body: string = ''
@@ -571,7 +571,7 @@ export async function executeHttpWasm(
   const response = await fetch('/api/execute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, method, headers, body }),
+    body: JSON.stringify({ path, method, headers, body }),
   });
 
   if (!response.ok) {

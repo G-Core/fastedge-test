@@ -1,4 +1,4 @@
-import type { HeaderMap } from "./types";
+import type { HeaderMap, HeaderTuples } from "./types";
 
 const textEncoder = new TextEncoder();
 
@@ -100,5 +100,102 @@ export class HeaderManager {
       headers[key.toLowerCase()] = value;
     }
     return headers;
+  }
+
+  // --- Tuple-based methods for multi-valued header support ---
+
+  static recordToTuples(headers: HeaderMap): HeaderTuples {
+    return Object.entries(headers).map(([k, v]) => [k.toLowerCase(), String(v)]);
+  }
+
+  static tuplesToRecord(tuples: HeaderTuples): HeaderMap {
+    const record: HeaderMap = {};
+    for (const [key, value] of tuples) {
+      const existing = record[key];
+      record[key] = existing !== undefined ? `${existing},${value}` : value;
+    }
+    return record;
+  }
+
+  static normalizeTuples(tuples: HeaderTuples): HeaderTuples {
+    return tuples.map(([k, v]) => [k.toLowerCase(), String(v)]);
+  }
+
+  static serializeTuples(tuples: HeaderTuples): Uint8Array {
+    const numPairs = tuples.length;
+
+    const encoded: Array<{ key: Uint8Array; value: Uint8Array }> = [];
+    let dataSize = 0;
+    for (const [key, value] of tuples) {
+      const keyBytes = textEncoder.encode(key);
+      const valBytes = textEncoder.encode(value);
+      encoded.push({ key: keyBytes, value: valBytes });
+      dataSize += keyBytes.length + 1 + valBytes.length + 1;
+    }
+
+    const totalSize = 4 + numPairs * 2 * 4 + dataSize;
+    const buffer = new ArrayBuffer(totalSize);
+    const view = new DataView(buffer);
+    const bytes = new Uint8Array(buffer);
+
+    view.setUint32(0, numPairs, true);
+
+    let offset = 4;
+    for (const { key, value } of encoded) {
+      view.setUint32(offset, key.length, true);
+      offset += 4;
+      view.setUint32(offset, value.length, true);
+      offset += 4;
+    }
+
+    for (const { key, value } of encoded) {
+      bytes.set(key, offset);
+      offset += key.length;
+      bytes[offset] = 0;
+      offset += 1;
+
+      bytes.set(value, offset);
+      offset += value.length;
+      bytes[offset] = 0;
+      offset += 1;
+    }
+
+    return bytes;
+  }
+
+  static deserializeBinaryToTuples(bytes: Uint8Array): HeaderTuples {
+    if (bytes.length < 4) return [];
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const numPairs = view.getUint32(0, true);
+    const lengths: Array<{ keyLen: number; valLen: number }> = [];
+    let offset = 4;
+    for (let i = 0; i < numPairs; i++) {
+      const keyLen = view.getUint32(offset, true);
+      offset += 4;
+      const valLen = view.getUint32(offset, true);
+      offset += 4;
+      lengths.push({ keyLen, valLen });
+    }
+    const decoder = new TextDecoder();
+    const tuples: HeaderTuples = [];
+    for (const { keyLen, valLen } of lengths) {
+      const key = decoder.decode(bytes.slice(offset, offset + keyLen));
+      offset += keyLen + 1;
+      const value = decoder.decode(bytes.slice(offset, offset + valLen));
+      offset += valLen + 1;
+      tuples.push([key.toLowerCase(), value]);
+    }
+    return tuples;
+  }
+
+  static deserializeToTuples(payload: string): HeaderTuples {
+    const parts = payload.split("\0").filter((part) => part.length > 0);
+    const tuples: HeaderTuples = [];
+    for (let i = 0; i < parts.length; i += 2) {
+      const key = parts[i];
+      const value = parts[i + 1] ?? "";
+      tuples.push([key.toLowerCase(), value]);
+    }
+    return tuples;
   }
 }

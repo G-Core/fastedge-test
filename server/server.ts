@@ -14,6 +14,7 @@ import { HttpWasmRunner } from "./runner/HttpWasmRunner.js";
 import { WebSocketManager, StateManager } from "./websocket/index.js";
 import { detectWasmType } from "./utils/wasmTypeDetector.js";
 import { validatePath } from "./utils/pathValidator.js";
+import { resolveDotenvPath } from "./utils/dotenv-loader.js";
 import {
   ApiLoadBodySchema,
   ApiSendBodySchema,
@@ -233,7 +234,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     // Precedence: client-provided path → WORKSPACE_PATH (VSCode) → undefined (CWD).
     // When running inside VSCode the server CWD is the extension's dist/debugger/
     // directory, so WORKSPACE_PATH is the fallback. A client-provided path wins.
-    const dotenvPath = dotenv?.path || process.env.WORKSPACE_PATH || undefined;
+    const dotenvPath = resolveDotenvPathFromWorkspace(dotenv?.path) || process.env.WORKSPACE_PATH || undefined;
 
     // Load WASM (accepts either Buffer or string path)
     await currentRunner.load(bufferOrPath, {
@@ -287,7 +288,7 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
 
   try {
     const dotenvPath =
-      (typeof dotenv.path === "string" ? dotenv.path : undefined) ||
+      resolveDotenvPathFromWorkspace(typeof dotenv.path === "string" ? dotenv.path : undefined) ||
       process.env.WORKSPACE_PATH ||
       undefined;
     await currentRunner.applyDotenv(dotenv.enabled, dotenvPath);
@@ -298,7 +299,7 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
 });
 
 app.post("/api/execute", async (req: Request, res: Response) => {
-  const { url, method, headers, body } = req.body ?? {};
+  const { url, path: reqPath, method, headers, body } = req.body ?? {};
 
   if (!currentRunner) {
     res.status(400).json({
@@ -310,17 +311,32 @@ app.post("/api/execute", async (req: Request, res: Response) => {
 
   try {
     if (currentRunner.getType() === "http-wasm") {
-      // HTTP WASM: Simple request/response
-      if (!url || typeof url !== "string") {
+      // HTTP WASM: Accept either `path` (preferred) or `url` (legacy).
+      // When `path` is provided, use it directly (e.g. "/api/hello?q=1").
+      // When `url` is provided, extract pathname + search from it.
+      let resolvedPath: string;
+      if (reqPath && typeof reqPath === "string") {
+        resolvedPath = reqPath;
+      } else if (url && typeof url === "string") {
+        let urlObj: URL;
+        try {
+          urlObj = new URL(url);
+        } catch {
+          res
+            .status(400)
+            .json({ ok: false, error: `Invalid url: ${url} (must be an absolute URL)` });
+          return;
+        }
+        resolvedPath = urlObj.pathname + urlObj.search;
+      } else {
         res
           .status(400)
-          .json({ ok: false, error: "Missing url for HTTP WASM request" });
+          .json({ ok: false, error: "Missing path (or url) for HTTP WASM request" });
         return;
       }
 
-      const urlObj = new URL(url);
       const result = await currentRunner.execute({
-        path: urlObj.pathname + urlObj.search,
+        path: resolvedPath,
         method: method || "GET",
         headers: headers || {},
         body: body || "",
@@ -479,12 +495,25 @@ function resolveConfigDir(): string {
   return path.join(root, ".fastedge-debug");
 }
 
+/** Resolve a potentially relative dotenv path using the same base as resolveConfigDir(). */
+function resolveDotenvPathFromWorkspace(dotenvPath: string | undefined): string | undefined {
+  const base = process.env.WORKSPACE_PATH || path.join(__dirname, "..");
+  return resolveDotenvPath(dotenvPath, base);
+}
+
 // Get test configuration
 app.get("/api/config", async (req: Request, res: Response) => {
   try {
-    const configPath = path.join(resolveConfigDir(), "fastedge-config.test.json");
+    const configDir = resolveConfigDir();
+    const configPath = path.join(configDir, "fastedge-config.test.json");
     const configData = await fs.readFile(configPath, "utf-8");
     const config = JSON.parse(configData);
+
+    // Resolve relative dotenv.path against the config file's directory
+    if (config.dotenv?.path && !path.isAbsolute(config.dotenv.path)) {
+      config.dotenv.path = path.resolve(configDir, config.dotenv.path);
+    }
+
     // Validate config against schema, include validation result in response
     const validation = TestConfigSchema.safeParse(config);
     res.json({

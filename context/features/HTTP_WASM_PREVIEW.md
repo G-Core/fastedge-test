@@ -138,7 +138,7 @@ Files fixed: `ResponsePanel.module.css`, `HookStagesPanel.module.css`,
 Before this change, HTTP WASM logs worked correctly for explicit "Send" requests but were
 completely missing in live mode.
 
-**Execute flow (Send button)**: `POST /api/execute` → `HttpWasmRunner.execute()` → logs
+**Execute flow (Send button)**: `POST /api/execute` (with `{ path }` for HTTP WASM) → `HttpWasmRunner.execute()` → logs
 accumulated in `this.logs[]` → returned in HTTP response → emitted in `http_wasm_request_completed`
 WebSocket event → frontend replaced `httpLogs` with the new batch.
 

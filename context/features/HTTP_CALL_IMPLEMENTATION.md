@@ -1,7 +1,7 @@
 # HTTP Callout (proxy_http_call) Implementation
 
 **Status**: ✅ Complete
-**Last Updated**: February 27, 2026
+**Last Updated**: April 1, 2026
 
 ---
 
@@ -71,7 +71,8 @@ while (returnCode === 1 /* PAUSE */ && hostFunctions.hasPendingHttpCall()) {
   url = `${scheme}://${authority}${path}`;
 
   // HTTP fetch (real network call)
-  resp = await fetch(url, { method, headers, body, signal: AbortSignal.timeout(timeoutMs) });
+  // Note: body is stripped for GET/HEAD (Node.js fetch enforces HTTP spec)
+  resp = await fetch(url, { method, headers, body: (method !== 'GET' && method !== 'HEAD') ? body : undefined, signal: AbortSignal.timeout(timeoutMs) });
 
   // Store response for WASM to read back
   hostFunctions.setHttpCallResponse(tokenId, responseHeaders, responseBodyBytes);
@@ -149,11 +150,23 @@ Per the proxy-wasm spec: a failed HTTP call delivers `numHeaders = 0` to `proxy_
 
 ```typescript
 } catch (err) {
+  // Always surface the error in WASM-visible logs (WARN level, [host] prefix)
+  this.logs.push({ level: 3, message: `[host] http_call failed for ${url}: ${String(err)}` });
   responseHeaders = {};
   responseBody = new Uint8Array(0);
 }
 // numHeaders = 0, bodySize = 0 → WASM sees failed call
 ```
+
+### 5b. GET/HEAD Body Stripping
+
+Node.js `fetch()` strictly enforces HTTP spec — GET/HEAD requests cannot have a body. Some WASM binaries (e.g. FastEdge-sdk-rust `cdn/http_call`) pass a body with GET requests. The PAUSE loop strips the body for these methods:
+
+```typescript
+body: pending.body && method !== 'GET' && method !== 'HEAD' ? Buffer.from(pending.body) : undefined,
+```
+
+This matches production CDN behavior where the body would be ignored for bodiless methods.
 
 ### 6. `proxy_continue_stream` / `proxy_close_stream`
 

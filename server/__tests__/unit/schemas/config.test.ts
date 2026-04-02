@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   TestConfigSchema,
   RequestConfigSchema,
+  HttpRequestConfigSchema,
   WasmConfigSchema,
   ResponseConfigSchema,
 } from '../../../schemas/config';
@@ -148,5 +149,114 @@ describe('TestConfigSchema', () => {
       });
       expect(result.success).toBe(true);
     });
+  });
+
+  describe('HTTP WASM configs (appType: http-wasm)', () => {
+    it('should accept a minimal HTTP config with path', () => {
+      const result = TestConfigSchema.safeParse({
+        appType: 'http-wasm',
+        request: { path: '/api/hello' },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept path with query parameters', () => {
+      const result = TestConfigSchema.safeParse({
+        appType: 'http-wasm',
+        request: { path: '/api/hello/world?name=FastEdge&lang=Rust' },
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect((result.data.request as { path: string }).path).toBe('/api/hello/world?name=FastEdge&lang=Rust');
+      }
+    });
+
+    it('should default method to GET for HTTP config', () => {
+      const result = TestConfigSchema.safeParse({
+        appType: 'http-wasm',
+        request: { path: '/' },
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.request.method).toBe('GET');
+    });
+
+    it('should accept HTTP config with all fields', () => {
+      const result = TestConfigSchema.safeParse({
+        appType: 'http-wasm',
+        description: 'Hello world test',
+        request: {
+          method: 'POST',
+          path: '/api/data',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{"key":"value"}',
+        },
+        dotenv: { enabled: true, path: '/fixtures' },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject HTTP config without path', () => {
+      const result = TestConfigSchema.safeParse({
+        appType: 'http-wasm',
+        request: { method: 'GET' },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject HTTP config with url instead of path', () => {
+      const result = TestConfigSchema.safeParse({
+        appType: 'http-wasm',
+        request: { url: 'https://example.com' },
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('CDN backward compatibility (no appType)', () => {
+    it('should accept config without appType as CDN', () => {
+      const result = TestConfigSchema.safeParse({
+        request: { url: 'https://example.com' },
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.appType).toBe('proxy-wasm');
+    });
+
+    it('should accept explicit proxy-wasm appType', () => {
+      const result = TestConfigSchema.safeParse({
+        appType: 'proxy-wasm',
+        request: { url: 'https://example.com' },
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+});
+
+describe('HttpRequestConfigSchema', () => {
+  it('should require path', () => {
+    expect(HttpRequestConfigSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('should default method to GET', () => {
+    const result = HttpRequestConfigSchema.safeParse({ path: '/' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.method).toBe('GET');
+  });
+
+  it('should default headers to {}', () => {
+    const result = HttpRequestConfigSchema.safeParse({ path: '/' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.headers).toEqual({});
+  });
+
+  it('should default body to empty string', () => {
+    const result = HttpRequestConfigSchema.safeParse({ path: '/' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.body).toBe('');
+  });
+
+  it('should accept path with query string', () => {
+    const result = HttpRequestConfigSchema.safeParse({ path: '/api/users?id=89' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.path).toBe('/api/users?id=89');
   });
 });

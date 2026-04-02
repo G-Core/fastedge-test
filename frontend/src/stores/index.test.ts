@@ -302,7 +302,7 @@ describe('Store Composition (index.ts)', () => {
       const config = result.current.exportConfig();
 
       expect(config.request.method).toBe('DELETE');
-      expect(config.request.url).toBe('https://test.com');
+      expect((config.request as { url: string }).url).toBe('https://test.com');
       expect(config.request.headers).toEqual({ 'X-Test': 'header' });
       expect(config.properties).toEqual({ prop: 'value' });
       expect(config.logLevel).toBe(4);

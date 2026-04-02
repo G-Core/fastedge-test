@@ -228,7 +228,11 @@ export class ProxyWasmRunner implements IWasmRunner {
 
     // Normalise the "built-in" shorthand to a real URL so every downstream
     // consumer (URL parsing, pseudo-headers, property extraction) just works.
-    const isBuiltIn = targetUrl === BUILTIN_SHORTHAND || targetUrl === BUILTIN_URL;
+    // Allow query params on built-in URL (e.g. http://fastedge-builtin.debug?key=value)
+    const isBuiltIn = targetUrl === BUILTIN_SHORTHAND
+      || targetUrl === BUILTIN_URL
+      || targetUrl.startsWith(BUILTIN_URL + '?')
+      || targetUrl.startsWith(BUILTIN_URL + '/');
     if (targetUrl === BUILTIN_SHORTHAND) {
       targetUrl = BUILTIN_URL;
       this.logDebug(`Substituted "${BUILTIN_SHORTHAND}" → ${BUILTIN_URL}`);
@@ -857,7 +861,7 @@ export class ProxyWasmRunner implements IWasmRunner {
         const resp = await fetch(url, {
           method,
           headers: fetchHeaders,
-          body: pending.body ? Buffer.from(pending.body) : undefined,
+          body: pending.body && method !== 'GET' && method !== 'HEAD' ? Buffer.from(pending.body) : undefined,
           signal: AbortSignal.timeout(pending.timeoutMs),
         });
         resp.headers.forEach((v, k) => { responseHeaders[k] = v; });
@@ -867,7 +871,10 @@ export class ProxyWasmRunner implements IWasmRunner {
         );
       } catch (err) {
         // Timeout or network error → numHeaders = 0 (proxy-wasm contract for failed calls)
-        this.logDebug(`http_call failed for ${url}: ${String(err)}`);
+        const errMsg = `http_call failed for ${url}: ${String(err)}`;
+        this.logDebug(errMsg);
+        // Always surface fetch failures in the WASM-visible logs so developers can diagnose
+        this.logs.push({ level: 3, message: `[host] ${errMsg}` });
         responseHeaders = {};
         responseBody = new Uint8Array(0);
       }
