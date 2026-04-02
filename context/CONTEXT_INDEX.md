@@ -44,6 +44,7 @@ This index helps you discover relevant documentation without reading thousands o
 - `FASTEDGE_IMPLEMENTATION.md` (645 lines) - FastEdge CDN integration, secrets, env vars
 - `PROPERTY_IMPLEMENTATION_COMPLETE.md` (495 lines) - Property system, runtime calculation
 - `PRODUCTION_PARITY_HEADERS.md` (421 lines) - Header serialization, G-Core SDK format
+- `MULTI_VALUE_HEADERS.md` (~200 lines) - Multi-value header support, internal tuple storage, nginx remove behavior, cdn-headers integration test (AS + Rust)
 - `CONFIG_SHARING.md` (281 lines) - fastedge-config.test.json sharing system
 - `DOTENV.md` (~210 lines) - Environment variable system, dotenvPath support (CDN + HTTP)
 - `CDN_VARIABLES_AND_SECRETS.md` (~120 lines) - ✅ CDN env var/secret integration test (7 tests); requires proxy-wasm-sdk-as@^1.2.2
@@ -152,8 +153,9 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 
 1. Read relevant `wasm/*.md` file for your specific task
 2. Read `FASTEDGE_IMPLEMENTATION.md` (FastEdge context)
-3. Read `PRODUCTION_PARITY_HEADERS.md` if dealing with headers
-4. Grep for examples in codebase
+3. Read `PRODUCTION_PARITY_HEADERS.md` if dealing with header display/injection
+4. Read `MULTI_VALUE_HEADERS.md` if dealing with host functions (add/replace/remove/get)
+5. Grep for examples in codebase
 
 ### Working with proxy_http_call / HTTP Callouts
 

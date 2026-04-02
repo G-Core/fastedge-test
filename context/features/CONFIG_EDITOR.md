@@ -218,7 +218,7 @@ This is intentional — `fastedge-config.test.json` is the marker used by `resol
 Real-time validation checks:
 - ✅ Valid JSON syntax
 - ✅ Required fields: `request`, `properties`, `logLevel`
-- ✅ Required nested fields: `request.method`, `request.url`, `request.headers`, `request.body`
+- ✅ Required nested fields: `request.method`, `request.url` (CDN) or `request.path` (HTTP), `request.headers`, `request.body`
 - ✅ Type checking: `logLevel` must be number
 - ✅ Optional fields: `description`, `wasm` (with required `wasm.path`)
 

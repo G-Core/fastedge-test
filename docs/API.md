@@ -16,12 +16,12 @@ The port can be overridden via the `PORT` environment variable. When `WORKSPACE_
 
 The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
-| Value        | Description                                             |
-| ------------ | ------------------------------------------------------- |
-| `ui`         | Request originated from the web UI (default if omitted) |
-| `ai_agent`   | Request originated from an AI agent                     |
-| `api`        | Request originated from direct API usage                |
-| `system`     | Request originated from an automated system             |
+| Value      | Description                                             |
+| ---------- | ------------------------------------------------------- |
+| `ui`       | Request originated from the web UI (default if omitted) |
+| `ai_agent` | Request originated from an AI agent                     |
+| `api`      | Request originated from direct API usage                |
+| `system`   | Request originated from an automated system             |
 
 ```http
 X-Source: ai_agent
@@ -222,18 +222,19 @@ Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`
 
 **Request Body**
 
-For **HTTP-WASM**, the top-level `url`, `method`, `headers`, and `body` fields are used directly as the request:
+For **HTTP-WASM**, provide either `path` (preferred) or `url` (legacy). When `path` is given, it is used directly as the request path (e.g. `/api/hello?q=1`). When only `url` is given, the path and query string are extracted from it.
 
 ```typescript
 {
-  url: string;                       // Full URL (path and query extracted from this)
+  path?: string;                     // Request path and query string (preferred)
+  url?: string;                      // Full URL — path and query extracted (legacy fallback)
   method?: string;                   // HTTP method (default: "GET")
-  headers?: Record<string, string>;  // Request headers
-  body?: string;                     // Request body
+  headers?: Record<string, string>;  // Request headers (default: {})
+  body?: string;                     // Request body (default: "")
 }
 ```
 
-For **Proxy-WASM**, the same top-level `url` field is required for URL parsing. The full CDN flow is controlled via nested `request`, `response`, and `properties` fields:
+For **Proxy-WASM**, the top-level `url` field is required. The full CDN flow is controlled via nested `request`, `response`, and `properties` fields:
 
 ```typescript
 {
@@ -317,7 +318,7 @@ curl -X POST http://localhost:5179/api/execute \
   -H "Content-Type: application/json" \
   -H "X-Source: api" \
   -d '{
-    "url": "http://example.com/api/data",
+    "path": "/api/data?format=json",
     "method": "GET",
     "headers": { "accept": "application/json" }
   }'
@@ -403,10 +404,10 @@ curl -X POST http://localhost:5179/api/execute \
 
 **Error Responses**
 
-| Status | Condition                                  |
-| ------ | ------------------------------------------ |
-| `400`  | No WASM module loaded, or `url` is missing |
-| `500`  | Execution failed                           |
+| Status | Condition                                                                              |
+| ------ | -------------------------------------------------------------------------------------- |
+| `400`  | No WASM module loaded, or missing `path`/`url` for HTTP-WASM, or missing `url` for Proxy-WASM |
+| `500`  | Execution failed                                                                       |
 
 ---
 
@@ -671,16 +672,15 @@ Reads the `fastedge-config.test.json` file from the project root and returns it 
 }
 ```
 
-Where `TestConfig` is:
+`TestConfig` is a discriminated union on `appType`:
 
 ```typescript
-type TestConfig = {
+// Proxy-WASM config (appType defaults to "proxy-wasm")
+type ProxyWasmConfig = {
   $schema?: string;
   description?: string;
-  wasm?: {
-    path: string;
-    description?: string;
-  };
+  appType: "proxy-wasm";
+  wasm?: { path: string; description?: string };
   request: {
     method: string;
     url: string;
@@ -692,11 +692,26 @@ type TestConfig = {
     body: string;
   };
   properties: Record<string, unknown>;
-  dotenv?: {
-    enabled?: boolean;
-    path?: string;
-  };
+  dotenv?: { enabled?: boolean; path?: string };
 };
+
+// HTTP-WASM config
+type HttpWasmConfig = {
+  $schema?: string;
+  description?: string;
+  appType: "http-wasm";
+  wasm?: { path: string; description?: string };
+  request: {
+    method: string;
+    path: string;
+    headers: Record<string, string>;
+    body: string;
+  };
+  properties: Record<string, unknown>;
+  dotenv?: { enabled?: boolean; path?: string };
+};
+
+type TestConfig = ProxyWasmConfig | HttpWasmConfig;
 ```
 
 **Example**
@@ -710,6 +725,7 @@ curl http://localhost:5179/api/config
   "ok": true,
   "config": {
     "$schema": "http://localhost:5179/api/schema/fastedge-config.test",
+    "appType": "proxy-wasm",
     "request": {
       "method": "GET",
       "url": "https://example.com/",
@@ -744,31 +760,11 @@ Accepts an optional [`X-Source`](#x-source-header) request header.
 
 ```typescript
 {
-  config: {
-    $schema?: string;
-    description?: string;
-    wasm?: {
-      path: string;
-      description?: string;
-    };
-    request: {                           // Required
-      method: string;
-      url: string;
-      headers: Record<string, string>;
-      body: string;
-    };
-    response?: {
-      headers: Record<string, string>;
-      body: string;
-    };
-    properties: Record<string, unknown>; // Required
-    dotenv?: {
-      enabled?: boolean;
-      path?: string;
-    };
-  };
+  config: TestConfig; // See GET /api/config for the TestConfig type
 }
 ```
+
+The `config` object must match one of the two `TestConfig` variants. `properties` and `appType` are required in both variants; `request` is required and its shape depends on `appType` (`path` for `"http-wasm"`, `url` for `"proxy-wasm"`).
 
 **Response**
 
@@ -787,6 +783,7 @@ curl -X POST http://localhost:5179/api/config \
   -d '{
     "config": {
       "$schema": "http://localhost:5179/api/schema/fastedge-config.test",
+      "appType": "proxy-wasm",
       "request": {
         "method": "GET",
         "url": "https://example.com/",
@@ -812,10 +809,10 @@ curl -X POST http://localhost:5179/api/config \
 
 **Error Responses**
 
-| Status | Condition                                                           |
-| ------ | ------------------------------------------------------------------- |
-| `400`  | Validation failed (missing `config.request` or `config.properties`) |
-| `500`  | File write failed                                                   |
+| Status | Condition                                                                          |
+| ------ | ---------------------------------------------------------------------------------- |
+| `400`  | Validation failed (missing `config.appType`, `config.request`, or `config.properties`) |
+| `500`  | File write failed                                                                  |
 
 ---
 
@@ -848,6 +845,7 @@ curl -X POST http://localhost:5179/api/config/save-as \
   -H "Content-Type: application/json" \
   -d '{
     "config": {
+      "appType": "proxy-wasm",
       "request": {
         "method": "GET",
         "url": "https://example.com/",
@@ -892,23 +890,23 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Request Schemas
 
-| Name           | Description                                |
-| -------------- | ------------------------------------------ |
-| `api-load`     | Request body schema for `POST /api/load`   |
-| `api-send`     | Request body schema for `POST /api/send`   |
-| `api-call`     | Request body schema for `POST /api/call`   |
-| `api-config`   | Request body schema for `POST /api/config` |
+| Name         | Description                                |
+| ------------ | ------------------------------------------ |
+| `api-load`   | Request body schema for `POST /api/load`   |
+| `api-send`   | Request body schema for `POST /api/send`   |
+| `api-call`   | Request body schema for `POST /api/call`   |
+| `api-config` | Request body schema for `POST /api/config` |
 
 #### Response / Type Schemas
 
-| Name                     | Description                                                   |
-| ------------------------ | ------------------------------------------------------------- |
-| `fastedge-config.test`   | Schema for `fastedge-config.test.json` config files           |
-| `hook-result`            | Shape of a single `HookResult` object                         |
-| `hook-call`              | Shape of a `HookCall` input object                            |
-| `full-flow-result`       | Shape of the `FullFlowResult` returned by full-flow endpoints |
-| `http-request`           | Shape of an `HttpRequest` for HTTP-WASM execution             |
-| `http-response`          | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
+| Name                   | Description                                                   |
+| ---------------------- | ------------------------------------------------------------- |
+| `fastedge-config.test` | Schema for `fastedge-config.test.json` config files           |
+| `hook-result`          | Shape of a single `HookResult` object                         |
+| `hook-call`            | Shape of a `HookCall` input object                            |
+| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints |
+| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution             |
+| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
 
 **Example**
 
@@ -925,6 +923,7 @@ curl http://localhost:5179/api/schema/fastedge-config.test
 ```json
 {
   "$schema": "http://localhost:5179/api/schema/fastedge-config.test",
+  "appType": "proxy-wasm",
   "request": {
     "method": "GET",
     "url": "https://example.com/",

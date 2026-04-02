@@ -135,6 +135,7 @@ Place a `fastedge-config.test.json` file in your project root to define default 
 ```json
 {
   "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
+  "appType": "proxy-wasm",
   "wasm": {
     "path": "./dist/my-module.wasm"
   },

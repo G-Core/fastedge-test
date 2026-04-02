@@ -30,10 +30,11 @@ export function ProxyWasmView() {
 
     // Config state
     properties,
+    calculatedProperties,
     dotenv,
     logLevel,
     setProperties,
-    mergeProperties,
+    setCalculatedProperties,
     setDotenvEnabled,
     setDotenvPath,
     setLogLevel,
@@ -73,17 +74,14 @@ export function ProxyWasmView() {
       setHookResults(newHookResults);
       setFinalResponse(response);
 
-      // Merge calculated properties into the UI
-      console.log("[API] Received calculatedProperties:", calculatedProperties);
+      // Store calculated properties separately for read-only display.
+      // These are NOT in the editable `properties` store — no stale feedback loop.
       if (calculatedProperties) {
-        console.log("[API] Updating properties. Previous:", properties);
-        const propsToMerge: Record<string, string> = {};
-        // Always update calculated properties - they change with each request
-        for (const [key, value] of Object.entries(calculatedProperties)) {
-          propsToMerge[key] = String(value);
+        const stringProps: Record<string, string> = {};
+        for (const [k, v] of Object.entries(calculatedProperties)) {
+          stringProps[k] = String(v);
         }
-        console.log("[API] Merging properties:", propsToMerge);
-        mergeProperties(propsToMerge);
+        setCalculatedProperties(stringProps);
       }
     } catch (err) {
       // Show error in all hooks
@@ -182,6 +180,7 @@ export function ProxyWasmView() {
 
       <ServerPropertiesPanel
         properties={properties}
+        calculatedProperties={calculatedProperties}
         onPropertiesChange={setProperties}
       />
 

@@ -5,9 +5,18 @@ export const WasmConfigSchema = z.object({
   description: z.string().optional(),
 });
 
-export const RequestConfigSchema = z.object({
+// CDN (proxy-wasm) request: full URL required (upstream target)
+export const CdnRequestConfigSchema = z.object({
   method: z.string().default('GET'),
   url: z.string(),
+  headers: z.record(z.string(), z.string()).optional().default({}),
+  body: z.string().optional().default(''),
+});
+
+// HTTP request: path-only (the app IS the origin server)
+export const HttpRequestConfigSchema = z.object({
+  method: z.string().default('GET'),
+  path: z.string(),
   headers: z.record(z.string(), z.string()).optional().default({}),
   body: z.string().optional().default(''),
 });
@@ -17,20 +26,43 @@ export const ResponseConfigSchema = z.object({
   body: z.string().optional().default(''),
 });
 
-export const TestConfigSchema = z.object({
+const DotenvSchema = z.object({
+  enabled: z.boolean().optional(),
+  path: z.string().optional(),
+});
+
+const BaseConfigSchema = z.object({
   $schema: z.string().optional(),
   description: z.string().optional(),
   wasm: WasmConfigSchema.optional(),
-  request: RequestConfigSchema,
-  response: ResponseConfigSchema.optional(),
   properties: z.record(z.string(), z.unknown()).optional().default({}),
-  dotenv: z.object({
-    enabled: z.boolean().optional(),
-    path: z.string().optional(),
-  }).optional(),
+  dotenv: DotenvSchema.optional(),
 });
 
+// CDN config: full URL + optional mock response
+const CdnConfigSchema = BaseConfigSchema.extend({
+  appType: z.literal('proxy-wasm').default('proxy-wasm'),
+  request: CdnRequestConfigSchema,
+  response: ResponseConfigSchema.optional(),
+});
+
+// HTTP config: path only, no mock response
+const HttpConfigSchema = BaseConfigSchema.extend({
+  appType: z.literal('http-wasm'),
+  request: HttpRequestConfigSchema,
+});
+
+// Discriminated union — appType determines which schema validates
+export const TestConfigSchema = z.union([HttpConfigSchema, CdnConfigSchema]);
+
+// Backward-compat alias: the old flat RequestConfigSchema is the CDN variant
+export const RequestConfigSchema = CdnRequestConfigSchema;
+
 export type WasmConfig = z.infer<typeof WasmConfigSchema>;
-export type RequestConfig = z.infer<typeof RequestConfigSchema>;
+export type CdnRequestConfig = z.infer<typeof CdnRequestConfigSchema>;
+export type HttpRequestConfig = z.infer<typeof HttpRequestConfigSchema>;
+export type RequestConfig = z.infer<typeof CdnRequestConfigSchema>;
 export type ResponseConfig = z.infer<typeof ResponseConfigSchema>;
+export type CdnConfig = z.infer<typeof CdnConfigSchema>;
+export type HttpConfig = z.infer<typeof HttpConfigSchema>;
 export type TestConfig = z.infer<typeof TestConfigSchema>;

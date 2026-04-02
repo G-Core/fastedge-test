@@ -140,14 +140,14 @@ curl -X POST http://localhost:5179/api/load \
 
 ### /api/execute (NEW)
 
-Unified endpoint that works with both WASM types:
+Unified endpoint that works with both WASM types. Accepts both `path` (preferred for HTTP WASM) and `url` (legacy/CDN):
 
 **For HTTP WASM**:
 ```bash
 curl -X POST http://localhost:5179/api/execute \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "http://example.com/path?query=value",
+    "path": "/path?query=value",
     "method": "GET",
     "headers": {"user-agent": "test"},
     "body": ""
@@ -278,10 +278,10 @@ curl -X POST http://localhost:5179/api/load \
   -H "Content-Type: application/json" \
   -d "{\"wasmBase64\": \"$WASM_BASE64\", \"wasmType\": \"http-wasm\"}"
 
-# Execute
+# Execute (use "path" for HTTP WASM)
 curl -X POST http://localhost:5179/api/execute \
   -H "Content-Type: application/json" \
-  -d '{"url": "http://example.com/", "method": "GET"}'
+  -d '{"path": "/", "method": "GET"}'
 ```
 
 **Test Proxy-WASM**:

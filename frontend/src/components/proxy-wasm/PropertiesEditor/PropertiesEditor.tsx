@@ -4,6 +4,7 @@ import styles from "./PropertiesEditor.module.css";
 
 interface PropertiesEditorProps {
   value: Record<string, string>;
+  calculatedProperties?: Record<string, string>;
   onChange: (properties: Record<string, string>) => void;
 }
 
@@ -133,7 +134,23 @@ const getEnabledDefaults = (countryKey: string): Record<string, string> => {
   return result;
 };
 
-export function PropertiesEditor({ value, onChange }: PropertiesEditorProps) {
+/** Overlay server-calculated values onto the read-only default rows. */
+const getDefaultsWithCalculated = (
+  countryKey: string,
+  calculated?: Record<string, string>,
+) => {
+  const defaults = getPropertiesForCountry(countryKey);
+  if (!calculated) return defaults;
+  const result = { ...defaults };
+  for (const [key, val] of Object.entries(result)) {
+    if (typeof val === "object" && val.readOnly && key in calculated) {
+      result[key] = { ...val, value: calculated[key] };
+    }
+  }
+  return result;
+};
+
+export function PropertiesEditor({ value, calculatedProperties, onChange }: PropertiesEditorProps) {
   const [selectedCountry, setSelectedCountry] = useState<string>("luxembourg");
 
   // Push default properties into the store on first mount only —
@@ -170,13 +187,13 @@ export function PropertiesEditor({ value, onChange }: PropertiesEditorProps) {
         ))}
       </div>
       <DictionaryInput
-        key={selectedCountry}
+        key={`${selectedCountry}-${JSON.stringify(calculatedProperties ?? {})}`}
         value={value}
         onChange={onChange}
         keyPlaceholder="Property path"
         valuePlaceholder="Property value"
         disableDelete={true}
-        defaultValues={getPropertiesForCountry(selectedCountry)}
+        defaultValues={getDefaultsWithCalculated(selectedCountry, calculatedProperties)}
       />
     </div>
   );

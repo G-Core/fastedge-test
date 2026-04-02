@@ -640,4 +640,4 @@ await runAndExit(suite);
 - [RUNNER.md](RUNNER.md) — Low-level `IWasmRunner` interface, `RunnerConfig`, and `callFullFlow`
 - [API.md](API.md) — REST API for running tests via HTTP
 - [TEST_CONFIG.md](TEST_CONFIG.md) — `fastedge-config.test.json` schema and `loadConfigFile` config options
-- [quickstart.md](quickstart.md) — Installation and first test walkthrough
+- [DEBUGGER.md](DEBUGGER.md) — Interactive debugger server for step-through WASM execution

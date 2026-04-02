@@ -39,7 +39,7 @@ Made `fastedge-config.test.json` and all API request/response bodies a versioned
 - **Runner-internal types** (execution results): TypeScript types → JSON Schema via `ts-json-schema-generator`
 
 **New Files:**
-- `server/schemas/config.ts` — Zod schemas: `TestConfigSchema`, `RequestConfigSchema`, `ResponseConfigSchema`, `WasmConfigSchema`
+- `server/schemas/config.ts` — Zod schemas: `TestConfigSchema`, `CdnRequestConfigSchema`, `HttpRequestConfigSchema`, `RequestConfigSchema` (backward-compat alias for `CdnRequestConfigSchema`), `ResponseConfigSchema`, `WasmConfigSchema`
 - `server/schemas/api.ts` — Zod schemas: `ApiLoadBodySchema`, `ApiSendBodySchema`, `ApiCallBodySchema`, `ApiConfigBodySchema`
 - `server/schemas/index.ts` — re-exports
 - `scripts/generate-schemas.ts` — schema generation build step

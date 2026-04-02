@@ -40,6 +40,7 @@ function App() {
     hookResults,
     properties,
     mergeProperties,
+    setCalculatedProperties,
 
     // HTTP WASM state (for WebSocket event handling)
     setHttpResponse,
@@ -155,22 +156,14 @@ function App() {
         // Full request completed (for proxy-wasm) - update all results and final response
         setHookResults(event.data.hookResults);
         setFinalResponse(event.data.finalResponse);
-
-        // Update calculated properties from WebSocket event
-        console.log(
-          "[WebSocket] request_completed calculatedProperties:",
-          event.data.calculatedProperties,
-        );
+        // Store calculated properties separately for read-only display.
+        // These are NOT in the editable `properties` store — no stale feedback loop.
         if (event.data.calculatedProperties) {
-          console.log("[WebSocket] Updating properties. Previous:", properties);
-          const propsToMerge: Record<string, string> = {};
-          for (const [key, value] of Object.entries(
-            event.data.calculatedProperties,
-          )) {
-            propsToMerge[key] = String(value);
+          const stringProps: Record<string, string> = {};
+          for (const [k, v] of Object.entries(event.data.calculatedProperties)) {
+            stringProps[k] = String(v);
           }
-          console.log("[WebSocket] Merging properties:", propsToMerge);
-          mergeProperties(propsToMerge);
+          setCalculatedProperties(stringProps);
         }
         break;
 
@@ -246,6 +239,12 @@ function App() {
       // Validate config structure
       if (!config.request || !config.properties || config.logLevel === undefined) {
         throw new Error('Invalid config file structure');
+      }
+
+      // Warn about relative dotenv path — browser drag-drop hides the full
+      // file path, so relative paths will fall back to the server workspace root.
+      if (config.dotenv?.path && !config.dotenv.path.startsWith('/')) {
+        console.warn(`Config contains relative dotenv path "${config.dotenv.path}" — will resolve against server workspace root, not the config file location.`);
       }
 
       // Load config state

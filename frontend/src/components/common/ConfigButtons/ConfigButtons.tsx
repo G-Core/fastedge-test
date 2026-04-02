@@ -17,6 +17,16 @@ export function ConfigButtons() {
     if (event.data.canceled) return;
     try {
       const config: TestConfig = JSON.parse(event.data.content);
+
+      // Resolve relative dotenv.path against the config file's directory.
+      // Use URL API to normalize away . and .. segments (no Node path in browser).
+      if (config.dotenv?.path && event.data.configDir && !config.dotenv.path.startsWith('/')) {
+        config.dotenv.path = new URL(
+          config.dotenv.path,
+          `file://${event.data.configDir}/`,
+        ).pathname;
+      }
+
       loadFromConfig(config);
 
       if (config.wasm?.path) {
@@ -66,6 +76,13 @@ export function ConfigButtons() {
 
         const text = await file.text();
         const config: TestConfig = JSON.parse(text);
+
+        // Warn about relative dotenv path — browser file picker hides the full
+        // file path, so relative paths will fall back to the server workspace root.
+        if (config.dotenv?.path && !config.dotenv.path.startsWith('/')) {
+          console.warn(`Config contains relative dotenv path "${config.dotenv.path}" — will resolve against server workspace root, not the config file location.`);
+        }
+
         loadFromConfig(config);
 
         // Auto-load WASM if path is specified

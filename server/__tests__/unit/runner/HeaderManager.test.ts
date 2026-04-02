@@ -695,4 +695,125 @@ describe("HeaderManager", () => {
       expect(result.length).toBeGreaterThanOrEqual(expectedMinSize);
     });
   });
+
+  describe("recordToTuples()", () => {
+    it("should convert a Record to tuples with lowercase keys", () => {
+      const record: HeaderMap = { "Content-Type": "text/html", "X-Foo": "bar" };
+      const result = HeaderManager.recordToTuples(record);
+      expect(result).toEqual([
+        ["content-type", "text/html"],
+        ["x-foo", "bar"],
+      ]);
+    });
+
+    it("should handle empty record", () => {
+      expect(HeaderManager.recordToTuples({})).toEqual([]);
+    });
+  });
+
+  describe("tuplesToRecord()", () => {
+    it("should convert tuples to Record", () => {
+      const tuples: [string, string][] = [
+        ["content-type", "text/html"],
+        ["x-foo", "bar"],
+      ];
+      expect(HeaderManager.tuplesToRecord(tuples)).toEqual({
+        "content-type": "text/html",
+        "x-foo": "bar",
+      });
+    });
+
+    it("should comma-join multi-valued headers", () => {
+      const tuples: [string, string][] = [
+        ["x-multi", "val1"],
+        ["x-other", "solo"],
+        ["x-multi", "val2"],
+        ["x-multi", "val3"],
+      ];
+      expect(HeaderManager.tuplesToRecord(tuples)).toEqual({
+        "x-multi": "val1,val2,val3",
+        "x-other": "solo",
+      });
+    });
+
+    it("should handle empty tuples", () => {
+      expect(HeaderManager.tuplesToRecord([])).toEqual({});
+    });
+  });
+
+  describe("normalizeTuples()", () => {
+    it("should lowercase all keys", () => {
+      const tuples: [string, string][] = [
+        ["Content-Type", "text/html"],
+        ["X-FOO", "bar"],
+      ];
+      expect(HeaderManager.normalizeTuples(tuples)).toEqual([
+        ["content-type", "text/html"],
+        ["x-foo", "bar"],
+      ]);
+    });
+  });
+
+  describe("serializeTuples()", () => {
+    it("should produce same binary as serialize() for unique keys", () => {
+      const record: HeaderMap = { host: "example.com", "content-type": "text/html" };
+      const tuples: [string, string][] = Object.entries(record);
+      const fromRecord = HeaderManager.serialize(record);
+      const fromTuples = HeaderManager.serializeTuples(tuples);
+      expect(fromTuples).toEqual(fromRecord);
+    });
+
+    it("should serialize duplicate keys as separate entries", () => {
+      const tuples: [string, string][] = [
+        ["x-multi", "val1"],
+        ["x-multi", "val2"],
+      ];
+      const bytes = HeaderManager.serializeTuples(tuples);
+      const view = new DataView(bytes.buffer);
+      // Should have 2 pairs
+      expect(view.getUint32(0, true)).toBe(2);
+
+      // Deserialize back to tuples — should get 2 separate entries
+      const result = HeaderManager.deserializeBinaryToTuples(bytes);
+      expect(result).toEqual([
+        ["x-multi", "val1"],
+        ["x-multi", "val2"],
+      ]);
+    });
+
+    it("should handle empty tuples", () => {
+      const bytes = HeaderManager.serializeTuples([]);
+      const view = new DataView(bytes.buffer);
+      expect(view.getUint32(0, true)).toBe(0);
+      expect(bytes.length).toBe(4);
+    });
+  });
+
+  describe("deserializeBinaryToTuples()", () => {
+    it("should preserve duplicate keys", () => {
+      const tuples: [string, string][] = [
+        ["set-cookie", "a=1"],
+        ["set-cookie", "b=2"],
+        ["content-type", "text/html"],
+      ];
+      const bytes = HeaderManager.serializeTuples(tuples);
+      const result = HeaderManager.deserializeBinaryToTuples(bytes);
+      expect(result).toEqual(tuples);
+    });
+
+    it("should handle empty bytes", () => {
+      expect(HeaderManager.deserializeBinaryToTuples(new Uint8Array(0))).toEqual([]);
+    });
+  });
+
+  describe("deserializeToTuples()", () => {
+    it("should preserve duplicate keys from null-separated string", () => {
+      const payload = "x-multi\0val1\0x-multi\0val2\0";
+      const result = HeaderManager.deserializeToTuples(payload);
+      expect(result).toEqual([
+        ["x-multi", "val1"],
+        ["x-multi", "val2"],
+      ]);
+    });
+  });
 });

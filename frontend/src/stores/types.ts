@@ -86,6 +86,7 @@ export type ResultsSlice = ResultsState & ResultsActions;
 // Config Store
 export interface ConfigState {
   properties: Record<string, string>;
+  calculatedProperties: Record<string, string>;
   dotenv: {
     enabled: boolean;
     path: string | null;
@@ -101,6 +102,7 @@ export interface ConfigActions {
   setDotenvEnabled: (enabled: boolean) => void;
   setDotenvPath: (path: string | null) => Promise<void>;
   setLogLevel: (level: number) => void;
+  setCalculatedProperties: (properties: Record<string, string>) => void;
   loadFromConfig: (config: TestConfig) => void;
   exportConfig: () => TestConfig;
   resetConfig: () => void;
@@ -186,6 +188,21 @@ export type AppStore = RequestSlice &
 // UTILITY TYPES
 // ============================================================================
 
+// CDN (proxy-wasm) request uses a full URL; HTTP request uses a path.
+export interface CdnRequestConfig {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+export interface HttpRequestConfig {
+  method: string;
+  path: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
 export interface TestConfig {
   appType?: "proxy-wasm" | "http-wasm";
   description?: string;
@@ -193,12 +210,7 @@ export interface TestConfig {
     path: string;
     description?: string;
   };
-  request: {
-    method: string;
-    url: string;
-    headers: Record<string, string>;
-    body: string;
-  };
+  request: CdnRequestConfig | HttpRequestConfig;
   response?: {
     headers: Record<string, string>;
     body: string;

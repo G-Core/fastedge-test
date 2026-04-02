@@ -132,6 +132,19 @@ export const BUILT_IN_PROPERTIES: PropertyDefinition[] = [
     description: 'Request path extension',
   },
 
+  // Client IP (read-only)
+  {
+    path: 'request.x_real_ip',
+    type: 'string',
+    access: {
+      [HookContext.OnRequestHeaders]: PropertyAccess.ReadOnly,
+      [HookContext.OnRequestBody]: PropertyAccess.ReadOnly,
+      [HookContext.OnResponseHeaders]: PropertyAccess.ReadOnly,
+      [HookContext.OnResponseBody]: PropertyAccess.ReadOnly,
+    },
+    description: 'Client IP address (X-Real-IP)',
+  },
+
   // Geolocation properties (read-only)
   {
     path: 'request.country',

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { loadDotenvFiles, hasDotenvFiles } from "../../../utils/dotenv-loader.js";
+import { loadDotenvFiles, hasDotenvFiles, resolveDotenvPath } from "../../../utils/dotenv-loader.js";
 import fs from "fs/promises";
 import path from "path";
 
@@ -841,6 +841,32 @@ DB_PASSWORD=prod-db-pass`;
       });
 
       expect(result.dictionary).toEqual({});
+    });
+  });
+
+  describe("resolveDotenvPath", () => {
+    it("returns undefined for undefined input", () => {
+      expect(resolveDotenvPath(undefined, "/base")).toBeUndefined();
+    });
+
+    it("returns undefined for empty string input", () => {
+      expect(resolveDotenvPath("", "/base")).toBeUndefined();
+    });
+
+    it("returns absolute paths unchanged", () => {
+      expect(resolveDotenvPath("/abs/path/to/fixtures", "/base")).toBe("/abs/path/to/fixtures");
+    });
+
+    it("resolves relative path against base directory", () => {
+      expect(resolveDotenvPath("./fixtures", "/home/user/project")).toBe("/home/user/project/fixtures");
+    });
+
+    it("resolves bare relative path against base directory", () => {
+      expect(resolveDotenvPath("fixtures", "/home/user/project")).toBe("/home/user/project/fixtures");
+    });
+
+    it("resolves parent-relative path against base directory", () => {
+      expect(resolveDotenvPath("../shared/fixtures", "/home/user/project/config")).toBe("/home/user/project/shared/fixtures");
     });
   });
 });

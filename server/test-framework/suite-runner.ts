@@ -1,4 +1,5 @@
 import { readFile } from "fs/promises";
+import path from "path";
 import { createRunner, createRunnerFromBuffer } from "../runner/standalone.js";
 import { BUILTIN_SHORTHAND, BUILTIN_URL } from "../runner/ProxyWasmRunner.js";
 import { TestConfigSchema } from "../schemas/config.js";
@@ -41,6 +42,13 @@ export async function loadConfigFile(configPath: string): Promise<TestConfig> {
       `Invalid test config '${configPath}':\n${JSON.stringify(result.error.flatten(), null, 2)}`,
     );
   }
+
+  // Resolve relative dotenv.path against the config file's directory
+  if (result.data.dotenv?.path && !path.isAbsolute(result.data.dotenv.path)) {
+    const configDir = path.dirname(path.resolve(configPath));
+    result.data.dotenv.path = path.resolve(configDir, result.data.dotenv.path);
+  }
+
   return result.data;
 }
 

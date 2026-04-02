@@ -42,3 +42,32 @@ Discovers all `*.test.json` files, runs each, prints a summary table.
 - Reuse `createRunner()` + `runFlow()`/`runHttpRequest()` from the test framework
 - Auto-detect CDN vs HTTP-WASM from the loaded binary to choose the right execution path
 - Consider a `--json` flag for machine-readable output
+
+---
+
+## Hot Dotenv Reload + Secret Rollover / Slots
+
+**Problem**: The debugger currently loads `.env` files once at WASM startup. There is no way to update secrets at runtime without restarting the runner. This means the `secret_rollover` example (which uses `secret::get_effective_at()` with slot-based lookup) cannot be meaningfully tested in the debugger — the slot values are static and never change.
+
+**Research needed**:
+1. **Hot dotenv reload**: Can the debugger detect `.env` file changes (via file watcher or manual trigger) and push updated env vars / secrets into the running WASM instance without restarting?
+2. **Slot-based secrets in the debugger**: How should the debugger model the `get_effective_at(slot)` API? The real FastEdge server maintains a history of secret values keyed by slot. The debugger currently only has "current" values from `.env.secrets`.
+3. **Fixture support**: Should `fastedge-config.test.json` support defining multiple secret versions with slot values? e.g.:
+   ```json
+   {
+     "secrets": {
+       "TOKEN_SECRET": [
+         { "slot": 0, "value": "original-token" },
+         { "slot": 1719849600, "value": "rotated-token" }
+       ]
+     }
+   }
+   ```
+4. **UI considerations**: How should the debugger UI expose secret history / slot editing? Could be a timeline or version list per secret.
+
+**Context**: The `secret_rollover` example in `FastEdge-sdk-rust/examples/http/wasi/secret_rollover/` uses `x-slot` and `x-secret-name` request headers to query secrets at specific slots. The fixtures (`current.test.json`, `slot.test.json`) exercise this but currently only test against static dotenv values.
+
+**Why this matters**:
+- Secret rotation is a real production pattern (API key rollover, certificate rotation)
+- Without slot support in the debugger, developers can't verify their rollover logic locally
+- Hot reload would also benefit general development workflow (change an env var without restarting)

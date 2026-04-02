@@ -113,3 +113,17 @@ export async function hasDotenvFiles(
 
   return false;
 }
+
+/**
+ * Resolve a potentially relative dotenv path to an absolute path.
+ * Relative paths are resolved against the provided base directory.
+ * Returns undefined for falsy input; absolute paths pass through unchanged.
+ */
+export function resolveDotenvPath(
+  dotenvPath: string | undefined,
+  base: string,
+): string | undefined {
+  if (!dotenvPath) return undefined;
+  if (path.isAbsolute(dotenvPath)) return dotenvPath;
+  return path.resolve(base, dotenvPath);
+}

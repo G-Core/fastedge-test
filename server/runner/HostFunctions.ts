@@ -1,4 +1,4 @@
-import type { HeaderMap, LogEntry } from "./types";
+import type { HeaderMap, HeaderTuples, LogEntry } from "./types";
 import { ProxyStatus, BufferType, MapType } from "./types";
 import { MemoryManager } from "./MemoryManager";
 import { HeaderManager } from "./HeaderManager";
@@ -28,8 +28,8 @@ export class HostFunctions {
   private propertyAccessControl: PropertyAccessControl;
   private getCurrentHook: () => HookContext | null;
   private logs: LogEntry[] = [];
-  private requestHeaders: HeaderMap = {};
-  private responseHeaders: HeaderMap = {};
+  private requestHeaders: HeaderTuples = [];
+  private responseHeaders: HeaderTuples = [];
   private requestBody = "";
   private responseBody = "";
   private vmConfig = "";
@@ -94,8 +94,8 @@ export class HostFunctions {
     reqBody: string,
     resBody: string,
   ): void {
-    this.requestHeaders = reqHeaders;
-    this.responseHeaders = resHeaders;
+    this.requestHeaders = HeaderManager.recordToTuples(reqHeaders);
+    this.responseHeaders = HeaderManager.recordToTuples(resHeaders);
     this.requestBody = reqBody;
     this.responseBody = resBody;
   }
@@ -162,11 +162,11 @@ export class HostFunctions {
   }
 
   getRequestHeaders(): HeaderMap {
-    return this.requestHeaders;
+    return HeaderManager.tuplesToRecord(this.requestHeaders);
   }
 
   getResponseHeaders(): HeaderMap {
-    return this.responseHeaders;
+    return HeaderManager.tuplesToRecord(this.responseHeaders);
   }
 
   getRequestBody(): string {
@@ -327,14 +327,17 @@ export class HostFunctions {
           `proxy_get_header_map_value map=${mapType} keyLen=${keyLen}`,
         );
         const key = this.memory.readString(keyPtr, keyLen).toLowerCase();
-        const map = this.getHeaderMap(mapType);
-        const value = map[key];
-        if (value === undefined) {
+        const tuples = this.getInternalHeaders(mapType);
+        const found = tuples.find(([k]) => k === key);
+        if (found === undefined) {
           this.logDebug(`get_header_map_value miss: map=${mapType} key=${key}`);
+          // nginx behavior: missing headers return Ok with empty string.
+          // The writeStringResult writes a non-null pointer, so the Rust SDK
+          // interprets this as Some("") rather than None.
           this.memory.writeStringResult("", valuePtrPtr, valueLenPtr);
           return ProxyStatus.Ok;
         }
-        this.memory.writeStringResult(value, valuePtrPtr, valueLenPtr);
+        this.memory.writeStringResult(found[1], valuePtrPtr, valueLenPtr);
         return ProxyStatus.Ok;
       },
 
@@ -344,8 +347,8 @@ export class HostFunctions {
         valueLenPtr: number,
       ) => {
         this.setLastHostCall(`proxy_get_header_map_pairs map=${mapType}`);
-        const map = this.getHeaderMap(mapType);
-        const bytes = HeaderManager.serialize(map);
+        const tuples = this.getInternalHeaders(mapType);
+        const bytes = HeaderManager.serializeTuples(tuples);
         const ptr = this.memory.writeToWasm(bytes);
         if (valuePtrPtr) {
           this.memory.writeU32(valuePtrPtr, ptr);
@@ -359,16 +362,15 @@ export class HostFunctions {
           .map((b) => b.toString(16).padStart(2, "0"))
           .join(" ");
         this.logDebug(
-          `header_map_pairs ptr=${ptr} len=${bytes.length} count=${Object.keys(map).length} hex=${hexDump}`,
+          `header_map_pairs ptr=${ptr} len=${bytes.length} count=${tuples.length} hex=${hexDump}`,
         );
         return ProxyStatus.Ok;
       },
 
       proxy_get_header_map_size: (mapType: number, sizePtr: number) => {
         this.setLastHostCall(`proxy_get_header_map_size map=${mapType}`);
-        const map = this.getHeaderMap(mapType);
-        // Return number of header pairs
-        const size = Object.keys(map).length;
+        const tuples = this.getInternalHeaders(mapType);
+        const size = tuples.length;
         this.memory.writeU32(sizePtr, size);
         this.logDebug(
           `header_map_size map=${mapType} size=${size} (pair count)`,
@@ -388,10 +390,9 @@ export class HostFunctions {
         );
         const key = this.memory.readString(keyPtr, keyLen).toLowerCase();
         const value = this.memory.readString(valuePtr, valueLen);
-        const map = this.getHeaderMap(mapType);
-        const existing = map[key];
-        map[key] = existing ? `${existing},${value}` : value;
-        this.setHeaderMap(mapType, map);
+        const tuples = this.getInternalHeaders(mapType);
+        tuples.push([key, value]);
+        this.setInternalHeaders(mapType, tuples);
         return ProxyStatus.Ok;
       },
 
@@ -407,9 +408,10 @@ export class HostFunctions {
         );
         const key = this.memory.readString(keyPtr, keyLen).toLowerCase();
         const value = this.memory.readString(valuePtr, valueLen);
-        const map = this.getHeaderMap(mapType);
-        map[key] = value;
-        this.setHeaderMap(mapType, map);
+        const tuples = this.getInternalHeaders(mapType);
+        const filtered = tuples.filter(([k]) => k !== key);
+        filtered.push([key, value]);
+        this.setInternalHeaders(mapType, filtered);
         return ProxyStatus.Ok;
       },
 
@@ -422,9 +424,16 @@ export class HostFunctions {
           `proxy_remove_header_map_value map=${mapType} keyLen=${keyLen}`,
         );
         const key = this.memory.readString(keyPtr, keyLen).toLowerCase();
-        const map = this.getHeaderMap(mapType);
-        delete map[key];
-        this.setHeaderMap(mapType, map);
+        const tuples = this.getInternalHeaders(mapType);
+        const exists = tuples.some(([k]) => k === key);
+        if (exists) {
+          // Match nginx behavior: set to empty string instead of deleting.
+          // nginx does not allow truly removing headers — remove() sets value to "".
+          const filtered = tuples.filter(([k]) => k !== key);
+          filtered.push([key, ""]);
+          this.setInternalHeaders(mapType, filtered);
+        }
+        // If header doesn't exist, remove is a no-op
         return ProxyStatus.Ok;
       },
 
@@ -437,8 +446,8 @@ export class HostFunctions {
           `proxy_set_header_map_pairs map=${mapType} valueLen=${valueLen}`,
         );
         const raw = this.memory.readString(valuePtr, valueLen);
-        const map = HeaderManager.deserialize(raw);
-        this.setHeaderMap(mapType, map);
+        const tuples = HeaderManager.deserializeToTuples(raw);
+        this.setInternalHeaders(mapType, tuples);
         return ProxyStatus.Ok;
       },
 
@@ -772,7 +781,7 @@ export class HostFunctions {
     };
   }
 
-  private getHeaderMap(mapType: number): HeaderMap {
+  private getInternalHeaders(mapType: number): HeaderTuples {
     if (
       mapType === MapType.ResponseHeaders ||
       mapType === MapType.ResponseTrailers
@@ -783,19 +792,20 @@ export class HostFunctions {
       mapType === MapType.HttpCallResponseHeaders ||
       mapType === MapType.HttpCallResponseTrailers
     ) {
-      return this.httpCallResponse?.headers ?? {};
+      return HeaderManager.recordToTuples(this.httpCallResponse?.headers ?? {});
     }
     return this.requestHeaders;
   }
 
-  private setHeaderMap(mapType: number, map: HeaderMap): void {
+  private setInternalHeaders(mapType: number, tuples: HeaderTuples): void {
+    const normalized = HeaderManager.normalizeTuples(tuples);
     if (
       mapType === MapType.ResponseHeaders ||
       mapType === MapType.ResponseTrailers
     ) {
-      this.responseHeaders = HeaderManager.normalize(map);
+      this.responseHeaders = normalized;
     } else {
-      this.requestHeaders = HeaderManager.normalize(map);
+      this.requestHeaders = normalized;
     }
   }
 

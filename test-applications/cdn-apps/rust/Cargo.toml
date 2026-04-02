@@ -1,5 +1,5 @@
 [workspace]
-members = ["cdn-variables-and-secrets", "cdn-http-call"]
+members = ["cdn-variables-and-secrets", "cdn-http-call", "cdn-headers"]
 resolver = "2"
 
 [workspace.dependencies]

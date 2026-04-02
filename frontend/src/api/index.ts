@@ -1,4 +1,6 @@
 import { HookCall, HookResult } from "../types";
+import type { TestConfig } from "../stores/types";
+export type { TestConfig } from "../stores/types";
 import { hasFilesystemAccess } from "../utils/environment";
 import { getFilePath, hasFilePath, formatFileSize } from "../utils/filePath";
 
@@ -355,26 +357,7 @@ export async function sendFullFlow(
   };
 }
 
-export interface TestConfig {
-  appType?: 'proxy-wasm' | 'http-wasm';
-  description?: string;
-  wasm?: {
-    path: string;
-    description?: string;
-  };
-  request: {
-    method: string;
-    url: string;
-    headers: Record<string, string>;
-    body: string;
-  };
-  properties: Record<string, string>;
-  logLevel: number;
-  dotenv?: {
-    enabled?: boolean;
-    path?: string;
-  };
-}
+// TestConfig is imported from ../types
 
 export async function loadConfig(): Promise<TestConfig> {
   const response = await fetch(`${API_BASE}/config`, {
@@ -457,8 +440,20 @@ export async function executeHttpWasm(
   isBase64?: boolean;
   logs: Array<{ level: number; message: string }>;
 }> {
+  // Extract the path from the full internal URL and send `path` to the server.
+  // The server accepts both `path` and `url`, but `path` is the canonical form
+  // for HTTP WASM apps (mirrors how the real FastEdge server works).
+  let path: string;
+  try {
+    const parsed = new URL(url);
+    path = parsed.pathname + parsed.search;
+  } catch {
+    // If url is already a path (e.g. "/api/hello"), use it directly
+    path = url;
+  }
+
   const payload = {
-    url,
+    path,
     method,
     headers,
     body,
