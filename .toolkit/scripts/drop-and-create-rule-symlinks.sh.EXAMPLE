@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Drop all existing rule symlinks in .claude/rules/ and create new ones
+# from .toolkit/claude/rules/.
+#
+# Run from repo root.
+# Edit the RULES list below to control which rules are linked.
+
+set -Eeuo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+SOURCE_DIR=".toolkit/claude/rules"
+TARGET_DIR=".claude/rules"
+
+# relative prefix from TARGET_DIR to SOURCE_DIR (two levels up)
+REL_PREFIX="../../.toolkit/claude/rules"
+
+RULES=(
+  coding/git-commits.md
+  coding/scripts.md
+  docs/changelog.md
+  docs/frontmatter.md
+  docs/markdown.md
+)
+
+if [[ ! -d "$SOURCE_DIR" ]]; then
+  echo "error: $SOURCE_DIR not found" >&2
+  exit 1
+fi
+
+mkdir -p "$TARGET_DIR"
+
+# drop old symlinks
+find "$TARGET_DIR" -maxdepth 1 -type l -name '*.md' -delete
+
+count=0
+for rule in "${RULES[@]}"; do
+  src="$SOURCE_DIR/$rule"
+  name="$(basename "$rule")"
+
+  if [[ ! -f "$src" ]]; then
+    echo "warn: $src not found, skipping" >&2
+    continue
+  fi
+
+  ln -s "$REL_PREFIX/$rule" "$TARGET_DIR/$name"
+  echo "  $name -> $REL_PREFIX/$rule" >&2
+  ((count++))
+done
+
+echo "linked $count rules" >&2
