@@ -257,6 +257,23 @@ export class HostFunctions {
           this.memory.writeStringResult("", valuePtrPtr, valueLenPtr);
           return ProxyStatus.Ok;
         }
+
+        // Encode response status as 2-byte big-endian u16 to match
+        // the real Envoy/proxy-wasm host behaviour.
+        const normalizedPath = path.replace(/\0/g, ".");
+        if (
+          (normalizedPath === "response.status" ||
+            normalizedPath === "response.code" ||
+            normalizedPath === "response.status_code") &&
+          typeof raw === "number"
+        ) {
+          const buf = new Uint8Array(2);
+          buf[0] = (raw >> 8) & 0xff;
+          buf[1] = raw & 0xff;
+          this.memory.writeBytesResult(buf, valuePtrPtr, valueLenPtr);
+          return ProxyStatus.Ok;
+        }
+
         const value = typeof raw === "string" ? raw : JSON.stringify(raw);
         this.memory.writeStringResult(value ?? "", valuePtrPtr, valueLenPtr);
         return ProxyStatus.Ok;

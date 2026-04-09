@@ -22,27 +22,27 @@ The config schema is a union of two variants selected by `appType`:
 
 ### Top-Level Fields
 
-| JSON Path            | Type      | Required (Schema)                    | Default          | Description                                                                                           |
-| -------------------- | --------- | ------------------------------------ | ---------------- | ----------------------------------------------------------------------------------------------------- |
-| `$schema`            | `string`  | No                                   | —                | URI pointing to the JSON Schema file for IDE autocompletion and validation.                           |
-| `description`        | `string`  | No                                   | —                | Human-readable label for this test scenario.                                                          |
-| `wasm`               | `object`  | No                                   | —                | WASM binary configuration. Required when running without a programmatic `wasmBuffer`.                 |
-| `wasm.path`          | `string`  | Yes (if `wasm` present)              | —                | Path to the compiled `.wasm` binary, relative to the config file or absolute.                        |
-| `wasm.description`   | `string`  | No                                   | —                | Human-readable label for the WASM binary.                                                             |
-| `appType`            | `string`  | Yes (schema) / CDN has runtime default | `"proxy-wasm"` | App variant. `"proxy-wasm"` for CDN mode; `"http-wasm"` for HTTP mode. HTTP-WASM has no default.    |
-| `request`            | `object`  | **Yes**                              | —                | Incoming HTTP request to simulate.                                                                    |
-| `request.method`     | `string`  | Yes (schema) / runtime default       | `"GET"`          | HTTP method (e.g. `"GET"`, `"POST"`).                                                                 |
-| `request.url`        | `string`  | **Yes** (CDN only)                   | —                | Full URL for the simulated upstream request (e.g. `"https://example.com/api"`). CDN mode only.       |
-| `request.path`       | `string`  | **Yes** (HTTP-WASM only)             | —                | Request path (e.g. `"/api/submit"`). HTTP-WASM mode only. The WASM module acts as the origin server. |
-| `request.headers`    | `object`  | Yes (schema) / runtime default       | `{}`             | Key/value map of request headers. All keys and values must be strings.                                |
-| `request.body`       | `string`  | Yes (schema) / runtime default       | `""`             | Request body as a plain string. Use an empty string for requests with no body.                        |
-| `response`           | `object`  | No                                   | —                | Mock origin response for CDN mode. Not applicable to HTTP-WASM.                                       |
-| `response.headers`   | `object`  | Yes (if `response` present)          | `{}`             | Key/value map of mock origin response headers.                                                        |
-| `response.body`      | `string`  | Yes (if `response` present)          | `""`             | Mock origin response body as a plain string.                                                          |
-| `properties`         | `object`  | **Yes** (schema) / runtime default   | `{}`             | CDN property key/value pairs passed to the WASM execution context. Values may be any JSON type.      |
-| `dotenv`             | `object`  | No                                   | —                | Dotenv file loading configuration.                                                                    |
-| `dotenv.enabled`     | `boolean` | No                                   | —                | Whether to load a `.env` file before execution.                                                       |
-| `dotenv.path`        | `string`  | No                                   | —                | Path to the `.env` file. If omitted, resolves `.env` relative to the config file directory.          |
+| JSON Path            | Type      | Required (Schema)                      | Default          | Description                                                                                           |
+| -------------------- | --------- | -------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `$schema`            | `string`  | No                                     | —                | URI pointing to the JSON Schema file for IDE autocompletion and validation.                           |
+| `description`        | `string`  | No                                     | —                | Human-readable label for this test scenario.                                                          |
+| `wasm`               | `object`  | No                                     | —                | WASM binary configuration. Required when running without a programmatic `wasmBuffer`.                 |
+| `wasm.path`          | `string`  | Yes (if `wasm` present)                | —                | Path to the compiled `.wasm` binary, relative to the config file or absolute.                        |
+| `wasm.description`   | `string`  | No                                     | —                | Human-readable label for the WASM binary.                                                             |
+| `appType`            | `string`  | Yes (schema) / CDN has runtime default | `"proxy-wasm"`   | App variant. `"proxy-wasm"` for CDN mode; `"http-wasm"` for HTTP mode. HTTP-WASM has no default.    |
+| `request`            | `object`  | **Yes**                                | —                | Incoming HTTP request to simulate.                                                                    |
+| `request.method`     | `string`  | Yes (schema) / runtime default         | `"GET"`          | HTTP method (e.g. `"GET"`, `"POST"`).                                                                 |
+| `request.url`        | `string`  | **Yes** (CDN only)                     | —                | Full URL for the simulated upstream request (e.g. `"https://example.com/api"`). CDN mode only.       |
+| `request.path`       | `string`  | **Yes** (HTTP-WASM only)               | —                | Request path (e.g. `"/api/submit"`). HTTP-WASM mode only. The WASM module acts as the origin server. |
+| `request.headers`    | `object`  | Yes (schema) / runtime default         | `{}`             | Key/value map of request headers. All keys and values must be strings.                                |
+| `request.body`       | `string`  | Yes (schema) / runtime default         | `""`             | Request body as a plain string. Use an empty string for requests with no body.                        |
+| `response`           | `object`  | No                                     | —                | Mock origin response for CDN mode. Not applicable to HTTP-WASM.                                       |
+| `response.headers`   | `object`  | Yes (if `response` present)            | `{}`             | Key/value map of mock origin response headers.                                                        |
+| `response.body`      | `string`  | Yes (if `response` present)            | `""`             | Mock origin response body as a plain string.                                                          |
+| `properties`         | `object`  | **Yes** (schema) / runtime default     | `{}`             | CDN property key/value pairs passed to the WASM execution context. Values may be any JSON type.      |
+| `dotenv`             | `object`  | No                                     | —                | Dotenv file loading configuration.                                                                    |
+| `dotenv.enabled`     | `boolean` | No                                     | —                | Whether to load a `.env` file before execution.                                                       |
+| `dotenv.path`        | `string`  | No                                     | —                | Path to the `.env` file. If omitted, resolves `.env` relative to the config file directory.          |
 
 ### Required vs. Default Distinction
 
@@ -55,7 +55,7 @@ To avoid editor warnings while keeping configs concise, either supply the fields
 When `dotenv.enabled` is `true`, the runner loads a `.env` file and merges its contents into `process.env` before executing the WASM binary. This allows secrets and environment-specific values to be injected without embedding them in the config file.
 
 **File resolution order:**
-1. If `dotenv.path` is set, that path is used (relative to the working directory or absolute).
+1. If `dotenv.path` is set, that path is used (relative to the directory containing the config file, or absolute).
 2. If `dotenv.path` is omitted, `.env` is resolved relative to the directory containing the config file.
 
 **CDN mode**: Properties passed to the WASM context come from the `properties` field in the config. Dotenv variables are available to the Node.js host process but are not automatically injected as CDN properties. To expose a `.env` value as a CDN property, reference `process.env.VAR_NAME` programmatically when constructing the runner config.

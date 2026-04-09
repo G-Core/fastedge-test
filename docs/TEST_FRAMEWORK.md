@@ -255,12 +255,12 @@ interface FullFlowResult {
 
 Hook results are accessed by camelCase key:
 
-| Key                 | Hook                       |
-| ------------------- | -------------------------- |
-| `onRequestHeaders`  | `on_request_headers` hook  |
-| `onRequestBody`     | `on_request_body` hook     |
-| `onResponseHeaders` | `on_response_headers` hook |
-| `onResponseBody`    | `on_response_body` hook    |
+| Key                   | Hook                         |
+| --------------------- | ---------------------------- |
+| `onRequestHeaders`    | `on_request_headers` hook    |
+| `onRequestBody`       | `on_request_body` hook       |
+| `onResponseHeaders`   | `on_response_headers` hook   |
+| `onResponseBody`      | `on_response_body` hook      |
 
 ```typescript
 const result = await runFlow(runner, {
@@ -330,9 +330,9 @@ function assertNoRequestHeader(result: HookResult, name: string): void
 ```typescript
 const hookResult = result.hookResults.onRequestHeaders;
 
-assertRequestHeader(hookResult, "x-forwarded-for");        // exists
-assertRequestHeader(hookResult, "x-country-code", "DE");   // exists with value
-assertNoRequestHeader(hookResult, "x-internal-secret");    // absent
+assertRequestHeader(hookResult, "x-forwarded-for");       // exists
+assertRequestHeader(hookResult, "x-country-code", "DE");  // exists with value
+assertNoRequestHeader(hookResult, "x-internal-secret");   // absent
 ```
 
 ### Response Headers
@@ -366,7 +366,7 @@ function assertFinalHeader(result: FullFlowResult, name: string, expected?: stri
 ```typescript
 assertFinalStatus(result, 200);
 assertFinalHeader(result, "x-cache", "HIT");
-assertFinalHeader(result, "content-encoding");             // exists, any value
+assertFinalHeader(result, "content-encoding");            // exists, any value
 ```
 
 ### Return Code

@@ -1,5 +1,20 @@
 # Proxy-WASM Runner - Changelog
 
+## April 7, 2026 - Fix response.status property encoding (big-endian u16)
+
+### Overview
+`proxy_get_property` was encoding `response.status` (and aliases `response.code`, `response.status_code`) as a JSON-stringified number (e.g. the UTF-8 string `"404"`, 3 bytes). The real Envoy/proxy-wasm host encodes it as a 2-byte big-endian u16. WASM apps that check `status.len() == 2` and call `u16::from_be_bytes` (the correct pattern used by Rust CDN examples like `custom_error_pages` and `convert_image`) would never match, causing error-page and image-conversion logic to silently pass through.
+
+### What Changed
+- `server/runner/HostFunctions.ts` — In `proxy_get_property`, when the resolved path is `response.status`, `response.code`, or `response.status_code` and the value is a number, encode it as 2-byte big-endian u16 via `writeBytesResult` instead of `writeStringResult`
+- `server/__tests__/integration/cdn-apps/property-access/response-properties.test.ts` — Removed assertions that checked UTF-8 decoded log output of the status value (e.g. `"Response Status: 200"`). These were written against the broken encoding. Access control assertions (readable/denied) retained unchanged
+
+### Notes
+- The test WASM binaries (`valid-response-status-read.wasm`, `invalid-response-status-write.wasm`) use `String.UTF8.decode()` on the raw property bytes, which is incorrect for a binary u16. They were written to match the broken behaviour. Ideally they should be recompiled to decode the u16 properly, but the access control behaviour they test is still valid
+- The `proxy-wasm-sdk-as` `get_property` correctly returns raw `ArrayBuffer` — the SDK does not provide a convenience helper to decode `response.status` as a u16
+
+---
+
 ## April 2, 2026 - Config Schema Split: Discriminated Union on appType
 
 ### Overview
