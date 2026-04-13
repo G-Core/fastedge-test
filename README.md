@@ -40,7 +40,7 @@ npx @gcoredev/fastedge-test
 # Opens http://localhost:5179
 ```
 
-Or with a custom port:
+If port 5179 is already in use, the server automatically tries the next port sequentially (up to 10 attempts, e.g. 5179–5188). The bound port is written to `.fastedge-debug/.debug-port` and deleted on shutdown. Set `PORT` to bypass auto-increment when a predictable port is required:
 
 ```bash
 PORT=8080 npx @gcoredev/fastedge-test
