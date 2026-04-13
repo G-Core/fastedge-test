@@ -169,18 +169,18 @@ callFullFlow(
 
 **Parameters**
 
-| Parameter                          | Type                      | Description                                                                                                                          |
-| ---------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `url`                              | `string`                  | Full request URL, or `BUILTIN_SHORTHAND` (`"built-in"`) to use the built-in responder instead of a real origin fetch                 |
-| `method`                           | `string`                  | HTTP method                                                                                                                          |
-| `headers`                          | `Record<string, string>`  | Request headers                                                                                                                      |
-| `body`                             | `string`                  | Request body                                                                                                                         |
-| `responseHeaders`                  | `Record<string, string>`  | Upstream response headers (used as initial state for response hooks)                                                                 |
-| `responseBody`                     | `string`                  | Upstream response body                                                                                                               |
-| `responseStatus`                   | `number`                  | Upstream response status code                                                                                                        |
-| `responseStatusText`               | `string`                  | Upstream response status text                                                                                                        |
-| `properties`                       | `Record<string, unknown>` | Shared properties passed to all hooks                                                                                                |
-| `enforceProductionPropertyRules`   | `boolean`                 | When `true`, restricts property access to match CDN production behavior                                                              |
+| Parameter                        | Type                      | Description                                                                                                           |
+| -------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `url`                            | `string`                  | Full request URL, or `BUILTIN_SHORTHAND` (`"built-in"`) to use the built-in responder instead of a real origin fetch  |
+| `method`                         | `string`                  | HTTP method                                                                                                           |
+| `headers`                        | `Record<string, string>`  | Request headers                                                                                                       |
+| `body`                           | `string`                  | Request body                                                                                                          |
+| `responseHeaders`                | `Record<string, string>`  | Upstream response headers (used as initial state for response hooks)                                                  |
+| `responseBody`                   | `string`                  | Upstream response body                                                                                                |
+| `responseStatus`                 | `number`                  | Upstream response status code                                                                                         |
+| `responseStatusText`             | `string`                  | Upstream response status text                                                                                         |
+| `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                                                                                 |
+| `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior                                               |
 
 Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fetch or built-in responder)* → `onResponseHeaders` → `onResponseBody`.
 
@@ -285,10 +285,10 @@ const result = await runner.callFullFlow(
 
 **Built-in responder behavior** — controlled by request headers set before the origin phase:
 
-| Header                   | Effect                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------- |
-| `x-debugger-status`      | HTTP status code for the generated response (default: `200`)                    |
-| `x-debugger-content`     | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default) |
+| Header               | Effect                                                                          |
+| -------------------- | ------------------------------------------------------------------------------- |
+| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                    |
+| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default) |
 
 When `x-debugger-content` is omitted, the built-in responder returns a JSON echo of the request method, headers, body, and URL. Both control headers are stripped before response hooks execute so they do not appear in hook input state.
 
@@ -309,12 +309,12 @@ interface RunnerConfig {
 }
 ```
 
-| Field                              | Type       | Default       | Description                                                                                                                                                                                                                                                              |
-| ---------------------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `dotenv.enabled`                   | `boolean`  | `false`       | Whether to load `.env` files                                                                                                                                                                                                                                             |
-| `dotenv.path`                      | `string`   | `undefined`   | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory). |
-| `enforceProductionPropertyRules`   | `boolean`  | `true`        | Restrict property access to match CDN production behavior                                                                                                                                                                                                                |
-| `runnerType`                       | `WasmType` | auto-detected | Override WASM type detection                                                                                                                                                                                                                                             |
+| Field                            | Type       | Default         | Description                                                                                                                                                                                                                                                               |
+| -------------------------------- | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`  | `false`         | Whether to load `.env` files                                                                                                                                                                                                                                              |
+| `dotenv.path`                    | `string`   | `undefined`     | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory). |
+| `enforceProductionPropertyRules` | `boolean`  | `true`          | Restrict property access to match CDN production behavior                                                                                                                                                                                                                 |
+| `runnerType`                     | `WasmType` | auto-detected   | Override WASM type detection                                                                                                                                                                                                                                              |
 
 ### HttpRequest & HttpResponse
 
@@ -367,14 +367,14 @@ type HookCall = {
 };
 ```
 
-| Field                              | Description                                                                                         |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `hook`                             | Hook name: `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`       |
-| `request`                          | Request state passed to the hook                                                                    |
-| `response`                         | Response state passed to the hook                                                                   |
-| `properties`                       | Shared properties (e.g. `request.path`, `vm_config`, `plugin_config`)                              |
-| `dotenvEnabled`                    | Optional per-call dotenv override. Use `applyDotenv()` for persistent changes.                      |
-| `enforceProductionPropertyRules`   | Defaults to `true`. Set to `false` to allow property reads that would be blocked on production CDN. |
+| Field                            | Description                                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `hook`                           | Hook name: `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`       |
+| `request`                        | Request state passed to the hook                                                                    |
+| `response`                       | Response state passed to the hook                                                                   |
+| `properties`                     | Shared properties (e.g. `request.path`, `vm_config`, `plugin_config`)                               |
+| `dotenvEnabled`                  | Optional per-call dotenv override. Use `applyDotenv()` for persistent changes.                      |
+| `enforceProductionPropertyRules` | Defaults to `true`. Set to `false` to allow property reads that would be blocked on production CDN. |
 
 ### HookResult
 
@@ -421,11 +421,11 @@ type FullFlowResult = {
 };
 ```
 
-| Field                  | Description                                                                                                                                                |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hookResults`          | A `Record` keyed by hook name (`"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`), each containing a `HookResult`         |
+| Field                  | Description                                                                                                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hookResults`          | A `Record` keyed by hook name (`"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`), each containing a `HookResult`                          |
 | `finalResponse`        | The final response after all hooks have executed, or the local response if a hook short-circuited (see `callFullFlow`). `body` is base64-encoded when `isBase64` is `true`. |
-| `calculatedProperties` | Runtime properties computed from the request URL (e.g. `request.path`, `request.host`)                                                                    |
+| `calculatedProperties` | Runtime properties computed from the request URL (e.g. `request.path`, `request.host`)                                                                                      |
 
 ### Supporting Types
 
@@ -455,20 +455,71 @@ Log levels follow the proxy-wasm convention: `0` = Trace, `1` = Debug, `2` = Inf
 `IStateManager` is the event emission interface used by runners to broadcast lifecycle events. In headless/standalone usage, pass `new NullStateManager()` (a no-op implementation) or omit `setStateManager` entirely.
 
 ```typescript
+type EventSource = 'ui' | 'ai_agent' | 'api' | 'system';
+
 interface IStateManager {
-  emitRequestStarted(url, method, headers, source?): void;
-  emitHookExecuted(hook, returnCode, logCount, input, output, source?): void;
-  emitRequestCompleted(hookResults, finalResponse, calculatedProperties?, source?): void;
-  emitRequestFailed(error, details?, source?): void;
-  emitWasmLoaded(filename, size, source?): void;
-  emitPropertiesUpdated(properties, source?): void;
-  emitHttpWasmRequestCompleted(response, source?): void;
-  emitHttpWasmLog(log, source?): void;
-  emitReloadWorkspaceWasm(path, source?): void;
+  emitRequestStarted(
+    url: string,
+    method: string,
+    headers: Record<string, string>,
+    source?: EventSource,
+  ): void;
+
+  emitHookExecuted(
+    hook: string,
+    returnCode: number | null,
+    logCount: number,
+    input: {
+      request: { headers: Record<string, string>; body: string };
+      response: { headers: Record<string, string>; body: string };
+    },
+    output: {
+      request: { headers: Record<string, string>; body: string };
+      response: { headers: Record<string, string>; body: string };
+    },
+    source?: EventSource,
+  ): void;
+
+  emitRequestCompleted(
+    hookResults: Record<string, unknown>,
+    finalResponse: {
+      status: number;
+      statusText: string;
+      headers: Record<string, string>;
+      body: string;
+      contentType: string;
+      isBase64?: boolean;
+    },
+    calculatedProperties?: Record<string, unknown>,
+    source?: EventSource,
+  ): void;
+
+  emitRequestFailed(error: string, details?: string, source?: EventSource): void;
+
+  emitWasmLoaded(filename: string, size: number, source?: EventSource): void;
+
+  emitPropertiesUpdated(
+    properties: Record<string, string>,
+    source?: EventSource,
+  ): void;
+
+  emitHttpWasmRequestCompleted(
+    response: {
+      status: number;
+      statusText: string;
+      headers: Record<string, string>;
+      body: string;
+      contentType: string | null;
+      isBase64?: boolean;
+    },
+    source?: EventSource,
+  ): void;
+
+  emitHttpWasmLog(log: { level: number; message: string }, source?: EventSource): void;
+
+  emitReloadWorkspaceWasm(path: string, source?: EventSource): void;
 }
 ```
-
-`EventSource` is `"ui" | "ai_agent" | "api" | "system"`.
 
 ## Complete Example
 

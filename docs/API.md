@@ -404,10 +404,10 @@ curl -X POST http://localhost:5179/api/execute \
 
 **Error Responses**
 
-| Status | Condition                                                                              |
-| ------ | -------------------------------------------------------------------------------------- |
+| Status | Condition                                                                                      |
+| ------ | ---------------------------------------------------------------------------------------------- |
 | `400`  | No WASM module loaded, or missing `path`/`url` for HTTP-WASM, or missing `url` for Proxy-WASM |
-| `500`  | Execution failed                                                                       |
+| `500`  | Execution failed                                                                               |
 
 ---
 
@@ -533,7 +533,7 @@ Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`
 
 ```typescript
 {
-  url: string;                         // Full request URL (required)
+  url: string | "built-in";            // Full request URL, or "built-in" to use the URL from loaded config
   request?: {
     method?: string;                   // HTTP method (default: "GET")
     url?: string;
@@ -547,6 +547,8 @@ Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`
   properties: Record<string, unknown>; // CDN properties (required; use {} if none)
 }
 ```
+
+The `response` object for this endpoint does not accept `status` or `statusText` — the full flow always uses `200 OK` as the simulated upstream status. Use `POST /api/execute` if you need to control those values.
 
 **Response**
 
@@ -809,10 +811,10 @@ curl -X POST http://localhost:5179/api/config \
 
 **Error Responses**
 
-| Status | Condition                                                                          |
-| ------ | ---------------------------------------------------------------------------------- |
+| Status | Condition                                                                               |
+| ------ | --------------------------------------------------------------------------------------- |
 | `400`  | Validation failed (missing `config.appType`, `config.request`, or `config.properties`) |
-| `500`  | File write failed                                                                  |
+| `500`  | File write failed                                                                       |
 
 ---
 

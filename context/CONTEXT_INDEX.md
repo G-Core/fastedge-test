@@ -12,7 +12,7 @@ This index helps you discover relevant documentation without reading thousands o
 **Purpose**: Postman-like test runner for debugging proxy-wasm binaries locally
 **Tech Stack**: Node.js + Express + TypeScript (backend) | React + Vite + TypeScript + Zustand (frontend)
 **WASM Runtime**: Node WebAssembly API with WASI preview1
-**Port**: 5179
+**Port**: 5179 (auto-increments through 5179-5188 if busy)
 
 **Current Branch**: See git status
 **Philosophy**: Production parity, no over-engineering, type safety, modular architecture
@@ -98,6 +98,7 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 - `docs/RUNNER.md` — Low-level runner API: factory functions, IWasmRunner interface, type definitions
 - `docs/TEST_CONFIG.md` — `fastedge-config.test.json` schema, dotenv, CDN and HTTP-WASM examples
 - `docs/DEBUGGER.md` — Debugger server CLI, programmatic startup, port config, health check
+- `VSCODE_BUNDLING.md` — Server bundling for VSCode extension, auto-start architecture, port auto-increment
 
 ### 🚀 Future Enhancements (read when looking for "what's next")
 
@@ -203,6 +204,17 @@ Applies when: tests fail because HTTP apps are run as proxy-wasm (or vice versa)
 
 1. **Always read first**: `features/CROSS_PLATFORM.md` — rules, patterns, and what's already handled
 2. Check `server/utils/fastedge-cli.ts` as the reference implementation for platform branching
+
+### Server Startup, Port Selection, and `bin/fastedge-debug.js`
+
+**Architecture (April 2026)**: `dist/server.js` unconditionally calls `startServer()` on load. This works for both the CLI (`bin/fastedge-debug.js` does `import("../dist/server.js")`) and VSCode extension (`fork()`). Library consumers use `dist/lib/` entry points which do not auto-start.
+
+1. `startServer()` probes ports 5179-5188 via HTTP `/health` check; first available port wins
+2. Port file written to `{WORKSPACE_PATH || cwd()}/.fastedge-debug/.debug-port` (WORKSPACE_PATH defaults to `process.cwd()` so CLI users get port files too)
+3. Startup messages go to stderr (`console.error()`) so MCP stdio transport is not corrupted
+4. **Old pattern removed**: `require.main === module` guard was deleted because it fails in bundled CJS loaded via dynamic `import()`
+
+Key files: `server/server.ts` (startServer, port probing, port file), `bin/fastedge-debug.js` (CLI entry)
 
 ### Testing Changes
 
@@ -374,4 +386,4 @@ Time: 5-7 minutes of reading
 
 ---
 
-**Last Updated**: March 30, 2026
+**Last Updated**: April 13, 2026

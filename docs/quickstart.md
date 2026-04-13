@@ -130,11 +130,11 @@ See [RUNNER.md](RUNNER.md) for the full `IWasmRunner` interface, `RunnerConfig` 
 
 ## Configuration
 
-Place a `fastedge-config.test.json` file in your project root to define default request parameters, response stubs, and WASM properties for the interactive debugger.
+Place a `fastedge-config.test.json` file in `.fastedge-debug/` at your project root to define default request parameters, response stubs, and WASM properties for the interactive debugger.
 
 ```json
 {
-  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
+  "$schema": "../node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
   "appType": "proxy-wasm",
   "wasm": {
     "path": "./dist/my-module.wasm"

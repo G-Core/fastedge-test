@@ -1,5 +1,11 @@
 # AI Agent Instructions for Proxy-WASM Test Runner
 
+## Governance (REQUIRED)
+
+Read `AGENTS.md` for company-wide agent rules. These are mandatory and override any conflicting behavior. Key rules: never go beyond the assigned task, never change code that was not asked to change, never "improve" or "optimize" without a clear request, always distinguish observations from action requests.
+
+---
+
 ## 🎯 CRITICAL: Read Smart, Not Everything
 
 **DO NOT read all context files upfront.** This repository uses a **discovery-based context system** to minimize token usage while maximizing effectiveness.
@@ -268,13 +274,13 @@ grep -r "keyword" context/
 - Backend: Node.js + Express + TypeScript
 - Frontend: React + Vite + TypeScript + Zustand
 - WASM: Node WebAssembly API with WASI preview1
-- Port: 5179
+- Port: 5179 (auto-increments through 5179-5188 if busy)
 
 **Common Commands:**
 ```bash
 pnpm install
 pnpm run build          # Build both backend and frontend
-pnpm start              # Start server on port 5179
+pnpm start              # Start server (port 5179-5188, auto-increments)
 pnpm run dev:backend    # Backend watch mode
 pnpm run dev:frontend   # Vite dev server (port 5173)
 ```
@@ -298,4 +304,4 @@ pnpm run dev:frontend   # Vite dev server (port 5173)
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: April 2026

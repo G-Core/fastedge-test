@@ -330,9 +330,9 @@ function assertNoRequestHeader(result: HookResult, name: string): void
 ```typescript
 const hookResult = result.hookResults.onRequestHeaders;
 
-assertRequestHeader(hookResult, "x-forwarded-for");        // exists
-assertRequestHeader(hookResult, "x-country-code", "DE");   // exists with value
-assertNoRequestHeader(hookResult, "x-internal-secret");    // absent
+assertRequestHeader(hookResult, "x-forwarded-for");       // exists
+assertRequestHeader(hookResult, "x-country-code", "DE");  // exists with value
+assertNoRequestHeader(hookResult, "x-internal-secret");   // absent
 ```
 
 ### Response Headers
@@ -366,7 +366,7 @@ function assertFinalHeader(result: FullFlowResult, name: string, expected?: stri
 ```typescript
 assertFinalStatus(result, 200);
 assertFinalHeader(result, "x-cache", "HIT");
-assertFinalHeader(result, "content-encoding");             // exists, any value
+assertFinalHeader(result, "content-encoding"); // exists, any value
 ```
 
 ### Return Code

@@ -68,13 +68,13 @@ interface WasmLoadedEvent {
 }
 ```
 
-| Field           | Type                          | Description                                                         |
-| --------------- | ----------------------------- | ------------------------------------------------------------------- |
-| `filename`      | `string`                      | Name of the loaded WASM file                                        |
-| `size`          | `number`                      | File size in bytes                                                  |
+| Field           | Type                          | Description                                                          |
+| --------------- | ----------------------------- | -------------------------------------------------------------------- |
+| `filename`      | `string`                      | Name of the loaded WASM file                                         |
+| `size`          | `number`                      | File size in bytes                                                   |
 | `runnerPort?`   | `number \| null`              | Port the runner is listening on, if applicable. Omitted when not set |
-| `wasmType`      | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type                                                |
-| `resolvedPath?` | `string \| null`              | Absolute filesystem path to the loaded binary. Omitted when not set |
+| `wasmType`      | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type                                                 |
+| `resolvedPath?` | `string \| null`              | Absolute filesystem path to the loaded binary. Omitted when not set  |
 
 **Example:**
 

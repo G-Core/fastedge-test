@@ -16,7 +16,13 @@ Or using the explicit binary name:
 npx fastedge-debug
 ```
 
-Once started, the server listens on `http://localhost:5179` by default and logs the bound address to stdout.
+Once started, the server listens on `http://localhost:5179` by default and logs the bound address to stderr.
+
+The CLI automatically discovers the workspace root by walking up from the current directory, looking first for an existing `.fastedge-debug/` directory, then for a `package.json` or `Cargo.toml`. The resolved root is used as the base for port file and configuration file placement. Pass a path as the first argument to anchor discovery to a specific starting location:
+
+```bash
+npx fastedge-debug /path/to/my-app
+```
 
 ## Programmatic Usage
 
@@ -65,7 +71,9 @@ process.kill(process.pid, "SIGTERM");
 PORT=8080 npx fastedge-debug
 ```
 
-When `WORKSPACE_PATH` is set, the server writes the bound port number to `$WORKSPACE_PATH/.fastedge-debug/.debug-port` on startup and deletes it on shutdown.
+If the preferred port is already in use, the server tries the next port sequentially, repeating up to 10 times (for example, `5179` through `5188` by default). If no free port is found in that range, the server exits with an error. Set `PORT` to a specific value to bypass auto-increment when a predictable port is required.
+
+The server writes the bound port number to `.fastedge-debug/.debug-port` under `WORKSPACE_PATH` (if set) or the current working directory, and deletes the file on shutdown. Use this file for programmatic port discovery when starting the server as a subprocess.
 
 ## Health Check
 
@@ -120,7 +128,7 @@ The server handles `SIGTERM` and `SIGINT`:
 1. Logs the received signal.
 2. Cleans up the active WASM runner (frees memory, closes child processes).
 3. Closes all WebSocket connections.
-4. Deletes the `.fastedge-debug/.debug-port` file (if `WORKSPACE_PATH` is set).
+4. Deletes the `.fastedge-debug/.debug-port` file.
 5. Closes the HTTP server.
 6. Exits with code `0`.
 

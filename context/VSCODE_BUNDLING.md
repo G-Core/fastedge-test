@@ -1,6 +1,6 @@
 # VSCode Extension Bundling
 
-**Last Updated**: March 3, 2026
+**Last Updated**: April 13, 2026
 **Status**: ✅ Implemented
 
 ---
@@ -160,10 +160,20 @@ npm run package
   └─→ vsce package (create .vsix)
 ```
 
+### Server Auto-Start Architecture (April 2026)
+
+`dist/server.js` unconditionally calls `startServer()` on load. This replaced the old `require.main === module` guard which failed in the bundled CJS context when loaded via dynamic `import()`. The auto-start design works for both entry points:
+
+- **CLI**: `bin/fastedge-debug.js` resolves the app root (walk up to `package.json`/`Cargo.toml`), sets `WORKSPACE_PATH`, then does `import("../dist/server.js")` — the server starts automatically
+- **VSCode extension**: `fork(serverPath)` — the forked module starts automatically
+- **Library consumers**: Use `dist/lib/` entry points (runner, test framework), which do NOT auto-start
+
+`startServer()` probes ports 5179-5188 via HTTP `/health` check before binding (port auto-increment moved from the VSCode extension's `DebuggerServerManager.resolvePort()` into the server). Port file written to `{WORKSPACE_PATH}/.fastedge-debug/.debug-port`. Both the CLI and VSCode extension resolve `WORKSPACE_PATH` before starting the server using the same priority: existing `.fastedge-debug/` dir > nearest `package.json`/`Cargo.toml` > cwd. Startup messages go to stderr so MCP stdio transport is not corrupted.
+
 ### Extension Runtime
 
 ```typescript
-// Extension forks bundled server
+// Extension forks bundled server — auto-starts on load
 const serverPath = path.join(
   extensionPath,
   'dist/debugger/server.js'
@@ -224,8 +234,8 @@ grep -q "wasi-shim" dist/server.bundle.js && echo "WASI bundled ✅"
 # Run bundled server directly
 node dist/server.bundle.js
 
-# Should start on port 5179
-# Visit http://localhost:5179
+# Auto-starts on port 5179 (or next available up to 5188)
+# Visit http://localhost:<port>
 ```
 
 ### Test in Extension

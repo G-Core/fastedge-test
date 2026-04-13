@@ -45,6 +45,27 @@ Discovers all `*.test.json` files, runs each, prints a summary table.
 
 ---
 
+## Response Preview: Content-Type Aware Rendering
+
+**Problem**: The debugger's response preview currently only handles plain-text and HTML responses. FastEdge apps can respond with many other content types — PDFs (`application/pdf`), SVGs (`image/svg+xml`), images (`image/png`, `image/jpeg`), etc. — but these render as raw binary gibberish or are not displayed at all in the preview pane.
+
+**Proposed Solution**: Make the response preview Content-Type aware, rendering each response body appropriately based on its `Content-Type` header.
+
+**Rendering strategies by type**:
+- `text/plain`, `text/html` — existing behavior (text / HTML preview)
+- `image/svg+xml` — render inline as SVG
+- `image/png`, `image/jpeg`, `image/gif`, `image/webp` — render as `<img>` with a data URI (`data:{mime};base64,...`)
+- `application/pdf` — embed via `<iframe>` or `<object>` with a data URI, or offer a download link
+- `application/json` — syntax-highlighted, collapsible JSON tree
+- `application/octet-stream` / unknown — hex dump preview + download link
+
+**Why this matters**:
+- Several existing examples (PDF generation, image manipulation, SVG rendering) produce non-text responses that developers need to verify visually
+- Without proper preview, developers must save the response body to a file and open it externally — breaking the debugger's fast feedback loop
+- Content-Type aware rendering makes the debugger useful for the full range of FastEdge use cases, not just text-based apps
+
+---
+
 ## Hot Dotenv Reload + Secret Rollover / Slots
 
 **Problem**: The debugger currently loads `.env` files once at WASM startup. There is no way to update secrets at runtime without restarting the runner. This means the `secret_rollover` example (which uses `secret::get_effective_at()` with slot-based lookup) cannot be meaningfully tested in the debugger — the slot values are static and never change.
