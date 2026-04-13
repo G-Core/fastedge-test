@@ -1,5 +1,70 @@
 # Proxy-WASM Runner - Changelog
 
+## April 13, 2026 - CLI app root resolution aligned with VSCode extension
+
+### Overview
+`bin/fastedge-debug.js` now resolves `WORKSPACE_PATH` by walking up the directory tree, matching the same logic the VSCode extension uses. Previously the CLI just used `cwd()` or an explicit arg verbatim, causing `.fastedge-debug/` to land in a different location than when debugging the same app via VSCode F5.
+
+### What Changed
+
+#### `bin/fastedge-debug.js` — app root walk-up resolution
+- Accepts optional positional arg: `npx fastedge-debug ./app1/src`
+- Resolves app root using priority: existing `.fastedge-debug/` > nearest `package.json`/`Cargo.toml` > start path
+- Sets `WORKSPACE_PATH` before importing the server
+- Aligns with industry convention: debug artifacts live next to the build manifest
+
+**Resolution examples:**
+| Command | Resolved app root |
+|---|---|
+| `cd app1 && npx fastedge-debug` | `app1/` (has package.json) |
+| `npx fastedge-debug ./app1/src` | `app1/` (walks up to package.json) |
+| `npx fastedge-debug ./app1` | `app1/` (has package.json) |
+
+**Files Modified:**
+- `bin/fastedge-debug.js` — added `resolveAppRoot()` walk-up function
+
+---
+
+## April 13, 2026 - Server auto-start, port auto-increment, WORKSPACE_PATH default, stderr startup messages
+
+### Overview
+Several related changes to server startup that fix the `bin/fastedge-debug.js` bug and move port auto-increment from the VSCode extension into the server itself.
+
+### 🎯 What Was Completed
+
+#### 1. `bin/fastedge-debug.js` bug fix
+- `startServer()` was never called because the `require.main === module` guard failed in the bundled CJS context when loaded via dynamic `import()`
+- Fixed by adding unconditional `startServer()` at the end of `server.ts`
+- `bin/fastedge-debug.js` is now just `import("../dist/server.js")`
+
+#### 2. Port auto-increment moved from FastEdge-vscode into fastedge-test
+- `startServer()` probes ports 5179-5188 via HTTP `/health` check before binding
+- If a port is busy, tries the next one
+- Previously this logic lived only in the VSCode extension's `DebuggerServerManager.resolvePort()`
+
+#### 3. WORKSPACE_PATH defaults to `process.cwd()`
+- `getPortFilePath()` previously returned null without `WORKSPACE_PATH` (only set by VSCode extension)
+- Now defaults to `process.cwd()`, so CLI users get port files and config resolution too
+- Port file written to `{WORKSPACE_PATH || cwd()}/.fastedge-debug/.debug-port`
+
+#### 4. Server auto-start architecture
+- `dist/server.js` unconditionally calls `startServer()` on load
+- Works for both `bin/fastedge-debug.js` (CLI) and `fork()` (VSCode extension)
+- Library consumers use separate entry points (`dist/lib/`), not the server bundle
+
+#### 5. Startup messages go to stderr
+- `console.error()` instead of `console.log()` so MCP stdio transport is not corrupted
+
+**Files Modified:**
+- `server/server.ts` — removed `require.main === module` guard, added unconditional `startServer()`, port probing loop (5179-5188), WORKSPACE_PATH default to cwd(), stderr for startup messages
+- `bin/fastedge-debug.js` — simplified to `import("../dist/server.js")`
+
+### 📝 Notes
+- The old `require.main === module` pattern does not work when a CJS bundle is loaded via dynamic `import()` — `require.main` is undefined in that context
+- Port auto-increment uses the same `/health` endpoint check that the VSCode extension used, ensuring only fastedge-debugger instances are detected as "busy"
+
+---
+
 ## April 7, 2026 - Fix response.status property encoding (big-endian u16)
 
 ### Overview
@@ -1052,6 +1117,7 @@ The VSCode extension previously used a single global server shared across all ap
 ### 📝 Notes
 - `WORKSPACE_PATH` is set by the VSCode extension (always the app root, not workspace root)
 - Standalone CLI users (`fastedge-debug` command) are unaffected — no `WORKSPACE_PATH` means no port file, PortManager OS check still works
+- **Updated April 13, 2026**: `WORKSPACE_PATH` now defaults to `process.cwd()`, so CLI users get port files too. Port auto-increment also moved into the server. See April 13 entry above.
 - `.fastedge-debug/` should be in `.gitignore` of each app (scaffolded by `create-fastedge-app`)
 
 ---

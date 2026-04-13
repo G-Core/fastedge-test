@@ -94,6 +94,10 @@ process.on("exit", () => {
 
 The `exit` event fires for normal exits and unhandled exceptions on all platforms. It does **not** fire after a hard `TerminateProcess` — that is acceptable since the VSCode extension validates port file health on startup.
 
+**WORKSPACE_PATH default (April 2026)**: `getPortFilePath()` defaults `WORKSPACE_PATH` to `process.cwd()`, so CLI users get port files and config resolution too (previously only set by the VSCode extension).
+
+**Port auto-increment (April 2026)**: `startServer()` probes ports 5179-5188 via HTTP `/health` check before binding. If a port is busy, tries the next one. This logic was moved from the VSCode extension's `DebuggerServerManager.resolvePort()` into the server itself.
+
 ---
 
 ## What Is Already Handled
@@ -116,4 +120,4 @@ The `exit` event fires for normal exits and unhandled exceptions on all platform
 ## Known Limitations
 
 - **`dev:backend` script**: Uses `sleep 2` (Unix only). Windows developers must run `dev:backend:esbuild` and `dev:backend:server` manually in separate terminals.
-- **Hard kill (TerminateProcess)**: A `.fastedge-debug/.debug-port` file may persist after a hard kill on Windows. The VSCode extension's `DebuggerServerManager.resolvePort()` handles stale port files via health checks, so this is not a user-visible bug.
+- **Hard kill (TerminateProcess)**: A `.fastedge-debug/.debug-port` file may persist after a hard kill on Windows. The server's port auto-increment probes via `/health` check, so stale port files do not cause port collisions.

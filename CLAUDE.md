@@ -274,13 +274,13 @@ grep -r "keyword" context/
 - Backend: Node.js + Express + TypeScript
 - Frontend: React + Vite + TypeScript + Zustand
 - WASM: Node WebAssembly API with WASI preview1
-- Port: 5179
+- Port: 5179 (auto-increments through 5179-5188 if busy)
 
 **Common Commands:**
 ```bash
 pnpm install
 pnpm run build          # Build both backend and frontend
-pnpm start              # Start server on port 5179
+pnpm start              # Start server (port 5179-5188, auto-increments)
 pnpm run dev:backend    # Backend watch mode
 pnpm run dev:frontend   # Vite dev server (port 5173)
 ```
@@ -304,4 +304,4 @@ pnpm run dev:frontend   # Vite dev server (port 5173)
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: April 2026

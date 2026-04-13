@@ -491,13 +491,13 @@ app.post("/api/send", async (req: Request, res: Response) => {
  *  Prefers WORKSPACE_PATH (VSCode integration) so the config lives next to
  *  the developer's app, not inside the extension/package install folder. */
 function resolveConfigDir(): string {
-  const root = process.env.WORKSPACE_PATH || path.join(__dirname, "..");
+  const root = process.env.WORKSPACE_PATH || process.cwd();
   return path.join(root, ".fastedge-debug");
 }
 
 /** Resolve a potentially relative dotenv path using the same base as resolveConfigDir(). */
 function resolveDotenvPathFromWorkspace(dotenvPath: string | undefined): string | undefined {
-  const base = process.env.WORKSPACE_PATH || path.join(__dirname, "..");
+  const base = process.env.WORKSPACE_PATH || process.cwd();
   return resolveDotenvPath(dotenvPath, base);
 }
 
@@ -668,8 +668,7 @@ const defaultPort = process.env.PORT ? Number(process.env.PORT) : 5179;
 // so port discovery is co-located with the config and WASM that anchor
 // each app's identity.
 function getPortFilePath(): string | null {
-  const appRoot = process.env.WORKSPACE_PATH;
-  if (!appRoot) return null;
+  const appRoot = process.env.WORKSPACE_PATH || process.cwd();
   return path.join(appRoot, ".fastedge-debug", ".debug-port");
 }
 
@@ -694,23 +693,60 @@ function deletePortFile(): void {
   }
 }
 
-export function startServer(port = defaultPort): Promise<void> {
+/**
+ * Check if a port is available by attempting a TCP connection.
+ * If something is listening, check if it's a fastedge-debugger via /health.
+ */
+async function isPortAvailable(port: number): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 500);
+    const response = await fetch(`http://localhost:${port}/health`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    // Something is listening — port is taken
+    return false;
+  } catch {
+    // Connection refused or timeout — port is free
+    return true;
+  }
+}
+
+/**
+ * Find an available port starting from the preferred port.
+ * Tries up to 10 ports (5179-5188 by default).
+ */
+async function resolvePort(preferred: number): Promise<number> {
+  const maxAttempts = 10;
+  for (let port = preferred; port < preferred + maxAttempts; port++) {
+    if (await isPortAvailable(port)) {
+      return port;
+    }
+    console.error(`Port ${port} is in use, trying ${port + 1}...`);
+  }
+  throw new Error(
+    `Could not find a free port (tried ${preferred}-${preferred + maxAttempts - 1}). ` +
+      `Set PORT env var to use a specific port.`
+  );
+}
+
+export async function startServer(port = defaultPort): Promise<void> {
+  const resolvedPort = await resolvePort(port);
   return new Promise((resolve) => {
-    httpServer.listen(port, () => {
-      console.log(`Proxy runner listening on http://localhost:${port}`);
-      console.log(`WebSocket available at ws://localhost:${port}/ws`);
-      writePortFile(port);
+    httpServer.listen(resolvedPort, () => {
+      console.error(`Proxy runner listening on http://localhost:${resolvedPort}`);
+      console.error(`WebSocket available at ws://localhost:${resolvedPort}/ws`);
+      writePortFile(resolvedPort);
       resolve();
     });
   });
 }
 
-// Auto-start when run directly as CLI (node dist/server.js or via bin)
-// When imported programmatically, call startServer() manually
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-if ((require as any).main === module) {
-  startServer();
-}
+// Auto-start: this bundle is only loaded by bin/fastedge-debug.js (CLI)
+// or fork() from the VSCode extension. Both need the server running.
+// Library consumers use separate entry points (dist/lib/).
+startServer();
 
 // Port file cleanup on exit — covers Windows where SIGTERM is never sent.
 // The unlinkSync in deletePortFile is already try/catch so double-deletion is safe.
