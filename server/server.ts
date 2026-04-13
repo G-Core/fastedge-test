@@ -698,18 +698,26 @@ function deletePortFile(): void {
  * If something is listening, check if it's a fastedge-debugger via /health.
  */
 async function isPortAvailable(port: number): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 500);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 500);
-    const response = await fetch(`http://localhost:${port}/health`, {
+    await fetch(`http://localhost:${port}/health`, {
       signal: controller.signal,
     });
-    clearTimeout(timeout);
     // Something is listening — port is taken
     return false;
-  } catch {
-    // Connection refused or timeout — port is free
-    return true;
+  } catch (err) {
+    // Connection refused → nothing listening → port is free.
+    // Abort/timeout or other errors → something may be there, treat as taken.
+    if (
+      err instanceof TypeError &&
+      (err as any).cause?.code === "ECONNREFUSED"
+    ) {
+      return true;
+    }
+    return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -746,7 +754,11 @@ export async function startServer(port = defaultPort): Promise<void> {
 // Auto-start: this bundle is only loaded by bin/fastedge-debug.js (CLI)
 // or fork() from the VSCode extension. Both need the server running.
 // Library consumers use separate entry points (dist/lib/).
-startServer();
+void startServer().catch((error: unknown) => {
+  console.error("Failed to start server:");
+  console.error(error);
+  process.exit(1);
+});
 
 // Port file cleanup on exit — covers Windows where SIGTERM is never sent.
 // The unlinkSync in deletePortFile is already try/catch so double-deletion is safe.

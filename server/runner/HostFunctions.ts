@@ -267,9 +267,10 @@ export class HostFunctions {
             normalizedPath === "response.status_code") &&
           typeof raw === "number"
         ) {
+          const statusU16 = Number.isFinite(raw) ? (Math.trunc(raw) & 0xffff) : 0;
           const buf = new Uint8Array(2);
-          buf[0] = (raw >> 8) & 0xff;
-          buf[1] = raw & 0xff;
+          buf[0] = (statusU16 >> 8) & 0xff;
+          buf[1] = statusU16 & 0xff;
           this.memory.writeBytesResult(buf, valuePtrPtr, valueLenPtr);
           return ProxyStatus.Ok;
         }
