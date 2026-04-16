@@ -1058,7 +1058,7 @@ export class ProxyWasmRunner implements IWasmRunner {
   }
 
   private createImports(): WebAssembly.Imports {
-    const wasi = new WASI({ version: "preview1" });
+    const wasi = new WASI({ version: "preview1", env: this.dictionary.getAll() });
     const wasiImport = wasi.wasiImport as Record<string, unknown>;
 
     return {
