@@ -1,20 +1,23 @@
 /**
  * CDN WASM Runner - Variables and Secrets Tests
  *
- * Tests that env vars and secrets loaded from dotenv files are accessible
- * at runtime via getEnv() and getSecret() in proxy-wasm apps.
+ * Tests all three runtime data access surfaces:
+ *   1. getEnv()         — WASI process.env (< 64 KB values)
+ *   2. getDictionary()  — proxy_dictionary_get host function (2mb limit)
+ *   3. getSecret()      — proxy_get_secret host function
  *
  * Runs the same assertions against all language variants (AS, Rust).
  *
  * App behavior:
- *   - Reads USERNAME via dictionary/getEnv("USERNAME")
- *   - Reads PASSWORD via secret/getSecret("PASSWORD")
- *   - Adds them as request headers: x-env-username, x-env-password
- *   - Logs: "USERNAME: <value>" and "PASSWORD: <value>"
+ *   - Reads USERNAME via getEnv (WASI env) → header x-env-username
+ *   - Reads LARGE_DATA via getDictionary (proxy_dictionary_get) → header x-dict-large-data
+ *   - Reads PASSWORD via getSecret (proxy_get_secret) → header x-env-password
+ *   - Logs all three values
  *
  * Dotenv loading: fixtures/.env
- *   - FASTEDGE_VAR_ENV_USERNAME  -> dictionary entry USERNAME
- *   - FASTEDGE_VAR_SECRET_PASSWORD -> secret PASSWORD
+ *   - FASTEDGE_VAR_ENV_USERNAME    → WASI env + dictionary entry USERNAME
+ *   - FASTEDGE_VAR_ENV_LARGE_DATA  → WASI env + dictionary entry LARGE_DATA
+ *   - FASTEDGE_VAR_SECRET_PASSWORD → secret PASSWORD
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -64,37 +67,60 @@ for (const variant of CDN_APP_VARIANTS) {
       expect(runner.getType()).toBe("proxy-wasm");
     });
 
-    it("should read USERNAME env var from dotenv file and log it", async () => {
+    // --- getEnv (WASI process.env) ---
+
+    it("should read USERNAME via getEnv (WASI env) and log it", async () => {
       const result = await runner.callHook(createHookCall("onRequestHeaders"));
       expect(logsContain(result, "USERNAME: cdn-test-user")).toBe(true);
     });
 
-    it("should read PASSWORD secret from dotenv file and log it", async () => {
-      const result = await runner.callHook(createHookCall("onRequestHeaders"));
-      expect(logsContain(result, "PASSWORD: cdn-test-secret")).toBe(true);
-    });
-
-    it("should add x-env-username request header with env var value", async () => {
+    it("should add x-env-username header via getEnv", async () => {
       const result = await runner.callHook(createHookCall("onRequestHeaders"));
       expect(result.output.request.headers["x-env-username"]).toBe(
         "cdn-test-user",
       );
     });
 
-    it("should add x-env-password request header with secret value", async () => {
+    // --- getDictionary (proxy_dictionary_get) ---
+
+    it("should read LARGE_DATA via getDictionary (proxy_dictionary_get) and log it", async () => {
+      const result = await runner.callHook(createHookCall("onRequestHeaders"));
+      expect(logsContain(result, "LARGE_DATA: cdn-test-large-data")).toBe(true);
+    });
+
+    it("should add x-dict-large-data header via getDictionary", async () => {
+      const result = await runner.callHook(createHookCall("onRequestHeaders"));
+      expect(result.output.request.headers["x-dict-large-data"]).toBe(
+        "cdn-test-large-data",
+      );
+    });
+
+    // --- getSecret (proxy_get_secret) ---
+
+    it("should read PASSWORD via getSecret (proxy_get_secret) and log it", async () => {
+      const result = await runner.callHook(createHookCall("onRequestHeaders"));
+      expect(logsContain(result, "PASSWORD: cdn-test-secret")).toBe(true);
+    });
+
+    it("should add x-env-password header via getSecret", async () => {
       const result = await runner.callHook(createHookCall("onRequestHeaders"));
       expect(result.output.request.headers["x-env-password"]).toBe(
         "cdn-test-secret",
       );
     });
 
-    it("should return both values consistently across multiple hook calls", async () => {
+    // --- All three surfaces together ---
+
+    it("should return all three values consistently across multiple hook calls", async () => {
       for (let i = 0; i < 3; i++) {
         const result = await runner.callHook(
           createHookCall("onRequestHeaders"),
         );
         expect(result.output.request.headers["x-env-username"]).toBe(
           "cdn-test-user",
+        );
+        expect(result.output.request.headers["x-dict-large-data"]).toBe(
+          "cdn-test-large-data",
         );
         expect(result.output.request.headers["x-env-password"]).toBe(
           "cdn-test-secret",

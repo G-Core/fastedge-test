@@ -28,7 +28,11 @@ impl Context for VariablesContext {}
 
 impl HttpContext for VariablesContext {
     fn on_http_request_headers(&mut self, _: usize, _: bool) -> Action {
-        let username = dictionary::get("USERNAME").unwrap_or_default();
+        // std::env::var: reads via WASI environ_get (< 64 KB values)
+        let username = std::env::var("USERNAME").unwrap_or_default();
+        // dictionary::get: reads via proxy_dictionary_get (no size limit)
+        let large_data = dictionary::get("LARGE_DATA").unwrap_or_default();
+        // secret::get: reads via proxy_get_secret
         let password = secret::get("PASSWORD")
             .ok()
             .flatten()
@@ -36,9 +40,11 @@ impl HttpContext for VariablesContext {
             .unwrap_or_default();
 
         proxy_wasm::hostcalls::log(LogLevel::Info, &format!("USERNAME: {}", username)).ok();
+        proxy_wasm::hostcalls::log(LogLevel::Info, &format!("LARGE_DATA: {}", large_data)).ok();
         proxy_wasm::hostcalls::log(LogLevel::Info, &format!("PASSWORD: {}", password)).ok();
 
         self.add_http_request_header("x-env-username", &username);
+        self.add_http_request_header("x-dict-large-data", &large_data);
         self.add_http_request_header("x-env-password", &password);
 
         Action::Continue

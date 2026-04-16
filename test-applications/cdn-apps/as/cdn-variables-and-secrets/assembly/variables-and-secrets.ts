@@ -10,6 +10,7 @@ import {
 } from "@gcoredev/proxy-wasm-sdk-as/assembly";
 import {
   getEnv,
+  getDictionary,
   getSecret,
   setLogLevel,
 } from "@gcoredev/proxy-wasm-sdk-as/assembly/fastedge";
@@ -27,13 +28,19 @@ class VariablesContext extends Context {
   }
 
   onRequestHeaders(a: u32, end_of_stream: bool): FilterHeadersStatusValues {
+    // getEnv: reads via WASI process.env (< 64 KB values)
     const username = getEnv("USERNAME");
+    // getDictionary: reads via proxy_dictionary_get (no size limit)
+    const largeData = getDictionary("LARGE_DATA");
+    // getSecret: reads via proxy_get_secret
     const password = getSecret("PASSWORD");
 
     log(LogLevelValues.info, "USERNAME: " + username);
+    log(LogLevelValues.info, "LARGE_DATA: " + largeData);
     log(LogLevelValues.info, "PASSWORD: " + password);
 
     stream_context.headers.request.add("x-env-username", username);
+    stream_context.headers.request.add("x-dict-large-data", largeData);
     stream_context.headers.request.add("x-env-password", password);
 
     return FilterHeadersStatusValues.Continue;
