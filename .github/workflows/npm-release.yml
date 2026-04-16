@@ -2,24 +2,24 @@ name: Deploy to NPM
 
 on:
   push:
-    # If you add a branch here, you **MUST** create a branch rule in Github settings
-    branches: ['*.*.x', '*.x', 'main', 'next', 'next-major', 'beta', 'alpha']
+    # If you add a branch here, you **MUST** create a branch rule in Github settings!
+    branches: ["*.*.x", "*.x", "main", "next", "next-major", "beta", "alpha"]
     paths:
-      - 'server/**'
-      - 'frontend/**'
-      - 'esbuild/**'
-      - 'schemas/**'
-      - 'bin/**'
-      - 'scripts/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
+      - "server/**"
+      - "frontend/**"
+      - "esbuild/**"
+      - "schemas/**"
+      - "bin/**"
+      - "scripts/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
 
   workflow_dispatch: # trigger manually
     inputs:
       dry_run:
-        description: 'NPM release dry-run'
+        description: "NPM release dry-run"
         required: true
-        default: 'true'
+        default: "true"
 
 jobs:
   # Github Actions do not allow regex validation for numbers in *.*.x branch names
