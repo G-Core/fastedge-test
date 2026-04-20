@@ -169,18 +169,18 @@ callFullFlow(
 
 **Parameters**
 
-| Parameter                        | Type                      | Description                                                                                                           |
-| -------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `url`                            | `string`                  | Full request URL, or `BUILTIN_SHORTHAND` (`"built-in"`) to use the built-in responder instead of a real origin fetch  |
-| `method`                         | `string`                  | HTTP method                                                                                                           |
-| `headers`                        | `Record<string, string>`  | Request headers                                                                                                       |
-| `body`                           | `string`                  | Request body                                                                                                          |
-| `responseHeaders`                | `Record<string, string>`  | Upstream response headers (used as initial state for response hooks)                                                  |
-| `responseBody`                   | `string`                  | Upstream response body                                                                                                |
-| `responseStatus`                 | `number`                  | Upstream response status code                                                                                         |
-| `responseStatusText`             | `string`                  | Upstream response status text                                                                                         |
-| `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                                                                                 |
-| `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior                                               |
+| Parameter                        | Type                      | Description                                                                                                          |
+| -------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `url`                            | `string`                  | Full request URL, or `BUILTIN_SHORTHAND` (`"built-in"`) to use the built-in responder instead of a real origin fetch |
+| `method`                         | `string`                  | HTTP method                                                                                                          |
+| `headers`                        | `Record<string, string>`  | Request headers                                                                                                      |
+| `body`                           | `string`                  | Request body                                                                                                         |
+| `responseHeaders`                | `Record<string, string>`  | Upstream response headers (used as initial state for response hooks)                                                 |
+| `responseBody`                   | `string`                  | Upstream response body                                                                                               |
+| `responseStatus`                 | `number`                  | Upstream response status code                                                                                        |
+| `responseStatusText`             | `string`                  | Upstream response status text                                                                                        |
+| `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                                                                                |
+| `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior                                              |
 
 Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fetch or built-in responder)* → `onResponseHeaders` → `onResponseBody`.
 
@@ -309,12 +309,12 @@ interface RunnerConfig {
 }
 ```
 
-| Field                            | Type       | Default         | Description                                                                                                                                                                                                                                                               |
-| -------------------------------- | ---------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`  | `false`         | Whether to load `.env` files                                                                                                                                                                                                                                              |
-| `dotenv.path`                    | `string`   | `undefined`     | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory). |
-| `enforceProductionPropertyRules` | `boolean`  | `true`          | Restrict property access to match CDN production behavior                                                                                                                                                                                                                 |
-| `runnerType`                     | `WasmType` | auto-detected   | Override WASM type detection                                                                                                                                                                                                                                              |
+| Field                            | Type       | Default       | Description                                                                                                                                                                                                                                                               |
+| -------------------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`  | `false`       | Whether to load `.env` files                                                                                                                                                                                                                                              |
+| `dotenv.path`                    | `string`   | `undefined`   | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory). |
+| `enforceProductionPropertyRules` | `boolean`  | `true`        | Restrict property access to match CDN production behavior                                                                                                                                                                                                                 |
+| `runnerType`                     | `WasmType` | auto-detected | Override WASM type detection                                                                                                                                                                                                                                              |
 
 ### HttpRequest & HttpResponse
 
@@ -538,19 +538,19 @@ async function testCdnApp() {
   try {
     // Execute the full CDN request/response lifecycle
     const result: FullFlowResult = await runner.callFullFlow(
-      'https://example.com/api/data',          // request URL
-      'GET',                                    // method
-      { 'accept': 'application/json' },         // request headers
-      '',                                       // request body
-      { 'content-type': 'application/json' },   // upstream response headers
-      '{"key":"value"}',                        // upstream response body
-      200,                                      // upstream response status
-      'OK',                                     // upstream response status text
+      'https://example.com/api/data',         // request URL
+      'GET',                                   // method
+      { 'accept': 'application/json' },        // request headers
+      '',                                      // request body
+      { 'content-type': 'application/json' },  // upstream response headers
+      '{"key":"value"}',                       // upstream response body
+      200,                                     // upstream response status
+      'OK',                                    // upstream response status text
       {
         'request.path': '/api/data',
         'request.host': 'example.com',
-      },                                        // shared properties
-      true,                                     // enforce production property rules
+      },                                       // shared properties
+      true,                                    // enforce production property rules
     );
 
     // Inspect hook results
@@ -606,7 +606,7 @@ async function testCdnAppOffline() {
   try {
     // Use built-in responder — no origin server required
     const result: FullFlowResult = await runner.callFullFlow(
-      BUILTIN_SHORTHAND,  // generates a local response instead of fetching
+      BUILTIN_SHORTHAND, // generates a local response instead of fetching
       'GET',
       { 'accept': 'application/json' },
       '',

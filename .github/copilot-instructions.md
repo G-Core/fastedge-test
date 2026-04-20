@@ -24,11 +24,27 @@ Changes to these exports require updated `docs/`, updated tests, and a semver-ap
 
 Full constitution: `.specify/memory/constitution.md`
 
+## Generated Content — `docs/`
+
+Files in `docs/` are **machine-generated** from source code by `./fastedge-plugin-source/generate-docs.sh`. They must not be edited by hand — manual changes will be silently overwritten on the next generation run.
+
+### When reviewing PRs that touch `docs/`:
+
+- **Never** suggest manual edits to any file in `docs/`
+- If docs are stale or incorrect, suggest: **Run `./fastedge-plugin-source/generate-docs.sh`**
+- If the generated output itself is wrong (e.g., wrong structure, missing section), the fix belongs in `fastedge-plugin-source/.generation-config.md`, not in `docs/` directly
+- If a PR modifies `docs/` files without a corresponding source code change, flag it — the change should come from the generation script, not a hand-edit
+
+### When reviewing PRs that change source code covered by `docs/`:
+
+- Check whether the change affects the public API or user-facing behavior
+- If yes, and `docs/` was not regenerated in the same PR, **request changes** with:
+  > Source code affecting public API was changed but docs/ was not regenerated.
+  > Run: `./fastedge-plugin-source/generate-docs.sh`
+
 ## Documentation Freshness
 
-`docs/` is the single source of truth for public API documentation. When code changes affect the public API or user-facing behavior, **request changes** if the corresponding doc file was not updated in the same PR.
-
-### Public API changes (must update docs/)
+### Public API changes (must regenerate docs/)
 - New, modified, or removed REST endpoints in `server/server.ts`
 - Changes to WebSocket message types or protocol in `server/websocket/`
 - Changes to exported types/interfaces in `server/runner/index.ts` or `server/test-framework/index.ts`
@@ -57,15 +73,15 @@ Full constitution: `.specify/memory/constitution.md`
 
 ### Violation example
 
-> PR adds `POST /api/foo` handler in `server/server.ts` but `docs/API.md` has no `/api/foo` section → **request changes**. The endpoint must be documented before merge.
+> PR adds `POST /api/foo` handler in `server/server.ts` but `docs/API.md` has no `/api/foo` section → **request changes**. Run `./fastedge-plugin-source/generate-docs.sh` before merge.
 
 ### Quickstart protection
 
-If any public API signature or behavior changes, check whether `docs/quickstart.md` examples are still accurate. Request changes if examples would no longer work against the updated code.
+If any public API signature or behavior changes, check whether `docs/quickstart.md` examples are still accurate. Request regeneration if examples would no longer work against the updated code.
 
 ### Pipeline source contract
 
-If `fastedge-plugin-source/manifest.json` lists source files that overlap with files changed in this PR, request that `docs/` is updated to keep the plugin pipeline's source material current.
+If `fastedge-plugin-source/manifest.json` lists source files that overlap with files changed in this PR, request that `docs/` is regenerated (run `./fastedge-plugin-source/generate-docs.sh`) to keep the plugin pipeline's source material current.
 
 ## Quality Rules
 
