@@ -672,8 +672,8 @@ curl -X POST http://localhost:5179/api/send \
 
 **Error Responses**
 
-| Status | Condition                                                                   |
-| ------ | --------------------------------------------------------------------------- |
+| Status | Condition                                                                    |
+| ------ | ---------------------------------------------------------------------------- |
 | `400`  | Validation failed (missing `url` or `properties`), or no WASM module loaded |
 | `500`  | Execution failed                                                             |
 

@@ -7,6 +7,16 @@ async function app(event: FetchEvent): Promise<Response> {
     });
   }
 
+  // Set-Cookie regression path: when x-set-cookies is present, emit two
+  // Set-Cookie headers. RFC 6265 §3 requires these stay separate — the
+  // runner must surface both entries (not a single last-wins string).
+  if (event.request.headers.get("x-set-cookies")) {
+    const headers = new Headers({ "content-type": "text/plain" });
+    headers.append("set-cookie", "sid=abc; Path=/; HttpOnly");
+    headers.append("set-cookie", "theme=dark; Path=/");
+    return new Response("cookies set", { status: 200, headers });
+  }
+
   const requestUrl = new URL(event.request.url);
   const reqHeaders: Record<string, string> = {};
 

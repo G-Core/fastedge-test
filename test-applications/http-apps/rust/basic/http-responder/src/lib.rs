@@ -18,6 +18,20 @@ fn main(req: Request<Body>) -> Result<Response<Body>> {
             .map_err(Into::into);
     }
 
+    // Set-Cookie regression path: RFC 6265 §3 requires multiple Set-Cookie
+    // headers to stay separate (not comma-joined). Two distinct cookies are
+    // emitted when x-set-cookies is present so the runner can be verified
+    // end-to-end.
+    if req.headers().contains_key("x-set-cookies") {
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "text/plain")
+            .header("set-cookie", "sid=abc; Path=/; HttpOnly")
+            .header("set-cookie", "theme=dark; Path=/")
+            .body(Body::from("cookies set"))
+            .map_err(Into::into);
+    }
+
     let method = req.method().to_string();
     let request_url = req.uri().to_string();
 

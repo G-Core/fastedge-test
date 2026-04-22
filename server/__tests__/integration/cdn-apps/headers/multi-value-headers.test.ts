@@ -215,6 +215,43 @@ for (const variant of CDN_APP_VARIANTS) {
           expect(outputHeaders["new-header-bytes-01"]).toBe("");
         }
       });
+
+      // Both variants emit two Set-Cookie headers in onResponseHeaders so
+      // this runner-level projection check runs under AS and Rust identically.
+      it("should preserve multiple Set-Cookie values as string[] (RFC 6265 §3)", async () => {
+        const result = await runner.callHook({
+          hook: "onResponseHeaders",
+          request: { headers: {}, body: "" },
+          response: { headers: { host: "" }, body: "" },
+          properties: {},
+        });
+        expect(result.returnCode).toBe(0);
+
+        const setCookie = result.output.response.headers["set-cookie"];
+        expect(Array.isArray(setCookie)).toBe(true);
+        expect(setCookie).toEqual([
+          "sid=abc; Path=/; HttpOnly",
+          "theme=dark; Path=/",
+        ]);
+      });
+
+      it("should preserve multi-value new-header-03 as string[] (lossless projection)", async () => {
+        const result = await runner.callHook({
+          hook: "onResponseHeaders",
+          request: { headers: {}, body: "" },
+          response: { headers: { host: "" }, body: "" },
+          properties: {},
+        });
+        expect(result.returnCode).toBe(0);
+
+        // new-header-03 is added twice by the WASM: "value-03" then "value-03-a".
+        // Post-fix the tuplesToRecord projection preserves both as an ordered
+        // string[] instead of lossy comma-joining. Both Rust and AS variants
+        // exercise the same runner pipeline and must agree.
+        const newHeader03 = result.output.response.headers["new-header-03"];
+        expect(Array.isArray(newHeader03)).toBe(true);
+        expect(newHeader03).toEqual(["value-03", "value-03-a"]);
+      });
     });
   });
 }

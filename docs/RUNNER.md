@@ -161,7 +161,7 @@ const runner = await createRunner('./my-http-app.wasm');
 let response = await runner.execute({ path: '/moved', method: 'GET', headers: {} });
 if (response.status >= 300 && response.status < 400 && response.headers['location']) {
   response = await runner.execute({
-    path: response.headers['location'], // e.g. "/new-location"
+    path: response.headers['location'] as string, // e.g. "/new-location"
     method: 'GET',
     headers: {},
   });
@@ -320,10 +320,10 @@ const result: FullFlowResult = await runner.callFullFlow(
 
 **Built-in responder behavior** — controlled by request headers set before the origin phase:
 
-| Header               | Effect                                                                          |
-| -------------------- | ------------------------------------------------------------------------------- |
-| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                    |
-| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default) |
+| Header               | Effect                                                                           |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                     |
+| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default)  |
 
 When `x-debugger-content` is omitted, the built-in responder returns a JSON echo of the request method, headers, body, and URL. Both control headers are stripped before response hooks execute so they do not appear in hook input state.
 
@@ -345,13 +345,13 @@ interface RunnerConfig {
 }
 ```
 
-| Field                            | Type       | Default       | Description                                                                                                                                                                                                                                                                                                                        |
-| -------------------------------- | ---------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`  | `false`       | Whether to load `.env` files                                                                                                                                                                                                                                                                                                       |
-| `dotenv.path`                    | `string`   | `undefined`   | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory).                                                      |
-| `enforceProductionPropertyRules` | `boolean`  | `true`        | Restrict property access to match CDN production behavior                                                                                                                                                                                                                                                                          |
-| `runnerType`                     | `WasmType` | auto-detected | Override WASM type detection                                                                                                                                                                                                                                                                                                       |
-| `httpPort`                       | `number`   | `undefined`   | HTTP-WASM only. Pin the spawned `fastedge-run` subprocess to a specific port instead of allocating from the dynamic pool (8100–8199). `load()` throws if the port is busy — there is no fallback to dynamic allocation. Intended for Codespaces/Docker port-forwarding or external tooling requiring a fixed address. Ignored for proxy-wasm runners. |
+| Field                            | Type       | Default       | Description                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------- | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`  | `false`       | Whether to load `.env` files                                                                                                                                                                                                                                                                                                                 |
+| `dotenv.path`                    | `string`   | `undefined`   | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory).                                                                |
+| `enforceProductionPropertyRules` | `boolean`  | `true`        | Restrict property access to match CDN production behavior                                                                                                                                                                                                                                                                                    |
+| `runnerType`                     | `WasmType` | auto-detected | Override WASM type detection                                                                                                                                                                                                                                                                                                                 |
+| `httpPort`                       | `number`   | `undefined`   | HTTP-WASM only. Pin the spawned `fastedge-run` subprocess to a specific port instead of allocating from the dynamic pool (8100–8199). `load()` throws if the port is busy — there is no fallback to dynamic allocation. Intended for Codespaces/Docker port-forwarding or external tooling requiring a fixed address. Ignored for proxy-wasm. |
 
 ### HttpRequest & HttpResponse
 
@@ -387,8 +387,8 @@ interface HttpResponse {
 **Multi-valued headers.** `Set-Cookie` is preserved as a `string[]` — each `Set-Cookie` header emitted by the WASM app (or an upstream origin) becomes a separate array entry. This matches RFC 6265 §3 and Node's fetch behaviour. Example:
 
 ```typescript
-const response = await runner.execute({ path: '/login', method: 'POST' });
-const cookies = response.headers['set-cookie'];  // string[] | undefined
+const response = await runner.execute({ path: '/login', method: 'POST', headers: {} });
+const cookies = response.headers['set-cookie']; // string[] | undefined
 for (const cookie of cookies ?? []) {
   console.log(cookie);
 }
@@ -397,7 +397,7 @@ for (const cookie of cookies ?? []) {
 Single-valued headers read as plain strings with no narrowing needed:
 
 ```typescript
-const location = response.headers['location'];   // string | undefined
+const location = response.headers['location'];        // string | undefined
 const contentType = response.headers['content-type']; // string | undefined
 ```
 
@@ -407,14 +407,14 @@ const contentType = response.headers['content-type']; // string | undefined
 type HookCall = {
   hook: string;
   request: {
-    headers: HeaderMap;
+    headers: HeaderRecord;
     body: string;
     method?: string;
     path?: string;
     scheme?: string;
   };
   response: {
-    headers: HeaderMap;
+    headers: HeaderRecord;
     body: string;
     status?: number;
     statusText?: string;
@@ -434,6 +434,8 @@ type HookCall = {
 | `dotenvEnabled`                  | Optional per-call dotenv override. Use `applyDotenv()` for persistent changes.                      |
 | `enforceProductionPropertyRules` | Defaults to `true`. Set to `false` to allow property reads that would be blocked on production CDN. |
 
+`HeaderRecord` is `Record<string, string | string[]>` — multi-valued headers (e.g. multiple `Set-Cookie`) are represented as `string[]`.
+
 ### HookResult
 
 ```typescript
@@ -441,13 +443,13 @@ type HookResult = {
   returnCode: number | null;
   logs: { level: number; message: string }[];
   input: {
-    request: { headers: HeaderMap; body: string };
-    response: { headers: HeaderMap; body: string };
+    request: { headers: HeaderRecord; body: string };
+    response: { headers: HeaderRecord; body: string };
     properties?: Record<string, unknown>;
   };
   output: {
-    request: { headers: HeaderMap; body: string };
-    response: { headers: HeaderMap; body: string };
+    request: { headers: HeaderRecord; body: string };
+    response: { headers: HeaderRecord; body: string };
     properties?: Record<string, unknown>;
   };
   properties: Record<string, unknown>;
@@ -470,7 +472,7 @@ type FullFlowResult = {
   finalResponse: {
     status: number;
     statusText: string;
-    headers: HeaderMap;
+    headers: HeaderRecord;
     body: string;
     contentType: string;
     isBase64?: boolean;
@@ -490,7 +492,11 @@ type FullFlowResult = {
 ```typescript
 type WasmType = 'http-wasm' | 'proxy-wasm';
 
+// Single-valued headers only — used as callFullFlow input parameters
 type HeaderMap = Record<string, string>;
+
+// Single- or multi-valued headers — used in HookCall, HookResult, and FullFlowResult
+type HeaderRecord = Record<string, string | string[]>;
 
 type LogEntry = {
   level: number;
@@ -519,7 +525,7 @@ interface IStateManager {
   emitRequestStarted(
     url: string,
     method: string,
-    headers: Record<string, string>,
+    headers: Record<string, string | string[]>,
     source?: EventSource,
   ): void;
 
@@ -528,12 +534,12 @@ interface IStateManager {
     returnCode: number | null,
     logCount: number,
     input: {
-      request: { headers: Record<string, string>; body: string };
-      response: { headers: Record<string, string>; body: string };
+      request: { headers: Record<string, string | string[]>; body: string };
+      response: { headers: Record<string, string | string[]>; body: string };
     },
     output: {
-      request: { headers: Record<string, string>; body: string };
-      response: { headers: Record<string, string>; body: string };
+      request: { headers: Record<string, string | string[]>; body: string };
+      response: { headers: Record<string, string | string[]>; body: string };
     },
     source?: EventSource,
   ): void;
@@ -543,7 +549,7 @@ interface IStateManager {
     finalResponse: {
       status: number;
       statusText: string;
-      headers: Record<string, string>;
+      headers: Record<string, string | string[]>;
       body: string;
       contentType: string;
       isBase64?: boolean;
@@ -565,7 +571,7 @@ interface IStateManager {
     response: {
       status: number;
       statusText: string;
-      headers: Record<string, string>;
+      headers: Record<string, string | string[] | undefined>;
       body: string;
       contentType: string | null;
       isBase64?: boolean;

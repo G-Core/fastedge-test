@@ -11,7 +11,7 @@
  * to its existing 200 JSON echo (exercised by other tests).
  */
 
-import { describe, it, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { IWasmRunner } from '../../../../runner/IWasmRunner';
 import { createHttpWasmRunner } from '../../utils/http-wasm-helpers';
 import { runHttpRequest } from '../../../../test-framework/suite-runner';
@@ -60,6 +60,39 @@ for (const variant of HTTP_APP_VARIANTS) {
 
       assertHttpStatus(response, 302);
       assertHttpHeader(response, 'location', 'http://redirect-target.invalid/path');
+    }, 10000);
+
+    it('should preserve multiple Set-Cookie headers as string[] (RFC 6265 §3)', async () => {
+      // Trigger the x-set-cookies branch in the WASM app. It emits two distinct
+      // Set-Cookie headers. Per RFC 6265 §3, each must stay separate — the
+      // runner surfaces them as a string[] via IncomingHttpHeaders, not a
+      // comma-joined or last-wins string.
+      const response = await runHttpRequest(runner, {
+        path: '/',
+        method: 'GET',
+        headers: { 'x-set-cookies': '1' },
+        body: '',
+      });
+
+      assertHttpStatus(response, 200);
+
+      const setCookie = response.headers['set-cookie'];
+      expect(Array.isArray(setCookie)).toBe(true);
+      expect(setCookie).toEqual([
+        'sid=abc; Path=/; HttpOnly',
+        'theme=dark; Path=/',
+      ]);
+
+      // assertHttpHeader uses .includes() semantics for multi-valued headers
+      // when the expected value is a single string.
+      assertHttpHeader(response, 'set-cookie', 'sid=abc; Path=/; HttpOnly');
+      assertHttpHeader(response, 'set-cookie', 'theme=dark; Path=/');
+
+      // Exact array match form also works.
+      assertHttpHeader(response, 'set-cookie', [
+        'sid=abc; Path=/; HttpOnly',
+        'theme=dark; Path=/',
+      ]);
     }, 10000);
   });
 }

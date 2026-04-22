@@ -32,9 +32,15 @@ Multiple `Set-Cookie` headers from a WASM response or an upstream origin fetch w
 - `frontend/src/components/proxy-wasm/HookStagesPanel/HookStagesPanel.tsx` — `isJsonContent` / `parseBodyIfJson` helpers widened; reads `content-type` via first-value coercion.
 - `frontend/src/App.tsx` — `request_started` handler flattens any multi-valued headers to comma-joined strings before populating the single-value editable request-headers field.
 
-#### 6. Regression + unit tests
+#### 6. Regression + unit + integration tests
 - `server/__tests__/unit/runner/HttpWasmRunner.test.ts` — new file. Tests `parseFetchHeaders` directly with a fetch `Headers` object carrying two `Set-Cookie` entries; verifies `string[]` output, single-cookie `string[]` of length 1, absence behaviour, non-cookie headers as `string`. Also exercises `assertHttpHeader` with multi-valued cookies: `.includes()` semantics for string expected, exact-array semantics for string[] expected, case-insensitive name lookup, `assertHttpNoHeader` absence. 9 new tests.
 - `server/__tests__/unit/runner/HeaderManager.test.ts` — `tuplesToRecord` tests updated: comma-join expectation replaced with `string[]` expectation; new test for duplicate `set-cookie` preservation.
+- **End-to-end integration coverage** — real WASM → runner → `HttpResponse` / `HookResult` round-trips:
+  - `test-applications/http-apps/{js,rust/basic,rust/wasi}/http-responder/` — added `x-set-cookies` request-header trigger that emits two distinct `Set-Cookie` headers (`sid=abc; Path=/; HttpOnly`, `theme=dark; Path=/`) from each of the three http-responder variants. WASMs rebuilt.
+  - `test-applications/cdn-apps/rust/cdn-headers/src/lib.rs` — added two `add_http_response_header("set-cookie", ...)` calls in `on_http_response_headers`; updated `expected` and `expected_bytes` HashSets so the app's strict diff validation still passes. WASM rebuilt.
+  - **`test-applications/cdn-apps/as/cdn-headers/assembly/headers.ts`** — new file. AS equivalent of the Rust strict-validation app, ported from `proxy-wasm-sdk-as/examples/headers/` so `wasm/cdn-apps/as/headers/headers.wasm` is built from in-repo source for the first time (it was previously a hand-copied orphan from the sibling SDK repo, never tracked in git and never wired into any build script — a real standalone-repo defect exposed by this work). Includes the same two `add("set-cookie", ...)` calls as the Rust app. The port drops a latent AS-only bug in the sibling's `hostHeader && hostHeader === ""` 551-check: AS strings are always truthy as object references, so the check would fire on valid empty-host inputs; and the AS SDK's `get()` returns a non-nullable `string`, so there's no way to distinguish "missing" from "present-but-empty" anyway. Rust's version uses `is_none()` on an `Option` which discriminates correctly; AS has no equivalent, so the check is simply omitted. The `test-applications/cdn-apps/as/cdn-headers/package.json` `build:all` / `copy:all` targets now produce both `headers.wasm` and `headers-change.wasm`.
+  - `server/__tests__/integration/http-apps/http-responder/http-responder.test.ts` — new test asserts `response.headers['set-cookie']` is a 2-element `string[]` with the expected values; also verifies `assertHttpHeader` `.includes()` semantics and exact-array semantics. Runs across all three variants (js, rust-basic, rust-wasi).
+  - `server/__tests__/integration/cdn-apps/headers/multi-value-headers.test.ts` — two new `onResponseHeaders` assertions running **across both Rust and AS variants** (no `hasBytesVariants` gate — that flag only applies to assertions that exercise the Rust SDK's `_bytes` APIs): `set-cookie` returned as the expected 2-element `string[]`, and `new-header-03` (emitted twice by the WASM app) returned as `string[]` confirming the lossless `tuplesToRecord` projection under the proxy-wasm hook pipeline.
 
 #### 7. Schemas + docs
 - `schemas/http-response.schema.json`, `schemas/hook-call.schema.json`, `schemas/hook-result.schema.json`, `schemas/full-flow-result.schema.json` — regenerated via `pnpm build:schemas`. `http-response.schema.json` now references Node's `IncomingHttpHeaders` definition.
@@ -43,7 +49,23 @@ Multiple `Set-Cookie` headers from a WASM response or an upstream origin fetch w
 ### 🧪 Testing
 - `pnpm test:backend` — 452/452 green (443 pre-existing + 9 new).
 - `pnpm -w run test:frontend` — 345/345 green.
-- `pnpm check-types` — clean (the pre-existing `server/utils/fastedge-cli.ts` `import.meta` error is unrelated to this change).
+- `pnpm -w run test:integration:http` — 81/81 green (was 78; +3 for the new Set-Cookie test across 3 variants).
+- `pnpm -w run test:integration:cdn` — 122/122 green + 0 skipped (was 118; +4 new assertions running across both Rust and AS variants, no gates).
+- `pnpm check-types` — clean (the pre-existing `server/utils/fastedge-cli.ts` TS1343 was silenced with `// @ts-ignore TS1343` pointing at esbuild's `import.meta.url` transform; see file comment).
+- Consumer type resolution verified with an isolated `npm install`-based project: `import { createRunner, HttpResponse } from "@gcoredev/fastedge-test"` and `import { runTestSuite } from "@gcoredev/fastedge-test/test"` both resolve types cleanly; `tsc --noEmit` exits 0.
+
+#### 8. Top-level `.d.ts` shim for the `.` export
+Separate downstream pain point surfaced by an agent working against the published package: `import { createRunner } from "@gcoredev/fastedge-test"` resolved the JS bundle but picked up no types, forcing the consumer to route through the `./test` subpath. Root cause: esbuild flattens `server/runner/index.ts` → `dist/lib/index.js`, but `tsc --declaration` follows the source tree and emits `dist/lib/runner/index.d.ts` — a sibling `dist/lib/index.d.ts` never existed. The `./test` subpath worked only by coincidence because its source path already matched its bundle output path.
+
+Fix:
+- `esbuild/bundle-lib.js` — after `tsc` emits declarations, write a one-line shim `dist/lib/index.d.ts` containing `export * from "./runner/index.js";`.
+- `package.json` `exports` — added `"types"` conditions (first per Node resolution spec) to both `.` and `./test`:
+  ```json
+  ".":     { "types": "./dist/lib/index.d.ts",                 "import": "...", "require": "..." },
+  "./test": { "types": "./dist/lib/test-framework/index.d.ts", "import": "...", "require": "..." }
+  ```
+
+Unblocks upstream consumers' e2e tests that want to call `createRunner` directly from the top-level import instead of working around via `./test`.
 
 ### 📝 Notes
 - Architectural constraint satisfied: the 2026-04-01 multi-value headers refactor already made `HostFunctions` tuple-based internally. This change finishes the job by keeping tuples lossless all the way through the boundary projection, instead of comma-joining. `HeaderManager.tuplesToRecord`'s old comma-join is gone — existing callers (`getRequestHeaders`, `getResponseHeaders`) return `HeaderRecord` now, and nothing internal relies on the comma-join behaviour.

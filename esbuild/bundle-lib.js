@@ -109,6 +109,20 @@ async function buildLib() {
     });
     console.log("✅ Declarations generated: dist/lib/**/*.d.ts");
 
+    // Write a top-level .d.ts shim that re-exports the runner entry types.
+    // The esbuild bundle flattens server/runner/index.ts → dist/lib/index.js,
+    // but tsc --declaration follows the source tree and emits
+    // dist/lib/runner/index.d.ts. Without this shim, `import { createRunner }
+    // from "@gcoredev/fastedge-test"` resolves the JS bundle but not types —
+    // the ./test subpath works only because its source path happens to match
+    // its bundle output path. See context/features/MULTI_VALUE_HEADERS.md-
+    // adjacent notes in package.json exports.
+    fs.writeFileSync(
+      path.join(distLibDir, "index.d.ts"),
+      'export * from "./runner/index.js";\n',
+    );
+    console.log("✅ dist/lib/index.d.ts shim written");
+
     // Write package.json so Node treats dist/lib/**/*.js as ESM
     fs.writeFileSync(
       path.join(distLibDir, "package.json"),

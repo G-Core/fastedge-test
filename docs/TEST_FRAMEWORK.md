@@ -1,6 +1,6 @@
 # Test Framework API
 
-High-level API for defining and running proxy-wasm test suites with `@gcoredev/fastedge-test`.
+High-level test framework API for defining and running WASM test suites with `@gcoredev/fastedge-test`.
 
 ## Import
 
@@ -161,6 +161,26 @@ Re-exported from the runner. Controls WASM execution behaviour. See [RUNNER.md](
 import type { RunnerConfig } from "@gcoredev/fastedge-test/test";
 ```
 
+```typescript
+interface RunnerConfig {
+  dotenv?: {
+    enabled?: boolean;
+    path?: string;
+  };
+  enforceProductionPropertyRules?: boolean;
+  runnerType?: "http-wasm" | "proxy-wasm";
+  httpPort?: number;
+}
+```
+
+| Field                            | Type                          | Description                                                               |
+| -------------------------------- | ----------------------------- | ------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`                     | Enable dotenv loading                                                     |
+| `dotenv.path`                    | `string`                      | Directory to load dotenv files from; defaults to process CWD when omitted |
+| `enforceProductionPropertyRules` | `boolean`                     | Override production property enforcement for the runner; default `true`   |
+| `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                    |
+| `httpPort`                       | `number`                      | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
+
 ## Functions
 
 ### defineTestSuite
@@ -244,11 +264,11 @@ The returned `FullFlowResult` has this shape:
 
 ```typescript
 type FullFlowResult = {
-  hookResults: Record<string, HookResult>; // keyed by camelCase hook name
+  hookResults: Record<string, HookResult>;    // keyed by camelCase hook name
   finalResponse: {
     status: number;
     statusText: string;
-    headers: Record<string, string>;
+    headers: Record<string, string | string[]>;
     body: string;
     contentType: string;
     isBase64?: boolean;
@@ -259,12 +279,12 @@ type FullFlowResult = {
 
 Hook results are accessed by camelCase key:
 
-| Key                  | Hook                       |
-| -------------------- | -------------------------- |
-| `onRequestHeaders`   | `on_request_headers` hook  |
-| `onRequestBody`      | `on_request_body` hook     |
-| `onResponseHeaders`  | `on_response_headers` hook |
-| `onResponseBody`     | `on_response_body` hook    |
+| Key                 | Hook                       |
+| ------------------- | -------------------------- |
+| `onRequestHeaders`  | `on_request_headers` hook  |
+| `onRequestBody`     | `on_request_body` hook     |
+| `onResponseHeaders` | `on_response_headers` hook |
+| `onResponseBody`    | `on_response_body` hook    |
 
 ```typescript
 const result = await runFlow(runner, {
@@ -307,7 +327,7 @@ const response = await runHttpRequest(runner, { path: "/login" });
 assertHttpStatus(response, 302);
 assertHttpHeader(response, "location", "/dashboard");
 
-const redirected = await runHttpRequest(runner, { path: response.headers["location"] });
+const redirected = await runHttpRequest(runner, { path: response.headers["location"] as string });
 assertHttpStatus(redirected, 200);
 ```
 
@@ -482,13 +502,13 @@ function assertHttpNoLog(response: HttpResponse, messageSubstring: string): void
 
 ```typescript
 // Single-valued header — exact match
-assertHttpHeader(response, 'content-type', 'application/json');
+assertHttpHeader(response, "content-type", "application/json");
 
 // Multi-valued header — one-of-many match
-assertHttpHeader(response, 'set-cookie', 'sid=abc; Path=/');
+assertHttpHeader(response, "set-cookie", "sid=abc; Path=/");
 
 // Multi-valued header — exact array
-assertHttpHeader(response, 'set-cookie', ['sid=abc; Path=/', 'theme=dark; Path=/']);
+assertHttpHeader(response, "set-cookie", ["sid=abc; Path=/", "theme=dark; Path=/"]);
 ```
 
 `assertHttpNoHeader` — asserts the named header is absent (case-insensitive).

@@ -245,6 +245,11 @@ impl HttpContext for HttpHeaders {
         self.add_http_response_header("new-header-03", "value-03-a");
         self.add_http_response_header_bytes("new-header-bytes-03", b"value-bytes-03-a");
 
+        // add two Set-Cookie headers — RFC 6265 §3 requires these stay as
+        // separate entries (not comma-joined). The runner must surface both.
+        self.add_http_response_header("set-cookie", "sid=abc; Path=/; HttpOnly");
+        self.add_http_response_header("set-cookie", "theme=dark; Path=/");
+
         // get new headers
         let headers = self
             .get_http_response_headers()
@@ -273,6 +278,11 @@ impl HttpContext for HttpHeaders {
                 "new-header-bytes-03".to_string(),
                 "value-bytes-03-a".to_string(),
             ),
+            (
+                "set-cookie".to_string(),
+                "sid=abc; Path=/; HttpOnly".to_string(),
+            ),
+            ("set-cookie".to_string(), "theme=dark; Path=/".to_string()),
         ];
 
         let expected = expected.iter().collect::<HashSet<_>>();
@@ -295,6 +305,11 @@ impl HttpContext for HttpHeaders {
                 "new-header-bytes-03".to_string(),
                 b"value-bytes-03-a".to_vec(),
             ),
+            (
+                "set-cookie".to_string(),
+                b"sid=abc; Path=/; HttpOnly".to_vec(),
+            ),
+            ("set-cookie".to_string(), b"theme=dark; Path=/".to_vec()),
         ];
 
         let expected_bytes = expected_bytes.iter().collect::<HashSet<_>>();

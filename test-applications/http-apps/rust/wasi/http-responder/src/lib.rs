@@ -17,6 +17,18 @@ async fn main(request: Request<Body>) -> anyhow::Result<Response<Body>> {
             .body(Body::from(""))?);
     }
 
+    // Set-Cookie regression path: RFC 6265 §3 — multiple Set-Cookie headers
+    // stay separate, not comma-joined. Emit two distinct cookies when
+    // x-set-cookies is present so the runner can be verified end-to-end.
+    if request.headers().contains_key("x-set-cookies") {
+        return Ok(Response::builder()
+            .status(200)
+            .header("content-type", "text/plain")
+            .header("set-cookie", "sid=abc; Path=/; HttpOnly")
+            .header("set-cookie", "theme=dark; Path=/")
+            .body(Body::from("cookies set"))?);
+    }
+
     let method = request.method().to_string();
     let request_url = request.uri().to_string();
 

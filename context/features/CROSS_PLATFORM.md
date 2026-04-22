@@ -96,7 +96,7 @@ The `exit` event fires for normal exits and unhandled exceptions on all platform
 
 **WORKSPACE_PATH default (April 2026)**: `getPortFilePath()` defaults `WORKSPACE_PATH` to `process.cwd()`, so CLI users get port files and config resolution too (previously only set by the VSCode extension).
 
-**Port auto-increment (April 2026)**: `startServer()` probes ports 5179-5188 via HTTP `/health` check before binding. If a port is busy, tries the next one. This logic was moved from the VSCode extension's `DebuggerServerManager.resolvePort()` into the server itself.
+**Port auto-increment (April 2026)**: `startServer()` probes ports 5179-5228 via HTTP `/health` check before binding (50 slots, expanded from 10 on 2026-04-22 for Codespaces / multi-session workflows). If a port is busy, tries the next one. This logic was moved from the VSCode extension's `DebuggerServerManager.resolvePort()` into the server itself.
 
 ---
 

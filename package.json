@@ -11,11 +11,13 @@
   },
   "exports": {
     ".": {
+      "types": "./dist/lib/index.d.ts",
       "import": "./dist/lib/index.js",
       "require": "./dist/lib/index.cjs"
     },
     "./server": "./dist/server.js",
     "./test": {
+      "types": "./dist/lib/test-framework/index.d.ts",
       "import": "./dist/lib/test-framework/index.js",
       "require": "./dist/lib/test-framework/index.cjs"
     },

@@ -12,7 +12,7 @@ This index helps you discover relevant documentation without reading thousands o
 **Purpose**: Postman-like test runner for debugging proxy-wasm binaries locally
 **Tech Stack**: Node.js + Express + TypeScript (backend) | React + Vite + TypeScript + Zustand (frontend)
 **WASM Runtime**: Node WebAssembly API with WASI preview1
-**Port**: 5179 (auto-increments through 5179-5188 if busy)
+**Port**: 5179 (auto-increments through 5179-5228 if busy)
 
 **Current Branch**: See git status
 **Philosophy**: Production parity, no over-engineering, type safety, modular architecture
@@ -44,7 +44,7 @@ This index helps you discover relevant documentation without reading thousands o
 - `FASTEDGE_IMPLEMENTATION.md` (645 lines) - FastEdge CDN integration, secrets, env vars
 - `PROPERTY_IMPLEMENTATION_COMPLETE.md` (495 lines) - Property system, runtime calculation
 - `PRODUCTION_PARITY_HEADERS.md` (421 lines) - Header serialization, G-Core SDK format
-- `MULTI_VALUE_HEADERS.md` (~200 lines) - Multi-value header support, internal tuple storage, nginx remove behavior, cdn-headers integration test (AS + Rust)
+- `MULTI_VALUE_HEADERS.md` (~230 lines) - Multi-value header support: three type layers (HeaderMap/HeaderTuples/HeaderRecord), lossless tuplesToRecord projection, Set-Cookie / RFC 6265 §3 correctness end-to-end, AS validation app ported in-repo (Apr 2026), cdn-headers + http-responder integration tests across all variants
 - `CONFIG_SHARING.md` (281 lines) - fastedge-config.test.json sharing system
 - `DOTENV.md` (~210 lines) - Environment variable system, dotenvPath support (CDN + HTTP)
 - `CDN_VARIABLES_AND_SECRETS.md` (~120 lines) - ✅ CDN env var/secret integration test (7 tests); requires proxy-wasm-sdk-as@^1.2.2
@@ -209,7 +209,7 @@ Applies when: tests fail because HTTP apps are run as proxy-wasm (or vice versa)
 
 **Architecture (April 2026)**: `dist/server.js` unconditionally calls `startServer()` on load. This works for both the CLI (`bin/fastedge-debug.js` does `import("../dist/server.js")`) and VSCode extension (`fork()`). Library consumers use `dist/lib/` entry points which do not auto-start.
 
-1. `startServer()` probes ports 5179-5188 via HTTP `/health` check; first available port wins
+1. `startServer()` probes ports 5179-5228 via HTTP `/health` check (50 slots, expanded from 10 in April 2026 for Codespaces / multi-session workflows); first available port wins
 2. Port file written to `{WORKSPACE_PATH || cwd()}/.fastedge-debug/.debug-port` (WORKSPACE_PATH defaults to `process.cwd()` so CLI users get port files too)
 3. Startup messages go to stderr (`console.error()`) so MCP stdio transport is not corrupted
 4. **Old pattern removed**: `require.main === module` guard was deleted because it fails in bundled CJS loaded via dynamic `import()`
@@ -386,4 +386,4 @@ Time: 5-7 minutes of reading
 
 ---
 
-**Last Updated**: April 13, 2026
+**Last Updated**: April 22, 2026
