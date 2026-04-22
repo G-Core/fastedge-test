@@ -1,17 +1,22 @@
 export type HeaderMap = Record<string, string>;
 export type HeaderTuples = [string, string][];
 
+// Wire/projection format for hook and full-flow results.
+// Single-valued headers are a string; multi-valued (e.g. set-cookie) are a string[].
+// Matches Node's IncomingHttpHeaders shape for consumers that read these fields.
+export type HeaderRecord = Record<string, string | string[]>;
+
 export type HookCall = {
   hook: string;
   request: {
-    headers: HeaderMap;
+    headers: HeaderRecord;
     body: string;
     method?: string;
     path?: string;
     scheme?: string;
   };
   response: {
-    headers: HeaderMap;
+    headers: HeaderRecord;
     body: string;
     status?: number;
     statusText?: string;
@@ -25,13 +30,13 @@ export type HookResult = {
   returnCode: number | null;
   logs: { level: number; message: string }[];
   input: {
-    request: { headers: HeaderMap; body: string };
-    response: { headers: HeaderMap; body: string };
+    request: { headers: HeaderRecord; body: string };
+    response: { headers: HeaderRecord; body: string };
     properties?: Record<string, unknown>;
   };
   output: {
-    request: { headers: HeaderMap; body: string };
-    response: { headers: HeaderMap; body: string };
+    request: { headers: HeaderRecord; body: string };
+    response: { headers: HeaderRecord; body: string };
     properties?: Record<string, unknown>;
   };
   properties: Record<string, unknown>;
@@ -70,7 +75,7 @@ export type FullFlowResult = {
   finalResponse: {
     status: number;
     statusText: string;
-    headers: HeaderMap;
+    headers: HeaderRecord;
     body: string;
     contentType: string;
     isBase64?: boolean;

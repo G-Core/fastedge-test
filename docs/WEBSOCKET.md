@@ -2,6 +2,8 @@
 
 Real-time event stream from the `@gcoredev/fastedge-test` server to connected clients.
 
+> **Note on header values.** Response and hook-result headers in this protocol use `Record<string, string | string[]>` — single-valued headers are a `string`, multi-valued headers (notably `Set-Cookie` per RFC 6265) are a `string[]`. Request-side header inputs remain single-valued `Record<string, string>`. Type signatures in the examples below use `Record<string, string>` for brevity; the actual wire format widens to include `string[]` for output-side headers.
+
 ## Connection
 
 Connect to the WebSocket server at:

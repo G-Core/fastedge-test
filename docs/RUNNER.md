@@ -366,7 +366,11 @@ interface HttpRequest {
 interface HttpResponse {
   status: number;
   statusText: string;
-  headers: Record<string, string>;
+  // Node's IncomingHttpHeaders (from "node:http"):
+  //   known single-valued headers (content-type, location, etag, …) are typed as string
+  //   set-cookie is always string[] when present
+  //   unknown headers are string | string[] | undefined
+  headers: IncomingHttpHeaders;
   body: string;
   contentType: string | null;
   isBase64?: boolean;
@@ -379,6 +383,23 @@ interface HttpResponse {
 `isBase64` is `true` when the response body is binary content (images, audio, video, PDF, ZIP) encoded as base64.
 
 `HttpResponse.logs` contains log entries captured from the `fastedge-run` process stdout/stderr during the request.
+
+**Multi-valued headers.** `Set-Cookie` is preserved as a `string[]` — each `Set-Cookie` header emitted by the WASM app (or an upstream origin) becomes a separate array entry. This matches RFC 6265 §3 and Node's fetch behaviour. Example:
+
+```typescript
+const response = await runner.execute({ path: '/login', method: 'POST' });
+const cookies = response.headers['set-cookie'];  // string[] | undefined
+for (const cookie of cookies ?? []) {
+  console.log(cookie);
+}
+```
+
+Single-valued headers read as plain strings with no narrowing needed:
+
+```typescript
+const location = response.headers['location'];   // string | undefined
+const contentType = response.headers['content-type']; // string | undefined
+```
 
 ### HookCall
 

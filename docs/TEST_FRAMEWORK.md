@@ -343,11 +343,11 @@ All assertion helpers throw an `Error` on failure, making them compatible with a
 ### Request Headers
 
 ```typescript
-function assertRequestHeader(result: HookResult, name: string, expected?: string): void
+function assertRequestHeader(result: HookResult, name: string, expected?: string | string[]): void
 function assertNoRequestHeader(result: HookResult, name: string): void
 ```
 
-`assertRequestHeader` asserts the named header exists in the hook's output request headers. If `expected` is provided, also asserts the value matches exactly.
+`assertRequestHeader` asserts the named header exists (case-insensitive) in the hook's output request headers. When `expected` is a `string` and the header is multi-valued, passes if any value matches (`.includes()` semantics). When `expected` is a `string[]`, requires an exact array match.
 
 `assertNoRequestHeader` asserts the named header is absent.
 
@@ -362,7 +362,7 @@ assertNoRequestHeader(hookResult, "x-internal-secret");   // absent
 ### Response Headers
 
 ```typescript
-function assertResponseHeader(result: HookResult, name: string, expected?: string): void
+function assertResponseHeader(result: HookResult, name: string, expected?: string | string[]): void
 function assertNoResponseHeader(result: HookResult, name: string): void
 ```
 
@@ -380,8 +380,10 @@ assertNoResponseHeader(hookResult, "server");
 
 ```typescript
 function assertFinalStatus(result: FullFlowResult, expected: number): void
-function assertFinalHeader(result: FullFlowResult, name: string, expected?: string): void
+function assertFinalHeader(result: FullFlowResult, name: string, expected?: string | string[]): void
 ```
+
+Multi-value semantics on `assertResponseHeader` / `assertFinalHeader` match `assertRequestHeader`: a `string` expected matches any value when the actual header is multi-valued; a `string[]` expected requires an exact array match. This preserves the RFC 6265 contract for `Set-Cookie` and any other legitimately-repeatable headers.
 
 `assertFinalStatus` asserts the final response status code after the full flow completes.
 
@@ -464,7 +466,7 @@ These assertions operate on an `HttpResponse` returned by `runHttpRequest`. Use 
 
 ```typescript
 function assertHttpStatus(response: HttpResponse, expected: number): void
-function assertHttpHeader(response: HttpResponse, name: string, expected?: string): void
+function assertHttpHeader(response: HttpResponse, name: string, expected?: string | string[]): void
 function assertHttpNoHeader(response: HttpResponse, name: string): void
 function assertHttpBody(response: HttpResponse, expected: string): void
 function assertHttpBodyContains(response: HttpResponse, substring: string): void
@@ -476,7 +478,18 @@ function assertHttpNoLog(response: HttpResponse, messageSubstring: string): void
 
 `assertHttpStatus` — asserts the response status code.
 
-`assertHttpHeader` — asserts the named header exists (case-insensitive). If `expected` is provided, also asserts the value matches exactly.
+`assertHttpHeader` — asserts the named header exists (case-insensitive). If `expected` is a `string` and the header is multi-valued (e.g. `set-cookie`), passes if any value matches (`.includes()` semantics). If `expected` is a `string[]`, requires an exact array match.
+
+```typescript
+// Single-valued header — exact match
+assertHttpHeader(response, 'content-type', 'application/json');
+
+// Multi-valued header — one-of-many match
+assertHttpHeader(response, 'set-cookie', 'sid=abc; Path=/');
+
+// Multi-valued header — exact array
+assertHttpHeader(response, 'set-cookie', ['sid=abc; Path=/', 'theme=dark; Path=/']);
+```
 
 `assertHttpNoHeader` — asserts the named header is absent (case-insensitive).
 

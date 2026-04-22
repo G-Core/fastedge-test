@@ -28,7 +28,7 @@ export interface RequestStartedEvent extends BaseEvent {
   data: {
     url: string;
     method: string;
-    headers: Record<string, string>;
+    headers: Record<string, string | string[]>;
   };
 }
 
@@ -39,12 +39,12 @@ export interface HookExecutedEvent extends BaseEvent {
     returnCode: number | null;
     logCount: number;
     input: {
-      request: { headers: Record<string, string>; body: string };
-      response: { headers: Record<string, string>; body: string };
+      request: { headers: Record<string, string | string[]>; body: string };
+      response: { headers: Record<string, string | string[]>; body: string };
     };
     output: {
-      request: { headers: Record<string, string>; body: string };
-      response: { headers: Record<string, string>; body: string };
+      request: { headers: Record<string, string | string[]>; body: string };
+      response: { headers: Record<string, string | string[]>; body: string };
     };
   };
 }
@@ -56,7 +56,7 @@ export interface RequestCompletedEvent extends BaseEvent {
     finalResponse: {
       status: number;
       statusText: string;
-      headers: Record<string, string>;
+      headers: Record<string, string | string[]>;
       body: string;
       contentType: string;
       isBase64?: boolean;
@@ -94,7 +94,7 @@ export interface HttpWasmRequestCompletedEvent extends BaseEvent {
     response: {
       status: number;
       statusText: string;
-      headers: Record<string, string>;
+      headers: Record<string, string | string[] | undefined>;
       body: string;
       contentType: string;
       isBase64?: boolean;

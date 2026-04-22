@@ -8,26 +8,71 @@
 import type { HookResult, FullFlowResult, LogEntry } from "../runner/types.js";
 import type { HttpResponse } from "../runner/IWasmRunner.js";
 
+// ─── Header lookup helpers ───────────────────────────────────────────────────
+
+type AnyHeaders = Record<string, string | string[] | undefined>;
+
+// Case-insensitive header value lookup. Returns the raw value (string | string[])
+// or undefined if the header is absent.
+function findHeader(
+  headers: AnyHeaders,
+  name: string,
+): string | string[] | undefined {
+  const lower = name.toLowerCase();
+  for (const [k, v] of Object.entries(headers)) {
+    if (k.toLowerCase() === lower) return v;
+  }
+  return undefined;
+}
+
+// Does `actual` satisfy `expected`?
+// - expected: string → .includes() semantics when actual is multi-valued, exact match when single.
+// - expected: string[] → strict equality (same order, same length).
+function headerMatches(
+  actual: string | string[],
+  expected: string | string[],
+): boolean {
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(actual)) return false;
+    if (actual.length !== expected.length) return false;
+    return actual.every((v, i) => v === expected[i]);
+  }
+  if (Array.isArray(actual)) return actual.includes(expected);
+  return actual === expected;
+}
+
+function formatHeaderValue(v: string | string[]): string {
+  return Array.isArray(v) ? JSON.stringify(v) : `'${v}'`;
+}
+
+function formatExpected(v: string | string[]): string {
+  return Array.isArray(v) ? JSON.stringify(v) : `'${v}'`;
+}
+
 // ─── Request / Response header assertions ────────────────────────────────────
 
 /**
  * Assert that a named header exists (and optionally matches a value)
  * in the hook's output request headers.
+ *
+ * When `expected` is a string and the header is multi-valued, passes if
+ * any value matches (`.includes()` semantics). When `expected` is a string[],
+ * requires an exact array match.
  */
 export function assertRequestHeader(
   result: HookResult,
   name: string,
-  expected?: string,
+  expected?: string | string[],
 ): void {
-  const value = result.output.request.headers[name];
+  const value = findHeader(result.output.request.headers, name);
   if (value === undefined) {
     throw new Error(
       `Expected request header '${name}' to be set, but it was missing`,
     );
   }
-  if (expected !== undefined && value !== expected) {
+  if (expected !== undefined && !headerMatches(value, expected)) {
     throw new Error(
-      `Expected request header '${name}' to be '${expected}', got '${value}'`,
+      `Expected request header '${name}' to be ${formatExpected(expected)}, got ${formatHeaderValue(value)}`,
     );
   }
 }
@@ -36,10 +81,10 @@ export function assertRequestHeader(
  * Assert that a named header is absent in the hook's output request headers.
  */
 export function assertNoRequestHeader(result: HookResult, name: string): void {
-  const value = result.output.request.headers[name];
+  const value = findHeader(result.output.request.headers, name);
   if (value !== undefined) {
     throw new Error(
-      `Expected request header '${name}' to be absent, but found '${value}'`,
+      `Expected request header '${name}' to be absent, but found ${formatHeaderValue(value)}`,
     );
   }
 }
@@ -47,21 +92,25 @@ export function assertNoRequestHeader(result: HookResult, name: string): void {
 /**
  * Assert that a named header exists (and optionally matches a value)
  * in the hook's output response headers.
+ *
+ * When `expected` is a string and the header is multi-valued (e.g. set-cookie),
+ * passes if any value matches (`.includes()` semantics). When `expected` is a
+ * string[], requires an exact array match.
  */
 export function assertResponseHeader(
   result: HookResult,
   name: string,
-  expected?: string,
+  expected?: string | string[],
 ): void {
-  const value = result.output.response.headers[name];
+  const value = findHeader(result.output.response.headers, name);
   if (value === undefined) {
     throw new Error(
       `Expected response header '${name}' to be set, but it was missing`,
     );
   }
-  if (expected !== undefined && value !== expected) {
+  if (expected !== undefined && !headerMatches(value, expected)) {
     throw new Error(
-      `Expected response header '${name}' to be '${expected}', got '${value}'`,
+      `Expected response header '${name}' to be ${formatExpected(expected)}, got ${formatHeaderValue(value)}`,
     );
   }
 }
@@ -73,10 +122,10 @@ export function assertNoResponseHeader(
   result: HookResult,
   name: string,
 ): void {
-  const value = result.output.response.headers[name];
+  const value = findHeader(result.output.response.headers, name);
   if (value !== undefined) {
     throw new Error(
-      `Expected response header '${name}' to be absent, but found '${value}'`,
+      `Expected response header '${name}' to be absent, but found ${formatHeaderValue(value)}`,
     );
   }
 }
@@ -100,21 +149,23 @@ export function assertFinalStatus(
 /**
  * Assert that a named header exists (and optionally matches a value)
  * in the final response headers from a full-flow run.
+ *
+ * Multi-value semantics match {@link assertResponseHeader}.
  */
 export function assertFinalHeader(
   result: FullFlowResult,
   name: string,
-  expected?: string,
+  expected?: string | string[],
 ): void {
-  const value = result.finalResponse.headers[name];
+  const value = findHeader(result.finalResponse.headers, name);
   if (value === undefined) {
     throw new Error(
       `Expected final response header '${name}' to be set, but it was missing`,
     );
   }
-  if (expected !== undefined && value !== expected) {
+  if (expected !== undefined && !headerMatches(value, expected)) {
     throw new Error(
-      `Expected final response header '${name}' to be '${expected}', got '${value}'`,
+      `Expected final response header '${name}' to be ${formatExpected(expected)}, got ${formatHeaderValue(value)}`,
     );
   }
 }
@@ -242,24 +293,25 @@ export function assertHttpStatus(response: HttpResponse, expected: number): void
 /**
  * Assert that a named header exists (and optionally matches a value)
  * in the HTTP response.
+ *
+ * Multi-value semantics: when `expected` is a string and the header is
+ * multi-valued (e.g. set-cookie is `string[]` per RFC 6265), passes if any
+ * value matches. When `expected` is a string[], requires exact array match.
  */
 export function assertHttpHeader(
   response: HttpResponse,
   name: string,
-  expected?: string,
+  expected?: string | string[],
 ): void {
-  const lower = name.toLowerCase();
-  const value = Object.entries(response.headers).find(
-    ([k]) => k.toLowerCase() === lower,
-  )?.[1];
+  const value = findHeader(response.headers, name);
   if (value === undefined) {
     throw new Error(
       `Expected HTTP response header '${name}' to be set, but it was missing`,
     );
   }
-  if (expected !== undefined && value !== expected) {
+  if (expected !== undefined && !headerMatches(value, expected)) {
     throw new Error(
-      `Expected HTTP response header '${name}' to be '${expected}', got '${value}'`,
+      `Expected HTTP response header '${name}' to be ${formatExpected(expected)}, got ${formatHeaderValue(value)}`,
     );
   }
 }
@@ -268,13 +320,10 @@ export function assertHttpHeader(
  * Assert that a named header is absent in the HTTP response.
  */
 export function assertHttpNoHeader(response: HttpResponse, name: string): void {
-  const lower = name.toLowerCase();
-  const value = Object.entries(response.headers).find(
-    ([k]) => k.toLowerCase() === lower,
-  )?.[1];
+  const value = findHeader(response.headers, name);
   if (value !== undefined) {
     throw new Error(
-      `Expected HTTP response header '${name}' to be absent, but found '${value}'`,
+      `Expected HTTP response header '${name}' to be absent, but found ${formatHeaderValue(value)}`,
     );
   }
 }

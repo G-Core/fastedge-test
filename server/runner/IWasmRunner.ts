@@ -4,6 +4,7 @@
  * Defines the common contract for both ProxyWasmRunner and HttpWasmRunner
  */
 
+import type { IncomingHttpHeaders } from "node:http";
 import type { IStateManager } from "./IStateManager.js";
 import type { HookCall, HookResult, FullFlowResult } from "./types.js";
 
@@ -43,12 +44,18 @@ export interface HttpRequest {
 }
 
 /**
- * HTTP Response type for HTTP WASM runner
+ * HTTP Response type for HTTP WASM runner.
+ *
+ * `headers` uses Node's `IncomingHttpHeaders` shape — common single-valued
+ * headers (`content-type`, `location`, `etag`, …) are typed as `string`;
+ * `set-cookie` is `string[]`; unknown keys are `string | string[] | undefined`.
+ * This preserves RFC 6265 Set-Cookie semantics (each cookie kept separate)
+ * and matches consumer expectations for Node's fetch/http ecosystem.
  */
 export interface HttpResponse {
   status: number;
   statusText: string;
-  headers: Record<string, string>;
+  headers: IncomingHttpHeaders;
   body: string;
   contentType: string | null;
   isBase64?: boolean;

@@ -1,5 +1,5 @@
 import { WASI } from "node:wasi";
-import type { HookCall, HookResult, HeaderMap, FullFlowResult } from "./types";
+import type { HookCall, HookResult, HeaderMap, HeaderRecord, HeaderTuples, FullFlowResult } from "./types";
 import type {
   IWasmRunner,
   WasmType,
@@ -295,7 +295,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       const responseHeaders = results.onRequestHeaders.output.response.headers;
       this.hostFunctions.resetLocalResponse();
 
-      const contentType = responseHeaders['content-type'] || 'text/plain';
+      const contentType = HeaderManager.firstValue(responseHeaders['content-type']) || 'text/plain';
       const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
 
       return {
@@ -348,7 +348,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       const responseHeaders = results.onRequestBody.output.response.headers;
       this.hostFunctions.resetLocalResponse();
 
-      const contentType = responseHeaders['content-type'] || 'text/plain';
+      const contentType = HeaderManager.firstValue(responseHeaders['content-type']) || 'text/plain';
       const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
 
       return {
@@ -375,7 +375,7 @@ export class ProxyWasmRunner implements IWasmRunner {
     const requestMethod = call.request.method ?? "GET";
 
     // Phase 2: Obtain origin response (built-in responder or real HTTP fetch)
-    let responseHeaders: Record<string, string>;
+    let responseHeaders: HeaderRecord;
     let responseBody: string;
     let responseStatus: number;
     let responseStatusText: string;
@@ -390,7 +390,7 @@ export class ProxyWasmRunner implements IWasmRunner {
         //   x-debugger-content — "body-only" | "status-only" (default: full JSON echo)
         this.logDebug("Using built-in responder");
 
-        const rawStatus = (modifiedRequestHeaders["x-debugger-status"] || "").trim();
+        const rawStatus = (HeaderManager.firstValue(modifiedRequestHeaders["x-debugger-status"]) || "").trim();
         if (rawStatus === "") {
           responseStatus = 200;
         } else {
@@ -404,7 +404,7 @@ export class ProxyWasmRunner implements IWasmRunner {
         }
         responseStatusText = responseStatus === 200 ? "OK" : String(responseStatus);
         const responseContentMode =
-          modifiedRequestHeaders["x-debugger-content"] || "";
+          HeaderManager.firstValue(modifiedRequestHeaders["x-debugger-content"]) || "";
 
         // Strip debugger control headers so they don't leak into the echo or response hooks
         delete modifiedRequestHeaders["x-debugger-status"];
@@ -415,7 +415,7 @@ export class ProxyWasmRunner implements IWasmRunner {
           contentType = "text/plain";
         } else if (responseContentMode === "body-only") {
           responseBody = modifiedRequestBody || "";
-          contentType = modifiedRequestHeaders["content-type"] || "text/plain";
+          contentType = HeaderManager.firstValue(modifiedRequestHeaders["content-type"]) || "text/plain";
         } else {
           // Default: full JSON echo (similar to http-responder)
           contentType = "application/json";
@@ -454,10 +454,13 @@ export class ProxyWasmRunner implements IWasmRunner {
         this.logDebug(`Modified URL: ${actualTargetUrl}`);
         this.logDebug(`Fetching ${requestMethod} ${actualTargetUrl}`);
 
-        // Preserve the host header as x-forwarded-host since fetch() will override it
-        const fetchHeaders: Record<string, string> = {
-          ...modifiedRequestHeaders,
-        };
+        // Preserve the host header as x-forwarded-host since fetch() will override it.
+        // fetch's HeadersInit requires single-string values; modifiedRequestHeaders may
+        // include multi-valued entries (from duplicate hook additions), so flatten to a
+        // comma-joined map — acceptable for request headers (never Set-Cookie).
+        const fetchHeaders: Record<string, string> = HeaderManager.flattenToMap(
+          modifiedRequestHeaders,
+        );
 
         // If there's a host header, also add it as x-forwarded-host
         const hostHeader = Object.entries(modifiedRequestHeaders).find(
@@ -465,8 +468,9 @@ export class ProxyWasmRunner implements IWasmRunner {
         );
 
         if (hostHeader) {
-          fetchHeaders["x-forwarded-host"] = hostHeader[1];
-          this.logDebug(`Adding x-forwarded-host: ${hostHeader[1]}`);
+          const hostValue = HeaderManager.firstValue(hostHeader[1]) ?? "";
+          fetchHeaders["x-forwarded-host"] = hostValue;
+          this.logDebug(`Adding x-forwarded-host: ${hostValue}`);
         }
 
         // Auto-inject standard proxy headers based on URL and properties
@@ -502,11 +506,18 @@ export class ProxyWasmRunner implements IWasmRunner {
 
         const response = await fetch(actualTargetUrl, fetchOptions);
 
-        // Extract response headers
+        // Extract response headers — preserve multiple Set-Cookie entries as string[]
+        // (RFC 6265 §3: Set-Cookie is the canonical exception to comma-combine).
         responseHeaders = {};
         response.headers.forEach((value, key) => {
-          responseHeaders[key] = value;
+          if (key.toLowerCase() !== "set-cookie") {
+            responseHeaders[key] = value;
+          }
         });
+        const setCookies = response.headers.getSetCookie();
+        if (setCookies.length > 0) {
+          responseHeaders["set-cookie"] = setCookies;
+        }
 
         contentType = response.headers.get("content-type") || "text/plain";
         responseStatus = response.status;
@@ -619,7 +630,7 @@ export class ProxyWasmRunner implements IWasmRunner {
         this.propertyResolver.getCalculatedProperties();
 
       // Derive contentType from final headers (WASM may have changed it during response hooks)
-      const finalContentType = finalHeaders["content-type"] || contentType;
+      const finalContentType = HeaderManager.firstValue(finalHeaders["content-type"]) || contentType;
 
       return {
         hookResults: results,
@@ -854,7 +865,9 @@ export class ProxyWasmRunner implements IWasmRunner {
         if (!k.startsWith(':')) fetchHeaders[k] = v;
       }
 
-      let responseHeaders: HeaderMap = {};
+      // Collect tuples so duplicate Set-Cookie entries survive through to the WASM-visible
+      // HttpCallResponseHeaders map (RFC 6265 §3 — Set-Cookie is not comma-combinable).
+      let responseHeaders: HeaderTuples = [];
       let responseBody = new Uint8Array(0);
 
       try {
@@ -864,10 +877,15 @@ export class ProxyWasmRunner implements IWasmRunner {
           body: pending.body && method !== 'GET' && method !== 'HEAD' ? Buffer.from(pending.body) : undefined,
           signal: AbortSignal.timeout(pending.timeoutMs),
         });
-        resp.headers.forEach((v, k) => { responseHeaders[k] = v; });
+        resp.headers.forEach((v, k) => {
+          if (k.toLowerCase() !== 'set-cookie') responseHeaders.push([k, v]);
+        });
+        for (const cookie of resp.headers.getSetCookie()) {
+          responseHeaders.push(['set-cookie', cookie]);
+        }
         responseBody = new Uint8Array(await resp.arrayBuffer());
         this.logDebug(
-          `http_call response: ${resp.status} ${resp.statusText} numHeaders=${Object.keys(responseHeaders).length} bodySize=${responseBody.byteLength}`,
+          `http_call response: ${resp.status} ${resp.statusText} numHeaders=${responseHeaders.length} bodySize=${responseBody.byteLength}`,
         );
       } catch (err) {
         // Timeout or network error → numHeaders = 0 (proxy-wasm contract for failed calls)
@@ -875,11 +893,11 @@ export class ProxyWasmRunner implements IWasmRunner {
         this.logDebug(errMsg);
         // Always surface fetch failures in the WASM-visible logs so developers can diagnose
         this.logs.push({ level: 3, message: `[host] ${errMsg}` });
-        responseHeaders = {};
+        responseHeaders = [];
         responseBody = new Uint8Array(0);
       }
 
-      const numHeaders = Object.keys(responseHeaders).length;
+      const numHeaders = responseHeaders.length;
       const bodySize   = responseBody.byteLength;
 
       this.hostFunctions.setHttpCallResponse(pending.tokenId, responseHeaders, responseBody);
@@ -1004,19 +1022,28 @@ export class ProxyWasmRunner implements IWasmRunner {
 
   private buildHookInvocation(
     hook: string,
-    requestHeaders: HeaderMap,
-    responseHeaders: HeaderMap,
+    requestHeaders: HeaderMap | HeaderRecord,
+    responseHeaders: HeaderMap | HeaderRecord,
     requestBody: string,
     responseBody: string,
   ): {
     exportName: string;
     args: number[];
   } {
+    // Header count must include duplicates (e.g. multiple Set-Cookie) to match
+    // proxy_get_header_map_size, which reports tuple length.
+    const countEntries = (h: HeaderMap | HeaderRecord): number => {
+      let n = 0;
+      for (const v of Object.values(h)) {
+        n += Array.isArray(v) ? v.length : 1;
+      }
+      return n;
+    };
     switch (hook) {
       case "onRequestHeaders":
         return {
           exportName: "proxy_on_request_headers",
-          args: [this.currentContextId, Object.keys(requestHeaders).length, 0],
+          args: [this.currentContextId, countEntries(requestHeaders), 0],
         };
       case "onRequestBody":
         return {
@@ -1026,7 +1053,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       case "onResponseHeaders":
         return {
           exportName: "proxy_on_response_headers",
-          args: [this.currentContextId, Object.keys(responseHeaders).length, 0],
+          args: [this.currentContextId, countEntries(responseHeaders), 0],
         };
       case "onResponseBody":
         return {

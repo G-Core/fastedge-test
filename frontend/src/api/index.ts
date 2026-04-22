@@ -300,7 +300,7 @@ export async function sendFullFlow(
   finalResponse: {
     status: number;
     statusText: string;
-    headers: Record<string, string>;
+    headers: Record<string, string | string[]>;
     body: string;
     contentType: string;
     isBase64?: boolean;
@@ -436,7 +436,7 @@ export async function executeHttpWasm(
 ): Promise<{
   status: number;
   statusText: string;
-  headers: Record<string, string>;
+  headers: Record<string, string | string[] | undefined>;
   body: string;
   contentType: string;
   isBase64?: boolean;

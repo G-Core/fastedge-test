@@ -1,5 +1,79 @@
 # Proxy-WASM Runner - Changelog
 
+## April 22, 2026 - Set-Cookie preserved across the stack (RFC 6265 §3)
+
+### Overview
+Multiple `Set-Cookie` headers from a WASM response or an upstream origin fetch were silently collapsed to the last value, because the three fetch→Record ingestion sites and `HeaderManager.tuplesToRecord` all used single-string-per-key semantics. RFC 6265 §3 exempts `Set-Cookie` from the comma-combine rule, and every ecosystem tool (Node `http`, undici, supertest, axios, browsers) models it as an array. The test runner now matches: `Set-Cookie` flows through as `string[]` from the fetch Headers object all the way to assertion helpers and the Debugger UI.
+
+### What Changed
+
+#### 1. Lossless tuples→Record projection
+- `server/runner/HeaderManager.ts` — `tuplesToRecord` replaces lossy comma-join with a per-key projection: single-valued → `string`, multi-valued → `string[]`. Matches Node's `IncomingHttpHeaders` shape. New helpers `firstValue()` (single-string coercion for callers that need a scalar) and `flattenToMap()` (comma-join escape hatch for `fetch()`'s `HeadersInit`). `normalize()` and `recordToTuples()` widened to accept `HeaderMap | HeaderRecord`.
+- `server/runner/types.ts` — new `HeaderRecord = Record<string, string | string[]>`; `HookCall`, `HookResult`, `FullFlowResult.finalResponse.headers` all use it. `HeaderMap` kept for single-valued-input call sites (e.g. `FlowOptions.requestHeaders`, `HttpRequest.headers`).
+
+#### 2. Three fetch→Record ingestion sites fixed
+- `server/runner/HttpWasmRunner.ts` — `parseHeaders` extracted to a pure module-level `parseFetchHeaders()` (exported for direct testability). Uses `Headers.getSetCookie()` to preserve every `Set-Cookie` as a separate array entry. `HttpResponse.headers` typed as `IncomingHttpHeaders` (from `node:http`) — known single-valued headers read as `string` with no narrowing; `set-cookie` is `string[]`.
+- `server/runner/ProxyWasmRunner.ts` (origin fetch in `callFullFlow`) — line ~505 rewritten: `forEach` skips `set-cookie`, then `getSetCookie()` appends as `string[]`. `responseHeaders` local typed `HeaderRecord`. `fetchHeaders` constructed via `HeaderManager.flattenToMap` since `fetch()`'s `HeadersInit` only accepts single-string values. Property reads that expect scalars (content-type, host, x-debugger-*) go through `HeaderManager.firstValue`.
+- `server/runner/ProxyWasmRunner.ts` (proxy_http_call upstream at line ~867) — rewritten to build `HeaderTuples` directly (`for (const [k, v] of resp.headers)` plus `getSetCookie()` appended as tuples). `numHeaders` passed to `proxy_on_http_call_response` is now tuple count (includes duplicates), matching `proxy_get_header_map_size`.
+
+#### 3. HostFunctions multi-value through-pipe
+- `server/runner/HostFunctions.ts` — `httpCallResponse.headers` storage changed from `HeaderMap` to `HeaderTuples`. `setHttpCallResponse` accepts `HeaderMap | HeaderRecord | HeaderTuples`. `getRequestHeaders()` / `getResponseHeaders()` return `HeaderRecord`. `setHeadersAndBodies` accepts widened input. WASM apps reading `proxy_get_header_map_pairs` on `HttpCallResponseHeaders` now see every upstream `Set-Cookie` as a separate entry.
+- `server/runner/PropertyResolver.ts` — header fields widened to `HeaderRecord`. Property-path lookups (e.g. `response.headers.content-type`, `request.host`) go through `HeaderManager.firstValue` so proxy-wasm property semantics stay single-string. WASM apps needing all values use `proxy_get_header_map_pairs` instead.
+- `server/runner/ProxyWasmRunner.ts` — `buildHookInvocation` header count uses tuple-expanded length (including duplicates) to match `proxy_get_header_map_size`. Previously `Object.keys().length` reported unique keys only — a pre-existing discrepancy for multi-valued headers.
+
+#### 4. Test framework assertions — `.includes()` for multi-value
+- `server/test-framework/assertions.ts` — `assertRequestHeader`, `assertResponseHeader`, `assertFinalHeader`, `assertHttpHeader` expanded `expected` param to `string | string[]`. Shared `findHeader()` (case-insensitive) + `headerMatches()` helpers. Semantics: `expected: string` against a multi-valued header uses `.includes()` (ergonomic for "is this cookie set?"); `expected: string[]` requires exact ordered array match.
+
+#### 5. Wire format + frontend
+- `server/websocket/types.ts`, `server/runner/IStateManager.ts`, `server/websocket/StateManager.ts` — event types (`RequestStartedEvent`, `HookExecutedEvent`, `RequestCompletedEvent`, `HttpWasmRequestCompletedEvent`) widened response/hook-result headers to `Record<string, string | string[]>` (with `| undefined` where `IncomingHttpHeaders` flows directly through).
+- `server/server.ts` — no changes needed; assignments flow through the widened event types.
+- `frontend/src/hooks/websocket-types.ts`, `frontend/src/types/index.ts`, `frontend/src/stores/types.ts`, `frontend/src/api/index.ts` — mirror the widening on the frontend side.
+- `frontend/src/components/common/ResponsePanel/ResponsePanel.tsx` — renders each multi-valued header value on its own row (e.g. two `set-cookie` lines) instead of coercing to a joined string.
+- `frontend/src/components/proxy-wasm/HookStagesPanel/HookStagesPanel.tsx` — `isJsonContent` / `parseBodyIfJson` helpers widened; reads `content-type` via first-value coercion.
+- `frontend/src/App.tsx` — `request_started` handler flattens any multi-valued headers to comma-joined strings before populating the single-value editable request-headers field.
+
+#### 6. Regression + unit tests
+- `server/__tests__/unit/runner/HttpWasmRunner.test.ts` — new file. Tests `parseFetchHeaders` directly with a fetch `Headers` object carrying two `Set-Cookie` entries; verifies `string[]` output, single-cookie `string[]` of length 1, absence behaviour, non-cookie headers as `string`. Also exercises `assertHttpHeader` with multi-valued cookies: `.includes()` semantics for string expected, exact-array semantics for string[] expected, case-insensitive name lookup, `assertHttpNoHeader` absence. 9 new tests.
+- `server/__tests__/unit/runner/HeaderManager.test.ts` — `tuplesToRecord` tests updated: comma-join expectation replaced with `string[]` expectation; new test for duplicate `set-cookie` preservation.
+
+#### 7. Schemas + docs
+- `schemas/http-response.schema.json`, `schemas/hook-call.schema.json`, `schemas/hook-result.schema.json`, `schemas/full-flow-result.schema.json` — regenerated via `pnpm build:schemas`. `http-response.schema.json` now references Node's `IncomingHttpHeaders` definition.
+- `docs/RUNNER.md`, `docs/TEST_FRAMEWORK.md` — `HttpResponse.headers` typed as `IncomingHttpHeaders`; assertion signatures updated to `expected?: string | string[]`; new "Multi-valued headers" section with access examples. `docs/WEBSOCKET.md` + `docs/API.md` get a top-of-file note explaining the widened header shape on the wire.
+
+### 🧪 Testing
+- `pnpm test:backend` — 452/452 green (443 pre-existing + 9 new).
+- `pnpm -w run test:frontend` — 345/345 green.
+- `pnpm check-types` — clean (the pre-existing `server/utils/fastedge-cli.ts` `import.meta` error is unrelated to this change).
+
+### 📝 Notes
+- Architectural constraint satisfied: the 2026-04-01 multi-value headers refactor already made `HostFunctions` tuple-based internally. This change finishes the job by keeping tuples lossless all the way through the boundary projection, instead of comma-joining. `HeaderManager.tuplesToRecord`'s old comma-join is gone — existing callers (`getRequestHeaders`, `getResponseHeaders`) return `HeaderRecord` now, and nothing internal relies on the comma-join behaviour.
+- Public API breaking change for `@gcoredev/fastedge-test` consumers: `HttpResponse.headers` type narrows from `Record<string, string>` to `IncomingHttpHeaders`. Code like `response.headers['location']` keeps working (still `string`). Code that spreads `response.headers` into `fetch()` needs narrowing (or use `HeaderManager.flattenToMap`). Set-Cookie reads now return `string[]` instead of a last-wins string.
+- `PropertyResolver` returns first-value for multi-valued headers via property paths (e.g. `response.headers.set-cookie`) — matches proxy-wasm's single-string property contract. WASM apps needing all values use `proxy_get_header_map_pairs`.
+- Pre-existing `fastedge-cli.ts` TS error left as-is — outside scope.
+
+**Files Modified:**
+- `server/runner/types.ts` — new `HeaderRecord`, widened hook types
+- `server/runner/HeaderManager.ts` — lossless `tuplesToRecord`, `firstValue`, `flattenToMap`, widened `normalize` / `recordToTuples`
+- `server/runner/HttpWasmRunner.ts` — extracted `parseFetchHeaders`, switched to `getSetCookie()`
+- `server/runner/IWasmRunner.ts` — `HttpResponse.headers: IncomingHttpHeaders`
+- `server/runner/HostFunctions.ts` — tuple storage for `httpCallResponse`, widened getters/setters
+- `server/runner/ProxyWasmRunner.ts` — three fetch-site fixes, tuple counts, `HeaderManager.firstValue`/`flattenToMap` at read boundaries
+- `server/runner/PropertyResolver.ts` — widened to `HeaderRecord`, `firstValue` at property reads
+- `server/runner/IStateManager.ts`, `server/websocket/StateManager.ts`, `server/websocket/types.ts` — wire-format widening
+- `server/test-framework/assertions.ts` — multi-value assertion semantics
+- `server/__tests__/unit/runner/HeaderManager.test.ts` — updated projection tests
+- `frontend/src/hooks/websocket-types.ts`, `frontend/src/types/index.ts`, `frontend/src/stores/types.ts`, `frontend/src/api/index.ts` — frontend wire types
+- `frontend/src/components/common/ResponsePanel/ResponsePanel.tsx` — multi-row header rendering
+- `frontend/src/components/proxy-wasm/HookStagesPanel/HookStagesPanel.tsx` — widened helper signatures
+- `frontend/src/App.tsx` — flatten at `request_started` boundary
+- `schemas/*.schema.json` — regenerated
+- `docs/RUNNER.md`, `docs/TEST_FRAMEWORK.md`, `docs/WEBSOCKET.md`, `docs/API.md` — updated
+
+**Files Created:**
+- `server/__tests__/unit/runner/HttpWasmRunner.test.ts` — regression coverage for multi-`Set-Cookie`
+
+---
+
 ## April 22, 2026 - CDN request dropdown exposes full HTTP method set
 
 ### Overview

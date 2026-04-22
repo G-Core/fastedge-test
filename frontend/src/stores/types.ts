@@ -142,11 +142,13 @@ export interface HttpWasmState {
   httpRequestHeaders: Record<string, string>;
   httpRequestBody: string;
 
-  // Response state
+  // Response state.
+  // `headers` mirrors Node's IncomingHttpHeaders shape on the backend —
+  // set-cookie is string[], most others string, undefined tolerated at rest.
   httpResponse: {
     status: number;
     statusText: string;
-    headers: Record<string, string>;
+    headers: Record<string, string | string[] | undefined>;
     body: string;
     contentType: string;
     isBase64?: boolean;

@@ -6,6 +6,7 @@
  */
 
 import { spawn, execSync, ChildProcess } from "child_process";
+import type { IncomingHttpHeaders } from "node:http";
 import type {
   IWasmRunner,
   WasmType,
@@ -554,14 +555,31 @@ export class HttpWasmRunner implements IWasmRunner {
     return binaryTypes.some((type) => contentType.toLowerCase().includes(type));
   }
 
-  /**
-   * Parse headers from fetch Headers object
-   */
-  private parseHeaders(headers: Headers): Record<string, string> {
-    const result: Record<string, string> = {};
-    headers.forEach((value, key) => {
-      result[key] = value;
-    });
-    return result;
+  private parseHeaders(headers: Headers): IncomingHttpHeaders {
+    return parseFetchHeaders(headers);
   }
+}
+
+/**
+ * Parse a fetch Headers object into an IncomingHttpHeaders-shaped record.
+ *
+ * Uses `Headers.getSetCookie()` (Node 19.7+, always available on Node ≥22.12)
+ * to preserve multiple Set-Cookie entries as a string[] — RFC 6265 §3 exempts
+ * Set-Cookie from the "combine duplicates with commas" rule, and real browsers
+ * process each Set-Cookie independently.
+ *
+ * Exported for unit testing; in production use it via HttpWasmRunner.
+ */
+export function parseFetchHeaders(headers: Headers): IncomingHttpHeaders {
+  const result: IncomingHttpHeaders = {};
+  headers.forEach((value, key) => {
+    if (key.toLowerCase() !== "set-cookie") {
+      result[key] = value;
+    }
+  });
+  const setCookies = headers.getSetCookie();
+  if (setCookies.length > 0) {
+    result["set-cookie"] = setCookies;
+  }
+  return result;
 }

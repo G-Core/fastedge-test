@@ -2,6 +2,8 @@
 
 The `@gcoredev/fastedge-test` debugger server exposes a REST API for loading WASM modules, executing requests, and managing test configuration.
 
+> **Note on header values.** Response and hook-result headers use `Record<string, string | string[]>` on the wire — single-valued headers are a `string`, multi-valued headers (notably `Set-Cookie` per RFC 6265) are a `string[]`. Request-side header inputs remain single-valued `Record<string, string>`. Type signatures below use `Record<string, string>` in places for readability; output-side headers accept the widened form.
+
 ## Base URL
 
 ```

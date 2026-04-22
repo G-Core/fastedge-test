@@ -31,13 +31,16 @@ export function HookStagesPanel({
   const [activeSubView, setActiveSubView] = useState<SubView>("logs");
 
   /**
-   * Check if the content-type indicates JSON
+   * Check if the content-type indicates JSON.
+   * Accepts multi-valued headers (string[]) and reads the first value.
    */
-  const isJsonContent = (headers: Record<string, string>): boolean => {
-    const contentType =
-      Object.entries(headers).find(
-        ([key]) => key.toLowerCase() === "content-type",
-      )?.[1] || "";
+  const isJsonContent = (
+    headers: Record<string, string | string[]>,
+  ): boolean => {
+    const raw = Object.entries(headers).find(
+      ([key]) => key.toLowerCase() === "content-type",
+    )?.[1];
+    const contentType = Array.isArray(raw) ? raw[0] ?? "" : raw ?? "";
     return contentType.includes("application/json");
   };
 
@@ -46,7 +49,7 @@ export function HookStagesPanel({
    */
   const parseBodyIfJson = (
     body: string,
-    headers: Record<string, string>,
+    headers: Record<string, string | string[]>,
   ): unknown => {
     if (isJsonContent(headers)) {
       try {

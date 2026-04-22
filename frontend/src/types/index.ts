@@ -22,22 +22,22 @@ export interface HookResult {
   error?: string;
   input?: {
     request: {
-      headers: Record<string, string>;
+      headers: Record<string, string | string[]>;
       body: string;
     };
     response: {
-      headers: Record<string, string>;
+      headers: Record<string, string | string[]>;
       body: string;
     };
     properties?: Record<string, unknown>;
   };
   output?: {
     request: {
-      headers: Record<string, string>;
+      headers: Record<string, string | string[]>;
       body: string;
     };
     response: {
-      headers: Record<string, string>;
+      headers: Record<string, string | string[]>;
       body: string;
     };
     properties?: Record<string, unknown>;
@@ -54,7 +54,8 @@ export interface WasmState {
 export interface FinalResponse {
   status: number;
   statusText: string;
-  headers: Record<string, string>;
+  // Multi-valued headers (e.g. set-cookie) arrive as string[].
+  headers: Record<string, string | string[]>;
   body: string;
   contentType: string;
   isBase64?: boolean;

@@ -723,7 +723,7 @@ describe("HeaderManager", () => {
       });
     });
 
-    it("should comma-join multi-valued headers", () => {
+    it("should preserve multi-valued headers as string[]", () => {
       const tuples: [string, string][] = [
         ["x-multi", "val1"],
         ["x-other", "solo"],
@@ -731,8 +731,20 @@ describe("HeaderManager", () => {
         ["x-multi", "val3"],
       ];
       expect(HeaderManager.tuplesToRecord(tuples)).toEqual({
-        "x-multi": "val1,val2,val3",
+        "x-multi": ["val1", "val2", "val3"],
         "x-other": "solo",
+      });
+    });
+
+    it("should preserve duplicate set-cookie values as string[]", () => {
+      const tuples: [string, string][] = [
+        ["set-cookie", "sid=abc; Path=/; HttpOnly"],
+        ["content-type", "text/html"],
+        ["set-cookie", "theme=dark; Path=/"],
+      ];
+      expect(HeaderManager.tuplesToRecord(tuples)).toEqual({
+        "set-cookie": ["sid=abc; Path=/; HttpOnly", "theme=dark; Path=/"],
+        "content-type": "text/html",
       });
     });
 
