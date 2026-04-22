@@ -164,6 +164,22 @@ export async function runFlow(
  * - method defaults to "GET"
  * - headers defaults to {}
  * - body defaults to ""
+ *
+ * Redirects are surfaced verbatim — a 302 from the WASM is returned to the
+ * caller with its `Location` header preserved, matching FastEdge edge
+ * behaviour.
+ *
+ * `runHttpRequest` targets the WASM app under test only (`options.path` is a
+ * path on the local `fastedge-run` server, not a full URL). Following a
+ * redirect therefore depends on the shape of `response.headers.location`:
+ *
+ * - Relative (e.g. `/auth/complete`) — pass it directly as `path` in a second
+ *   `runHttpRequest` call.
+ * - Absolute with the app's own host — parse with `new URL(...)`, then
+ *   re-issue against `url.pathname + url.search`.
+ * - Absolute with an external host — cannot be followed through the runner;
+ *   that redirect is the end of the test, assert on status + Location and
+ *   stop there.
  */
 export async function runHttpRequest(
   runner: IWasmRunner,

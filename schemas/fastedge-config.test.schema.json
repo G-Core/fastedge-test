@@ -49,6 +49,11 @@
           "type": "string",
           "const": "http-wasm"
         },
+        "httpPort": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
         "request": {
           "type": "object",
           "properties": {

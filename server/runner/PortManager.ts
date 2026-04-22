@@ -22,8 +22,11 @@ export class PortManager {
    * This is necessary when multiple server processes run simultaneously —
    * each has its own PortManager with independent in-memory state, so
    * in-memory tracking alone is not enough to prevent cross-process conflicts.
+   *
+   * Public so pinned-port callers (HttpWasmRunner with RunnerConfig.httpPort)
+   * can reuse the same OS-level check without going through allocate().
    */
-  private isPortFree(port: number): Promise<boolean> {
+  isPortFree(port: number): Promise<boolean> {
     return new Promise((resolve) => {
       const server = createServer();
       server.once("error", () => resolve(false));

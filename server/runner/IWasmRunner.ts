@@ -21,6 +21,15 @@ export interface RunnerConfig {
   enforceProductionPropertyRules?: boolean;
   /** Override automatic WASM type detection. Use when detection produces wrong results. */
   runnerType?: WasmType;
+  /**
+   * HTTP-WASM only. Pin the spawned `fastedge-run` HTTP server to a specific
+   * port instead of allocating from the dynamic pool (8100-8199). Intended for
+   * Codespaces/Docker port-forwarding setups, stable live-preview URLs, or any
+   * external tooling that requires a fixed target. `load()` throws if the port
+   * is already in use — there is no fallback to dynamic allocation. Ignored
+   * for proxy-wasm runners.
+   */
+  httpPort?: number;
 }
 
 /**
@@ -58,7 +67,22 @@ export interface IWasmRunner {
   load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void>;
 
   /**
-   * Execute a request through the WASM module (HTTP WASM only)
+   * Execute a request through the WASM module (HTTP WASM only).
+   *
+   * Redirects are surfaced verbatim — the underlying fetch uses
+   * `redirect: "manual"` so tests can assert on 3xx status and the `Location`
+   * header. This matches how a FastEdge edge deployment returns redirects to
+   * the client rather than following them server-side.
+   *
+   * `execute` only hits the WASM app under test — `request.path` is a path on
+   * the spawned `fastedge-run` server, not a full URL. To follow a redirect
+   * the caller must inspect `response.headers.location`:
+   * - Relative Location (`/foo`) — reuse as `request.path` directly.
+   * - Absolute same-host Location — extract `pathname + search` via `new URL()`
+   *   and re-issue with that path.
+   * - Absolute cross-host Location — cannot be followed through the runner;
+   *   the 302 is the terminal state for the test.
+   *
    * @param request The HTTP request to execute
    * @returns The HTTP response
    */

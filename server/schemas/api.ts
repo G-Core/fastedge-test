@@ -8,6 +8,12 @@ export const ApiLoadBodySchema = z.object({
     enabled: z.boolean().optional(),
     path: z.string().optional(),
   }).optional(),
+  /**
+   * HTTP-WASM only. Pin the fastedge-run subprocess to this port instead of
+   * using dynamic allocation. Forwarded from the frontend's currently-loaded
+   * config (any *.test.json filename). Load fails fast if the port is busy.
+   */
+  httpPort: z.number().int().min(1024).max(65535).optional(),
 }).refine(d => d.wasmBase64 || d.wasmPath, {
   message: 'Either wasmBase64 or wasmPath must be provided',
 }).refine(d => !(d.wasmBase64 && d.wasmPath), {

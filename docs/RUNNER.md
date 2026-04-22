@@ -126,6 +126,14 @@ load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void>
 
 Calling `load()` again on the same runner replaces the current module and restarts any underlying process.
 
+**`httpPort` pinning (HTTP-WASM only).** When `config.httpPort` is set, the spawned `fastedge-run` process is bound to that specific port instead of allocating from the dynamic pool (8100–8199). If the port is already in use, `load()` throws:
+
+```
+fastedge-run port <N> is not available — release it or choose a different httpPort in fastedge-config.test.json
+```
+
+There is no fallback to dynamic allocation — pinning is only useful if the address is stable. Intended for Codespaces/Docker port-forwarding setups, live-preview URLs, or external tooling that requires a fixed target. For proxy-wasm runners, `httpPort` is ignored.
+
 ### execute (HTTP-WASM)
 
 Executes an HTTP request through the WASM module. Only available on `HttpWasmRunner` (http-wasm). Calling this on a `ProxyWasmRunner` throws.
@@ -134,7 +142,33 @@ Executes an HTTP request through the WASM module. Only available on `HttpWasmRun
 execute(request: HttpRequest): Promise<HttpResponse>
 ```
 
-The runner forwards the request to the locally spawned `fastedge-run` process and returns the response including any logs captured from the process.
+`request.path` is a path on the locally spawned `fastedge-run` server, not a full URL. The runner forwards the request to that local process and returns the response including logs captured from the process stdout/stderr.
+
+**Redirects are not followed.** The underlying fetch uses `redirect: "manual"`, so 3xx responses reach the caller intact — status code and `Location` header — rather than being transparently followed. This matches FastEdge edge behavior, where redirects are returned to the client rather than followed server-side, and lets tests assert on redirect status and `Location`.
+
+To follow a redirect, inspect `response.headers.location` and handle by `Location` shape:
+
+- **Relative Location** (e.g. `/new-path`) — reuse directly as `request.path`.
+- **Absolute same-host Location** (e.g. `http://localhost:8100/new-path`) — parse via `new URL()` and re-issue with `pathname + search` as `request.path`.
+- **Absolute cross-host Location** (e.g. `https://other.example.com/`) — cannot be followed through the runner; the 3xx response is the terminal state for the test.
+
+```typescript
+import { createRunner } from '@gcoredev/fastedge-test';
+
+const runner = await createRunner('./my-http-app.wasm');
+
+// Relative Location: reuse directly as path
+let response = await runner.execute({ path: '/moved', method: 'GET', headers: {} });
+if (response.status >= 300 && response.status < 400 && response.headers['location']) {
+  response = await runner.execute({
+    path: response.headers['location'], // e.g. "/new-location"
+    method: 'GET',
+    headers: {},
+  });
+}
+
+await runner.cleanup();
+```
 
 ### callHook (Proxy-WASM)
 
@@ -272,14 +306,15 @@ When testing proxy-wasm modules without a real origin server, pass `BUILTIN_SHOR
 
 ```typescript
 import { createRunner, BUILTIN_SHORTHAND } from '@gcoredev/fastedge-test';
+import type { FullFlowResult } from '@gcoredev/fastedge-test';
 
 const runner = await createRunner('./my-cdn-app.wasm');
-const result = await runner.callFullFlow(
+const result: FullFlowResult = await runner.callFullFlow(
   BUILTIN_SHORTHAND, // no origin fetch
   'GET',
   { 'accept': 'application/json' },
   '',
-  {}, '', 200, 'OK', {}, true
+  {}, '', 200, 'OK', {}, true,
 );
 ```
 
@@ -306,15 +341,17 @@ interface RunnerConfig {
   };
   enforceProductionPropertyRules?: boolean;
   runnerType?: WasmType;
+  httpPort?: number;
 }
 ```
 
-| Field                            | Type       | Default       | Description                                                                                                                                                                                                                                                               |
-| -------------------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`  | `false`       | Whether to load `.env` files                                                                                                                                                                                                                                              |
-| `dotenv.path`                    | `string`   | `undefined`   | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory). |
-| `enforceProductionPropertyRules` | `boolean`  | `true`        | Restrict property access to match CDN production behavior                                                                                                                                                                                                                 |
-| `runnerType`                     | `WasmType` | auto-detected | Override WASM type detection                                                                                                                                                                                                                                              |
+| Field                            | Type       | Default       | Description                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------- | ---------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`  | `false`       | Whether to load `.env` files                                                                                                                                                                                                                                                                                                       |
+| `dotenv.path`                    | `string`   | `undefined`   | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory).                                                      |
+| `enforceProductionPropertyRules` | `boolean`  | `true`        | Restrict property access to match CDN production behavior                                                                                                                                                                                                                                                                          |
+| `runnerType`                     | `WasmType` | auto-detected | Override WASM type detection                                                                                                                                                                                                                                                                                                       |
+| `httpPort`                       | `number`   | `undefined`   | HTTP-WASM only. Pin the spawned `fastedge-run` subprocess to a specific port instead of allocating from the dynamic pool (8100–8199). `load()` throws if the port is busy — there is no fallback to dynamic allocation. Intended for Codespaces/Docker port-forwarding or external tooling requiring a fixed address. Ignored for proxy-wasm runners. |
 
 ### HttpRequest & HttpResponse
 

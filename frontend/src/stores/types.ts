@@ -92,6 +92,12 @@ export interface ConfigState {
     path: string | null;
   };
   logLevel: number;
+  /**
+   * HTTP-WASM only. Pin the fastedge-run subprocess to this port instead of
+   * dynamic allocation. Forwarded in /api/load body; sourced from whichever
+   * config file the user loaded (default or via picker).
+   */
+  httpPort: number | null;
 }
 
 export interface ConfigActions {
@@ -221,6 +227,7 @@ export interface TestConfig {
     enabled?: boolean;
     path?: string;
   };
+  httpPort?: number;
 }
 
 export interface PersistConfig {

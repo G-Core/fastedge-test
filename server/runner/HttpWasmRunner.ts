@@ -39,6 +39,8 @@ export class HttpWasmRunner implements IWasmRunner {
   private portManager: PortManager;
   private dotenvEnabled: boolean = true;
   private dotenvPath: string | null = null;
+  /** Pinned ports bypass PortManager allocation and must not be released back to it. */
+  private isPinnedPort: boolean = false;
   /** @deprecated Legacy sync support — remove when #[fastedge::http] is retired */
   private isLegacySync: boolean = false;
 
@@ -84,8 +86,25 @@ export class HttpWasmRunner implements IWasmRunner {
     // Detect legacy sync binaries (deprecated #[fastedge::http] pattern)
     this.isLegacySync = await isLegacySyncWasm(bufferOrPath);
 
-    // Allocate port — async OS check prevents cross-process port collisions
-    this.port = await this.portManager.allocate();
+    // Port selection: pinned (RunnerConfig.httpPort / fastedge-config.test.json)
+    // takes precedence and bypasses the dynamic pool. Load fails fast if the
+    // pinned port is not free — there is no fallback to dynamic allocation,
+    // because the whole point of pinning is a predictable address for external
+    // tooling (port-forwarding rules, Docker maps, bookmarks).
+    if (config?.httpPort !== undefined) {
+      const pinned = config.httpPort;
+      if (!(await this.portManager.isPortFree(pinned))) {
+        throw new Error(
+          `fastedge-run port ${pinned} is not available — release it or choose a different httpPort in fastedge-config.test.json`,
+        );
+      }
+      this.port = pinned;
+      this.isPinnedPort = true;
+    } else {
+      // Dynamic allocation — OS check prevents cross-process port collisions
+      this.port = await this.portManager.allocate();
+      this.isPinnedPort = false;
+    }
 
     // Build command arguments
     const wasi_http = !this.isLegacySync;
@@ -140,7 +159,13 @@ export class HttpWasmRunner implements IWasmRunner {
   }
 
   /**
-   * Execute an HTTP request through the WASM module
+   * Execute an HTTP request through the WASM module.
+   *
+   * Redirects are surfaced verbatim — `fetch` is called with
+   * `redirect: "manual"` so 3xx responses (status + `Location`) reach the
+   * caller intact. This matches FastEdge edge behaviour, which returns
+   * redirects to the client rather than following them server-side. See
+   * `IWasmRunner.execute` for the public contract.
    */
   async execute(request: HttpRequest): Promise<HttpResponse> {
     if (!this.port || !this.process) {
@@ -158,6 +183,10 @@ export class HttpWasmRunner implements IWasmRunner {
         headers: request.headers,
         body: request.body || undefined,
         signal: AbortSignal.timeout(30000), // 30 second timeout
+        // Surface 3xx responses verbatim so tests can assert on status/Location.
+        // A FastEdge edge returns redirects to the client rather than following
+        // them server-side; production parity requires the same here.
+        redirect: "manual",
       });
 
       // Read response body
@@ -289,10 +318,14 @@ export class HttpWasmRunner implements IWasmRunner {
       this.process = null;
     }
 
-    // Release port
+    // Release port — pinned ports were never added to PortManager's pool, so
+    // releasing them would be a no-op at best and an accounting bug at worst.
     if (this.port !== null) {
-      this.portManager.release(this.port);
+      if (!this.isPinnedPort) {
+        this.portManager.release(this.port);
+      }
       this.port = null;
+      this.isPinnedPort = false;
     }
 
     // Remove temp file

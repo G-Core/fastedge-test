@@ -37,6 +37,9 @@ test-applications/**/target/
 # Using pnpm
 package-lock.json
 
+# FastEdge debugger artifacts
+**/.fastedge-debug/
+
 # Agent workspaces
 .codex
 .claude

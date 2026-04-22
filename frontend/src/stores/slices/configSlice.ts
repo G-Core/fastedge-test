@@ -10,6 +10,7 @@ const DEFAULT_CONFIG_STATE: ConfigState = {
     path: null,
   },
   logLevel: 2,
+  httpPort: null,
 };
 
 export const createConfigSlice: StateCreator<
@@ -84,6 +85,10 @@ export const createConfigSlice: StateCreator<
         enabled: config.dotenv?.enabled ?? false,
         path: config.dotenv?.path ?? null,
       };
+      // httpPort applies only to http-wasm configs; for CDN configs clear it
+      // so a previously-loaded HTTP pin doesn't leak across loads.
+      state.httpPort =
+        config.appType === 'http-wasm' ? config.httpPort ?? null : null;
 
       // Restore request fields into the correct slice based on app type.
       // HTTP configs use `path`, CDN configs use `url`.
@@ -149,6 +154,11 @@ export const createConfigSlice: StateCreator<
         ...(state.dotenv.path ? { path: state.dotenv.path } : {}),
       },
     };
+
+    // Only emit httpPort for HTTP apps (the schema rejects it elsewhere)
+    if (isHttp && state.httpPort !== null) {
+      config.httpPort = state.httpPort;
+    }
 
     // CDN apps have a configurable mock response; HTTP apps don't
     if (!isHttp) {

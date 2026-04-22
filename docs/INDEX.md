@@ -28,12 +28,12 @@
 
 ## Package Exports
 
-| Entry point   | Description                                                                                     |
-| ------------- | ----------------------------------------------------------------------------------------------- |
-| `.`           | Main entry — runner API and core types                                                          |
-| `./test`      | Test framework API — use this for writing and running test suites                               |
-| `./server`    | Debugger server entry — used by the `fastedge-debug` CLI binary; not intended for direct import |
-| `./schemas`   | JSON Schema files for `fastedge-config.test.json` — reference in editors for validation        |
+| Entry point | Description                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| `.`         | Main entry — runner API and core types                                                          |
+| `./test`    | Test framework API — use this for writing and running test suites                               |
+| `./server`  | Debugger server entry — used by the `fastedge-debug` CLI binary; not intended for direct import |
+| `./schemas` | JSON Schema files for `fastedge-config.test.json` — reference in editors for validation        |
 
 ### `@gcoredev/fastedge-test` (`.`)
 

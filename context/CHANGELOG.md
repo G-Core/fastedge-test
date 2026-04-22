@@ -1,5 +1,149 @@
 # Proxy-WASM Runner - Changelog
 
+## April 22, 2026 - CDN request dropdown exposes full HTTP method set
+
+### Overview
+The CDN (proxy-wasm) request bar previously offered only `GET` and `POST` in the method dropdown, while the HTTP-WASM view already exposed all seven standard methods. Everything below the UI already supported arbitrary methods — the config schema (open string), `ApiSendBodySchema`, `ProxyWasmRunner.callFullFlow` (forwards via `:method` pseudo-header), `HttpWasmRunner.execute` (forwards to Node `fetch`) — and the `cors/fixtures/preflight.test.json` example proved OPTIONS works end-to-end today. The limit was a UI default; lifted now so CORS-style examples (preflight, PUT/DELETE variations) can be exercised from the dropdown without editing the URL bar or loading a fixture file.
+
+### What Changed
+
+#### `RequestBar` default method list → full 7
+- `frontend/src/components/common/RequestPanel/RequestBar/RequestBar.tsx` — `DEFAULT_METHODS` bumped from `["GET", "POST"]` to `["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]`. Since `ProxyWasmView` does not pass a `methods` prop, the CDN dropdown picks up the new default automatically.
+
+#### Redundant const removed from `HttpWasmView`
+- `frontend/src/views/HttpWasmView/HttpWasmView.tsx` — deleted the local `HTTP_METHODS` array (now identical to the component default) and dropped the `methods={HTTP_METHODS}` prop. Ordering is preserved.
+
+### 🧪 Testing
+No behaviour or contract change below the UI layer — state-layer tests (`requestSlice.test.ts`) already cover all 7 methods round-tripping through the store. Full frontend suite green (345/345). Backend integration untouched.
+
+### 📝 Notes
+- Schema-level method enum intentionally not added: `fastedge-config.test.json` accepts any string today, and restricting to a known set would break anyone using WebDAV/custom extension methods (`PROPFIND`, `MKCOL`, etc.). Open string stays.
+- `TRACE` and `CONNECT` deliberately excluded from the dropdown — rarely needed in application testing; `CONNECT` is a proxy-level concern that doesn't map cleanly onto the runner semantics. Users can still set either via the config file if needed.
+
+**Files Modified:**
+- `frontend/src/components/common/RequestPanel/RequestBar/RequestBar.tsx`
+- `frontend/src/views/HttpWasmView/HttpWasmView.tsx`
+
+---
+
+## April 22, 2026 - HTTP-WASM port pinning (httpPort) + debugger port range expanded to 50
+
+### Overview
+Two related developer-experience improvements for HTTP-WASM users running the debugger under port-constrained environments (Codespaces, Docker, corporate dev VMs):
+
+1. **HTTP-WASM port pinning** — new `httpPort` field in `fastedge-config.test.json` (HTTP variant) and on `RunnerConfig`. When set, `HttpWasmRunner.load()` binds the spawned `fastedge-run` subprocess to that exact port instead of allocating from the dynamic 8100-8199 pool. Load fails fast (no fallback) if the port is busy — pinning is pointless if the port can silently shift. Intended for stable port-forward rules, reproducible live-preview URLs, and external tooling (proxies, tcpdump filters) that need a fixed target.
+
+2. **Debugger auto-increment range 10 → 50** — `resolvePort()` now scans 5179-5228 instead of 5179-5188. Developers can run many more concurrent debug sessions (common in multi-app Codespaces workspaces) without the "Could not find a free port" error. Floor stays at 5179 (preserves VSCode discovery and existing `.debug-port` expectations); upper bound avoids common dev-tooling defaults below 5300.
+
+### What Changed
+
+#### 1. `httpPort` config field + RunnerConfig plumbing
+- `schemas/fastedge-config.test.schema.json` — new optional `httpPort` (integer, 1024-65535) on the HTTP variant (`anyOf[0]`).
+- `server/schemas/config.ts` — Zod mirror on `HttpConfigSchema`.
+- `server/runner/IWasmRunner.ts` — `RunnerConfig.httpPort` with JSDoc describing fail-fast semantics and scope.
+- `server/runner/PortManager.ts` — `isPortFree()` promoted from private to public so pinned-port callers can reuse the OS-level check without duplicating logic or going through `allocate()`.
+- `server/runner/HttpWasmRunner.ts` — `load()` branches on `config.httpPort`: if set, calls `isPortFree()` and throws a clear error on busy; if free, uses directly and skips `PortManager.allocate()` (pinned ports are never added to the pool). `isPinnedPort` state field ensures `cleanup()` does not release a pinned port back to a pool it was never in.
+- `schemas/api-load.schema.json` + `server/schemas/api.ts` — accept optional `httpPort` in the `/api/load` request body.
+- `server/server.ts` — `/api/load` forwards the body-supplied `httpPort` into `runner.load()`.
+
+**Why the frontend forwards `httpPort` (not the server reading the config file):** the debugger UI supports loading any `*.test.json` via the file picker (`ConfigButtons.tsx`), but `/api/config` GET/POST hardcode the filename `fastedge-config.test.json`. A server-side read would pin this feature to that one filename and silently ignore any other config the user loaded — so body-plumbing (mirroring the dotenv pattern) is the only shape that handles arbitrary config filenames correctly.
+
+#### 2. Frontend plumbing
+- `frontend/src/stores/types.ts` — `ConfigState.httpPort: number | null`; `TestConfig.httpPort?: number` for import/export.
+- `frontend/src/stores/slices/configSlice.ts` — `loadFromConfig` reads `httpPort` from HTTP-WASM configs (cleared on CDN configs); `exportConfig` emits it only for HTTP apps.
+- `frontend/src/stores/slices/wasmSlice.ts` — `loadWasm` reads `get().httpPort` and forwards to the upload functions.
+- `frontend/src/api/index.ts` — `uploadWasm`/`uploadWasmFromPath` accept an optional `httpPort` argument and include it in the request body.
+
+No UI form for editing `httpPort` — it's a provisioning concern, set once in the config JSON (VCS-tracked) for Codespaces/Docker setups.
+
+#### 3. Debugger port range 10 → 50
+- `server/server.ts` — `resolvePort()` `maxAttempts = 50`; comment + error message updated. Range becomes 5179-5228.
+
+### 🧪 Testing
+- New integration suite `server/__tests__/integration/http-apps/http-port-pin/http-port-pin.test.ts` (2 tests, JS variant):
+  - Positive: `load({httpPort: 8250})` → `getPort() === 8250` → request executes.
+  - Negative: pre-bind `8251` via `net.createServer().listen()` → `load({httpPort: 8251})` throws `/port 8251 is not available/`.
+- Existing unit tests (`server/__tests__/unit/schemas/api.test.ts`, `frontend/src/stores/slices/wasmSlice.test.ts`) unaffected after expectation updates for the new 4th argument.
+- Full backend + frontend suites green: HTTP integration 78/78, frontend stores 345/345.
+
+### 📝 Notes
+- **Range guidance**: pinning inside the 8100-8199 range is allowed but risks collisions with dynamic allocations from other debug sessions. Recommend ports outside that pool (e.g., 8250+) for production-like setups.
+- **Fail-fast is deliberate** — the alternative (silently falling back to dynamic) would break the external setups (port-forward rules, Docker maps, bookmarks) that motivate pinning in the first place.
+- **Behaviour change (breaking) is zero** for users who don't set `httpPort`: dynamic allocation remains the default.
+- **Debugger range**: floor stays at 5179 to preserve existing `.debug-port` discovery behaviour in VSCode integrations. Upper bound (5228) avoids common dev-tooling defaults (postgres, Jenkins, etc. all ≥5300).
+- Doc regeneration via `fastedge-plugin-source/generate-docs.sh` and version bump are out of scope — both will be performed manually before release.
+
+**Files Modified:**
+- `schemas/fastedge-config.test.schema.json`
+- `schemas/api-load.schema.json`
+- `server/schemas/config.ts`
+- `server/schemas/api.ts`
+- `server/runner/IWasmRunner.ts`
+- `server/runner/PortManager.ts`
+- `server/runner/HttpWasmRunner.ts`
+- `server/server.ts` (`/api/load` handler + `resolvePort` range)
+- `frontend/src/stores/types.ts`
+- `frontend/src/stores/slices/configSlice.ts`
+- `frontend/src/stores/slices/wasmSlice.ts`
+- `frontend/src/stores/slices/wasmSlice.test.ts` (test expectations)
+- `frontend/src/api/index.ts`
+- `fastedge-plugin-source/.generation-config.md`
+
+**Files Created:**
+- `server/__tests__/integration/http-apps/http-port-pin/http-port-pin.test.ts`
+
+---
+
+## April 22, 2026 - HttpWasmRunner.execute() surfaces redirects verbatim (production parity)
+
+### Overview
+`HttpWasmRunner.execute()` now calls `fetch` with `redirect: "manual"` so 3xx responses returned by an HTTP WASM app reach the caller intact — status code and `Location` header preserved. Previously Node `fetch`'s default (`redirect: "follow"`) caused the runner to transparently follow redirects server-side, producing confusing failure modes where redirect-asserting tests saw the redirect target instead of the 302 (typically "Expected 302, got 200/404" or unresolvable-host fetch errors). This matches how a real FastEdge edge deployment returns redirects to the client rather than following them itself.
+
+### Behaviour change
+Tests that previously saw the redirect target now see the redirect. This is a breaking change for any test that implicitly relied on `follow` — no such test existed in this repo, but external consumers of `@gcoredev/fastedge-test` may need to re-issue `runHttpRequest()` against `response.headers.location` to reproduce prior behaviour.
+
+### What Changed
+
+#### 1. `server/runner/HttpWasmRunner.ts` — pass `redirect: "manual"` to `fetch`
+- One-line runner fix; JSDoc updated on `IWasmRunner.execute`, `HttpWasmRunner.execute`, and `runHttpRequest` explaining the semantics.
+
+#### 2. `test-applications/http-apps/{js,rust/basic,rust/wasi}/http-responder` — redirect branch
+- When the request carries `x-redirect-url: <url>`, http-responder now returns `302` + `Location: <url>`. Otherwise its existing 200 JSON echo is preserved. Mirrors the CDN `cdn-redirect` test-app pattern.
+- All three variants rebuilt (`wasm/http-apps/{js,rust/basic,rust/wasi}/http-responder.wasm`).
+
+#### 3. `server/__tests__/integration/http-apps/http-responder/http-responder.test.ts` — regression
+- Parameterized across JS / Rust basic / Rust wasi variants (6 tests total).
+- Asserts the 302 + `Location` is returned verbatim, including for external unroutable targets (which would otherwise fail the fetch if follow were still active).
+
+#### 4. `fastedge-plugin-source/.generation-config.md` — doc-generator instructions
+- Added CRITICAL bullets under `docs/RUNNER.md` and `docs/TEST_FRAMEWORK.md` so the doc generator reliably surfaces the manual-redirect contract and a short "follow manually" snippet.
+
+**Files Modified:**
+- `server/runner/HttpWasmRunner.ts` — `redirect: "manual"` + expanded JSDoc
+- `server/runner/IWasmRunner.ts` — JSDoc on `execute()` method
+- `server/test-framework/suite-runner.ts` — JSDoc on `runHttpRequest`
+- `test-applications/http-apps/js/src/http-responder.ts`
+- `test-applications/http-apps/rust/basic/http-responder/src/lib.rs`
+- `test-applications/http-apps/rust/wasi/http-responder/src/lib.rs`
+- `wasm/http-apps/js/http-responder.wasm` (rebuilt)
+- `wasm/http-apps/rust/basic/http-responder.wasm` (rebuilt)
+- `wasm/http-apps/rust/wasi/http-responder.wasm` (rebuilt)
+- `fastedge-plugin-source/.generation-config.md`
+
+**Files Created:**
+- `server/__tests__/integration/http-apps/http-responder/http-responder.test.ts`
+
+### 🧪 Testing
+Full HTTP integration suite: 7 files, 76 tests passing (including the 6 new http-responder redirect assertions across all 3 variants). Previously passing tests unaffected — the redirect branch is dormant unless `x-redirect-url` is set.
+
+### 📝 Notes
+- Discovered during Task 3 (GitHub OAuth) WASM integration testing in `apps/saml-app`; full symptom/diagnosis documented in that project's `context/known-issues.md` (entry to be removed once consumers bump past this release).
+- `redirect: "error"` was considered and rejected — it would throw on every 302 and break tests that intentionally assert on redirects. `"manual"` preserves the Response for inspection while matching edge behaviour.
+- Configurable redirect mode (`HttpRequestOptions.redirect`) was deliberately not added: YAGNI, risk of cargo-culting `follow` back in, and users who need to follow can issue a second request against `response.headers.location` (made explicit at the call site).
+- Doc regeneration via `fastedge-plugin-source/generate-docs.sh` and version bump are intentionally out of scope for this changeset; both will be performed manually before release.
+
+---
+
 ## April 13, 2026 - CLI app root resolution aligned with VSCode extension
 
 ### Overview

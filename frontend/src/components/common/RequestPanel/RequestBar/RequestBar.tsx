@@ -16,7 +16,7 @@ interface RequestBarProps {
   urlInputRef?: RefObject<HTMLInputElement | null>;
 }
 
-const DEFAULT_METHODS = ["GET", "POST"];
+const DEFAULT_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
 export function RequestBar({
   method,

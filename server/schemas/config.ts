@@ -49,6 +49,13 @@ const CdnConfigSchema = BaseConfigSchema.extend({
 // HTTP config: path only, no mock response
 const HttpConfigSchema = BaseConfigSchema.extend({
   appType: z.literal('http-wasm'),
+  /**
+   * Pin the fastedge-run subprocess to a specific port instead of allocating
+   * from the dynamic pool (8100-8199). Use for Codespaces/Docker port-forwarding,
+   * stable live-preview URLs, or tooling that needs a fixed target. Load fails
+   * fast if the port is already in use.
+   */
+  httpPort: z.number().int().min(1024).max(65535).optional(),
   request: HttpRequestConfigSchema,
 });
 

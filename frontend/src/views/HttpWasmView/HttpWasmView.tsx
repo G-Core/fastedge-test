@@ -9,16 +9,6 @@ import { useAppStore } from "../../stores";
 import { HTTP_WASM_HOST } from "../../stores/slices/httpWasmSlice";
 import styles from "./HttpWasmView.module.css";
 
-const HTTP_METHODS = [
-  "GET",
-  "POST",
-  "PUT",
-  "DELETE",
-  "PATCH",
-  "HEAD",
-  "OPTIONS",
-];
-
 export function HttpWasmView() {
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [logLevel, setLogLevel] = useState<number>(0);
@@ -66,7 +56,6 @@ export function HttpWasmView() {
           onMethodChange={setHttpMethod}
           onUrlChange={handleUrlChange}
           onSend={handleSend}
-          methods={HTTP_METHODS}
           urlPrefix={HTTP_WASM_HOST}
           urlPlaceholder=""
           isExecuting={httpIsExecuting}

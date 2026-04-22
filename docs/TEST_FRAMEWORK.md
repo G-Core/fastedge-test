@@ -108,15 +108,15 @@ Object-based options for `runFlow()`. HTTP/2 pseudo-headers (`:method`, `:path`,
 ```typescript
 interface FlowOptions {
   url: string;
-  method?: string;                          // Default: "GET"
+  method?: string;                           // Default: "GET"
   requestHeaders?: Record<string, string>;
-  requestBody?: string;                     // Default: ""
-  responseStatus?: number;                  // Default: 200
-  responseStatusText?: string;              // Default: "OK"
-  responseHeaders?: Record<string, string>; // Default: {}
-  responseBody?: string;                    // Default: ""
-  properties?: Record<string, unknown>;     // Default: {}
-  enforceProductionPropertyRules?: boolean; // Default: true
+  requestBody?: string;                      // Default: ""
+  responseStatus?: number;                   // Default: 200
+  responseStatusText?: string;               // Default: "OK"
+  responseHeaders?: Record<string, string>;  // Default: {}
+  responseBody?: string;                     // Default: ""
+  properties?: Record<string, unknown>;      // Default: {}
+  enforceProductionPropertyRules?: boolean;  // Default: true
 }
 ```
 
@@ -135,7 +135,7 @@ interface FlowOptions {
 
 ### HttpRequestOptions
 
-Object-based options for `runHttpRequest()`. Used with HTTP WASM apps (as opposed to CDN proxy-wasm filter apps).
+Object-based options for `runHttpRequest()`. Used with HTTP WASM apps (as opposed to CDN proxy-wasm filter apps tested with `runFlow`).
 
 ```typescript
 interface HttpRequestOptions {
@@ -243,24 +243,28 @@ Executes a complete request/response flow through the WASM filter. Object-based 
 The returned `FullFlowResult` has this shape:
 
 ```typescript
-interface FullFlowResult {
+type FullFlowResult = {
   hookResults: Record<string, HookResult>; // keyed by camelCase hook name
   finalResponse: {
     status: number;
+    statusText: string;
     headers: Record<string, string>;
     body: string;
+    contentType: string;
+    isBase64?: boolean;
   };
-}
+  calculatedProperties?: Record<string, unknown>;
+};
 ```
 
 Hook results are accessed by camelCase key:
 
-| Key                 | Hook                       |
-| ------------------- | -------------------------- |
-| `onRequestHeaders`  | `on_request_headers` hook  |
-| `onRequestBody`     | `on_request_body` hook     |
-| `onResponseHeaders` | `on_response_headers` hook |
-| `onResponseBody`    | `on_response_body` hook    |
+| Key                  | Hook                       |
+| -------------------- | -------------------------- |
+| `onRequestHeaders`   | `on_request_headers` hook  |
+| `onRequestBody`      | `on_request_body` hook     |
+| `onResponseHeaders`  | `on_response_headers` hook |
+| `onResponseBody`     | `on_response_body` hook    |
 
 ```typescript
 const result = await runFlow(runner, {
@@ -277,7 +281,8 @@ const reqHook = result.hookResults.onRequestHeaders;
 const resHook = result.hookResults.onResponseHeaders;
 
 // Access final response
-console.log(result.finalResponse.status); // 201
+console.log(result.finalResponse.status);      // 201
+console.log(result.finalResponse.contentType); // e.g. "application/json"
 ```
 
 ### runHttpRequest
@@ -288,7 +293,26 @@ function runHttpRequest(runner: IWasmRunner, options: HttpRequestOptions): Promi
 
 Executes a single HTTP request through an HTTP WASM app. Object-based wrapper around the runner's `execute` method. Use this for WASM apps that handle HTTP requests directly, as opposed to CDN proxy-wasm filter apps tested with `runFlow`.
 
+**Redirects are not followed.** The underlying fetch uses `redirect: "manual"`, so a 302 (or any 3xx) returned by the WASM is surfaced verbatim — `response.status` is `302` and `response.headers.location` is preserved. This matches FastEdge edge behaviour, where redirects are returned to the client rather than followed server-side.
+
+`runHttpRequest` only targets the WASM app under test. `options.path` is a path on the local `fastedge-run` server, not a full URL. Following a redirect depends on the shape of `response.headers.location`:
+
+- **Relative** (e.g. `/auth/complete`) — pass it directly as `path` in a second `runHttpRequest` call.
+- **Absolute, same host** — extract `pathname + search` via `new URL()` and re-issue with that path.
+- **Absolute, external host** — cannot be followed through the runner; assert on status and `Location` and stop there.
+
 ```typescript
+// Assert on a 302 redirect and follow it (relative Location)
+const response = await runHttpRequest(runner, { path: "/login" });
+assertHttpStatus(response, 302);
+assertHttpHeader(response, "location", "/dashboard");
+
+const redirected = await runHttpRequest(runner, { path: response.headers["location"] });
+assertHttpStatus(redirected, 200);
+```
+
+```typescript
+// Standard request
 const response = await runHttpRequest(runner, {
   path: "/api/greet",
   method: "GET",

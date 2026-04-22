@@ -16,12 +16,12 @@ The port can be overridden via the `PORT` environment variable. When `WORKSPACE_
 
 The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
-| Value        | Description                                             |
-| ------------ | ------------------------------------------------------- |
-| `ui`         | Request originated from the web UI (default if omitted) |
-| `ai_agent`   | Request originated from an AI agent                     |
-| `api`        | Request originated from direct API usage                |
-| `system`     | Request originated from an automated system             |
+| Value      | Description                                             |
+| ---------- | ------------------------------------------------------- |
+| `ui`       | Request originated from the web UI (default if omitted) |
+| `ai_agent` | Request originated from an AI agent                     |
+| `api`      | Request originated from direct API usage                |
+| `system`   | Request originated from an automated system             |
 
 ```http
 X-Source: ai_agent
@@ -93,16 +93,19 @@ Loads a WASM binary into the runner. Accepts either a file path or a base64-enco
 
 **Request Body**
 
-Exactly one of `wasmPath` or `wasmBase64` must be provided.
+Exactly one of `wasmPath` or `wasmBase64` must be provided; providing both is an error.
 
 ```typescript
 {
-  wasmPath?: string;   // Absolute path to a .wasm file on the server filesystem
-  wasmBase64?: string; // Base64-encoded WASM binary
+  wasmPath?: string;    // Absolute path to a .wasm file on the server filesystem
+  wasmBase64?: string;  // Base64-encoded WASM binary; mutually exclusive with wasmPath
   dotenv?: {
-    enabled: boolean;  // Whether to load .env files for this module
-    path?: string;     // Directory containing .env files (defaults to server CWD)
+    enabled?: boolean;  // Whether to load .env files for this module
+    path?: string;      // Directory containing .env files (defaults to server CWD)
   };
+  httpPort?: number;    // HTTP-WASM only. Pin the runner subprocess to this port (1024–65535).
+                        // Load fails immediately if the port is already in use.
+                        // Ignored for proxy-wasm modules.
 }
 ```
 
@@ -153,11 +156,31 @@ curl -X POST http://localhost:5179/api/load \
 }
 ```
 
+**Example — pin HTTP-WASM to a specific port**
+
+```bash
+curl -X POST http://localhost:5179/api/load \
+  -H "Content-Type: application/json" \
+  -d '{
+    "wasmPath": "/home/user/project/build/app.wasm",
+    "httpPort": 8100
+  }'
+```
+
+```json
+{
+  "ok": true,
+  "wasmType": "http-wasm",
+  "resolvedPath": "/home/user/project/build/app.wasm"
+}
+```
+
 **Error Responses**
 
 | Status | Condition                                                                                                   |
 | ------ | ----------------------------------------------------------------------------------------------------------- |
 | `400`  | Validation failed, missing both `wasmPath` and `wasmBase64`, invalid path, or path does not end in `.wasm` |
+| `400`  | `httpPort` is specified and already in use (HTTP-WASM only)                                                 |
 | `500`  | WASM load failed or runner initialization error                                                             |
 
 ---
@@ -703,6 +726,7 @@ type HttpWasmConfig = {
   description?: string;
   appType: "http-wasm";
   wasm?: { path: string; description?: string };
+  httpPort?: number; // Pin the runner subprocess to this port (1024–65535)
   request: {
     method: string;
     path: string;
@@ -892,12 +916,12 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Request Schemas
 
-| Name           | Description                                |
-| -------------- | ------------------------------------------ |
-| `api-load`     | Request body schema for `POST /api/load`   |
-| `api-send`     | Request body schema for `POST /api/send`   |
-| `api-call`     | Request body schema for `POST /api/call`   |
-| `api-config`   | Request body schema for `POST /api/config` |
+| Name         | Description                                |
+| ------------ | ------------------------------------------ |
+| `api-load`   | Request body schema for `POST /api/load`   |
+| `api-send`   | Request body schema for `POST /api/send`   |
+| `api-call`   | Request body schema for `POST /api/call`   |
+| `api-config` | Request body schema for `POST /api/config` |
 
 #### Response / Type Schemas
 
