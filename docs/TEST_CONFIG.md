@@ -29,7 +29,7 @@ The config schema is a union of two variants selected by `appType`:
 | `wasm`               | `object`  | No                                     | —              | WASM binary configuration. Required when running without a programmatic `wasmBuffer`.                                                                  |
 | `wasm.path`          | `string`  | Yes (if `wasm` present)                | —              | Path to the compiled `.wasm` binary, relative to the config file or absolute.                                                                         |
 | `wasm.description`   | `string`  | No                                     | —              | Human-readable label for the WASM binary.                                                                                                              |
-| `appType`            | `string`  | Yes (schema) / CDN has runtime default | `"proxy-wasm"` | App variant. `"proxy-wasm"` for CDN mode; `"http-wasm"` for HTTP mode. HTTP-WASM has no default.                                                     |
+| `appType`            | `string`  | Yes (schema) / CDN has runtime default | `"proxy-wasm"` | App variant. `"proxy-wasm"` for CDN mode; `"http-wasm"` for HTTP mode. HTTP-WASM has no default.                                                      |
 | `request`            | `object`  | **Yes**                                | —              | Incoming HTTP request to simulate.                                                                                                                     |
 | `request.method`     | `string`  | Yes (schema) / runtime default         | `"GET"`        | HTTP method (e.g. `"GET"`, `"POST"`).                                                                                                                  |
 | `request.url`        | `string`  | **Yes** (CDN only)                     | —              | Full URL for the simulated upstream request (e.g. `"https://example.com/api"`). CDN mode only.                                                        |
@@ -39,10 +39,10 @@ The config schema is a union of two variants selected by `appType`:
 | `response`           | `object`  | No                                     | —              | Mock origin response for CDN mode. Not applicable to HTTP-WASM.                                                                                        |
 | `response.headers`   | `object`  | Yes (if `response` present)            | `{}`           | Key/value map of mock origin response headers.                                                                                                         |
 | `response.body`      | `string`  | Yes (if `response` present)            | `""`           | Mock origin response body as a plain string.                                                                                                           |
-| `properties`         | `object`  | **Yes** (schema) / runtime default     | `{}`           | CDN property key/value pairs passed to the WASM execution context. Values may be any JSON type.                                                       |
+| `properties`         | `object`  | **Yes** (schema) / runtime default     | `{}`           | CDN property key/value pairs passed to the WASM execution context. Values may be any JSON type.                                                        |
 | `dotenv`             | `object`  | No                                     | —              | Dotenv file loading configuration.                                                                                                                     |
 | `dotenv.enabled`     | `boolean` | No                                     | —              | Whether to load a `.env` file before execution.                                                                                                        |
-| `dotenv.path`        | `string`  | No                                     | —              | Path to the `.env` file. If omitted, resolves `.env` relative to the config file directory.                                                           |
+| `dotenv.path`        | `string`  | No                                     | —              | Path to the `.env` file. If omitted, resolves `.env` relative to the config file directory.                                                            |
 | `httpPort`           | `integer` | No                                     | —              | HTTP-WASM only. Pin the subprocess to a specific port (1024–65535) instead of dynamic allocation from the 8100–8199 pool. Throws if the port is busy. |
 
 ### Required vs. Default Distinction
@@ -81,10 +81,10 @@ Without `httpPort`, the runner allocates a port from the 8100–8199 range for e
 
 ### Fail-Fast Semantics
 
-If the pinned port is already in use, `loadConfigFile` throws immediately:
+If the pinned port is already in use, `HttpWasmRunner.load()` throws immediately:
 
 ```
-Error: port 8250 is not available
+fastedge-run port 8250 is not available — release it or choose a different httpPort in fastedge-config.test.json
 ```
 
 There is no fallback to dynamic allocation. Free the port or choose a different one before running.

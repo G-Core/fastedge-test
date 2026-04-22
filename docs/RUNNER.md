@@ -142,22 +142,26 @@ Executes an HTTP request through the WASM module. Only available on `HttpWasmRun
 execute(request: HttpRequest): Promise<HttpResponse>
 ```
 
-The runner forwards the request to the locally spawned `fastedge-run` process and returns the response including any logs captured from the process.
+`request.path` is a path on the locally spawned `fastedge-run` server, not a full URL. The runner forwards the request to that local process and returns the response including logs captured from the process stdout/stderr.
 
-**Redirects are not followed.** The underlying request to `fastedge-run` uses `redirect: "manual"`, so 3xx responses reach the caller intact — status code and `Location` header — rather than being transparently followed. This matches FastEdge edge behavior, where redirects are returned to the client rather than followed server-side.
+**Redirects are not followed.** The underlying fetch uses `redirect: "manual"`, so 3xx responses reach the caller intact — status code and `Location` header — rather than being transparently followed. This matches FastEdge edge behavior, where redirects are returned to the client rather than followed server-side, and lets tests assert on redirect status and `Location`.
 
-To follow a redirect manually, re-issue `execute()` against the `Location` value:
+To follow a redirect, inspect `response.headers.location` and handle by `Location` shape:
+
+- **Relative Location** (e.g. `/new-path`) — reuse directly as `request.path`.
+- **Absolute same-host Location** (e.g. `http://localhost:8100/new-path`) — parse via `new URL()` and re-issue with `pathname + search` as `request.path`.
+- **Absolute cross-host Location** (e.g. `https://other.example.com/`) — cannot be followed through the runner; the 3xx response is the terminal state for the test.
 
 ```typescript
 import { createRunner } from '@gcoredev/fastedge-test';
 
 const runner = await createRunner('./my-http-app.wasm');
 
+// Relative Location: reuse directly as path
 let response = await runner.execute({ path: '/moved', method: 'GET', headers: {} });
 if (response.status >= 300 && response.status < 400 && response.headers['location']) {
-  const redirectUrl = new URL(response.headers['location']);
   response = await runner.execute({
-    path: redirectUrl.pathname + redirectUrl.search,
+    path: response.headers['location'], // e.g. "/new-location"
     method: 'GET',
     headers: {},
   });
@@ -302,14 +306,15 @@ When testing proxy-wasm modules without a real origin server, pass `BUILTIN_SHOR
 
 ```typescript
 import { createRunner, BUILTIN_SHORTHAND } from '@gcoredev/fastedge-test';
+import type { FullFlowResult } from '@gcoredev/fastedge-test';
 
 const runner = await createRunner('./my-cdn-app.wasm');
-const result = await runner.callFullFlow(
+const result: FullFlowResult = await runner.callFullFlow(
   BUILTIN_SHORTHAND, // no origin fetch
   'GET',
   { 'accept': 'application/json' },
   '',
-  {}, '', 200, 'OK', {}, true
+  {}, '', 200, 'OK', {}, true,
 );
 ```
 

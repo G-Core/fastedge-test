@@ -72,8 +72,16 @@ export interface IWasmRunner {
    * Redirects are surfaced verbatim — the underlying fetch uses
    * `redirect: "manual"` so tests can assert on 3xx status and the `Location`
    * header. This matches how a FastEdge edge deployment returns redirects to
-   * the client rather than following them server-side. To follow a redirect,
-   * re-issue `execute()` against the returned `Location` value.
+   * the client rather than following them server-side.
+   *
+   * `execute` only hits the WASM app under test — `request.path` is a path on
+   * the spawned `fastedge-run` server, not a full URL. To follow a redirect
+   * the caller must inspect `response.headers.location`:
+   * - Relative Location (`/foo`) — reuse as `request.path` directly.
+   * - Absolute same-host Location — extract `pathname + search` via `new URL()`
+   *   and re-issue with that path.
+   * - Absolute cross-host Location — cannot be followed through the runner;
+   *   the 302 is the terminal state for the test.
    *
    * @param request The HTTP request to execute
    * @returns The HTTP response

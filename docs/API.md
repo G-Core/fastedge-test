@@ -925,14 +925,14 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Response / Type Schemas
 
-| Name                   | Description                                                    |
-| ---------------------- | -------------------------------------------------------------- |
-| `fastedge-config.test` | Schema for `fastedge-config.test.json` config files            |
-| `hook-result`          | Shape of a single `HookResult` object                          |
-| `hook-call`            | Shape of a `HookCall` input object                             |
-| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints  |
-| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution              |
-| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution     |
+| Name                   | Description                                                   |
+| ---------------------- | ------------------------------------------------------------- |
+| `fastedge-config.test` | Schema for `fastedge-config.test.json` config files           |
+| `hook-result`          | Shape of a single `HookResult` object                         |
+| `hook-call`            | Shape of a `HookCall` input object                            |
+| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints |
+| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution             |
+| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
 
 **Example**
 
