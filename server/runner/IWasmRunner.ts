@@ -21,6 +21,15 @@ export interface RunnerConfig {
   enforceProductionPropertyRules?: boolean;
   /** Override automatic WASM type detection. Use when detection produces wrong results. */
   runnerType?: WasmType;
+  /**
+   * HTTP-WASM only. Pin the spawned `fastedge-run` HTTP server to a specific
+   * port instead of allocating from the dynamic pool (8100-8199). Intended for
+   * Codespaces/Docker port-forwarding setups, stable live-preview URLs, or any
+   * external tooling that requires a fixed target. `load()` throws if the port
+   * is already in use — there is no fallback to dynamic allocation. Ignored
+   * for proxy-wasm runners.
+   */
+  httpPort?: number;
 }
 
 /**

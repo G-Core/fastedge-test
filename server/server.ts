@@ -145,7 +145,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
-  const { wasmBase64, wasmPath, dotenv } = parsed.data;
+  const { wasmBase64, wasmPath, dotenv, httpPort } = parsed.data;
 
   try {
     let bufferOrPath: Buffer | string;
@@ -236,9 +236,13 @@ app.post("/api/load", async (req: Request, res: Response) => {
     // directory, so WORKSPACE_PATH is the fallback. A client-provided path wins.
     const dotenvPath = resolveDotenvPathFromWorkspace(dotenv?.path) || process.env.WORKSPACE_PATH || undefined;
 
-    // Load WASM (accepts either Buffer or string path)
+    // Load WASM (accepts either Buffer or string path). httpPort is forwarded
+    // from the client so it works regardless of which config file the user
+    // loaded (picker, default, or an arbitrary *.test.json). Server-side read
+    // would be pinned to a single filename and miss the picker flow.
     await currentRunner.load(bufferOrPath, {
       dotenv: { enabled: dotenv?.enabled ?? false, path: dotenvPath },
+      httpPort,
     });
 
     // Emit WASM loaded event — include runner port for HTTP WASM so the
@@ -723,10 +727,12 @@ async function isPortAvailable(port: number): Promise<boolean> {
 
 /**
  * Find an available port starting from the preferred port.
- * Tries up to 10 ports (5179-5188 by default).
+ * Tries up to 50 ports (5179-5228 by default) so developers can run many
+ * concurrent debug sessions (Codespaces, multi-app projects) without
+ * exhausting the pool. Upper bound stays below common dev-tooling defaults.
  */
 async function resolvePort(preferred: number): Promise<number> {
-  const maxAttempts = 10;
+  const maxAttempts = 50;
   for (let port = preferred; port < preferred + maxAttempts; port++) {
     if (await isPortAvailable(port)) {
       return port;

@@ -19,6 +19,12 @@
         }
       },
       "additionalProperties": false
+    },
+    "httpPort": {
+      "description": "HTTP-WASM only. Pin the fastedge-run subprocess to this port instead of using dynamic allocation. Forwarded from the frontend's currently-loaded config (any *.test.json). Load fails fast if the port is busy.",
+      "type": "integer",
+      "minimum": 1024,
+      "maximum": 65535
     }
   },
   "additionalProperties": false

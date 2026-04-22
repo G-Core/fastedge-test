@@ -243,14 +243,18 @@ Executes a complete request/response flow through the WASM filter. Object-based 
 The returned `FullFlowResult` has this shape:
 
 ```typescript
-interface FullFlowResult {
+type FullFlowResult = {
   hookResults: Record<string, HookResult>; // keyed by camelCase hook name
   finalResponse: {
     status: number;
+    statusText: string;
     headers: Record<string, string>;
     body: string;
+    contentType: string;
+    isBase64?: boolean;
   };
-}
+  calculatedProperties?: Record<string, unknown>;
+};
 ```
 
 Hook results are accessed by camelCase key:
@@ -277,7 +281,8 @@ const reqHook = result.hookResults.onRequestHeaders;
 const resHook = result.hookResults.onResponseHeaders;
 
 // Access final response
-console.log(result.finalResponse.status); // 201
+console.log(result.finalResponse.status);      // 201
+console.log(result.finalResponse.contentType); // e.g. "application/json"
 ```
 
 ### runHttpRequest
@@ -287,6 +292,19 @@ function runHttpRequest(runner: IWasmRunner, options: HttpRequestOptions): Promi
 ```
 
 Executes a single HTTP request through an HTTP WASM app. Object-based wrapper around the runner's `execute` method. Use this for WASM apps that handle HTTP requests directly, as opposed to CDN proxy-wasm filter apps tested with `runFlow`.
+
+**Redirects are not followed.** The underlying fetch uses `redirect: "manual"`, so a 302 (or any 3xx) returned by the WASM is surfaced verbatim — `response.status` is `302` and `response.headers.location` is preserved. This matches FastEdge edge behaviour, where redirects are returned to the client rather than followed server-side.
+
+```typescript
+// Assert on a 302 redirect
+const response = await runHttpRequest(runner, { path: "/old-path" });
+assertHttpStatus(response, 302);
+assertHttpHeader(response, "location", "/new-path");
+
+// Follow the redirect manually
+const redirected = await runHttpRequest(runner, { path: response.headers["location"] });
+assertHttpStatus(redirected, 200);
+```
 
 ```typescript
 const response = await runHttpRequest(runner, {

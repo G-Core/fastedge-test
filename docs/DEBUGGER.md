@@ -71,7 +71,7 @@ process.kill(process.pid, "SIGTERM");
 PORT=8080 npx fastedge-debug
 ```
 
-If the preferred port is already in use, the server tries the next port sequentially, repeating up to 10 times (for example, `5179` through `5188` by default). If no free port is found in that range, the server exits with an error. Set `PORT` to a specific value to bypass auto-increment when a predictable port is required.
+If the preferred port is already in use, the server tries the next port sequentially, up to 50 ports (for example, `5179` through `5228` by default). If no free port is found in that range, the server exits with an error. Set `PORT` to a specific value to bypass auto-increment when a predictable port is required.
 
 The server writes the bound port number to `.fastedge-debug/.debug-port` under `WORKSPACE_PATH` (if set) or the current working directory, and deletes the file on shutdown. Use this file for programmatic port discovery when starting the server as a subprocess.
 
@@ -98,13 +98,13 @@ curl http://localhost:5179/health
 
 ## Environment Variables
 
-| Variable             | Type     | Default | Description                                                                                                                 |
-| -------------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `PORT`               | `number` | unset   | Port the HTTP server listens on. Defaults to `5179` when not set.                                                          |
-| `PROXY_RUNNER_DEBUG` | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity.                                                             |
-| `VSCODE_INTEGRATION` | `"true"` | unset   | Set to `"true"` when running in VSCode extension context; enables the `<workspace>` path placeholder in WASM path loading.  |
-| `WORKSPACE_PATH`     | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement.                              |
-| `FASTEDGE_RUN_PATH`  | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules.                                           |
+| Variable             | Type     | Default | Description                                                                                                                |
+| -------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`               | `number` | unset   | Port the HTTP server listens on. Defaults to `5179` when not set.                                                         |
+| `PROXY_RUNNER_DEBUG` | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity.                                                            |
+| `VSCODE_INTEGRATION` | `"true"` | unset   | Set to `"true"` when running in VSCode extension context; enables the `<workspace>` path placeholder in WASM path loading. |
+| `WORKSPACE_PATH`     | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement.                             |
+| `FASTEDGE_RUN_PATH`  | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules.                                          |
 
 ### Usage examples
 

@@ -1,5 +1,73 @@
 # Proxy-WASM Runner - Changelog
 
+## April 22, 2026 - HTTP-WASM port pinning (httpPort) + debugger port range expanded to 50
+
+### Overview
+Two related developer-experience improvements for HTTP-WASM users running the debugger under port-constrained environments (Codespaces, Docker, corporate dev VMs):
+
+1. **HTTP-WASM port pinning** — new `httpPort` field in `fastedge-config.test.json` (HTTP variant) and on `RunnerConfig`. When set, `HttpWasmRunner.load()` binds the spawned `fastedge-run` subprocess to that exact port instead of allocating from the dynamic 8100-8199 pool. Load fails fast (no fallback) if the port is busy — pinning is pointless if the port can silently shift. Intended for stable port-forward rules, reproducible live-preview URLs, and external tooling (proxies, tcpdump filters) that need a fixed target.
+
+2. **Debugger auto-increment range 10 → 50** — `resolvePort()` now scans 5179-5228 instead of 5179-5188. Developers can run many more concurrent debug sessions (common in multi-app Codespaces workspaces) without the "Could not find a free port" error. Floor stays at 5179 (preserves VSCode discovery and existing `.debug-port` expectations); upper bound avoids common dev-tooling defaults below 5300.
+
+### What Changed
+
+#### 1. `httpPort` config field + RunnerConfig plumbing
+- `schemas/fastedge-config.test.schema.json` — new optional `httpPort` (integer, 1024-65535) on the HTTP variant (`anyOf[0]`).
+- `server/schemas/config.ts` — Zod mirror on `HttpConfigSchema`.
+- `server/runner/IWasmRunner.ts` — `RunnerConfig.httpPort` with JSDoc describing fail-fast semantics and scope.
+- `server/runner/PortManager.ts` — `isPortFree()` promoted from private to public so pinned-port callers can reuse the OS-level check without duplicating logic or going through `allocate()`.
+- `server/runner/HttpWasmRunner.ts` — `load()` branches on `config.httpPort`: if set, calls `isPortFree()` and throws a clear error on busy; if free, uses directly and skips `PortManager.allocate()` (pinned ports are never added to the pool). `isPinnedPort` state field ensures `cleanup()` does not release a pinned port back to a pool it was never in.
+- `schemas/api-load.schema.json` + `server/schemas/api.ts` — accept optional `httpPort` in the `/api/load` request body.
+- `server/server.ts` — `/api/load` forwards the body-supplied `httpPort` into `runner.load()`.
+
+**Why the frontend forwards `httpPort` (not the server reading the config file):** the debugger UI supports loading any `*.test.json` via the file picker (`ConfigButtons.tsx`), but `/api/config` GET/POST hardcode the filename `fastedge-config.test.json`. A server-side read would pin this feature to that one filename and silently ignore any other config the user loaded — so body-plumbing (mirroring the dotenv pattern) is the only shape that handles arbitrary config filenames correctly.
+
+#### 2. Frontend plumbing
+- `frontend/src/stores/types.ts` — `ConfigState.httpPort: number | null`; `TestConfig.httpPort?: number` for import/export.
+- `frontend/src/stores/slices/configSlice.ts` — `loadFromConfig` reads `httpPort` from HTTP-WASM configs (cleared on CDN configs); `exportConfig` emits it only for HTTP apps.
+- `frontend/src/stores/slices/wasmSlice.ts` — `loadWasm` reads `get().httpPort` and forwards to the upload functions.
+- `frontend/src/api/index.ts` — `uploadWasm`/`uploadWasmFromPath` accept an optional `httpPort` argument and include it in the request body.
+
+No UI form for editing `httpPort` — it's a provisioning concern, set once in the config JSON (VCS-tracked) for Codespaces/Docker setups.
+
+#### 3. Debugger port range 10 → 50
+- `server/server.ts` — `resolvePort()` `maxAttempts = 50`; comment + error message updated. Range becomes 5179-5228.
+
+### 🧪 Testing
+- New integration suite `server/__tests__/integration/http-apps/http-port-pin/http-port-pin.test.ts` (2 tests, JS variant):
+  - Positive: `load({httpPort: 8250})` → `getPort() === 8250` → request executes.
+  - Negative: pre-bind `8251` via `net.createServer().listen()` → `load({httpPort: 8251})` throws `/port 8251 is not available/`.
+- Existing unit tests (`server/__tests__/unit/schemas/api.test.ts`, `frontend/src/stores/slices/wasmSlice.test.ts`) unaffected after expectation updates for the new 4th argument.
+- Full backend + frontend suites green: HTTP integration 78/78, frontend stores 345/345.
+
+### 📝 Notes
+- **Range guidance**: pinning inside the 8100-8199 range is allowed but risks collisions with dynamic allocations from other debug sessions. Recommend ports outside that pool (e.g., 8250+) for production-like setups.
+- **Fail-fast is deliberate** — the alternative (silently falling back to dynamic) would break the external setups (port-forward rules, Docker maps, bookmarks) that motivate pinning in the first place.
+- **Behaviour change (breaking) is zero** for users who don't set `httpPort`: dynamic allocation remains the default.
+- **Debugger range**: floor stays at 5179 to preserve existing `.debug-port` discovery behaviour in VSCode integrations. Upper bound (5228) avoids common dev-tooling defaults (postgres, Jenkins, etc. all ≥5300).
+- Doc regeneration via `fastedge-plugin-source/generate-docs.sh` and version bump are out of scope — both will be performed manually before release.
+
+**Files Modified:**
+- `schemas/fastedge-config.test.schema.json`
+- `schemas/api-load.schema.json`
+- `server/schemas/config.ts`
+- `server/schemas/api.ts`
+- `server/runner/IWasmRunner.ts`
+- `server/runner/PortManager.ts`
+- `server/runner/HttpWasmRunner.ts`
+- `server/server.ts` (`/api/load` handler + `resolvePort` range)
+- `frontend/src/stores/types.ts`
+- `frontend/src/stores/slices/configSlice.ts`
+- `frontend/src/stores/slices/wasmSlice.ts`
+- `frontend/src/stores/slices/wasmSlice.test.ts` (test expectations)
+- `frontend/src/api/index.ts`
+- `fastedge-plugin-source/.generation-config.md`
+
+**Files Created:**
+- `server/__tests__/integration/http-apps/http-port-pin/http-port-pin.test.ts`
+
+---
+
 ## April 22, 2026 - HttpWasmRunner.execute() surfaces redirects verbatim (production parity)
 
 ### Overview

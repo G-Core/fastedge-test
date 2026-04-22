@@ -49,6 +49,12 @@
           "type": "string",
           "const": "http-wasm"
         },
+        "httpPort": {
+          "description": "Pin the fastedge-run subprocess to a specific port instead of allocating from the dynamic pool (8100-8199). Use for Codespaces/Docker port-forwarding, stable live-preview URLs, or tooling that needs a fixed target. Load fails fast if the port is already in use.",
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
         "request": {
           "type": "object",
           "properties": {
