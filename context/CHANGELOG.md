@@ -1,5 +1,31 @@
 # Proxy-WASM Runner - Changelog
 
+## April 22, 2026 - CDN request dropdown exposes full HTTP method set
+
+### Overview
+The CDN (proxy-wasm) request bar previously offered only `GET` and `POST` in the method dropdown, while the HTTP-WASM view already exposed all seven standard methods. Everything below the UI already supported arbitrary methods — the config schema (open string), `ApiSendBodySchema`, `ProxyWasmRunner.callFullFlow` (forwards via `:method` pseudo-header), `HttpWasmRunner.execute` (forwards to Node `fetch`) — and the `cors/fixtures/preflight.test.json` example proved OPTIONS works end-to-end today. The limit was a UI default; lifted now so CORS-style examples (preflight, PUT/DELETE variations) can be exercised from the dropdown without editing the URL bar or loading a fixture file.
+
+### What Changed
+
+#### `RequestBar` default method list → full 7
+- `frontend/src/components/common/RequestPanel/RequestBar/RequestBar.tsx` — `DEFAULT_METHODS` bumped from `["GET", "POST"]` to `["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]`. Since `ProxyWasmView` does not pass a `methods` prop, the CDN dropdown picks up the new default automatically.
+
+#### Redundant const removed from `HttpWasmView`
+- `frontend/src/views/HttpWasmView/HttpWasmView.tsx` — deleted the local `HTTP_METHODS` array (now identical to the component default) and dropped the `methods={HTTP_METHODS}` prop. Ordering is preserved.
+
+### 🧪 Testing
+No behaviour or contract change below the UI layer — state-layer tests (`requestSlice.test.ts`) already cover all 7 methods round-tripping through the store. Full frontend suite green (345/345). Backend integration untouched.
+
+### 📝 Notes
+- Schema-level method enum intentionally not added: `fastedge-config.test.json` accepts any string today, and restricting to a known set would break anyone using WebDAV/custom extension methods (`PROPFIND`, `MKCOL`, etc.). Open string stays.
+- `TRACE` and `CONNECT` deliberately excluded from the dropdown — rarely needed in application testing; `CONNECT` is a proxy-level concern that doesn't map cleanly onto the runner semantics. Users can still set either via the config file if needed.
+
+**Files Modified:**
+- `frontend/src/components/common/RequestPanel/RequestBar/RequestBar.tsx`
+- `frontend/src/views/HttpWasmView/HttpWasmView.tsx`
+
+---
+
 ## April 22, 2026 - HTTP-WASM port pinning (httpPort) + debugger port range expanded to 50
 
 ### Overview
