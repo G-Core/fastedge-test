@@ -5,6 +5,18 @@ use serde_json::json;
 
 #[wstd::http_server]
 async fn main(request: Request<Body>) -> anyhow::Result<Response<Body>> {
+    if let Some(redirect_url) = request
+        .headers()
+        .get("x-redirect-url")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+    {
+        return Ok(Response::builder()
+            .status(302)
+            .header("location", &redirect_url)
+            .body(Body::from(""))?);
+    }
+
     let method = request.method().to_string();
     let request_url = request.uri().to_string();
 

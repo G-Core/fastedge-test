@@ -140,7 +140,13 @@ export class HttpWasmRunner implements IWasmRunner {
   }
 
   /**
-   * Execute an HTTP request through the WASM module
+   * Execute an HTTP request through the WASM module.
+   *
+   * Redirects are surfaced verbatim — `fetch` is called with
+   * `redirect: "manual"` so 3xx responses (status + `Location`) reach the
+   * caller intact. This matches FastEdge edge behaviour, which returns
+   * redirects to the client rather than following them server-side. See
+   * `IWasmRunner.execute` for the public contract.
    */
   async execute(request: HttpRequest): Promise<HttpResponse> {
     if (!this.port || !this.process) {
@@ -158,6 +164,10 @@ export class HttpWasmRunner implements IWasmRunner {
         headers: request.headers,
         body: request.body || undefined,
         signal: AbortSignal.timeout(30000), // 30 second timeout
+        // Surface 3xx responses verbatim so tests can assert on status/Location.
+        // A FastEdge edge returns redirects to the client rather than following
+        // them server-side; production parity requires the same here.
+        redirect: "manual",
       });
 
       // Read response body

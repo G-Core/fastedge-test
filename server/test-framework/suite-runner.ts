@@ -164,6 +164,11 @@ export async function runFlow(
  * - method defaults to "GET"
  * - headers defaults to {}
  * - body defaults to ""
+ *
+ * Redirects are surfaced verbatim — a 302 from the WASM is returned to the
+ * caller with its `Location` header preserved, matching FastEdge edge
+ * behaviour. To follow a redirect, issue a second `runHttpRequest()` against
+ * the returned `Location` value.
  */
 export async function runHttpRequest(
   runner: IWasmRunner,

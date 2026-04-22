@@ -6,6 +6,18 @@ use std::collections::HashMap;
 
 #[fastedge::http]
 fn main(req: Request<Body>) -> Result<Response<Body>> {
+    if let Some(redirect_url) = req
+        .headers()
+        .get("x-redirect-url")
+        .and_then(|v| v.to_str().ok())
+    {
+        return Response::builder()
+            .status(StatusCode::FOUND)
+            .header("location", redirect_url)
+            .body(Body::from(""))
+            .map_err(Into::into);
+    }
+
     let method = req.method().to_string();
     let request_url = req.uri().to_string();
 

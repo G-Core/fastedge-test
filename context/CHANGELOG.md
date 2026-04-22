@@ -1,5 +1,55 @@
 # Proxy-WASM Runner - Changelog
 
+## April 22, 2026 - HttpWasmRunner.execute() surfaces redirects verbatim (production parity)
+
+### Overview
+`HttpWasmRunner.execute()` now calls `fetch` with `redirect: "manual"` so 3xx responses returned by an HTTP WASM app reach the caller intact — status code and `Location` header preserved. Previously Node `fetch`'s default (`redirect: "follow"`) caused the runner to transparently follow redirects server-side, producing confusing failure modes where redirect-asserting tests saw the redirect target instead of the 302 (typically "Expected 302, got 200/404" or unresolvable-host fetch errors). This matches how a real FastEdge edge deployment returns redirects to the client rather than following them itself.
+
+### Behaviour change
+Tests that previously saw the redirect target now see the redirect. This is a breaking change for any test that implicitly relied on `follow` — no such test existed in this repo, but external consumers of `@gcoredev/fastedge-test` may need to re-issue `runHttpRequest()` against `response.headers.location` to reproduce prior behaviour.
+
+### What Changed
+
+#### 1. `server/runner/HttpWasmRunner.ts` — pass `redirect: "manual"` to `fetch`
+- One-line runner fix; JSDoc updated on `IWasmRunner.execute`, `HttpWasmRunner.execute`, and `runHttpRequest` explaining the semantics.
+
+#### 2. `test-applications/http-apps/{js,rust/basic,rust/wasi}/http-responder` — redirect branch
+- When the request carries `x-redirect-url: <url>`, http-responder now returns `302` + `Location: <url>`. Otherwise its existing 200 JSON echo is preserved. Mirrors the CDN `cdn-redirect` test-app pattern.
+- All three variants rebuilt (`wasm/http-apps/{js,rust/basic,rust/wasi}/http-responder.wasm`).
+
+#### 3. `server/__tests__/integration/http-apps/http-responder/http-responder.test.ts` — regression
+- Parameterized across JS / Rust basic / Rust wasi variants (6 tests total).
+- Asserts the 302 + `Location` is returned verbatim, including for external unroutable targets (which would otherwise fail the fetch if follow were still active).
+
+#### 4. `fastedge-plugin-source/.generation-config.md` — doc-generator instructions
+- Added CRITICAL bullets under `docs/RUNNER.md` and `docs/TEST_FRAMEWORK.md` so the doc generator reliably surfaces the manual-redirect contract and a short "follow manually" snippet.
+
+**Files Modified:**
+- `server/runner/HttpWasmRunner.ts` — `redirect: "manual"` + expanded JSDoc
+- `server/runner/IWasmRunner.ts` — JSDoc on `execute()` method
+- `server/test-framework/suite-runner.ts` — JSDoc on `runHttpRequest`
+- `test-applications/http-apps/js/src/http-responder.ts`
+- `test-applications/http-apps/rust/basic/http-responder/src/lib.rs`
+- `test-applications/http-apps/rust/wasi/http-responder/src/lib.rs`
+- `wasm/http-apps/js/http-responder.wasm` (rebuilt)
+- `wasm/http-apps/rust/basic/http-responder.wasm` (rebuilt)
+- `wasm/http-apps/rust/wasi/http-responder.wasm` (rebuilt)
+- `fastedge-plugin-source/.generation-config.md`
+
+**Files Created:**
+- `server/__tests__/integration/http-apps/http-responder/http-responder.test.ts`
+
+### 🧪 Testing
+Full HTTP integration suite: 7 files, 76 tests passing (including the 6 new http-responder redirect assertions across all 3 variants). Previously passing tests unaffected — the redirect branch is dormant unless `x-redirect-url` is set.
+
+### 📝 Notes
+- Discovered during Task 3 (GitHub OAuth) WASM integration testing in `apps/saml-app`; full symptom/diagnosis documented in that project's `context/known-issues.md` (entry to be removed once consumers bump past this release).
+- `redirect: "error"` was considered and rejected — it would throw on every 302 and break tests that intentionally assert on redirects. `"manual"` preserves the Response for inspection while matching edge behaviour.
+- Configurable redirect mode (`HttpRequestOptions.redirect`) was deliberately not added: YAGNI, risk of cargo-culting `follow` back in, and users who need to follow can issue a second request against `response.headers.location` (made explicit at the call site).
+- Doc regeneration via `fastedge-plugin-source/generate-docs.sh` and version bump are intentionally out of scope for this changeset; both will be performed manually before release.
+
+---
+
 ## April 13, 2026 - CLI app root resolution aligned with VSCode extension
 
 ### Overview

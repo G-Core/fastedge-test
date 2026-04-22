@@ -58,7 +58,14 @@ export interface IWasmRunner {
   load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void>;
 
   /**
-   * Execute a request through the WASM module (HTTP WASM only)
+   * Execute a request through the WASM module (HTTP WASM only).
+   *
+   * Redirects are surfaced verbatim — the underlying fetch uses
+   * `redirect: "manual"` so tests can assert on 3xx status and the `Location`
+   * header. This matches how a FastEdge edge deployment returns redirects to
+   * the client rather than following them server-side. To follow a redirect,
+   * re-issue `execute()` against the returned `Location` value.
+   *
    * @param request The HTTP request to execute
    * @returns The HTTP response
    */
