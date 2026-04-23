@@ -265,6 +265,19 @@
         "www-authenticate": {
           "type": "string"
         }
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
       }
     }
   }

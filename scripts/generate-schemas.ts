@@ -86,6 +86,20 @@ for (const { name, sourcePath, typeName } of tsSchemaConfigs) {
       additionalProperties: true,
     });
     const schema = generator.createSchema(typeName);
+
+    // ts-json-schema-generator drops the index signature that IncomingHttpHeaders
+    // inherits from NodeJS.Dict<string | string[]>, leaving unknown header keys
+    // unconstrained. Restore it so the schema matches the TS type.
+    const incomingHeaders = (schema as any).definitions?.IncomingHttpHeaders;
+    if (incomingHeaders && incomingHeaders.additionalProperties === undefined) {
+      incomingHeaders.additionalProperties = {
+        anyOf: [
+          { type: 'string' },
+          { type: 'array', items: { type: 'string' } },
+        ],
+      };
+    }
+
     const outputPath = path.join(schemasDir, `${name}.schema.json`);
     fs.writeFileSync(outputPath, JSON.stringify(schema, null, 2) + '\n');
     console.log(`✓ Generated ${name}.schema.json`);
