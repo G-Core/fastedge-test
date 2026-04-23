@@ -15,8 +15,6 @@ export function ProxyWasmView() {
     url,
     requestHeaders,
     requestBody,
-    responseHeaders,
-    responseBody,
     setMethod,
     setUrl,
     setRequestHeaders,
@@ -45,12 +43,14 @@ export function ProxyWasmView() {
     wasmPath,
   } = useAppStore();
 
+  // Response state (request_headers/body from slice; response seed is empty —
+  // the real response comes from full-flow results or a specific single-hook call).
   const hookCall = {
     request_headers: requestHeaders,
     request_body: requestBody,
     request_trailers: {},
-    response_headers: responseHeaders,
-    response_body: responseBody,
+    response_headers: {},
+    response_body: "",
     response_trailers: {},
     properties,
   };

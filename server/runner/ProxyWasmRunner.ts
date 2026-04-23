@@ -436,22 +436,20 @@ export class ProxyWasmRunner implements IWasmRunner {
           `Built-in responder: ${responseStatus} ${responseStatusText}, mode=${responseContentMode || "full"}`,
         );
       } else {
-        // Real HTTP fetch to origin
-        // Reconstruct target URL from potentially modified properties
-        // WASM can modify request.path, request.scheme, request.host, request.query
-        const modifiedScheme =
-          (propertiesAfterRequestBody["request.scheme"] as string) || "https";
-        const modifiedHost =
-          (propertiesAfterRequestBody["request.host"] as string) || "localhost";
-        const modifiedPath =
-          (propertiesAfterRequestBody["request.path"] as string) || "/";
-        const modifiedQuery =
-          (propertiesAfterRequestBody["request.query"] as string) || "";
-
-        const actualTargetUrl = `${modifiedScheme}://${modifiedHost}${modifiedPath}${modifiedQuery ? "?" + modifiedQuery : ""}`;
+        // Real HTTP fetch to origin.
+        //
+        // `request.url` is the single routing source (FastEdge production
+        // parity — the `geoRedirect` example is the canonical pattern). WASM
+        // writes to `request.path`, `request.host`, `request.scheme`, or
+        // `request.query` return Ok but do NOT affect the outbound fetch
+        // target, matching the silent-drop behaviour on production. WASM code
+        // that needs to re-route must rewrite `request.url` directly.
+        const actualTargetUrl =
+          (propertiesAfterRequestBody["request.url"] as string) || targetUrl;
+        const actualScheme = new URL(actualTargetUrl).protocol.replace(":", "");
 
         this.logDebug(`Original URL: ${targetUrl}`);
-        this.logDebug(`Modified URL: ${actualTargetUrl}`);
+        this.logDebug(`Effective URL: ${actualTargetUrl}`);
         this.logDebug(`Fetching ${requestMethod} ${actualTargetUrl}`);
 
         // Preserve the host header as x-forwarded-host since fetch() will override it.
@@ -461,6 +459,17 @@ export class ProxyWasmRunner implements IWasmRunner {
         const fetchHeaders: Record<string, string> = HeaderManager.flattenToMap(
           modifiedRequestHeaders,
         );
+
+        // Strip HTTP/2 pseudo-headers (:method, :path, :authority, :scheme).
+        // WASM hooks legitimately read them via proxy_get_header_map_value, but
+        // HTTP/1.1 fetch rejects them with "Headers.append: \":method\" is an
+        // invalid header name." Production FastEdge also drops pseudo-headers
+        // before upstream fetch. The proxy_http_call branch below does the same.
+        for (const key of Object.keys(fetchHeaders)) {
+          if (key.startsWith(":")) {
+            delete fetchHeaders[key];
+          }
+        }
 
         // If there's a host header, also add it as x-forwarded-host
         const hostHeader = Object.entries(modifiedRequestHeaders).find(
@@ -473,12 +482,12 @@ export class ProxyWasmRunner implements IWasmRunner {
           this.logDebug(`Adding x-forwarded-host: ${hostValue}`);
         }
 
-        // Auto-inject standard proxy headers based on URL and properties
-        fetchHeaders["x-forwarded-proto"] = modifiedScheme;
-        this.logDebug(`Adding x-forwarded-proto: ${modifiedScheme}`);
+        // Auto-inject standard proxy headers derived from the effective URL
+        fetchHeaders["x-forwarded-proto"] = actualScheme;
+        this.logDebug(`Adding x-forwarded-proto: ${actualScheme}`);
 
         fetchHeaders["x-forwarded-port"] =
-          modifiedScheme === "https" ? "443" : "80";
+          actualScheme === "https" ? "443" : "80";
         this.logDebug(
           `Adding x-forwarded-port: ${fetchHeaders["x-forwarded-port"]}`,
         );
@@ -755,13 +764,13 @@ export class ProxyWasmRunner implements IWasmRunner {
 
     const requestHeaders = HeaderManager.normalize(call.request.headers ?? {});
     const responseHeaders = HeaderManager.normalize(
-      call.response.headers ?? {},
+      call.response?.headers ?? {},
     );
     const requestBody = call.request.body ?? "";
-    const responseBody = call.response.body ?? "";
+    const responseBody = call.response?.body ?? "";
     const requestMethod = call.request.method ?? "GET";
-    const responseStatus = call.response.status ?? 200;
-    const responseStatusText = call.response.statusText ?? "OK";
+    const responseStatus = call.response?.status ?? 200;
+    const responseStatusText = call.response?.statusText ?? "OK";
 
     this.propertyResolver.setProperties({ ...(call.properties ?? {}) });
     // Only pass path/scheme if explicitly provided to avoid overwriting URL-extracted values
@@ -1192,33 +1201,25 @@ export class ProxyWasmRunner implements IWasmRunner {
   }
 
   /**
-   * Interface-compliant callFullFlow method
+   * Interface-compliant callFullFlow method.
+   *
+   * The upstream response is generated at runtime by a real HTTP fetch
+   * against `url` or by the built-in responder when `url === "built-in"`.
    */
   async callFullFlow(
     url: string,
     method: string,
     headers: Record<string, string>,
     body: string,
-    responseHeaders: Record<string, string>,
-    responseBody: string,
-    responseStatus: number,
-    responseStatusText: string,
     properties: Record<string, unknown>,
     enforceProductionPropertyRules: boolean
   ): Promise<FullFlowResult> {
-    // Convert to HookCall format and call legacy method
     const call: HookCall = {
       hook: "", // Not used in fullFlow
       request: {
         headers,
         body,
         method,
-      },
-      response: {
-        headers: responseHeaders,
-        body: responseBody,
-        status: responseStatus,
-        statusText: responseStatusText,
       },
       properties,
       enforceProductionPropertyRules,

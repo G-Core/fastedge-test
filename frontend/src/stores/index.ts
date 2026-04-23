@@ -37,8 +37,6 @@ export const useAppStore = create<AppStore>()(
               url: state.url,
               requestHeaders: state.requestHeaders,
               requestBody: state.requestBody,
-              responseHeaders: state.responseHeaders,
-              responseBody: state.responseBody,
             },
             config: {
               properties: state.properties,

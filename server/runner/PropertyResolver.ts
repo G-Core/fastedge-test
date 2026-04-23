@@ -80,17 +80,22 @@ export class PropertyResolver {
     try {
       const url = new URL(targetUrl);
 
-      // Extract URL components
+      // Extract URL components. FastEdge/nginx production parity: request.path
+      // includes the query string (e.g. "/foo?a=1"), mirroring the `:path`
+      // pseudo-header. request.query remains the query portion alone, without
+      // the leading `?`.
       this.requestUrl = targetUrl;
       this.requestHost = url.hostname + (url.port ? `:${url.port}` : "");
-      this.requestPath = url.pathname || "/";
+      this.requestPath = (url.pathname || "/") + url.search;
       this.requestQuery = url.search.startsWith("?")
         ? url.search.substring(1)
         : url.search;
       this.requestScheme = url.protocol.replace(":", "");
 
-      // Extract file extension from path
-      const pathParts = this.requestPath.split("/");
+      // Extract file extension from the last path segment, ignoring any query
+      // portion that now lives inside requestPath.
+      const pathOnly = url.pathname || "/";
+      const pathParts = pathOnly.split("/");
       const lastPart = pathParts[pathParts.length - 1];
       const dotIndex = lastPart.lastIndexOf(".");
       if (dotIndex > 0 && dotIndex < lastPart.length - 1) {

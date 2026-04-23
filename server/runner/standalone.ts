@@ -7,7 +7,7 @@
  * Usage:
  *   import { createRunner } from './server/runner/standalone.js';
  *   const runner = await createRunner('./path/to/wasm.wasm');
- *   const result = await runner.callFullFlow('https://example.com', 'GET', {}, '', {}, '', 200, 'OK', {}, true);
+ *   const result = await runner.callFullFlow('https://example.com', 'GET', {}, '', {}, true);
  */
 
 import { readFile } from "fs/promises";

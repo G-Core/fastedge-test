@@ -157,7 +157,8 @@ describe("PropertyResolver", () => {
       resolver.extractRuntimePropertiesFromUrl("https://api.example.com:8080/v1/users?id=123");
       expect(resolver.resolve("request.url")).toBe("https://api.example.com:8080/v1/users?id=123");
       expect(resolver.resolve("request.host")).toBe("api.example.com:8080");
-      expect(resolver.resolve("request.path")).toBe("/v1/users");
+      // FastEdge production parity: request.path includes the query string.
+      expect(resolver.resolve("request.path")).toBe("/v1/users?id=123");
       expect(resolver.resolve("request.query")).toBe("id=123");
       expect(resolver.resolve("request.scheme")).toBe("https");
       expect(resolver.resolve("request.extension")).toBe("");
@@ -167,7 +168,7 @@ describe("PropertyResolver", () => {
       resolver.extractRuntimePropertiesFromUrl("http://localhost:3000/api/data.json?format=compact");
       expect(resolver.resolve("request.url")).toBe("http://localhost:3000/api/data.json?format=compact");
       expect(resolver.resolve("request.host")).toBe("localhost:3000");
-      expect(resolver.resolve("request.path")).toBe("/api/data.json");
+      expect(resolver.resolve("request.path")).toBe("/api/data.json?format=compact");
       expect(resolver.resolve("request.query")).toBe("format=compact");
       expect(resolver.resolve("request.scheme")).toBe("http");
       expect(resolver.resolve("request.extension")).toBe("json");
@@ -297,6 +298,7 @@ describe("PropertyResolver", () => {
 
       const allProps = resolver.getAllProperties();
       expect(allProps["request.url"]).toBe("https://example.com/api");
+      // request.path has no query here — URL carries none.
       expect(allProps["request.path"]).toBe("/api");
       expect(allProps["request.host"]).toBe("example.com");
       expect(allProps["request.query"]).toBe("");
@@ -312,7 +314,7 @@ describe("PropertyResolver", () => {
       const calculated = resolver.getCalculatedProperties();
       expect(calculated["request.url"]).toBe("https://api.example.com/users?limit=10");
       expect(calculated["request.host"]).toBe("api.example.com");
-      expect(calculated["request.path"]).toBe("/users");
+      expect(calculated["request.path"]).toBe("/users?limit=10");
       expect(calculated["request.query"]).toBe("limit=10");
       expect(calculated["request.scheme"]).toBe("https");
       expect(calculated["request.method"]).toBe("POST");
@@ -610,7 +612,7 @@ describe("PropertyResolver", () => {
       const calculated = resolver.getCalculatedProperties();
       expect(calculated["request.url"]).toBe("https://api.example.com:8080/v2/users.json?limit=50");
       expect(calculated["request.host"]).toBe("api.example.com:8080");
-      expect(calculated["request.path"]).toBe("/v2/users.json");
+      expect(calculated["request.path"]).toBe("/v2/users.json?limit=50");
       expect(calculated["request.query"]).toBe("limit=50");
       expect(calculated["request.scheme"]).toBe("https");
       expect(calculated["request.extension"]).toBe("json");
@@ -676,7 +678,7 @@ describe("PropertyResolver", () => {
       expect(resolver.resolve("request.url")).toBe("https://api.example.com:443/v1/users/123.json?include=profile");
       // Port 443 is default for HTTPS, so URL parser omits it
       expect(resolver.resolve("request.host")).toBe("api.example.com");
-      expect(resolver.resolve("request.path")).toBe("/v1/users/123.json");
+      expect(resolver.resolve("request.path")).toBe("/v1/users/123.json?include=profile");
       expect(resolver.resolve("request.query")).toBe("include=profile");
       expect(resolver.resolve("request.method")).toBe("GET");
       expect(resolver.resolve("request.scheme")).toBe("https");

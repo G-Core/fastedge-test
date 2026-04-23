@@ -314,10 +314,6 @@ export async function sendFullFlow(
       body: params.request_body || "",
       method: method || "GET",
     },
-    response: {
-      headers: params.response_headers || {},
-      body: params.response_body || "",
-    },
     properties: params.properties || {},
     // logLevel not sent - server always returns all logs for client-side filtering
   };

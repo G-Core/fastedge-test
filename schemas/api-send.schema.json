@@ -41,26 +41,6 @@
       },
       "additionalProperties": false
     },
-    "response": {
-      "type": "object",
-      "properties": {
-        "headers": {
-          "default": {},
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "body": {
-          "default": "",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
     "properties": {
       "default": {},
       "type": "object",

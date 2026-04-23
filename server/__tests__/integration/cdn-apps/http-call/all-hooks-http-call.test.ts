@@ -111,10 +111,6 @@ describe('all-hooks-http-call: proxy_http_call dispatched in all four hooks', ()
       'GET',
       {},   // headers: runner auto-injects host=127.0.0.1:${port}
       '',   // request body
-      {},   // response headers (filled by downstream)
-      '',   // response body   (filled by downstream)
-      200,
-      'OK',
       {},   // properties
       true, // enforce production property rules
     );

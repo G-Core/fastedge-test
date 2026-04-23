@@ -15,7 +15,15 @@ export type HookCall = {
     path?: string;
     scheme?: string;
   };
-  response: {
+  /**
+   * Seed state for the response hooks (`onResponseHeaders` / `onResponseBody`)
+   * when calling them in isolation via `callHook()`. The full-flow path
+   * (`callFullFlow`) generates the upstream response at runtime and does not
+   * consume this field — request hooks ignore it, and response hooks are
+   * called with the response built from the live origin fetch or built-in
+   * responder output.
+   */
+  response?: {
     headers: HeaderRecord;
     body: string;
     status?: number;

@@ -238,10 +238,6 @@ export class HttpWasmRunner implements IWasmRunner {
     _method: string,
     _headers: Record<string, string>,
     _body: string,
-    _responseHeaders: Record<string, string>,
-    _responseBody: string,
-    _responseStatus: number,
-    _responseStatusText: string,
     _properties: Record<string, unknown>,
     _enforceProductionPropertyRules: boolean,
   ): Promise<FullFlowResult> {

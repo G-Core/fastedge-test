@@ -6,8 +6,6 @@ const DEFAULT_REQUEST_STATE: RequestState = {
   url: 'http://fastedge-builtin.debug',
   requestHeaders: {},
   requestBody: '',
-  responseHeaders: {},
-  responseBody: '',
 };
 
 export const createRequestSlice: StateCreator<
@@ -38,16 +36,6 @@ export const createRequestSlice: StateCreator<
       state.requestBody = body;
     }),
 
-  setResponseHeaders: (headers) =>
-    set((state) => {
-      state.responseHeaders = headers;
-    }),
-
-  setResponseBody: (body) =>
-    set((state) => {
-      state.responseBody = body;
-    }),
-
   updateRequestHeader: (key, value) =>
     set((state) => {
       state.requestHeaders[key] = value;
@@ -56,16 +44,6 @@ export const createRequestSlice: StateCreator<
   removeRequestHeader: (key) =>
     set((state) => {
       delete state.requestHeaders[key];
-    }),
-
-  updateResponseHeader: (key, value) =>
-    set((state) => {
-      state.responseHeaders[key] = value;
-    }),
-
-  removeResponseHeader: (key) =>
-    set((state) => {
-      delete state.responseHeaders[key];
     }),
 
   resetRequest: () =>

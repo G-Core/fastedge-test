@@ -90,10 +90,6 @@ describe('createRunner (from file path)', () => {
       'GET',
       { host: 'example.com' },
       '',   // request body
-      {},   // response headers
-      '',   // response body
-      200,
-      'OK',
       {},   // properties
       true, // enforce production rules
     );

@@ -74,10 +74,6 @@ describe('Full-Flow: CDN Headers-Change with Downstream', () => {
       'GET',
       {}, // Request headers
       '', // Request body
-      {}, // Response headers (will be filled by downstream)
-      '', // Response body (will be filled by downstream)
-      200,
-      'OK',
       {}, // Properties
       true // Enforce production property rules
     );
@@ -119,10 +115,6 @@ describe('Full-Flow: CDN Headers-Change with Downstream', () => {
       },
       JSON.stringify({ original: 'data' }), // Original request body
       {},
-      '',
-      200,
-      'OK',
-      {},
       true
     );
 
@@ -150,10 +142,6 @@ describe('Full-Flow: CDN Headers-Change with Downstream', () => {
       {},
       '',
       {},
-      '',
-      200,
-      'OK',
-      {},
       true
     );
 
@@ -177,10 +165,6 @@ describe('Full-Flow: CDN Headers-Change with Downstream', () => {
         'x-inject-res-body': 'injected-response-value',
       },
       '',
-      {},
-      '',
-      200,
-      'OK',
       {},
       true
     );
@@ -211,10 +195,6 @@ describe('Full-Flow: CDN Headers-Change with Downstream', () => {
         'x-inject-res-body': 'response-injection',
       },
       JSON.stringify({ test: 'data' }),
-      {},
-      '',
-      200,
-      'OK',
       {},
       true
     );
@@ -264,10 +244,6 @@ describe('Full-Flow: CDN Headers-Change with Downstream', () => {
       },
       '',
       {},
-      '',
-      200,
-      'OK',
-      {},
       true
     );
 
@@ -292,10 +268,6 @@ describe('Full-Flow: CDN Headers-Change with Downstream', () => {
         'x-inject-res-body': 'injected_into_responseBody',
       },
       JSON.stringify({ message: 'Hello' }),
-      {},
-      '',
-      200,
-      'OK',
       {},
       true
     );

@@ -21,11 +21,6 @@ export const HttpRequestConfigSchema = z.object({
   body: z.string().optional().default(''),
 });
 
-export const ResponseConfigSchema = z.object({
-  headers: z.record(z.string(), z.string()).optional().default({}),
-  body: z.string().optional().default(''),
-});
-
 const DotenvSchema = z.object({
   enabled: z.boolean().optional(),
   path: z.string().optional(),
@@ -39,11 +34,12 @@ const BaseConfigSchema = z.object({
   dotenv: DotenvSchema.optional(),
 });
 
-// CDN config: full URL + optional mock response
+// CDN config: full URL. The upstream response is generated at runtime —
+// either by the built-in responder (url === "built-in") or by a real fetch
+// against the configured URL. There is no fixture-level mock response.
 const CdnConfigSchema = BaseConfigSchema.extend({
   appType: z.literal('proxy-wasm').default('proxy-wasm'),
   request: CdnRequestConfigSchema,
-  response: ResponseConfigSchema.optional(),
 });
 
 // HTTP config: path only, no mock response
@@ -69,7 +65,6 @@ export type WasmConfig = z.infer<typeof WasmConfigSchema>;
 export type CdnRequestConfig = z.infer<typeof CdnRequestConfigSchema>;
 export type HttpRequestConfig = z.infer<typeof HttpRequestConfigSchema>;
 export type RequestConfig = z.infer<typeof CdnRequestConfigSchema>;
-export type ResponseConfig = z.infer<typeof ResponseConfigSchema>;
 export type CdnConfig = z.infer<typeof CdnConfigSchema>;
 export type HttpConfig = z.infer<typeof HttpConfigSchema>;
 export type TestConfig = z.infer<typeof TestConfigSchema>;

@@ -141,10 +141,6 @@ describe("Runner Type and Interface", () => {
         {},
         "",
         {},
-        "",
-        200,
-        "OK",
-        {},
         true,
       ),
     ).rejects.toThrow("not supported for HTTP WASM");

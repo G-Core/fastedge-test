@@ -110,10 +110,6 @@ export const createConfigSlice: StateCreator<
         state.url = req.url;
         state.requestHeaders = { ...req.headers };
         state.requestBody = req.body ?? '';
-        if (config.response) {
-          state.responseHeaders = { ...config.response.headers };
-          state.responseBody = config.response.body;
-        }
       }
     }),
 
@@ -158,14 +154,6 @@ export const createConfigSlice: StateCreator<
     // Only emit httpPort for HTTP apps (the schema rejects it elsewhere)
     if (isHttp && state.httpPort !== null) {
       config.httpPort = state.httpPort;
-    }
-
-    // CDN apps have a configurable mock response; HTTP apps don't
-    if (!isHttp) {
-      config.response = {
-        headers: { ...state.responseHeaders },
-        body: state.responseBody,
-      };
     }
 
     if (state.wasmPath) {

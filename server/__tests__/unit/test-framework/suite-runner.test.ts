@@ -80,10 +80,6 @@ describe('runFlow', () => {
         ':scheme': 'https',
       }),
       '',   // requestBody default
-      {},   // responseHeaders default
-      '',   // responseBody default
-      200,  // responseStatus default
-      'OK', // responseStatusText default
       {},   // properties default
       true, // enforceProductionPropertyRules default
     );
@@ -98,7 +94,6 @@ describe('runFlow', () => {
       'GET',
       expect.objectContaining({ ':method': 'GET' }),
       expect.anything(), expect.anything(), expect.anything(),
-      expect.anything(), expect.anything(), expect.anything(), expect.anything(),
     );
   });
 
@@ -116,28 +111,19 @@ describe('runFlow', () => {
         'x-custom': 'val',
       }),
       expect.anything(), expect.anything(), expect.anything(),
-      expect.anything(), expect.anything(), expect.anything(), expect.anything(),
     );
   });
 
-  it('passes through responseStatus, responseHeaders, properties', async () => {
+  it('passes through properties and enforceProductionPropertyRules', async () => {
     const runner = makeMockRunner();
     await runFlow(runner, {
       url: 'https://example.com/',
-      responseStatus: 404,
-      responseStatusText: 'Not Found',
-      responseHeaders: { 'x-resp': 'yes' },
-      responseBody: 'body',
       properties: { env: 'prod' },
       enforceProductionPropertyRules: false,
     });
 
     expect(runner.callFullFlow).toHaveBeenCalledWith(
       expect.anything(), expect.anything(), expect.anything(), expect.anything(),
-      { 'x-resp': 'yes' },
-      'body',
-      404,
-      'Not Found',
       { env: 'prod' },
       false,
     );

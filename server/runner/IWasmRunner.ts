@@ -103,15 +103,16 @@ export interface IWasmRunner {
   callHook(hookCall: HookCall): Promise<HookResult>;
 
   /**
-   * Execute full request/response flow (Proxy-WASM only)
-   * @param url Request URL
+   * Execute full request/response flow (Proxy-WASM only).
+   *
+   * The upstream response is generated at runtime — either by a real HTTP
+   * fetch against `url`, or by the built-in responder when
+   * `url === "built-in"`. There is no fixture-level mock response.
+   *
+   * @param url Request URL, or `"built-in"` to use the built-in responder
    * @param method HTTP method
    * @param headers Request headers
    * @param body Request body
-   * @param responseHeaders Response headers
-   * @param responseBody Response body
-   * @param responseStatus Response status code
-   * @param responseStatusText Response status text
    * @param properties Shared properties
    * @param enforceProductionPropertyRules Whether to enforce property access rules
    * @returns Full flow execution result
@@ -121,10 +122,6 @@ export interface IWasmRunner {
     method: string,
     headers: Record<string, string>,
     body: string,
-    responseHeaders: Record<string, string>,
-    responseBody: string,
-    responseStatus: number,
-    responseStatusText: string,
     properties: Record<string, unknown>,
     enforceProductionPropertyRules: boolean
   ): Promise<FullFlowResult>;

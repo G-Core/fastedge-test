@@ -1,14 +1,12 @@
 export {
   WasmConfigSchema,
   RequestConfigSchema,
-  ResponseConfigSchema,
   TestConfigSchema,
 } from './config';
 
 export type {
   WasmConfig,
   RequestConfig,
-  ResponseConfig,
   TestConfig,
 } from './config';
 

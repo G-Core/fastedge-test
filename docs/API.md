@@ -259,21 +259,15 @@ For **HTTP-WASM**, provide either `path` (preferred) or `url` (legacy). When `pa
 }
 ```
 
-For **Proxy-WASM**, the top-level `url` field is required. The full CDN flow is controlled via nested `request`, `response`, and `properties` fields:
+For **Proxy-WASM**, the top-level `url` field is required. The full CDN flow is controlled via nested `request` and `properties` fields. The upstream response is generated at runtime — either by a real fetch against `url`, or by the built-in responder when `url === "built-in"`:
 
 ```typescript
 {
-  url: string;                          // Request URL (required)
+  url: string;                          // Request URL, or "built-in" (required)
   request?: {
     method?: string;                    // HTTP method (default: "GET")
     headers?: Record<string, string>;   // Request headers (default: {})
     body?: string;                      // Request body (default: "")
-  };
-  response?: {
-    headers?: Record<string, string>;   // Simulated upstream response headers (default: {})
-    body?: string;                      // Simulated upstream response body (default: "")
-    status?: number;                    // Simulated upstream response status (default: 200)
-    statusText?: string;                // Simulated upstream response status text (default: "OK")
   };
   properties?: Record<string, unknown>; // CDN properties (default: {})
 }
@@ -378,12 +372,6 @@ curl -X POST http://localhost:5179/api/execute \
       "method": "GET",
       "headers": { "host": "example.com" },
       "body": ""
-    },
-    "response": {
-      "headers": { "content-type": "text/html" },
-      "body": "<html/>",
-      "status": 200,
-      "statusText": "OK"
     },
     "properties": {}
   }'
@@ -558,22 +546,18 @@ Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`
 
 ```typescript
 {
-  url: string | "built-in";            // Full request URL, or "built-in" to use the URL from loaded config
+  url: string | "built-in";            // Full request URL, or "built-in" to use the built-in responder
   request?: {
     method?: string;                   // HTTP method (default: "GET")
     url?: string;
     headers?: Record<string, string>;  // Request headers (default: {})
     body?: string;                     // Request body (default: "")
   };
-  response?: {
-    headers?: Record<string, string>;  // Simulated upstream response headers (default: {})
-    body?: string;                     // Simulated upstream response body (default: "")
-  };
   properties: Record<string, unknown>; // CDN properties (required; use {} if none)
 }
 ```
 
-The `response` object for this endpoint does not accept `status` or `statusText` — the full flow always uses `200 OK` as the simulated upstream status. Use `POST /api/execute` if you need to control those values.
+The upstream response is generated at runtime — either by a real fetch against `url`, or by the built-in responder when `url === "built-in"`.
 
 **Response**
 
@@ -607,10 +591,6 @@ curl -X POST http://localhost:5179/api/send \
       "method": "POST",
       "headers": { "content-type": "application/json" },
       "body": "{\"key\":\"value\"}"
-    },
-    "response": {
-      "headers": { "content-type": "application/json" },
-      "body": "{\"result\":\"ok\"}"
     },
     "properties": {
       "client.geo.country": "DE"
@@ -714,10 +694,6 @@ type ProxyWasmConfig = {
     headers: Record<string, string>;
     body: string;
   };
-  response?: {
-    headers: Record<string, string>;
-    body: string;
-  };
   properties: Record<string, unknown>;
   dotenv?: { enabled?: boolean; path?: string };
 };
@@ -757,10 +733,6 @@ curl http://localhost:5179/api/config
     "request": {
       "method": "GET",
       "url": "https://example.com/",
-      "headers": {},
-      "body": ""
-    },
-    "response": {
       "headers": {},
       "body": ""
     },
@@ -816,10 +788,6 @@ curl -X POST http://localhost:5179/api/config \
         "method": "GET",
         "url": "https://example.com/",
         "headers": { "accept": "text/html" },
-        "body": ""
-      },
-      "response": {
-        "headers": {},
         "body": ""
       },
       "properties": {

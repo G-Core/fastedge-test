@@ -1,5 +1,219 @@
 # Proxy-WASM Runner - Changelog
 
+## April 23, 2026 - Issue 1: `request.url` as sole routing source (FastEdge parity)
+
+### Overview
+Closes the last open production-parity divergence tracked during the April 2026 triage. The runner used to reconstruct the upstream fetch URL from `request.scheme` + `request.host` + `request.path` + `request.query`, which diverged from production: real FastEdge uses `request.url` as the single routing source and silently drops writes to `request.path`. The `geoRedirect` example (canonical re-routing pattern) writes to `request.url` only — it worked on production but had no effect in the test runner. Symmetrically, WASM code that rewrote `request.path` "worked" locally but broke on production.
+
+Adopted option (B) from the triage — full production parity, not a forgiving superset.
+
+### What Changed
+
+#### Runner
+- `server/runner/ProxyWasmRunner.ts` — real-fetch branch replaces the component reconstruction block with a direct read of `request.url` from the properties map. Falls back to the initial `targetUrl` when WASM hasn't rewritten it.
+  ```ts
+  const actualTargetUrl =
+    (propertiesAfterRequestBody["request.url"] as string) || targetUrl;
+  const actualScheme = new URL(actualTargetUrl).protocol.replace(":", "");
+  ```
+  `x-forwarded-proto` / `x-forwarded-port` injection now derives scheme from the effective URL instead of the removed `modifiedScheme` local. The 3.3 query-string-aware reconstruction branch (`modifiedPath.includes("?") ? ... : ...`) goes with the rest of the component logic.
+
+Properties `request.path`, `request.host`, `request.scheme`, `request.query`, `request.method`, `request.extension` remain settable (the access control layer still allows the writes in `onRequestHeaders`) and remain readable via `get_property` — matching our 3.2 stance that the runner's readback should reflect writes. They just no longer influence routing, matching production's silent-drop behaviour.
+
+#### Tests
+- `server/__tests__/integration/cdn-apps/full-flow/mocked-origin.test.ts` (+2 tests):
+  - **request.url rewrite honoured** — seeds `properties: { 'request.url': 'https://rewritten.example/new-target' }`, mocks only the rewrite target, asserts the fetch landed on the rewrite. Proves the positive routing path.
+  - **request.path write silently dropped** — seeds `properties: { 'request.path': '/should-not-reroute' }`, mocks only the original URL, asserts the original URL was hit. Proves the parity negative.
+
+  Used direct `callFullFlow` with seeded properties rather than loading a dedicated WASM fixture — the seeded property map is exactly what the runner sees post-hook, so the routing decision is tested cleanly without needing `valid-url-write.wasm` / `valid-path-write.wasm` to have callFullFlow-compatible lifecycle hooks.
+
+### Breaking-ish change (covered by your version bump)
+WASM that rewrote `request.path` / `request.host` / `request.scheme` / `request.query` expecting the test runner to reroute will now silently stop rerouting. That WASM was already broken on production (production drops those writes); the runner no longer papers over the real behaviour. Migration: use `set_property("request.url", newUrl)` — the canonical `geoRedirect` pattern.
+
+### 🧪 Testing
+- `pnpm test:backend` — 461/461 green.
+- `pnpm run test:frontend` — 340/340 green.
+- `pnpm run test:integration:cdn` — 130/130 green (+2 new Issue 1 tests).
+- `pnpm run test:integration:http` — 81/81 green.
+
+---
+
+## April 23, 2026 - Issue 2 tails: pseudo-header strip + dead slice cleanup
+
+### Overview
+Closes the two remaining follow-ups from the Issue 2 origin-mocking work so the feature is fully production-ready before merge.
+
+### What Changed
+
+#### 1. Runner strips HTTP/2 pseudo-headers from outbound fetch
+- `server/runner/ProxyWasmRunner.ts` — in the main origin-fetch branch of `callFullFlowLegacy`, after `HeaderManager.flattenToMap(modifiedRequestHeaders)` builds `fetchHeaders`, drop any key starting with `:` before the `fetch()` call. WASM hooks continue to see `:method`, `:path`, `:authority`, `:scheme` via `proxy_get_header_map_value`; only the HTTP/1.1 outbound loses them. Matches production FastEdge behaviour and the pattern already used in the `proxy_http_call` branch (line 864).
+
+  Before this fix, `runFlow({ url: 'https://origin.example/...' })` failed with `"Headers.append: \":method\" is an invalid header name."` because `runFlow` auto-derives the pseudo-headers and the previous code path forwarded them to `fetch`. `mockOrigins()` therefore required users to call `runner.callFullFlow(...)` directly. That limitation is now removed — `runFlow` + `mockOrigins` compose against any URL.
+
+- `server/__tests__/integration/cdn-apps/full-flow/mocked-origin.test.ts` — added one more test exercising `runFlow({ url: 'https://origin.example/api/resource?id=42' })` against a mocked origin. Asserts finalStatus 200, the injected `x-custom-response` header, and the mocked body. Proves the composition path without reaching through to raw `callFullFlow`.
+- `docs/TEST_FRAMEWORK.md` — dropped the "Known limitation — `mockOrigins` with `runFlow`" subsection; the caveat no longer applies.
+- `fastedge-plugin-source/.generation-config.md` — removed the matching `CRITICAL` note and added a small "Pseudo-headers and the outbound fetch" sub-item in the Origin Mocking structure template so generator output reflects the fix.
+
+#### 2. Deleted dead `responseHeaders` / `responseBody` slice state
+- `frontend/src/stores/types.ts` — dropped `responseHeaders` / `responseBody` fields from `RequestState` and the four setter signatures (`setResponseHeaders`, `setResponseBody`, `updateResponseHeader`, `removeResponseHeader`) from `RequestActions`.
+- `frontend/src/stores/slices/requestSlice.ts` — dropped both default state fields and all four action implementations.
+- `frontend/src/stores/index.ts` — removed both keys from the persist partializer. Users with stored state from a previous version will silently lose the (unused) values on next load.
+- `frontend/src/views/ProxyWasmView/ProxyWasmView.tsx` — stopped destructuring the two fields from the store. The `hookCall` payload now hard-codes empty response state (`{}` / `""`), which is exactly what the slice always produced anyway — there was no UI editor for these fields.
+- `frontend/src/stores/slices/requestSlice.test.ts` — removed test blocks for the four deleted actions (5 removed tests total). Kept `resetRequest` coverage, minus the response-field assertions.
+
+No functional change — the slice state had no UI editor, no runtime effect on the full flow (server.ts stopped forwarding it during Issue 2 closure), and only existed to be seeded from the now-removed `config.response` fixture field.
+
+### 🧪 Testing
+- `pnpm test:backend` — 461/461 green.
+- `pnpm run test:frontend` — 340/345 green (net −5 from removing tests for the deleted actions).
+- `pnpm run test:integration:cdn` — 128/127 green (+1 runFlow composition test).
+- `pnpm run test:integration:http` — 81/81 green.
+
+---
+
+## April 23, 2026 - Origin mocking via `mockOrigins()` (undici-backed)
+
+### Overview
+Adds `mockOrigins()` to `@gcoredev/fastedge-test/test` — a thin lifecycle wrapper around undici's `MockAgent` that intercepts the runner's origin fetch inside `callFullFlow` and every `proxy_http_call` upstream. Replaces the (never-implemented) fixture-level `response: {}` field removed earlier today: origin control now lives in test code, co-located with assertions, with explicit lifetime instead of a heuristic fixture-present trigger.
+
+Design rationale: the runner uses Node's global `fetch`, which routes through undici's global dispatcher. `setGlobalDispatcher(mockAgent)` captures every outbound request without the runner needing to know about mocking. The wrapper is ~90 lines; the match/reply DSL stays in undici.
+
+### What Changed
+
+#### 1. New runtime dependency
+- `package.json` — added `"undici": "^6.0.0"` to `dependencies`. Adds ~3MB to the test-time package; users who don't call `mockOrigins()` still get the dep because undici is a single flat package. Acceptable for a testing tool.
+
+#### 2. New module
+- `server/test-framework/mock-origins.ts` — `mockOrigins(options?)` returns a `MockOriginsHandle` with `origin(url)`, `agent` (raw MockAgent escape hatch), `close()` (idempotent; restores previous dispatcher), and `assertAllCalled()`. Default is `disableNetConnect()` — unmocked requests throw instead of silently reaching the real network. `allowNetConnect` accepts `boolean` or `(string | RegExp)[]` for HTTP-WASM tests that need the spawned `fastedge-run` localhost fetch to pass through.
+- `server/test-framework/index.ts` — re-exports `mockOrigins` + `MockOriginsHandle` + `MockOriginsOptions` from the `/test` entry.
+
+#### 3. Tests
+- `server/__tests__/unit/test-framework/mock-origins.test.ts` — 12 tests covering install/close lifecycle, default `disableNetConnect`, allowlist patterns, single and multi-origin intercept, method-routing via `intercept({ method })`, `assertAllCalled` both pass and fail paths, `origin()` pass-through to `MockAgent.get`.
+- `server/__tests__/integration/cdn-apps/full-flow/mocked-origin.test.ts` — 4 tests exercising `runner.callFullFlow()` directly (not `runFlow`, see limitation below) against a mocked origin using the existing `headers-change.wasm` fixture. Proves the MockAgent actually intercepts the runner's `fetch` and that response hooks see the mocked status/body/headers.
+
+#### 4. Known limitation — `runFlow` does not compose with real URLs (pre-existing)
+While writing the integration test, surfaced that `runFlow` auto-derives HTTP/2 pseudo-headers (`:method`, `:path`, `:authority`, `:scheme`) and passes them through to the runner's outbound `fetch`. `fetch` uses HTTP/1.1 semantics and rejects pseudo-headers with `Headers.append: ":method" is an invalid header name.` Consequence: `runFlow({ url: 'https://real.example/...' })` fails before the mock layer is ever consulted. Pre-existing bug (not introduced by this change) — it's only surfaced now because the previous pattern (no mocking, real-origin tests via raw `callFullFlow`) was common enough that nobody exercised `runFlow` against a real URL. Documented as a limitation in `docs/TEST_FRAMEWORK.md`; consumers combining `mockOrigins()` with a fetched origin must use `runner.callFullFlow(...)` directly. `runFlow({ url: 'built-in' })` bypasses fetch and composes fine. Fix belongs in `runFlow` (strip pseudo-headers before passing to `callFullFlow`), deferred as a separate ticket.
+
+#### 5. Docs
+- `docs/TEST_FRAMEWORK.md` — hand-updated with:
+  - Import block additions (`mockOrigins` + both types).
+  - `MockOriginsHandle` / `MockOriginsOptions` type definitions alongside `FlowOptions` (also cleaned stale `FlowOptions` response fields that were left behind in the earlier Issue 2 closure).
+  - `mockOrigins` function entry in the Functions section with a 5-line quickstart.
+  - New `## Origin Mocking` section with basic usage, multi-upstream `proxy_http_call` example, lifecycle pattern, `allowNetConnect` HTTP-WASM caveat, `runFlow` limitation callout, and a pointer to the raw `handle.agent` for `.persist()` / `.times()` / `.delay()`.
+- `fastedge-plugin-source/.generation-config.md` — TEST_FRAMEWORK.md section updated with:
+  - `mock-origins.ts` added to Source Files.
+  - Types and function entries.
+  - New `Origin Mocking` section in the Structure template.
+  - Two `CRITICAL` notes: the HTTP-WASM `disableNetConnect` caveat and the `runFlow` pseudo-header limitation. Generator must surface both.
+- No `manifest.json` changes — mocking fits under the existing `test-framework` source → `reference/test-framework.md` target.
+
+### 🧪 Testing
+- `pnpm test:backend` — 461/461 green.
+- `pnpm run test:frontend` — 345/345 green.
+- `pnpm run test:integration:cdn` — 127/127 green (+4 new mocked-origin tests).
+- `pnpm run test:integration:http` — 81/81 green.
+
+### Cleanup
+- The previously-deferred `suite-runner.test.ts` test (`'passes through responseStatus, responseHeaders, properties'`) was deleted: it asserted the `FlowOptions.responseStatus / responseHeaders / responseBody` pass-through, which no longer exists. A reduced variant (`'passes through properties and enforceProductionPropertyRules'`) covers the remaining `runFlow` → `callFullFlow` forwarding. The old behaviour is superseded by `mockOrigins()`.
+
+### Follow-ups
+- Fix `runFlow`'s pseudo-header forwarding so `mockOrigins()` composes against real URLs, not just `built-in`. Small change in `suite-runner.ts`; deferred because it's orthogonal to the origin-mocking story.
+
+---
+
+## April 23, 2026 - Remove vestigial `response` field from fixture schema
+
+### Overview
+`fastedge-config.test.json` previously declared a `response: { headers, body }` field under the CDN variant, advertised as a "mock origin response". It was never wired into the full-flow path; both origin modes (real fetch against `request.url`, and the built-in responder when `request.url === "built-in"`) generate their response at runtime. The frontend had no editor for the slice state the field seeded — nothing in the UI read or wrote it — so any value in the fixture was silently discarded. This was a legacy, never-implemented idea carried since the initial commit.
+
+Removed entirely. Fixtures in the wild that specify `response` will parse successfully at runtime (Zod strips unknown keys) but will surface an "unrecognized field" warning from JSON-Schema editors. No behavioural change, because the field had no effect in the first place.
+
+### What Changed
+
+#### 1. Zod schemas
+- `server/schemas/config.ts` — dropped `ResponseConfigSchema`, `ResponseConfig` type, and the `response` field on `CdnConfigSchema`. Added a comment explaining the two runtime response paths.
+- `server/schemas/api.ts` — dropped `response` from `ApiSendBodySchema` and the `ResponseConfigSchema` import.
+- `server/schemas/index.ts` — dropped re-exports of `ResponseConfigSchema` and `ResponseConfig`.
+
+#### 2. Regenerated JSON Schemas
+- `pnpm run build:schemas` — `schemas/fastedge-config.test.schema.json`, `schemas/api-send.schema.json`, and the other derived schemas no longer reference `response`.
+
+#### 3. Server handlers
+- `server/server.ts` — `/api/send` and `/api/execute` stop destructuring `response` from the request body. Calls to `runner.callFullFlow` pass fixed empty placeholders (`{}`, `""`, `200`, `"OK"`) for the legacy `responseHeaders` / `responseBody` / `responseStatus` / `responseStatusText` parameters.
+
+#### 4. Frontend
+- `frontend/src/stores/slices/configSlice.ts` — removed the `config.response` read in `loadFromConfig` and the `config.response` write in `exportConfig`.
+- `frontend/src/stores/types.ts` — dropped the `response?` field from the `TestConfig` interface.
+- `frontend/src/api/index.ts` — `sendFullFlow` no longer sends a `response` block in its `/api/send` POST payload.
+
+#### 5. Tests
+- `server/__tests__/unit/schemas/config.test.ts` — removed the `ResponseConfigSchema` describe block and the schema import.
+- `frontend/src/stores/slices/configSlice.test.ts` — removed the `response` field from the fixture in the `loadFromConfig` test and from both the setter calls and expected output in the `exportConfig` test.
+
+#### 6. Docs
+- `docs/TEST_CONFIG.md` — dropped the three `response.*` rows from the field table, the `response?` block from the `CdnConfig` type definition, the `config.response` destructuring example, and replaced the "Custom Origin Response" example with a "Built-In Responder" example that uses `"url": "built-in"`.
+- `docs/API.md` — dropped `response` from the `/api/execute` (Proxy-WASM variant) and `/api/send` request-body schemas, their curl examples, and the now-moot caveat about status/statusText.
+- `docs/quickstart.md` — removed the `response` block from the fixture example.
+- `docs/RUNNER.md` — relabelled the `responseHeaders` / `responseBody` / `responseStatus` / `responseStatusText` rows in the `callFullFlow` parameter table as "legacy placeholder" and updated the inline example to pass empty values.
+
+### Follow-ups (deliberately out of scope)
+- `requestSlice.responseHeaders` / `responseBody` state + their setter actions + their persisted entries — no UI editor, no runtime effect. Safe to remove in a broader frontend cleanup pass.
+
+### Breaking change extension — `IWasmRunner.callFullFlow` signature (same day)
+
+Taken further in the same session: the four response-input parameters on `IWasmRunner.callFullFlow` (`responseHeaders`, `responseBody`, `responseStatus`, `responseStatusText`) were also dead weight — every caller was passing placeholder `{}` / `""` / `200` / `"OK"` that the implementation ignored. Removed entirely. Consumers of the published `@gcoredev/fastedge-test` package calling `callFullFlow` directly must remove 4 arguments. `runFlow()` wrapper users are unaffected in signature (the corresponding `responseStatus` / `responseStatusText` / `responseHeaders` / `responseBody` fields on `FlowOptions` were also removed).
+
+#### Additional file changes
+- `server/runner/types.ts` — `HookCall.response` is now optional. Used only by the single-hook `callHook()` path to seed `onResponseHeaders` state when calling it in isolation; the full-flow path constructs its own response from the runtime origin fetch or built-in responder output.
+- `server/runner/IWasmRunner.ts` — interface signature drops the 4 response params.
+- `server/runner/ProxyWasmRunner.ts` — `callFullFlow` wrapper drops the params and no longer constructs a placeholder `response` block on the HookCall. `callHook()` dereferences `call.response?.headers` / `.body` / `.status` / `.statusText` via optional chaining with defaults.
+- `server/runner/HttpWasmRunner.ts` — stub signature drops the params.
+- `server/runner/standalone.ts` — docstring example updated.
+- `server/test-framework/types.ts` — `FlowOptions` drops `responseStatus` / `responseStatusText` / `responseHeaders` / `responseBody`.
+- `server/test-framework/suite-runner.ts` — `runFlow` destructure drops those fields and the call to `callFullFlow` uses the 6-arg form.
+- `server/server.ts` — both `/api/send` and `/api/execute` callers updated.
+- Test call sites updated across `headers-change-with-downstream.test.ts` (7 sites), `all-hooks-http-call.test.ts`, `hello-world-execution.test.ts`, `standalone.test.ts`, and three of the four `suite-runner.test.ts` `runFlow` tests.
+- `docs/RUNNER.md` — interface and parameter table reflect the new 6-arg signature.
+
+#### Follow-up resolved same session
+The `'passes through responseStatus, responseHeaders, properties'` test in `suite-runner.test.ts` (previously left failing deliberately) was deleted in the Origin Mocking change that landed next — its assertion covered behaviour that `mockOrigins()` now handles at a cleaner layer. A reduced variant asserting the remaining `runFlow` → `callFullFlow` pass-through (properties + enforce flag) replaces it.
+
+### 🧪 Testing
+- `pnpm test:backend` — 448 green at time of this change; rose to 461 after the follow-up cleanup above.
+- `pnpm run test:frontend` — 345/345 green.
+- `pnpm run test:integration:cdn` — 123/123 green.
+- `pnpm run test:integration:http` — 81/81 green.
+
+---
+
+## April 23, 2026 - `request.path` includes query string (production parity)
+
+### Overview
+The FastEdge edge emits `request.path` including the query portion (e.g. `"/search?q=1"`), matching the canonical proxy-wasm / envoy `:path` pseudo-header semantics. The test runner previously split `pathname` and `search` into separate `request.path` / `request.query` properties. WASM code written against production (e.g. the abTesting example's path-rewrite logic) would therefore see divergent shapes between environments. Runner now matches production. Also verifies (with a new test) that request headers added in `onRequestHeaders` are visible to response hooks — the supported cross-hook state-passing channel.
+
+### What Changed
+
+#### 1. `request.path` now carries the query string
+- `server/runner/PropertyResolver.ts` — `extractRuntimePropertiesFromUrl` sets `requestPath = (pathname || "/") + search`. `requestQuery` unchanged (query without leading `?`). File-extension extraction updated to run against `pathname` alone so query-ful URLs still yield correct `request.extension`.
+- `server/runner/ProxyWasmRunner.ts` — real-fetch URL reconstruction guards against double query-append when `modifiedPath` already contains `?`; falls back to the prior `path + "?" + query` form when WASM wrote only to `request.query`.
+
+#### 2. Cross-hook request-header echo (verified, no code change)
+- `server/__tests__/integration/cdn-apps/full-flow/built-in-responder.test.ts` — new test: `should expose WASM-injected request headers to onResponseHeaders`. Uses the existing `headers-change.wasm` fixture which injects `x-custom-request` in `onRequestHeaders`; asserts the same value is present in `onResponseHeaders.input.request.headers`. Proves the runner's data flow from `onRequestHeaders.output.request.headers` → `responseCall.request.headers` → `hostFunctions.setHeadersAndBodies` → backing tuples for `proxy_get_header_map_value(Request, …)` in response hooks.
+
+#### 3. Unit-test updates
+- `server/__tests__/unit/runner/PropertyResolver.test.ts` — five `request.path` assertions widened to include the query portion for URLs that carry one (e.g. `/v1/users?id=123` instead of `/v1/users`). Query-less URLs and file-extension expectations unchanged.
+
+### 🧪 Testing
+- `pnpm test:backend` — 452/452 green.
+- `pnpm run test:integration:cdn` — 123/123 green (+1 new 3.4 assertion).
+- `pnpm run test:integration:http` — 81/81 green.
+
+### 📝 Notes
+- `set_property` / `get_property` asymmetry for `request.url` on production is tracked as an **upstream server bug**, not a runner issue: this runner correctly reflects writes on readback (the intuitive semantics), and the server should be fixed to match.
+- The cross-hook custom-property boundary (`PropertyAccessControl` denies reads of onRequestHeaders-scoped custom properties in later hooks) is unchanged and remains correctly enforced — this is a production-parity constraint that existed before this change.
+
+---
+
 ## April 22, 2026 - Set-Cookie preserved across the stack (RFC 6265 §3)
 
 ### Overview

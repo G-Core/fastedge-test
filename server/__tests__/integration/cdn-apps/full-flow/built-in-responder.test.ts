@@ -146,6 +146,22 @@ describe('Built-In Responder', () => {
     expect(body.reqHeaders['x-custom-request']).toBe('I am injected from onRequestHeaders');
   }, 15000);
 
+  it('should expose WASM-injected request headers to onResponseHeaders', async () => {
+    // Production parity: a request header added in onRequestHeaders must be
+    // readable by the response hooks. This is the supported cross-hook
+    // state-passing channel (header echo) on real FastEdge, and it's how
+    // patterns like A/B variant propagation work across the nginx/core-proxy
+    // boundary. input.request.headers snapshots the exact tuples backing
+    // proxy_get_header_map_value(Request, ...) for the WASM instance.
+    const result = await runFlow(cdnRunner, { url: 'built-in' });
+
+    const responseHookRequestHeaders =
+      result.hookResults.onResponseHeaders.input.request.headers;
+    expect(responseHookRequestHeaders['x-custom-request']).toBe(
+      'I am injected from onRequestHeaders',
+    );
+  }, 15000);
+
   it('should accept the canonical URL directly', async () => {
     const result = await runFlow(cdnRunner, { url: BUILTIN_URL });
 

@@ -10,8 +10,6 @@ export interface RequestState {
   url: string;
   requestHeaders: Record<string, string>;
   requestBody: string;
-  responseHeaders: Record<string, string>;
-  responseBody: string;
 }
 
 export interface RequestActions {
@@ -19,12 +17,8 @@ export interface RequestActions {
   setUrl: (url: string) => void;
   setRequestHeaders: (headers: Record<string, string>) => void;
   setRequestBody: (body: string) => void;
-  setResponseHeaders: (headers: Record<string, string>) => void;
-  setResponseBody: (body: string) => void;
   updateRequestHeader: (key: string, value: string) => void;
   removeRequestHeader: (key: string) => void;
-  updateResponseHeader: (key: string, value: string) => void;
-  removeResponseHeader: (key: string) => void;
   resetRequest: () => void;
 }
 
@@ -219,10 +213,6 @@ export interface TestConfig {
     description?: string;
   };
   request: CdnRequestConfig | HttpRequestConfig;
-  response?: {
-    headers: Record<string, string>;
-    body: string;
-  };
   properties: Record<string, string>;
   logLevel: number;
   dotenv?: {

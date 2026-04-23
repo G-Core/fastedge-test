@@ -62,8 +62,6 @@ const suite = defineTestSuite({
         const result = await runFlow(runner, {
           url: "https://example.com/",
           method: "GET",
-          responseStatus: 200,
-          responseBody: "hello",
         });
 
         const header = result.finalResponse.headers["x-custom-header"];
@@ -102,10 +100,6 @@ try {
       ":scheme": "https",
     },
     "",                       // request body
-    {},                       // response headers
-    "",                       // response body
-    200,                      // response status
-    "OK",                     // response status text
     {},                       // properties
     true,                     // enforceProductionPropertyRules
   );
@@ -130,7 +124,7 @@ See [RUNNER.md](RUNNER.md) for the full `IWasmRunner` interface, `RunnerConfig` 
 
 ## Configuration
 
-Place a `fastedge-config.test.json` file in `.fastedge-debug/` at your project root to define default request parameters, response stubs, and WASM properties for the interactive debugger.
+Place a `fastedge-config.test.json` file in `.fastedge-debug/` at your project root to define the default request and WASM properties for the interactive debugger.
 
 ```json
 {
@@ -146,12 +140,6 @@ Place a `fastedge-config.test.json` file in `.fastedge-debug/` at your project r
       "accept": "text/html"
     },
     "body": ""
-  },
-  "response": {
-    "headers": {
-      "content-type": "text/html"
-    },
-    "body": "<html><body>Hello</body></html>"
   },
   "properties": {
     "my-property": "value"

@@ -71,43 +71,46 @@ Exports the high-level test framework. See [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md
 import { defineTestSuite, runAndExit } from "@gcoredev/fastedge-test/test";
 ```
 
-| Export                       | Kind     | Description                                                        |
-| ---------------------------- | -------- | ------------------------------------------------------------------ |
-| `defineTestSuite`            | function | Validates and returns a typed `TestSuite` definition               |
-| `runTestSuite`               | function | Executes a `TestSuite` and returns a `SuiteResult`                 |
-| `runAndExit`                 | function | Runs a suite and exits the process with a pass/fail code           |
-| `runFlow`                    | function | Executes a single request flow directly                            |
-| `runHttpRequest`             | function | Executes a single HTTP request directly                            |
-| `loadConfigFile`             | function | Loads and validates a `fastedge-config.test.json` file             |
-| `assertRequestHeader`        | function | Asserts a header is present on the outgoing request                |
-| `assertNoRequestHeader`      | function | Asserts a header is absent from the outgoing request               |
-| `assertResponseHeader`       | function | Asserts a header is present on the final response                  |
-| `assertNoResponseHeader`     | function | Asserts a header is absent from the final response                 |
-| `assertFinalStatus`          | function | Asserts the final HTTP status code                                 |
-| `assertFinalHeader`          | function | Asserts a header on the final response                             |
-| `assertReturnCode`           | function | Asserts the proxy-wasm return code                                 |
-| `assertLog`                  | function | Asserts a log entry was emitted                                    |
-| `assertNoLog`                | function | Asserts a log entry was not emitted                                |
-| `logsContain`                | function | Returns whether logs contain a matching entry                      |
-| `hasPropertyAccessViolation` | function | Returns whether any property access violation was recorded         |
-| `assertPropertyAllowed`      | function | Asserts that a WASM property read was allowed                      |
-| `assertPropertyDenied`       | function | Asserts that a WASM property read was denied                       |
-| `assertHttpStatus`           | function | Asserts the HTTP response status code                              |
-| `assertHttpHeader`           | function | Asserts a header is present on the HTTP response                   |
-| `assertHttpNoHeader`         | function | Asserts a header is absent from the HTTP response                  |
-| `assertHttpBody`             | function | Asserts the HTTP response body equals a value                      |
-| `assertHttpBodyContains`     | function | Asserts the HTTP response body contains a substring                |
-| `assertHttpJson`             | function | Asserts the HTTP response body matches a JSON value                |
-| `assertHttpContentType`      | function | Asserts the HTTP response Content-Type header                      |
-| `assertHttpLog`              | function | Asserts a log entry was emitted during HTTP request handling       |
-| `assertHttpNoLog`            | function | Asserts a log entry was not emitted during HTTP request handling   |
+| Export                       | Kind     | Description                                                          |
+| ---------------------------- | -------- | -------------------------------------------------------------------- |
+| `defineTestSuite`            | function | Validates and returns a typed `TestSuite` definition                 |
+| `runTestSuite`               | function | Executes a `TestSuite` and returns a `SuiteResult`                   |
+| `runAndExit`                 | function | Runs a suite and exits the process with a pass/fail code             |
+| `runFlow`                    | function | Executes a single request flow directly                              |
+| `runHttpRequest`             | function | Executes a single HTTP request directly                              |
+| `loadConfigFile`             | function | Loads and validates a `fastedge-config.test.json` file               |
+| `mockOrigins`                | function | Creates mock HTTP origins that respond to outgoing HTTP calls        |
+| `assertRequestHeader`        | function | Asserts a header is present on the outgoing request                  |
+| `assertNoRequestHeader`      | function | Asserts a header is absent from the outgoing request                 |
+| `assertResponseHeader`       | function | Asserts a header is present on the final response                    |
+| `assertNoResponseHeader`     | function | Asserts a header is absent from the final response                   |
+| `assertFinalStatus`          | function | Asserts the final HTTP status code                                   |
+| `assertFinalHeader`          | function | Asserts a header on the final response                               |
+| `assertReturnCode`           | function | Asserts the proxy-wasm return code                                   |
+| `assertLog`                  | function | Asserts a log entry was emitted                                      |
+| `assertNoLog`                | function | Asserts a log entry was not emitted                                  |
+| `logsContain`                | function | Returns whether logs contain a matching entry                        |
+| `hasPropertyAccessViolation` | function | Returns whether any property access violation was recorded           |
+| `assertPropertyAllowed`      | function | Asserts that a WASM property read was allowed                        |
+| `assertPropertyDenied`       | function | Asserts that a WASM property read was denied                         |
+| `assertHttpStatus`           | function | Asserts the HTTP response status code                                |
+| `assertHttpHeader`           | function | Asserts a header is present on the HTTP response                     |
+| `assertHttpNoHeader`         | function | Asserts a header is absent from the HTTP response                    |
+| `assertHttpBody`             | function | Asserts the HTTP response body equals a value                        |
+| `assertHttpBodyContains`     | function | Asserts the HTTP response body contains a substring                  |
+| `assertHttpJson`             | function | Asserts the HTTP response body matches a JSON value                  |
+| `assertHttpContentType`      | function | Asserts the HTTP response Content-Type header                        |
+| `assertHttpLog`              | function | Asserts a log entry was emitted during HTTP request handling         |
+| `assertHttpNoLog`            | function | Asserts a log entry was not emitted during HTTP request handling     |
+| `MockOriginsHandle`          | type     | Handle returned by `mockOrigins` — use to stop the mock servers      |
+| `MockOriginsOptions`         | type     | Options accepted by `mockOrigins`                                    |
 | `TestSuite`                  | type     | Suite definition — one of `wasmPath` or `wasmBuffer` plus test cases |
-| `TestCase`                   | type     | A single test scenario with config and assertions                  |
-| `TestResult`                 | type     | Result of a single test case execution                             |
-| `SuiteResult`                | type     | Aggregated result returned by `runTestSuite`                       |
-| `FlowOptions`                | type     | Options accepted by `runFlow`                                      |
-| `HttpRequestOptions`         | type     | Options accepted by `runHttpRequest`                               |
-| `RunnerConfig`               | type     | Configuration options for the underlying runner                    |
+| `TestCase`                   | type     | A single test scenario with config and assertions                    |
+| `TestResult`                 | type     | Result of a single test case execution                               |
+| `SuiteResult`                | type     | Aggregated result returned by `runTestSuite`                         |
+| `FlowOptions`                | type     | Options accepted by `runFlow`                                        |
+| `HttpRequestOptions`         | type     | Options accepted by `runHttpRequest`                                 |
+| `RunnerConfig`               | type     | Configuration options for the underlying runner                      |
 
 ### `@gcoredev/fastedge-test/server`
 
