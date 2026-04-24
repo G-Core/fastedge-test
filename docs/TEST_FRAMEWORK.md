@@ -581,8 +581,6 @@ console.log(data.items.length);
 
 The runner's origin fetch inside `callFullFlow` and every `proxy_http_call` upstream fetch both go through Node's global `fetch`, which routes through undici's global dispatcher. `mockOrigins()` installs a [`MockAgent`](https://undici.nodejs.org/#/docs/api/MockAgent) as that dispatcher, so interceptors registered on the returned handle match every request the runner makes — origin fetches in full-flow mode, upstream calls from WASM via `proxy_http_call`, anything else the runner eventually emits.
 
-This replaces the previous (never-implemented) `response: {}` field on `fastedge-config.test.json`. Origin control now lives in the test file, co-located with the assertions it supports.
-
 ### Basic Usage
 
 ```typescript

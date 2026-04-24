@@ -195,20 +195,20 @@ callFullFlow(
 
 **Parameters**
 
-| Parameter                        | Type                      | Description                                                                                                           |
-| -------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `url`                            | `string`                  | Full request URL, or `BUILTIN_SHORTHAND` (`"built-in"`) to use the built-in responder instead of a real origin fetch  |
-| `method`                         | `string`                  | HTTP method                                                                                                           |
-| `headers`                        | `Record<string, string>`  | Request headers                                                                                                       |
-| `body`                           | `string`                  | Request body                                                                                                          |
-| `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                                                                                 |
-| `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior                                               |
+| Parameter                        | Type                      | Description                                                                                                          |
+| -------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `url`                            | `string`                  | Full request URL, or `BUILTIN_SHORTHAND` (`"built-in"`) to use the built-in responder instead of a real origin fetch |
+| `method`                         | `string`                  | HTTP method                                                                                                          |
+| `headers`                        | `Record<string, string>`  | Request headers                                                                                                      |
+| `body`                           | `string`                  | Request body                                                                                                         |
+| `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                                                                                |
+| `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior                                              |
 
 The upstream response is generated at runtime — either by a real HTTP fetch against `url`, or by the built-in responder when `url === "built-in"`. There is no caller-provided mock response.
 
 Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fetch or built-in responder)* → `onResponseHeaders` → `onResponseBody`.
 
-**Local response short-circuit:** If a WASM module calls `send_http_response` (proxy-wasm: `proxy_send_local_response`) during `onRequestHeaders` or `onRequestBody` and returns `StopIteration` (return code `1`), the remaining hooks and origin fetch are **skipped**. The `finalResponse` in the result is built from the locally-sent status, headers, and body — matching CDN production behavior. This is how redirect modules (e.g., geo-redirect) and early error responses work.
+**Local response short-circuit.** If a WASM module calls `proxy_send_local_response` during `onRequestHeaders` or `onRequestBody` and returns `StopIteration` (return code `1`), the remaining hooks and origin fetch are skipped. The `finalResponse` in the result is built from the locally-sent status, headers, and body — matching CDN production behavior. This is how redirect modules (e.g., geo-redirect) and early error responses work.
 
 Only available on `ProxyWasmRunner`. Calling on `HttpWasmRunner` throws.
 
@@ -311,10 +311,10 @@ const result: FullFlowResult = await runner.callFullFlow(
 
 **Built-in responder behavior** — controlled by request headers set before the origin phase:
 
-| Header               | Effect                                                                          |
-| -------------------- | ------------------------------------------------------------------------------- |
-| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                    |
-| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default) |
+| Header               | Effect                                                                           |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                     |
+| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default)  |
 
 When `x-debugger-content` is omitted, the built-in responder returns a JSON echo of the request method, headers, body, and URL. Both control headers are stripped before response hooks execute so they do not appear in hook input state.
 
@@ -336,13 +336,13 @@ interface RunnerConfig {
 }
 ```
 
-| Field                            | Type       | Default       | Description                                                                                                                                                                                                                                                                                                                                   |
-| -------------------------------- | ---------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`  | `false`       | Whether to load `.env` files                                                                                                                                                                                                                                                                                                                  |
-| `dotenv.path`                    | `string`   | `undefined`   | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory).                                                                 |
-| `enforceProductionPropertyRules` | `boolean`  | `true`        | Restrict property access to match CDN production behavior                                                                                                                                                                                                                                                                                     |
-| `runnerType`                     | `WasmType` | auto-detected | Override WASM type detection                                                                                                                                                                                                                                                                                                                  |
-| `httpPort`                       | `number`   | `undefined`   | HTTP-WASM only. Pin the spawned `fastedge-run` subprocess to a specific port instead of allocating from the dynamic pool (8100–8199). `load()` throws if the port is busy — there is no fallback to dynamic allocation. Intended for Codespaces/Docker port-forwarding or external tooling requiring a fixed address. Ignored for proxy-wasm.  |
+| Field                            | Type       | Default         | Description                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------- | ---------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`  | `false`         | Whether to load `.env` files                                                                                                                                                                                                                                                                                                                 |
+| `dotenv.path`                    | `string`   | `undefined`     | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory).                                                                |
+| `enforceProductionPropertyRules` | `boolean`  | `true`          | Restrict property access to match CDN production behavior                                                                                                                                                                                                                                                                                    |
+| `runnerType`                     | `WasmType` | *auto-detected* | Override WASM type detection                                                                                                                                                                                                                                                                                                                 |
+| `httpPort`                       | `number`   | `undefined`     | HTTP-WASM only. Pin the spawned `fastedge-run` subprocess to a specific port instead of allocating from the dynamic pool (8100–8199). `load()` throws if the port is busy — there is no fallback to dynamic allocation. Intended for Codespaces/Docker port-forwarding or external tooling requiring a fixed address. Ignored for proxy-wasm. |
 
 ### HttpRequest & HttpResponse
 
@@ -375,7 +375,7 @@ interface HttpResponse {
 
 `HttpResponse.logs` contains log entries captured from the `fastedge-run` process stdout/stderr during the request.
 
-**Multi-valued headers.** `Set-Cookie` is preserved as a `string[]` — each `Set-Cookie` header emitted by the WASM app (or an upstream origin) becomes a separate array entry. This matches RFC 6265 §3 and Node's fetch behaviour. Example:
+**Multi-valued headers.** `Set-Cookie` is preserved as a `string[]` — each `Set-Cookie` header emitted by the WASM app (or an upstream origin) becomes a separate array entry. This matches RFC 6265 §3 and Node's fetch behavior. Example:
 
 ```typescript
 const response = await runner.execute({ path: '/login', method: 'POST', headers: {} });
@@ -416,14 +416,14 @@ type HookCall = {
 };
 ```
 
-| Field                            | Description                                                                                         |
-| -------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `hook`                           | Hook name: `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`       |
-| `request`                        | Request state passed to the hook                                                                    |
-| `response`                       | Response seed state for response hooks called via `callHook()`. Ignored by `callFullFlow()` and by request hooks — the full-flow path generates the upstream response at runtime. |
-| `properties`                     | Shared properties (e.g. `request.path`, `vm_config`, `plugin_config`)                               |
-| `dotenvEnabled`                  | Optional per-call dotenv override. Use `applyDotenv()` for persistent changes.                      |
-| `enforceProductionPropertyRules` | Defaults to `true`. Set to `false` to allow property reads that would be blocked on production CDN. |
+| Field                            | Description                                                                                                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hook`                           | Hook name: `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`                                                                                      |
+| `request`                        | Request state passed to the hook                                                                                                                                                   |
+| `response`                       | Seed state for response hooks called via `callHook()`. Ignored by `callFullFlow()` and by request hooks — the full-flow path generates the upstream response at runtime.           |
+| `properties`                     | Shared properties (e.g. `request.path`, `vm_config`, `plugin_config`)                                                                                                             |
+| `dotenvEnabled`                  | Optional per-call dotenv override. Use `applyDotenv()` for persistent changes.                                                                                                    |
+| `enforceProductionPropertyRules` | Defaults to `true`. Set to `false` to allow property reads that would be blocked on production CDN.                                                                               |
 
 `HeaderRecord` is `Record<string, string | string[]>` — multi-valued headers (e.g. multiple `Set-Cookie`) are represented as `string[]`.
 
@@ -447,13 +447,13 @@ type HookResult = {
 };
 ```
 
-| Field        | Description                                                                                |
-| ------------ | ------------------------------------------------------------------------------------------ |
-| `returnCode` | The numeric value returned by the WASM hook export, or `null` if the export was not found |
-| `logs`       | Log entries emitted via `proxy_log` during hook execution                                  |
-| `input`      | Request/response state as seen by the hook before execution                                |
-| `output`     | Request/response state after hook execution (reflects WASM mutations)                      |
-| `properties` | All shared properties after hook execution                                                 |
+| Field        | Description                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| `returnCode` | The numeric value returned by the WASM hook export, or `null` if the export was not found  |
+| `logs`       | Log entries emitted via `proxy_log` during hook execution                                   |
+| `input`      | Request/response state as seen by the hook before execution                                 |
+| `output`     | Request/response state after hook execution (reflects WASM mutations)                       |
+| `properties` | All shared properties after hook execution                                                  |
 
 ### FullFlowResult
 
@@ -472,11 +472,11 @@ type FullFlowResult = {
 };
 ```
 
-| Field                  | Description                                                                                                                                                                   |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hookResults`          | A `Record` keyed by hook name (`"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`), each containing a `HookResult`                           |
-| `finalResponse`        | The final response after all hooks have executed, or the local response if a hook short-circuited (see `callFullFlow`). `body` is base64-encoded when `isBase64` is `true`.  |
-| `calculatedProperties` | Runtime properties computed from the request URL (e.g. `request.path`, `request.host`)                                                                                       |
+| Field                  | Description                                                                                                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hookResults`          | A `Record` keyed by hook name (`"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`), each containing a `HookResult`                          |
+| `finalResponse`        | The final response after all hooks have executed, or the local response if a hook short-circuited (see `callFullFlow`). `body` is base64-encoded when `isBase64` is `true`. |
+| `calculatedProperties` | Runtime properties computed from the request URL (e.g. `request.path`, `request.host`)                                                                                      |
 
 ### Supporting Types
 
@@ -593,15 +593,15 @@ async function testCdnApp() {
   try {
     // Execute the full CDN request/response lifecycle
     const result: FullFlowResult = await runner.callFullFlow(
-      'https://example.com/api/data',  // request URL
-      'GET',                           // method
+      'https://example.com/api/data',   // request URL
+      'GET',                            // method
       { 'accept': 'application/json' }, // request headers
-      '',                              // request body
+      '',                               // request body
       {
         'request.path': '/api/data',
         'request.host': 'example.com',
-      },                               // shared properties
-      true,                            // enforce production property rules
+      },                                // shared properties
+      true,                             // enforce production property rules
     );
 
     // Inspect hook results

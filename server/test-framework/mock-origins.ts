@@ -74,7 +74,7 @@ export function mockOrigins(opts?: MockOriginsOptions): MockOriginsHandle {
     agent.disableNetConnect();
     if (Array.isArray(allow)) {
       for (const pattern of allow) {
-        agent.enableNetConnect(pattern);
+        agent.enableNetConnect(pattern as string);
       }
     }
   }

@@ -2,7 +2,7 @@
 
 The `@gcoredev/fastedge-test` debugger server exposes a REST API for loading WASM modules, executing requests, and managing test configuration.
 
-> **Note on header values.** Response and hook-result headers use `Record<string, string | string[]>` on the wire — single-valued headers are a `string`, multi-valued headers (notably `Set-Cookie` per RFC 6265) are a `string[]`. Request-side header inputs remain single-valued `Record<string, string>`. Type signatures below use `Record<string, string>` in places for readability; output-side headers accept the widened form.
+> **Note on header values.** Response-side and hook-result headers use `Record<string, string | string[]>` — single-valued headers are a `string`, multi-valued headers (notably `Set-Cookie` per RFC 6265) are a `string[]`. Request-side header inputs are single-valued `Record<string, string>`.
 
 ## Base URL
 
@@ -18,12 +18,12 @@ The port can be overridden via the `PORT` environment variable. When `WORKSPACE_
 
 The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
-| Value      | Description                                             |
-| ---------- | ------------------------------------------------------- |
-| `ui`       | Request originated from the web UI (default if omitted) |
-| `ai_agent` | Request originated from an AI agent                     |
-| `api`      | Request originated from direct API usage                |
-| `system`   | Request originated from an automated system             |
+| Value        | Description                                             |
+| ------------ | ------------------------------------------------------- |
+| `ui`         | Request originated from the web UI (default if omitted) |
+| `ai_agent`   | Request originated from an AI agent                     |
+| `api`        | Request originated from direct API usage                |
+| `system`     | Request originated from an automated system             |
 
 ```http
 X-Source: ai_agent
@@ -281,7 +281,7 @@ For **Proxy-WASM**, the top-level `url` field is required. The full CDN flow is 
   result: {
     status: number;
     statusText: string;
-    headers: Record<string, string>;
+    headers: Record<string, string | string[]>;
     body: string;
     contentType: string | null;
     isBase64?: boolean;
@@ -299,7 +299,7 @@ For **Proxy-WASM**, the top-level `url` field is required. The full CDN flow is 
   finalResponse: {
     status: number;
     statusText: string;
-    headers: Record<string, string>;
+    headers: Record<string, string | string[]>;
     body: string;
     contentType: string;
     isBase64?: boolean;
@@ -315,13 +315,13 @@ type HookResult = {
   returnCode: number | null;
   logs: Array<{ level: number; message: string }>;
   input: {
-    request: { headers: Record<string, string>; body: string };
-    response: { headers: Record<string, string>; body: string };
+    request: { headers: Record<string, string | string[]>; body: string };
+    response: { headers: Record<string, string | string[]>; body: string };
     properties?: Record<string, unknown>;
   };
   output: {
-    request: { headers: Record<string, string>; body: string };
-    response: { headers: Record<string, string>; body: string };
+    request: { headers: Record<string, string | string[]>; body: string };
+    response: { headers: Record<string, string | string[]>; body: string };
     properties?: Record<string, unknown>;
   };
   properties: Record<string, unknown>;
@@ -465,13 +465,13 @@ type HookResult = {
   returnCode: number | null;
   logs: Array<{ level: number; message: string }>;
   input: {
-    request: { headers: Record<string, string>; body: string };
-    response: { headers: Record<string, string>; body: string };
+    request: { headers: Record<string, string | string[]>; body: string };
+    response: { headers: Record<string, string | string[]>; body: string };
     properties?: Record<string, unknown>;
   };
   output: {
-    request: { headers: Record<string, string>; body: string };
-    response: { headers: Record<string, string>; body: string };
+    request: { headers: Record<string, string | string[]>; body: string };
+    response: { headers: Record<string, string | string[]>; body: string };
     properties?: Record<string, unknown>;
   };
   properties: Record<string, unknown>;
@@ -568,7 +568,7 @@ The upstream response is generated at runtime — either by a real fetch against
   finalResponse: {
     status: number;
     statusText: string;
-    headers: Record<string, string>;
+    headers: Record<string, string | string[]>;
     body: string;
     contentType: string;
     isBase64?: boolean;
@@ -886,23 +886,23 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Request Schemas
 
-| Name         | Description                                |
-| ------------ | ------------------------------------------ |
-| `api-load`   | Request body schema for `POST /api/load`   |
-| `api-send`   | Request body schema for `POST /api/send`   |
-| `api-call`   | Request body schema for `POST /api/call`   |
-| `api-config` | Request body schema for `POST /api/config` |
+| Name           | Description                                |
+| -------------- | ------------------------------------------ |
+| `api-load`     | Request body schema for `POST /api/load`   |
+| `api-send`     | Request body schema for `POST /api/send`   |
+| `api-call`     | Request body schema for `POST /api/call`   |
+| `api-config`   | Request body schema for `POST /api/config` |
 
 #### Response / Type Schemas
 
-| Name                   | Description                                                   |
-| ---------------------- | ------------------------------------------------------------- |
-| `fastedge-config.test` | Schema for `fastedge-config.test.json` config files           |
-| `hook-result`          | Shape of a single `HookResult` object                         |
-| `hook-call`            | Shape of a `HookCall` input object                            |
-| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints |
-| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution             |
-| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
+| Name                    | Description                                                   |
+| ----------------------- | ------------------------------------------------------------- |
+| `fastedge-config.test`  | Schema for `fastedge-config.test.json` config files           |
+| `hook-result`           | Shape of a single `HookResult` object                         |
+| `hook-call`             | Shape of a `HookCall` input object                            |
+| `full-flow-result`      | Shape of the `FullFlowResult` returned by full-flow endpoints |
+| `http-request`          | Shape of an `HttpRequest` for HTTP-WASM execution             |
+| `http-response`         | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
 
 **Example**
 
