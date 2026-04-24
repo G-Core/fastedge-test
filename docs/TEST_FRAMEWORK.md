@@ -147,13 +147,13 @@ interface MockOriginsHandle {
 }
 ```
 
-| Field                      | Description                                                                                                 |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `options.allowNetConnect`  | Opt requests out of the default `disableNetConnect` block. `true` allows all; an array allow-lists patterns |
-| `handle.origin(url)`       | Get or create a `MockPool` for an origin; chain `.intercept({path, method}).reply(...)` on it              |
-| `handle.agent`             | Raw `MockAgent` escape hatch for `.persist()` / `.times()` / `.delay()` / body matchers                    |
-| `handle.close()`           | Restore the previous global dispatcher and close the agent; idempotent                                      |
-| `handle.assertAllCalled()` | Throw if any registered interceptor was never matched by a real request                                     |
+| Field                      | Description                                                                                                                |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `options.allowNetConnect`  | Opt requests out of the default `disableNetConnect` block. `true` allows all; an array allow-lists origins or patterns    |
+| `handle.origin(url)`       | Get or create a `MockPool` for an origin; chain `.intercept({path, method}).reply(...)` on it                             |
+| `handle.agent`             | Raw `MockAgent` escape hatch for `.persist()` / `.times()` / `.delay()` / body matchers                                   |
+| `handle.close()`           | Restore the previous global dispatcher and close the agent; idempotent                                                    |
+| `handle.assertAllCalled()` | Throw if any registered interceptor was never matched by a real request                                                   |
 
 ### HttpRequestOptions
 
@@ -195,13 +195,13 @@ interface RunnerConfig {
 }
 ```
 
-| Field                            | Type                           | Description                                                               |
-| -------------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`                      | Enable dotenv loading                                                     |
-| `dotenv.path`                    | `string`                       | Directory to load dotenv files from; defaults to process CWD when omitted |
-| `enforceProductionPropertyRules` | `boolean`                      | Override production property enforcement for the runner; default `true`   |
+| Field                            | Type                            | Description                                                               |
+| -------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`                       | Enable dotenv loading                                                     |
+| `dotenv.path`                    | `string`                        | Directory to load dotenv files from; defaults to process CWD when omitted |
+| `enforceProductionPropertyRules` | `boolean`                       | Override production property enforcement for the runner; default `true`   |
 | `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                    |
-| `httpPort`                       | `number`                       | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
+| `httpPort`                       | `number`                        | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
 
 ## Functions
 
@@ -286,7 +286,7 @@ The returned `FullFlowResult` has this shape:
 
 ```typescript
 type FullFlowResult = {
-  hookResults: Record<string, HookResult>;    // keyed by camelCase hook name
+  hookResults: Record<string, HookResult>;
   finalResponse: {
     status: number;
     statusText: string;
@@ -301,12 +301,12 @@ type FullFlowResult = {
 
 Hook results are accessed by camelCase key:
 
-| Key                 | Hook                       |
-| ------------------- | -------------------------- |
-| `onRequestHeaders`  | `on_request_headers` hook  |
-| `onRequestBody`     | `on_request_body` hook     |
-| `onResponseHeaders` | `on_response_headers` hook |
-| `onResponseBody`    | `on_response_body` hook    |
+| Key                   | Hook                         |
+| --------------------- | ---------------------------- |
+| `onRequestHeaders`    | `on_request_headers` hook    |
+| `onRequestBody`       | `on_request_body` hook       |
+| `onResponseHeaders`   | `on_response_headers` hook   |
+| `onResponseBody`      | `on_response_body` hook      |
 
 ```typescript
 const result = await runFlow(runner, {
@@ -388,7 +388,7 @@ See [Origin Mocking](#origin-mocking) for the full usage pattern including lifec
 
 ```typescript
 const mocks = mockOrigins();
-mocks.origin("https://api.example").intercept({ path: "/users" }).reply(200, "[]");
+mocks.origin("https://api.example.com").intercept({ path: "/users" }).reply(200, "[]");
 // ... run your test ...
 await mocks.close();
 ```
@@ -440,7 +440,7 @@ function assertFinalStatus(result: FullFlowResult, expected: number): void
 function assertFinalHeader(result: FullFlowResult, name: string, expected?: string | string[]): void
 ```
 
-Multi-value semantics on `assertResponseHeader` / `assertFinalHeader` match `assertRequestHeader`: a `string` expected matches any value when the actual header is multi-valued; a `string[]` expected requires an exact array match. This preserves the RFC 6265 contract for `Set-Cookie` and any other legitimately-repeatable headers.
+Multi-value semantics on `assertFinalHeader` match `assertRequestHeader`: a `string` expected matches any value when the actual header is multi-valued; a `string[]` expected requires an exact array match. This preserves the RFC 6265 contract for `Set-Cookie` and any other legitimately-repeatable headers.
 
 `assertFinalStatus` asserts the final response status code after the full flow completes.
 
@@ -599,12 +599,12 @@ afterEach(async () => {
 
 it("renders a retry UI when the origin returns 503", async () => {
   mocks!
-    .origin("https://origin.example")
+    .origin("https://origin.example.com")
     .intercept({ path: "/api/resource" })
     .reply(503, "upstream down");
 
   const result = await runFlow(runner, {
-    url: "https://origin.example/api/resource",
+    url: "https://origin.example.com/api/resource",
   });
 
   assertFinalStatus(result, 503);
@@ -612,7 +612,7 @@ it("renders a retry UI when the origin returns 503", async () => {
 });
 ```
 
-`handle.origin(url)` returns an undici [`MockPool`](https://undici.nodejs.org/#/docs/api/MockPool) for that origin. Despite reading like "HTTP GET", `MockAgent.get` is a `Map.get`-style lookup — the HTTP method lives on the subsequent `.intercept({ method })` call and defaults to `GET`. It accepts any verb (string), a `RegExp`, or a predicate function.
+`handle.origin(url)` returns an undici [`MockPool`](https://undici.nodejs.org/#/docs/api/MockPool) for that origin. Despite reading like "HTTP GET", `MockAgent.get` is a `Map.get`-style lookup — the HTTP method lives on the subsequent `.intercept({ method })` call and defaults to `GET`. The method field accepts any HTTP verb as a string, a `RegExp`, or a predicate function.
 
 ### Multi-Upstream with `proxy_http_call`
 
@@ -620,22 +620,22 @@ Every upstream the WASM initiates via `proxy_http_call` goes through the same gl
 
 ```typescript
 mocks!
-  .origin("https://auth.example")
+  .origin("https://auth.example.com")
   .intercept({ path: "/token", method: "POST" })
   .reply(200, '{"jwt":"xyz"}');
 
 mocks!
-  .origin("https://analytics.example")
+  .origin("https://analytics.example.com")
   .intercept({ path: "/event", method: "POST" })
   .reply(204);
 
 mocks!
-  .origin("https://origin.example")
+  .origin("https://origin.example.com")
   .intercept({ path: "/" })
   .reply(200, "hello");
 
 const result = await runFlow(runner, {
-  url: "https://origin.example/",
+  url: "https://origin.example.com/",
 });
 
 // Fails if any registered interceptor was never hit
@@ -660,7 +660,7 @@ mocks = mockOrigins({
 });
 ```
 
-For pure-CDN test suites, the default is correct and this option is not needed.
+This preserves the block-by-default safety for all real origins while allowing the runner's own process-to-process fetch through. For pure-CDN test suites using `runFlow` only, the default is correct and this option is not needed.
 
 ### Advanced: the raw `MockAgent`
 
@@ -668,13 +668,13 @@ For pure-CDN test suites, the default is correct and this option is not needed.
 
 ```typescript
 mocks!.agent
-  .get("https://flaky.example")
+  .get("https://flaky.example.com")
   .intercept({ path: "/api" })
   .reply(503, "down")
   .times(2);
 
 mocks!.agent
-  .get("https://flaky.example")
+  .get("https://flaky.example.com")
   .intercept({ path: "/api" })
   .reply(200, "ok")
   .persist();

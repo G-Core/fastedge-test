@@ -195,14 +195,14 @@ callFullFlow(
 
 **Parameters**
 
-| Parameter                        | Type                      | Description                                                                                                          |
-| -------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `url`                            | `string`                  | Full request URL, or `BUILTIN_SHORTHAND` (`"built-in"`) to use the built-in responder instead of a real origin fetch |
-| `method`                         | `string`                  | HTTP method                                                                                                          |
-| `headers`                        | `Record<string, string>`  | Request headers                                                                                                      |
-| `body`                           | `string`                  | Request body                                                                                                         |
-| `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                                                                                |
-| `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior                                              |
+| Parameter                        | Type                      | Description                                                                                                           |
+| -------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `url`                            | `string`                  | Full request URL, or `BUILTIN_SHORTHAND` (`"built-in"`) to use the built-in responder instead of a real origin fetch  |
+| `method`                         | `string`                  | HTTP method                                                                                                           |
+| `headers`                        | `Record<string, string>`  | Request headers                                                                                                       |
+| `body`                           | `string`                  | Request body                                                                                                          |
+| `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                                                                                 |
+| `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior                                               |
 
 The upstream response is generated at runtime — either by a real HTTP fetch against `url`, or by the built-in responder when `url === "built-in"`. There is no caller-provided mock response.
 
@@ -416,14 +416,14 @@ type HookCall = {
 };
 ```
 
-| Field                            | Description                                                                                                                                                                        |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hook`                           | Hook name: `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`                                                                                      |
-| `request`                        | Request state passed to the hook                                                                                                                                                   |
-| `response`                       | Seed state for response hooks called via `callHook()`. Ignored by `callFullFlow()` and by request hooks — the full-flow path generates the upstream response at runtime.           |
-| `properties`                     | Shared properties (e.g. `request.path`, `vm_config`, `plugin_config`)                                                                                                             |
-| `dotenvEnabled`                  | Optional per-call dotenv override. Use `applyDotenv()` for persistent changes.                                                                                                    |
-| `enforceProductionPropertyRules` | Defaults to `true`. Set to `false` to allow property reads that would be blocked on production CDN.                                                                               |
+| Field                            | Description                                                                                                                                                                  |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hook`                           | Hook name: `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`                                                                                |
+| `request`                        | Request state passed to the hook                                                                                                                                             |
+| `response`                       | Seed state for response hooks called via `callHook()`. Ignored by `callFullFlow()` and by request hooks — the full-flow path generates the upstream response at runtime.     |
+| `properties`                     | Shared properties (e.g. `request.path`, `vm_config`, `plugin_config`)                                                                                                       |
+| `dotenvEnabled`                  | Optional per-call dotenv override. Use `applyDotenv()` for persistent changes.                                                                                              |
+| `enforceProductionPropertyRules` | Defaults to `true`. Set to `false` to allow property reads that would be blocked on production CDN.                                                                         |
 
 `HeaderRecord` is `Record<string, string | string[]>` — multi-valued headers (e.g. multiple `Set-Cookie`) are represented as `string[]`.
 
@@ -472,11 +472,11 @@ type FullFlowResult = {
 };
 ```
 
-| Field                  | Description                                                                                                                                                                  |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hookResults`          | A `Record` keyed by hook name (`"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`), each containing a `HookResult`                          |
-| `finalResponse`        | The final response after all hooks have executed, or the local response if a hook short-circuited (see `callFullFlow`). `body` is base64-encoded when `isBase64` is `true`. |
-| `calculatedProperties` | Runtime properties computed from the request URL (e.g. `request.path`, `request.host`)                                                                                      |
+| Field                  | Description                                                                                                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hookResults`          | A `Record` keyed by hook name (`"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`), each containing a `HookResult`                           |
+| `finalResponse`        | The final response after all hooks have executed, or the local response if a hook short-circuited (see `callFullFlow`). `body` is base64-encoded when `isBase64` is `true`.  |
+| `calculatedProperties` | Runtime properties computed from the request URL (e.g. `request.path`, `request.host`)                                                                                       |
 
 ### Supporting Types
 

@@ -233,4 +233,22 @@ describe('Built-In Responder', () => {
       /Invalid URL: "not-a-url".*Use a full URL.*or "built-in"/,
     );
   }, 15000);
+
+  it('should echo the post-hook request.url when WASM rewrites it', async () => {
+    // The valid-url-write app overwrites request.url in onRequestHeaders to
+    // https://example.com/new-url. The built-in echo must mirror this rewrite
+    // so developers see the URL that would have been fetched in production.
+    const urlWriteRunner = createTestRunner();
+    const urlWriteWasm = await loadCdnAppWasm(
+      'properties',
+      WASM_TEST_BINARIES.cdnApps.properties.validUrlWrite,
+    );
+    await urlWriteRunner.load(Buffer.from(urlWriteWasm));
+
+    const result = await runFlow(urlWriteRunner, { url: 'built-in' });
+
+    assertFinalStatus(result, 200);
+    const body = JSON.parse(result.finalResponse.body);
+    expect(body.requestUrl).toBe('https://example.com/new-url');
+  }, 30000);
 });

@@ -419,11 +419,15 @@ export class ProxyWasmRunner implements IWasmRunner {
         } else {
           // Default: full JSON echo (similar to http-responder)
           contentType = "application/json";
+          // Mirror the post-hook request.url so the echo reflects what would
+          // have been fetched in production (WASM can rewrite this via
+          // set_property). Falls back to BUILTIN_URL if the hook cleared it.
           responseBody = JSON.stringify({
             method: requestMethod,
             reqHeaders: modifiedRequestHeaders,
             reqBody: modifiedRequestBody || "",
-            requestUrl: BUILTIN_URL,
+            requestUrl:
+              (propertiesAfterRequestBody["request.url"] as string) || BUILTIN_URL,
           });
         }
 

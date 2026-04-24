@@ -18,12 +18,12 @@ The port can be overridden via the `PORT` environment variable. When `WORKSPACE_
 
 The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
-| Value        | Description                                             |
-| ------------ | ------------------------------------------------------- |
-| `ui`         | Request originated from the web UI (default if omitted) |
-| `ai_agent`   | Request originated from an AI agent                     |
-| `api`        | Request originated from direct API usage                |
-| `system`     | Request originated from an automated system             |
+| Value      | Description                                             |
+| ---------- | ------------------------------------------------------- |
+| `ui`       | Request originated from the web UI (default if omitted) |
+| `ai_agent` | Request originated from an AI agent                     |
+| `api`      | Request originated from direct API usage                |
+| `system`   | Request originated from an automated system             |
 
 ```http
 X-Source: ai_agent
@@ -886,23 +886,23 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Request Schemas
 
-| Name           | Description                                |
-| -------------- | ------------------------------------------ |
-| `api-load`     | Request body schema for `POST /api/load`   |
-| `api-send`     | Request body schema for `POST /api/send`   |
-| `api-call`     | Request body schema for `POST /api/call`   |
-| `api-config`   | Request body schema for `POST /api/config` |
+| Name         | Description                                |
+| ------------ | ------------------------------------------ |
+| `api-load`   | Request body schema for `POST /api/load`   |
+| `api-send`   | Request body schema for `POST /api/send`   |
+| `api-call`   | Request body schema for `POST /api/call`   |
+| `api-config` | Request body schema for `POST /api/config` |
 
 #### Response / Type Schemas
 
-| Name                    | Description                                                   |
-| ----------------------- | ------------------------------------------------------------- |
-| `fastedge-config.test`  | Schema for `fastedge-config.test.json` config files           |
-| `hook-result`           | Shape of a single `HookResult` object                         |
-| `hook-call`             | Shape of a `HookCall` input object                            |
-| `full-flow-result`      | Shape of the `FullFlowResult` returned by full-flow endpoints |
-| `http-request`          | Shape of an `HttpRequest` for HTTP-WASM execution             |
-| `http-response`         | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
+| Name                   | Description                                                   |
+| ---------------------- | ------------------------------------------------------------- |
+| `fastedge-config.test` | Schema for `fastedge-config.test.json` config files           |
+| `hook-result`          | Shape of a single `HookResult` object                         |
+| `hook-call`            | Shape of a `HookCall` input object                            |
+| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints |
+| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution             |
+| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
 
 **Example**
 

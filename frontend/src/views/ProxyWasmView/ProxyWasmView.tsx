@@ -7,6 +7,11 @@ import { useAppStore } from "../../stores";
 import { applyDefaultContentType } from "../../utils/contentType";
 import styles from "./ProxyWasmView.module.css";
 
+// FastEdge's edge layer answers OPTIONS preflights before the WASM runs —
+// proxy-wasm hooks never fire for OPTIONS on production, so don't offer it
+// as a method choice in the CDN debugger UI.
+const CDN_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"];
+
 export function ProxyWasmView() {
   // Get state and actions from stores
   const {
@@ -110,6 +115,7 @@ export function ProxyWasmView() {
         onMethodChange={setMethod}
         onUrlChange={setUrl}
         onSend={handleSend}
+        methods={CDN_METHODS}
         headers={requestHeaders}
         body={requestBody}
         onHeadersChange={setRequestHeaders}
