@@ -176,30 +176,6 @@
             "body"
           ],
           "additionalProperties": false
-        },
-        "response": {
-          "type": "object",
-          "properties": {
-            "headers": {
-              "default": {},
-              "type": "object",
-              "propertyNames": {
-                "type": "string"
-              },
-              "additionalProperties": {
-                "type": "string"
-              }
-            },
-            "body": {
-              "default": "",
-              "type": "string"
-            }
-          },
-          "required": [
-            "headers",
-            "body"
-          ],
-          "additionalProperties": false
         }
       },
       "required": [

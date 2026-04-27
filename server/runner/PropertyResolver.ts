@@ -1,8 +1,9 @@
-import type { HeaderMap } from "./types";
+import type { HeaderMap, HeaderRecord } from "./types";
+import { HeaderManager } from "./HeaderManager";
 
 export class PropertyResolver {
   private properties: Record<string, unknown> = {};
-  private requestHeaders: HeaderMap = {};
+  private requestHeaders: HeaderRecord = {};
   private requestMethod = "GET";
   private requestPath = "/";
   private requestScheme = "https";
@@ -10,7 +11,7 @@ export class PropertyResolver {
   private requestHost = "";
   private requestQuery = "";
   private requestExtension = "";
-  private responseHeaders: HeaderMap = {};
+  private responseHeaders: HeaderRecord = {};
   private responseStatus = 200;
   private responseStatusText = "OK";
 
@@ -55,7 +56,7 @@ export class PropertyResolver {
   }
 
   setRequestMetadata(
-    headers: HeaderMap,
+    headers: HeaderMap | HeaderRecord,
     method: string,
     path?: string,
     scheme?: string,
@@ -79,17 +80,22 @@ export class PropertyResolver {
     try {
       const url = new URL(targetUrl);
 
-      // Extract URL components
+      // Extract URL components. FastEdge/nginx production parity: request.path
+      // includes the query string (e.g. "/foo?a=1"), mirroring the `:path`
+      // pseudo-header. request.query remains the query portion alone, without
+      // the leading `?`.
       this.requestUrl = targetUrl;
       this.requestHost = url.hostname + (url.port ? `:${url.port}` : "");
-      this.requestPath = url.pathname || "/";
+      this.requestPath = (url.pathname || "/") + url.search;
       this.requestQuery = url.search.startsWith("?")
         ? url.search.substring(1)
         : url.search;
       this.requestScheme = url.protocol.replace(":", "");
 
-      // Extract file extension from path
-      const pathParts = this.requestPath.split("/");
+      // Extract file extension from the last path segment, ignoring any query
+      // portion that now lives inside requestPath.
+      const pathOnly = url.pathname || "/";
+      const pathParts = pathOnly.split("/");
       const lastPart = pathParts[pathParts.length - 1];
       const dotIndex = lastPart.lastIndexOf(".");
       if (dotIndex > 0 && dotIndex < lastPart.length - 1) {
@@ -109,7 +115,7 @@ export class PropertyResolver {
   }
 
   setResponseMetadata(
-    headers: HeaderMap,
+    headers: HeaderMap | HeaderRecord,
     status: number,
     statusText: string,
   ): void {
@@ -188,21 +194,28 @@ export class PropertyResolver {
         `${this.requestScheme}://${this.requestHost}${this.requestPath}`
       );
     if (path === "request.host")
-      return this.requestHost || this.requestHeaders["host"] || "localhost";
+      return (
+        this.requestHost ||
+        HeaderManager.firstValue(this.requestHeaders["host"]) ||
+        "localhost"
+      );
     if (path === "request.scheme") return this.requestScheme;
     if (path === "request.protocol") return this.requestScheme;
     if (path === "request.query") return this.requestQuery;
     if (path === "request.extension") return this.requestExtension;
     if (path === "request.content_type") {
-      return this.requestHeaders["content-type"] || "";
+      return HeaderManager.firstValue(this.requestHeaders["content-type"]) || "";
     }
 
-    // Individual header access (e.g., request.headers.content-type)
+    // Individual header access (e.g., request.headers.content-type).
+    // Proxy-wasm properties return a single string; for multi-valued headers
+    // we return the first value (WASM apps that need all values should use
+    // proxy_get_header_map_pairs instead).
     if (path.startsWith("request.headers.")) {
       const headerName = path
         .substring("request.headers.".length)
         .toLowerCase();
-      return this.requestHeaders[headerName] || "";
+      return HeaderManager.firstValue(this.requestHeaders[headerName]) || "";
     }
 
     // Response properties
@@ -211,7 +224,7 @@ export class PropertyResolver {
     if (path === "response.status_code") return this.responseStatus;
     if (path === "response.code_details") return this.responseStatusText;
     if (path === "response.content_type") {
-      return this.responseHeaders["content-type"] || "";
+      return HeaderManager.firstValue(this.responseHeaders["content-type"]) || "";
     }
 
     // Individual response header access (e.g., response.headers.content-type)
@@ -219,7 +232,7 @@ export class PropertyResolver {
       const headerName = path
         .substring("response.headers.".length)
         .toLowerCase();
-      return this.responseHeaders[headerName] || "";
+      return HeaderManager.firstValue(this.responseHeaders[headerName]) || "";
     }
 
     return undefined;

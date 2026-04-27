@@ -1,6 +1,6 @@
 # Test Framework API
 
-High-level API for defining and running proxy-wasm test suites with `@gcoredev/fastedge-test`.
+High-level test framework API for defining and running WASM test suites with `@gcoredev/fastedge-test`.
 
 ## Import
 
@@ -12,6 +12,7 @@ import {
   runFlow,
   runHttpRequest,
   loadConfigFile,
+  mockOrigins,
   assertRequestHeader,
   assertNoRequestHeader,
   assertResponseHeader,
@@ -44,6 +45,8 @@ import type {
   FlowOptions,
   HttpRequestOptions,
   RunnerConfig,
+  MockOriginsHandle,
+  MockOriginsOptions,
 } from "@gcoredev/fastedge-test/test";
 ```
 
@@ -111,10 +114,6 @@ interface FlowOptions {
   method?: string;                           // Default: "GET"
   requestHeaders?: Record<string, string>;
   requestBody?: string;                      // Default: ""
-  responseStatus?: number;                   // Default: 200
-  responseStatusText?: string;               // Default: "OK"
-  responseHeaders?: Record<string, string>;  // Default: {}
-  responseBody?: string;                     // Default: ""
   properties?: Record<string, unknown>;      // Default: {}
   enforceProductionPropertyRules?: boolean;  // Default: true
 }
@@ -122,16 +121,39 @@ interface FlowOptions {
 
 | Field                            | Default | Description                                                                 |
 | -------------------------------- | ------- | --------------------------------------------------------------------------- |
-| `url`                            | —       | Full URL including scheme and host; used to derive pseudo-headers           |
+| `url`                            | —       | Full URL including scheme and host, or `"built-in"` for the local responder |
 | `method`                         | `"GET"` | HTTP method                                                                 |
 | `requestHeaders`                 | `{}`    | Additional request headers; pseudo-headers here override derived values     |
 | `requestBody`                    | `""`    | Request body string                                                         |
-| `responseStatus`                 | `200`   | Simulated upstream response status code                                     |
-| `responseStatusText`             | `"OK"`  | Simulated upstream response status text                                     |
-| `responseHeaders`                | `{}`    | Simulated upstream response headers                                         |
-| `responseBody`                   | `""`    | Simulated upstream response body                                            |
 | `properties`                     | `{}`    | Proxy-wasm properties to inject                                             |
 | `enforceProductionPropertyRules` | `true`  | When true, denies access to properties not available in production FastEdge |
+
+The upstream response is generated at runtime by a real fetch against `url`, or by the built-in responder when `url === "built-in"`. See the [Origin Mocking](#origin-mocking) section for controlling responses in tests.
+
+### MockOriginsHandle & MockOriginsOptions
+
+Returned by `mockOrigins()` to scope an undici `MockAgent` to a single test (see [Origin Mocking](#origin-mocking) for full usage).
+
+```typescript
+interface MockOriginsOptions {
+  allowNetConnect?: boolean | (string | RegExp)[];  // Default: false
+}
+
+interface MockOriginsHandle {
+  origin(url: string): MockPool;
+  readonly agent: MockAgent;
+  close(): Promise<void>;
+  assertAllCalled(): void;
+}
+```
+
+| Field                      | Description                                                                                                                |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `options.allowNetConnect`  | Opt requests out of the default `disableNetConnect` block. `true` allows all; an array allow-lists origins or patterns    |
+| `handle.origin(url)`       | Get or create a `MockPool` for an origin; chain `.intercept({path, method}).reply(...)` on it                             |
+| `handle.agent`             | Raw `MockAgent` escape hatch for `.persist()` / `.times()` / `.delay()` / body matchers                                   |
+| `handle.close()`           | Restore the previous global dispatcher and close the agent; idempotent                                                    |
+| `handle.assertAllCalled()` | Throw if any registered interceptor was never matched by a real request                                                   |
 
 ### HttpRequestOptions
 
@@ -160,6 +182,26 @@ Re-exported from the runner. Controls WASM execution behaviour. See [RUNNER.md](
 ```typescript
 import type { RunnerConfig } from "@gcoredev/fastedge-test/test";
 ```
+
+```typescript
+interface RunnerConfig {
+  dotenv?: {
+    enabled?: boolean;
+    path?: string;
+  };
+  enforceProductionPropertyRules?: boolean;
+  runnerType?: "http-wasm" | "proxy-wasm";
+  httpPort?: number;
+}
+```
+
+| Field                            | Type                            | Description                                                               |
+| -------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`                       | Enable dotenv loading                                                     |
+| `dotenv.path`                    | `string`                        | Directory to load dotenv files from; defaults to process CWD when omitted |
+| `enforceProductionPropertyRules` | `boolean`                       | Override production property enforcement for the runner; default `true`   |
+| `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                    |
+| `httpPort`                       | `number`                        | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
 
 ## Functions
 
@@ -244,11 +286,11 @@ The returned `FullFlowResult` has this shape:
 
 ```typescript
 type FullFlowResult = {
-  hookResults: Record<string, HookResult>; // keyed by camelCase hook name
+  hookResults: Record<string, HookResult>;
   finalResponse: {
     status: number;
     statusText: string;
-    headers: Record<string, string>;
+    headers: Record<string, string | string[]>;
     body: string;
     contentType: string;
     isBase64?: boolean;
@@ -259,12 +301,12 @@ type FullFlowResult = {
 
 Hook results are accessed by camelCase key:
 
-| Key                  | Hook                       |
-| -------------------- | -------------------------- |
-| `onRequestHeaders`   | `on_request_headers` hook  |
-| `onRequestBody`      | `on_request_body` hook     |
-| `onResponseHeaders`  | `on_response_headers` hook |
-| `onResponseBody`     | `on_response_body` hook    |
+| Key                   | Hook                         |
+| --------------------- | ---------------------------- |
+| `onRequestHeaders`    | `on_request_headers` hook    |
+| `onRequestBody`       | `on_request_body` hook       |
+| `onResponseHeaders`   | `on_response_headers` hook   |
+| `onResponseBody`      | `on_response_body` hook      |
 
 ```typescript
 const result = await runFlow(runner, {
@@ -272,8 +314,6 @@ const result = await runFlow(runner, {
   method: "POST",
   requestHeaders: { "content-type": "application/json" },
   requestBody: '{"key":"value"}',
-  responseStatus: 201,
-  responseHeaders: { "x-upstream": "backend-1" },
 });
 
 // Access hook results
@@ -281,8 +321,8 @@ const reqHook = result.hookResults.onRequestHeaders;
 const resHook = result.hookResults.onResponseHeaders;
 
 // Access final response
-console.log(result.finalResponse.status);      // 201
-console.log(result.finalResponse.contentType); // e.g. "application/json"
+console.log(result.finalResponse.status);
+console.log(result.finalResponse.contentType);
 ```
 
 ### runHttpRequest
@@ -307,7 +347,7 @@ const response = await runHttpRequest(runner, { path: "/login" });
 assertHttpStatus(response, 302);
 assertHttpHeader(response, "location", "/dashboard");
 
-const redirected = await runHttpRequest(runner, { path: response.headers["location"] });
+const redirected = await runHttpRequest(runner, { path: response.headers["location"] as string });
 assertHttpStatus(redirected, 200);
 ```
 
@@ -336,6 +376,23 @@ Reads and validates a `fastedge-config.test.json` file. Returns the parsed `Test
 const config = await loadConfigFile("./fastedge-config.test.json");
 ```
 
+### mockOrigins
+
+```typescript
+function mockOrigins(options?: MockOriginsOptions): MockOriginsHandle
+```
+
+Install an undici `MockAgent` as the global fetch dispatcher for the duration of a test. Every origin fetch and every `proxy_http_call` upstream the runner makes routes through it, so interceptors registered on the returned handle match all of them. Blocks unmocked requests by default.
+
+See [Origin Mocking](#origin-mocking) for the full usage pattern including lifecycle, multi-upstream setup, and the HTTP-WASM `allowNetConnect` caveat.
+
+```typescript
+const mocks = mockOrigins();
+mocks.origin("https://api.example.com").intercept({ path: "/users" }).reply(200, "[]");
+// ... run your test ...
+await mocks.close();
+```
+
 ## Assertion Helpers
 
 All assertion helpers throw an `Error` on failure, making them compatible with any test framework (vitest, jest, node:assert) or plain try/catch.
@@ -343,11 +400,11 @@ All assertion helpers throw an `Error` on failure, making them compatible with a
 ### Request Headers
 
 ```typescript
-function assertRequestHeader(result: HookResult, name: string, expected?: string): void
+function assertRequestHeader(result: HookResult, name: string, expected?: string | string[]): void
 function assertNoRequestHeader(result: HookResult, name: string): void
 ```
 
-`assertRequestHeader` asserts the named header exists in the hook's output request headers. If `expected` is provided, also asserts the value matches exactly.
+`assertRequestHeader` asserts the named header exists (case-insensitive) in the hook's output request headers. When `expected` is a `string` and the header is multi-valued, passes if any value matches (`.includes()` semantics). When `expected` is a `string[]`, requires an exact array match.
 
 `assertNoRequestHeader` asserts the named header is absent.
 
@@ -362,7 +419,7 @@ assertNoRequestHeader(hookResult, "x-internal-secret");   // absent
 ### Response Headers
 
 ```typescript
-function assertResponseHeader(result: HookResult, name: string, expected?: string): void
+function assertResponseHeader(result: HookResult, name: string, expected?: string | string[]): void
 function assertNoResponseHeader(result: HookResult, name: string): void
 ```
 
@@ -380,8 +437,10 @@ assertNoResponseHeader(hookResult, "server");
 
 ```typescript
 function assertFinalStatus(result: FullFlowResult, expected: number): void
-function assertFinalHeader(result: FullFlowResult, name: string, expected?: string): void
+function assertFinalHeader(result: FullFlowResult, name: string, expected?: string | string[]): void
 ```
+
+Multi-value semantics on `assertFinalHeader` match `assertRequestHeader`: a `string` expected matches any value when the actual header is multi-valued; a `string[]` expected requires an exact array match. This preserves the RFC 6265 contract for `Set-Cookie` and any other legitimately-repeatable headers.
 
 `assertFinalStatus` asserts the final response status code after the full flow completes.
 
@@ -464,7 +523,7 @@ These assertions operate on an `HttpResponse` returned by `runHttpRequest`. Use 
 
 ```typescript
 function assertHttpStatus(response: HttpResponse, expected: number): void
-function assertHttpHeader(response: HttpResponse, name: string, expected?: string): void
+function assertHttpHeader(response: HttpResponse, name: string, expected?: string | string[]): void
 function assertHttpNoHeader(response: HttpResponse, name: string): void
 function assertHttpBody(response: HttpResponse, expected: string): void
 function assertHttpBodyContains(response: HttpResponse, substring: string): void
@@ -476,7 +535,18 @@ function assertHttpNoLog(response: HttpResponse, messageSubstring: string): void
 
 `assertHttpStatus` — asserts the response status code.
 
-`assertHttpHeader` — asserts the named header exists (case-insensitive). If `expected` is provided, also asserts the value matches exactly.
+`assertHttpHeader` — asserts the named header exists (case-insensitive). If `expected` is a `string` and the header is multi-valued (e.g. `set-cookie`), passes if any value matches (`.includes()` semantics). If `expected` is a `string[]`, requires an exact array match.
+
+```typescript
+// Single-valued header — exact match
+assertHttpHeader(response, "content-type", "application/json");
+
+// Multi-valued header — one-of-many match
+assertHttpHeader(response, "set-cookie", "sid=abc; Path=/");
+
+// Multi-valued header — exact array
+assertHttpHeader(response, "set-cookie", ["sid=abc; Path=/", "theme=dark; Path=/"]);
+```
 
 `assertHttpNoHeader` — asserts the named header is absent (case-insensitive).
 
@@ -506,6 +576,113 @@ assertHttpNoLog(response, "error");
 const data = assertHttpJson<{ items: unknown[] }>(response);
 console.log(data.items.length);
 ```
+
+## Origin Mocking
+
+The runner's origin fetch inside `callFullFlow` and every `proxy_http_call` upstream fetch both go through Node's global `fetch`, which routes through undici's global dispatcher. `mockOrigins()` installs a [`MockAgent`](https://undici.nodejs.org/#/docs/api/MockAgent) as that dispatcher, so interceptors registered on the returned handle match every request the runner makes — origin fetches in full-flow mode, upstream calls from WASM via `proxy_http_call`, anything else the runner eventually emits.
+
+### Basic Usage
+
+```typescript
+import { mockOrigins } from "@gcoredev/fastedge-test/test";
+
+let mocks: MockOriginsHandle | null = null;
+
+beforeEach(() => {
+  mocks = mockOrigins();
+});
+
+afterEach(async () => {
+  await mocks?.close();
+  mocks = null;
+});
+
+it("renders a retry UI when the origin returns 503", async () => {
+  mocks!
+    .origin("https://origin.example.com")
+    .intercept({ path: "/api/resource" })
+    .reply(503, "upstream down");
+
+  const result = await runFlow(runner, {
+    url: "https://origin.example.com/api/resource",
+  });
+
+  assertFinalStatus(result, 503);
+  mocks!.assertAllCalled();
+});
+```
+
+`handle.origin(url)` returns an undici [`MockPool`](https://undici.nodejs.org/#/docs/api/MockPool) for that origin. Despite reading like "HTTP GET", `MockAgent.get` is a `Map.get`-style lookup — the HTTP method lives on the subsequent `.intercept({ method })` call and defaults to `GET`. The method field accepts any HTTP verb as a string, a `RegExp`, or a predicate function.
+
+### Multi-Upstream with `proxy_http_call`
+
+Every upstream the WASM initiates via `proxy_http_call` goes through the same global dispatcher, so multiple origins can be stacked in one setup:
+
+```typescript
+mocks!
+  .origin("https://auth.example.com")
+  .intercept({ path: "/token", method: "POST" })
+  .reply(200, '{"jwt":"xyz"}');
+
+mocks!
+  .origin("https://analytics.example.com")
+  .intercept({ path: "/event", method: "POST" })
+  .reply(204);
+
+mocks!
+  .origin("https://origin.example.com")
+  .intercept({ path: "/" })
+  .reply(200, "hello");
+
+const result = await runFlow(runner, {
+  url: "https://origin.example.com/",
+});
+
+// Fails if any registered interceptor was never hit
+mocks!.assertAllCalled();
+```
+
+### Lifecycle and `assertAllCalled`
+
+The handle installs the MockAgent as the global dispatcher on construction and restores the previous dispatcher on `close()`. One handle per test is the expected pattern; `beforeEach` / `afterEach` keeps each test isolated. Calling `close()` more than once is safe — later calls are no-ops.
+
+`handle.assertAllCalled()` throws if any registered interceptor was never matched. Use it at the end of a test (or in `afterEach`) to catch setup drift — mocks that were registered but never exercised because the WASM under test took a different code path.
+
+### `allowNetConnect` and the HTTP-WASM caveat
+
+By default, `mockOrigins()` calls `MockAgent.disableNetConnect()` — every request that doesn't match a registered interceptor is rejected. This is the safer default: missing mocks become loud errors instead of silent live network calls in CI.
+
+**HTTP-WASM tests do not compose with the default.** `HttpWasmRunner.execute()` forwards requests to a spawned `fastedge-run` subprocess on `localhost:<port>`, and that localhost fetch is also blocked by `disableNetConnect()`. Use `allowNetConnect` to exempt localhost:
+
+```typescript
+mocks = mockOrigins({
+  allowNetConnect: [/^127\.0\.0\.1/, /^localhost/],
+});
+```
+
+This preserves the block-by-default safety for all real origins while allowing the runner's own process-to-process fetch through. For pure-CDN test suites using `runFlow` only, the default is correct and this option is not needed.
+
+### Advanced: the raw `MockAgent`
+
+`handle.agent` exposes the underlying `MockAgent` unchanged. Use it for features the wrapper doesn't re-export — `.persist()` (match repeatedly), `.times(n)` (match exactly N times), `.delay(ms)` (simulate latency), custom body matchers, request body predicates, etc. See the [undici MockAgent docs](https://undici.nodejs.org/#/docs/api/MockAgent) for the full DSL.
+
+```typescript
+mocks!.agent
+  .get("https://flaky.example.com")
+  .intercept({ path: "/api" })
+  .reply(503, "down")
+  .times(2);
+
+mocks!.agent
+  .get("https://flaky.example.com")
+  .intercept({ path: "/api" })
+  .reply(200, "ok")
+  .persist();
+```
+
+### Pseudo-headers and the outbound fetch
+
+The runner strips HTTP/2 pseudo-headers (`:method`, `:path`, `:authority`, `:scheme`) from the outbound fetch before it leaves the process. WASM hooks still see them via `proxy_get_header_map_value` during hook execution; the HTTP/1.1 fetch that actually reaches the origin does not carry them. This mirrors production FastEdge behaviour and means `runFlow` — which derives and injects the pseudo-headers from `url` and `method` — composes with `mockOrigins()` out of the box: interceptors match on path and method only, exactly as undici expects.
 
 ## CI Integration
 
@@ -590,8 +767,6 @@ const suite = defineTestSuite({
       async run(runner) {
         const result = await runFlow(runner, {
           url: "https://cdn.example.com/static/app.js",
-          responseStatus: 200,
-          responseHeaders: { "content-type": "application/javascript" },
         });
 
         const res = result.hookResults.onResponseHeaders;

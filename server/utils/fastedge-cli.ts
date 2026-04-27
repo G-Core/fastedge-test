@@ -14,7 +14,10 @@ import { fileURLToPath } from "url";
 import os from "os";
 
 // ESM-compatible equivalent of __dirname.
-// esbuild transforms import.meta.url correctly for both ESM and CJS output.
+// esbuild transforms import.meta.url correctly for both ESM and CJS output
+// via a banner shim (__importMetaUrl). `tsc` type-checks under CommonJS and
+// doesn't know about the esbuild transform, so suppress the TS1343 error here.
+// @ts-ignore TS1343 — import.meta.url is handled by esbuild, not tsc.
 const _currentDir = dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -86,7 +89,7 @@ export async function findFastEdgeRunCli(): Promise<string> {
       return envPath;
     } else {
       throw new Error(
-        `FASTEDGE_RUN_PATH is set to "${envPath}" but the file does not exist`
+        `FASTEDGE_RUN_PATH is set to "${envPath}" but the file does not exist`,
       );
     }
   }
@@ -102,7 +105,9 @@ export async function findFastEdgeRunCli(): Promise<string> {
   // 3. Check PATH using 'which' (Unix) or 'where' (Windows)
   try {
     const command =
-      process.platform === "win32" ? "where fastedge-run" : "which fastedge-run";
+      process.platform === "win32"
+        ? "where fastedge-run"
+        : "which fastedge-run";
     const result = execSync(command, { encoding: "utf8" }).trim();
 
     // On Windows, 'where' can return multiple lines; take the first
@@ -124,7 +129,7 @@ export async function findFastEdgeRunCli(): Promise<string> {
       "To fix this:\n" +
       "  - Set FASTEDGE_RUN_PATH environment variable, or\n" +
       "  - Install fastedge-run in PATH: cargo install fastedge-run, or\n" +
-      "  - Place the binary in fastedge-cli/ at project root (platform-specific filename)"
+      "  - Place the binary in fastedge-cli/ at project root (platform-specific filename)",
   );
 }
 

@@ -8,7 +8,8 @@ interface ResponsePanelProps {
   response: {
     status: number;
     statusText: string;
-    headers: Record<string, string>;
+    // Multi-valued headers (e.g. set-cookie) arrive as string[]; undefined tolerated.
+    headers: Record<string, string | string[] | undefined>;
     body: string;
     contentType: string;
     isBase64?: boolean;
@@ -269,8 +270,18 @@ export function ResponsePanel({ response }: ResponsePanelProps) {
   };
 
   const renderHeaders = () => {
-    const entries = Object.entries(response.headers);
-    if (entries.length === 0) {
+    // Flatten multi-valued headers (e.g. set-cookie with multiple cookies)
+    // into one row per value so each entry is readable independently.
+    const rows: Array<{ key: string; value: string }> = [];
+    for (const [key, raw] of Object.entries(response.headers)) {
+      if (raw === undefined) continue;
+      if (Array.isArray(raw)) {
+        for (const v of raw) rows.push({ key, value: v });
+      } else {
+        rows.push({ key, value: raw });
+      }
+    }
+    if (rows.length === 0) {
       return (
         <div className={styles.noHeaders}>
           No headers received
@@ -280,10 +291,10 @@ export function ResponsePanel({ response }: ResponsePanelProps) {
 
     return (
       <div className={styles.headersList}>
-        {entries.map(([key, value]) => (
-          <div key={key} className={styles.headerItem}>
-            <span className={styles.headerKey}>{key}:</span>
-            <span className={styles.headerValue}>{value}</span>
+        {rows.map((row, i) => (
+          <div key={`${row.key}-${i}`} className={styles.headerItem}>
+            <span className={styles.headerKey}>{row.key}:</span>
+            <span className={styles.headerValue}>{row.value}</span>
           </div>
         ))}
       </div>

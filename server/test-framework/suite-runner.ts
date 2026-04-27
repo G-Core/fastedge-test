@@ -116,10 +116,6 @@ export async function runFlow(
     url,
     method = "GET",
     requestBody = "",
-    responseStatus = 200,
-    responseStatusText = "OK",
-    responseHeaders = {},
-    responseBody = "",
     properties = {},
     enforceProductionPropertyRules = true,
   } = options;
@@ -148,10 +144,6 @@ export async function runFlow(
     method,
     requestHeaders,
     requestBody,
-    responseHeaders,
-    responseBody,
-    responseStatus,
-    responseStatusText,
     properties,
     enforceProductionPropertyRules,
   );

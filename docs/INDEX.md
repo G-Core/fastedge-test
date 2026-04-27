@@ -79,12 +79,13 @@ import { defineTestSuite, runAndExit } from "@gcoredev/fastedge-test/test";
 | `runFlow`                    | function | Executes a single request flow directly                              |
 | `runHttpRequest`             | function | Executes a single HTTP request directly                              |
 | `loadConfigFile`             | function | Loads and validates a `fastedge-config.test.json` file               |
+| `mockOrigins`                | function | Creates mock HTTP origins that respond to outgoing HTTP calls        |
 | `assertRequestHeader`        | function | Asserts a header is present on the outgoing request                  |
 | `assertNoRequestHeader`      | function | Asserts a header is absent from the outgoing request                 |
 | `assertResponseHeader`       | function | Asserts a header is present on the final response                    |
 | `assertNoResponseHeader`     | function | Asserts a header is absent from the final response                   |
 | `assertFinalStatus`          | function | Asserts the final HTTP status code                                   |
-| `assertFinalHeader`          | function | Asserts a header on the final response (alias for response header)   |
+| `assertFinalHeader`          | function | Asserts a header on the final response                               |
 | `assertReturnCode`           | function | Asserts the proxy-wasm return code                                   |
 | `assertLog`                  | function | Asserts a log entry was emitted                                      |
 | `assertNoLog`                | function | Asserts a log entry was not emitted                                  |
@@ -101,6 +102,8 @@ import { defineTestSuite, runAndExit } from "@gcoredev/fastedge-test/test";
 | `assertHttpContentType`      | function | Asserts the HTTP response Content-Type header                        |
 | `assertHttpLog`              | function | Asserts a log entry was emitted during HTTP request handling         |
 | `assertHttpNoLog`            | function | Asserts a log entry was not emitted during HTTP request handling     |
+| `MockOriginsHandle`          | type     | Handle returned by `mockOrigins` — use to stop the mock servers      |
+| `MockOriginsOptions`         | type     | Options accepted by `mockOrigins`                                    |
 | `TestSuite`                  | type     | Suite definition — one of `wasmPath` or `wasmBuffer` plus test cases |
 | `TestCase`                   | type     | A single test scenario with config and assertions                    |
 | `TestResult`                 | type     | Result of a single test case execution                               |

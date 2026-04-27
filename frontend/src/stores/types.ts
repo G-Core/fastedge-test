@@ -10,8 +10,6 @@ export interface RequestState {
   url: string;
   requestHeaders: Record<string, string>;
   requestBody: string;
-  responseHeaders: Record<string, string>;
-  responseBody: string;
 }
 
 export interface RequestActions {
@@ -19,12 +17,8 @@ export interface RequestActions {
   setUrl: (url: string) => void;
   setRequestHeaders: (headers: Record<string, string>) => void;
   setRequestBody: (body: string) => void;
-  setResponseHeaders: (headers: Record<string, string>) => void;
-  setResponseBody: (body: string) => void;
   updateRequestHeader: (key: string, value: string) => void;
   removeRequestHeader: (key: string) => void;
-  updateResponseHeader: (key: string, value: string) => void;
-  removeResponseHeader: (key: string) => void;
   resetRequest: () => void;
 }
 
@@ -142,11 +136,13 @@ export interface HttpWasmState {
   httpRequestHeaders: Record<string, string>;
   httpRequestBody: string;
 
-  // Response state
+  // Response state.
+  // `headers` mirrors Node's IncomingHttpHeaders shape on the backend —
+  // set-cookie is string[], most others string, undefined tolerated at rest.
   httpResponse: {
     status: number;
     statusText: string;
-    headers: Record<string, string>;
+    headers: Record<string, string | string[] | undefined>;
     body: string;
     contentType: string;
     isBase64?: boolean;
@@ -217,10 +213,6 @@ export interface TestConfig {
     description?: string;
   };
   request: CdnRequestConfig | HttpRequestConfig;
-  response?: {
-    headers: Record<string, string>;
-    body: string;
-  };
   properties: Record<string, string>;
   logLevel: number;
   dotenv?: {

@@ -129,10 +129,19 @@ function App() {
         break;
 
       case "request_started":
-        // Request started - update URL and method in UI (for proxy-wasm)
+        // Request started - update URL and method in UI (for proxy-wasm).
+        // The editable request-headers field stores single-valued pairs;
+        // flatten any multi-valued entries with ", " for display.
         setUrl(event.data.url);
         setMethod(event.data.method);
-        setRequestHeaders(event.data.headers);
+        setRequestHeaders(
+          Object.fromEntries(
+            Object.entries(event.data.headers).map(([k, v]) => [
+              k,
+              Array.isArray(v) ? v.join(", ") : v,
+            ]),
+          ),
+        );
         // Clear previous results
         setHookResults({});
         setFinalResponse(null);

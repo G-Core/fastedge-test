@@ -368,17 +368,13 @@ app.post("/api/execute", async (req: Request, res: Response) => {
         return;
       }
 
-      const { request, response, properties } = req.body ?? {};
+      const { request, properties } = req.body ?? {};
 
       const fullFlowResult = await currentRunner.callFullFlow(
         url,
         request?.method || "GET",
         request?.headers || {},
         request?.body || "",
-        response?.headers || {},
-        response?.body || "",
-        response?.status || 200,
-        response?.statusText || "OK",
         properties || {},
         true, // enforceProductionPropertyRules
       );
@@ -443,7 +439,7 @@ app.post("/api/send", async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
-  const { url, request, response, properties } = parsed.data;
+  const { url, request, properties } = parsed.data;
 
   if (!currentRunner) {
     res.status(400).json({
@@ -460,10 +456,6 @@ app.post("/api/send", async (req: Request, res: Response) => {
       request?.method || "GET",
       request?.headers || {},
       request?.body || "",
-      response?.headers || {},
-      response?.body || "",
-      200,
-      "OK",
       properties || {},
       true, // enforceProductionPropertyRules
     );

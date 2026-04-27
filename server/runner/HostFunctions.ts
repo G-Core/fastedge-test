@@ -1,4 +1,4 @@
-import type { HeaderMap, HeaderTuples, LogEntry } from "./types";
+import type { HeaderMap, HeaderRecord, HeaderTuples, LogEntry } from "./types";
 import { ProxyStatus, BufferType, MapType } from "./types";
 import { MemoryManager } from "./MemoryManager";
 import { HeaderManager } from "./HeaderManager";
@@ -50,7 +50,9 @@ export class HostFunctions {
   } | null = null;
   private httpCallResponse: {
     tokenId: number;
-    headers: HeaderMap;
+    // Stored as tuples so duplicate Set-Cookie headers from the upstream fetch
+    // survive all the way through to proxy_get_header_map_pairs on HttpCallResponseHeaders.
+    headers: HeaderTuples;
     body: Uint8Array;
   } | null = null;
   private streamClosed = false;
@@ -89,8 +91,8 @@ export class HostFunctions {
   }
 
   setHeadersAndBodies(
-    reqHeaders: HeaderMap,
-    resHeaders: HeaderMap,
+    reqHeaders: HeaderMap | HeaderRecord,
+    resHeaders: HeaderMap | HeaderRecord,
     reqBody: string,
     resBody: string,
   ): void {
@@ -132,8 +134,15 @@ export class HostFunctions {
     return call;
   }
 
-  setHttpCallResponse(tokenId: number, headers: HeaderMap, body: Uint8Array): void {
-    this.httpCallResponse = { tokenId, headers, body };
+  setHttpCallResponse(
+    tokenId: number,
+    headers: HeaderMap | HeaderRecord | HeaderTuples,
+    body: Uint8Array,
+  ): void {
+    const tuples: HeaderTuples = Array.isArray(headers)
+      ? headers
+      : HeaderManager.recordToTuples(headers);
+    this.httpCallResponse = { tokenId, headers: tuples, body };
   }
 
   clearHttpCallResponse(): void {
@@ -161,11 +170,11 @@ export class HostFunctions {
     this.localResponse = null;
   }
 
-  getRequestHeaders(): HeaderMap {
+  getRequestHeaders(): HeaderRecord {
     return HeaderManager.tuplesToRecord(this.requestHeaders);
   }
 
-  getResponseHeaders(): HeaderMap {
+  getResponseHeaders(): HeaderRecord {
     return HeaderManager.tuplesToRecord(this.responseHeaders);
   }
 
@@ -810,7 +819,7 @@ export class HostFunctions {
       mapType === MapType.HttpCallResponseHeaders ||
       mapType === MapType.HttpCallResponseTrailers
     ) {
-      return HeaderManager.recordToTuples(this.httpCallResponse?.headers ?? {});
+      return this.httpCallResponse?.headers ?? [];
     }
     return this.requestHeaders;
   }

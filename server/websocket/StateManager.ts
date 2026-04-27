@@ -76,7 +76,7 @@ export class StateManager {
   public emitRequestStarted(
     url: string,
     method: string,
-    headers: Record<string, string>,
+    headers: Record<string, string | string[]>,
     source: EventSource = "ui",
   ): void {
     this.currentState.lastRequest = { url, method, headers };
@@ -98,12 +98,12 @@ export class StateManager {
     returnCode: number | null,
     logCount: number,
     input: {
-      request: { headers: Record<string, string>; body: string };
-      response: { headers: Record<string, string>; body: string };
+      request: { headers: Record<string, string | string[]>; body: string };
+      response: { headers: Record<string, string | string[]>; body: string };
     },
     output: {
-      request: { headers: Record<string, string>; body: string };
-      response: { headers: Record<string, string>; body: string };
+      request: { headers: Record<string, string | string[]>; body: string };
+      response: { headers: Record<string, string | string[]>; body: string };
     },
     source: EventSource = "system",
   ): void {
@@ -126,7 +126,7 @@ export class StateManager {
     finalResponse: {
       status: number;
       statusText: string;
-      headers: Record<string, string>;
+      headers: Record<string, string | string[]>;
       body: string;
       contentType: string;
       isBase64?: boolean;
@@ -184,7 +184,7 @@ export class StateManager {
     response: {
       status: number;
       statusText: string;
-      headers: Record<string, string>;
+      headers: Record<string, string | string[] | undefined>;
       body: string;
       contentType: string | null;
       isBase64?: boolean;

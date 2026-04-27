@@ -283,10 +283,6 @@ describe('ConfigSlice', () => {
           headers: { 'Content-Type': 'application/json' },
           body: 'test body',
         },
-        response: {
-          headers: { 'Cache-Control': 'no-cache' },
-          body: 'test response',
-        },
         properties: { key1: 'value1', key2: 'value2' },
         logLevel: 5,
         dotenv: { enabled: false },
@@ -371,8 +367,6 @@ describe('ConfigSlice', () => {
         result.current.setUrl('https://test.com');
         result.current.setRequestHeaders({ 'X-Custom': 'header' });
         result.current.setRequestBody('request body');
-        result.current.setResponseHeaders({ 'X-Response': 'header' });
-        result.current.setResponseBody('response body');
         result.current.setProperties({ prop1: 'value1' });
         result.current.setLogLevel(5);
         result.current.setDotenvEnabled(false);
@@ -387,10 +381,6 @@ describe('ConfigSlice', () => {
           url: 'https://test.com',
           headers: { 'X-Custom': 'header' },
           body: 'request body',
-        },
-        response: {
-          headers: { 'X-Response': 'header' },
-          body: 'response body',
         },
         properties: { prop1: 'value1' },
         logLevel: 5,

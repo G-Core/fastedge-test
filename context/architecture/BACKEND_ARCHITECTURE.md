@@ -745,20 +745,26 @@ When `dotenvEnabled=false`:
 
 ### types.ts
 
+Three header types coexist at different boundaries. See `context/features/MULTI_VALUE_HEADERS.md` for the full architecture.
+
+- **`HeaderMap = Record<string, string>`** — simple input shape (single value per key). Used by `FlowOptions.requestHeaders`, `HttpRequest.headers`, and similar user-supplied maps.
+- **`HeaderTuples = [string, string][]`** — canonical internal representation, lossless / ordered / duplicate-preserving. Used by `HostFunctions` as the WASM-visible header maps and by `HeaderManager.serializeTuples` for proxy-wasm binary format.
+- **`HeaderRecord = Record<string, string | string[]>`** — wire / hook-result format. Single-valued keys as `string`, multi-valued (notably `Set-Cookie` per RFC 6265 §3) as `string[]`. Matches Node's `IncomingHttpHeaders` projection.
+
 **HookCall:**
 
 ```typescript
 export type HookCall = {
   hook: string;
   request: {
-    headers: HeaderMap;
+    headers: HeaderRecord;    // wire format; accepts HeaderMap (subset) for convenience
     body: string;
     method?: string;
     path?: string;
     scheme?: string;
   };
   response: {
-    headers: HeaderMap;
+    headers: HeaderRecord;
     body: string;
     status?: number;
     statusText?: string;
@@ -775,13 +781,13 @@ export type HookResult = {
   returnCode: number | null;
   logs: { level: number; message: string }[];
   input: {
-    request: { headers: HeaderMap; body: string };
-    response: { headers: HeaderMap; body: string };
+    request: { headers: HeaderRecord; body: string };
+    response: { headers: HeaderRecord; body: string };
     properties?: Record<string, unknown>; // State before hook execution
   };
   output: {
-    request: { headers: HeaderMap; body: string };
-    response: { headers: HeaderMap; body: string };
+    request: { headers: HeaderRecord; body: string };
+    response: { headers: HeaderRecord; body: string };
     properties?: Record<string, unknown>; // State after hook execution
   };
   properties: Record<string, unknown>; // Final merged properties
@@ -796,13 +802,29 @@ export type FullFlowResult = {
   finalResponse: {
     status: number;
     statusText: string;
-    headers: HeaderMap;
+    headers: HeaderRecord;
     body: string;
     contentType: string;
     isBase64?: boolean;
   };
   calculatedProperties?: Record<string, unknown>; // Runtime-extracted properties
 };
+```
+
+**HttpResponse (HTTP-WASM public output):**
+
+```typescript
+import type { IncomingHttpHeaders } from "node:http";
+
+export interface HttpResponse {
+  status: number;
+  statusText: string;
+  headers: IncomingHttpHeaders;  // set-cookie: string[]; common headers narrowed to string
+  body: string;
+  contentType: string | null;
+  isBase64?: boolean;
+  logs: Array<{ level: number; message: string }>;
+}
 ```
 
 **Calculated Properties (February 2026):**

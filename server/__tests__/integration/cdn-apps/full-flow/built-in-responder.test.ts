@@ -146,6 +146,22 @@ describe('Built-In Responder', () => {
     expect(body.reqHeaders['x-custom-request']).toBe('I am injected from onRequestHeaders');
   }, 15000);
 
+  it('should expose WASM-injected request headers to onResponseHeaders', async () => {
+    // Production parity: a request header added in onRequestHeaders must be
+    // readable by the response hooks. This is the supported cross-hook
+    // state-passing channel (header echo) on real FastEdge, and it's how
+    // patterns like A/B variant propagation work across the nginx/core-proxy
+    // boundary. input.request.headers snapshots the exact tuples backing
+    // proxy_get_header_map_value(Request, ...) for the WASM instance.
+    const result = await runFlow(cdnRunner, { url: 'built-in' });
+
+    const responseHookRequestHeaders =
+      result.hookResults.onResponseHeaders.input.request.headers;
+    expect(responseHookRequestHeaders['x-custom-request']).toBe(
+      'I am injected from onRequestHeaders',
+    );
+  }, 15000);
+
   it('should accept the canonical URL directly', async () => {
     const result = await runFlow(cdnRunner, { url: BUILTIN_URL });
 
@@ -217,4 +233,22 @@ describe('Built-In Responder', () => {
       /Invalid URL: "not-a-url".*Use a full URL.*or "built-in"/,
     );
   }, 15000);
+
+  it('should echo the post-hook request.url when WASM rewrites it', async () => {
+    // The valid-url-write app overwrites request.url in onRequestHeaders to
+    // https://example.com/new-url. The built-in echo must mirror this rewrite
+    // so developers see the URL that would have been fetched in production.
+    const urlWriteRunner = createTestRunner();
+    const urlWriteWasm = await loadCdnAppWasm(
+      'properties',
+      WASM_TEST_BINARIES.cdnApps.properties.validUrlWrite,
+    );
+    await urlWriteRunner.load(Buffer.from(urlWriteWasm));
+
+    const result = await runFlow(urlWriteRunner, { url: 'built-in' });
+
+    assertFinalStatus(result, 200);
+    const body = JSON.parse(result.finalResponse.body);
+    expect(body.requestUrl).toBe('https://example.com/new-url');
+  }, 30000);
 });

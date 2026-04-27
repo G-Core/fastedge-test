@@ -7,6 +7,9 @@
 
 export { defineTestSuite, runTestSuite, runAndExit, runFlow, runHttpRequest, loadConfigFile } from "./suite-runner.js";
 
+export { mockOrigins } from "./mock-origins.js";
+export type { MockOriginsHandle, MockOriginsOptions } from "./mock-origins.js";
+
 export {
   // CDN hook assertions
   assertRequestHeader,

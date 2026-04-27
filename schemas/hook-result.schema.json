@@ -36,7 +36,7 @@
               "type": "object",
               "properties": {
                 "headers": {
-                  "$ref": "#/definitions/HeaderMap"
+                  "$ref": "#/definitions/HeaderRecord"
                 },
                 "body": {
                   "type": "string"
@@ -51,7 +51,7 @@
               "type": "object",
               "properties": {
                 "headers": {
-                  "$ref": "#/definitions/HeaderMap"
+                  "$ref": "#/definitions/HeaderRecord"
                 },
                 "body": {
                   "type": "string"
@@ -79,7 +79,7 @@
               "type": "object",
               "properties": {
                 "headers": {
-                  "$ref": "#/definitions/HeaderMap"
+                  "$ref": "#/definitions/HeaderRecord"
                 },
                 "body": {
                   "type": "string"
@@ -94,7 +94,7 @@
               "type": "object",
               "properties": {
                 "headers": {
-                  "$ref": "#/definitions/HeaderMap"
+                  "$ref": "#/definitions/HeaderRecord"
                 },
                 "body": {
                   "type": "string"
@@ -128,10 +128,20 @@
         "properties"
       ]
     },
-    "HeaderMap": {
+    "HeaderRecord": {
       "type": "object",
       "additionalProperties": {
-        "type": "string"
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
       }
     }
   }

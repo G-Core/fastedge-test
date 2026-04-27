@@ -60,7 +60,7 @@ export interface HttpRequestOptions {
 }
 
 /**
- * Options for runFlow() — object-based alternative to the 10-arg callFullFlow().
+ * Options for runFlow() — object-based wrapper around callFullFlow().
  * Pseudo-headers (:method, :path, :authority, :scheme) are derived from url/method
  * automatically and can be overridden via requestHeaders.
  */
@@ -69,10 +69,6 @@ export interface FlowOptions {
   method?: string;
   requestHeaders?: Record<string, string>;
   requestBody?: string;
-  responseStatus?: number;
-  responseStatusText?: string;
-  responseHeaders?: Record<string, string>;
-  responseBody?: string;
   properties?: Record<string, unknown>;
   /** Default: true — matches production FastEdge behaviour */
   enforceProductionPropertyRules?: boolean;

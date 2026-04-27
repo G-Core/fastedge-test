@@ -168,7 +168,7 @@ npm run package
 - **VSCode extension**: `fork(serverPath)` — the forked module starts automatically
 - **Library consumers**: Use `dist/lib/` entry points (runner, test framework), which do NOT auto-start
 
-`startServer()` probes ports 5179-5188 via HTTP `/health` check before binding (port auto-increment moved from the VSCode extension's `DebuggerServerManager.resolvePort()` into the server). Port file written to `{WORKSPACE_PATH}/.fastedge-debug/.debug-port`. Both the CLI and VSCode extension resolve `WORKSPACE_PATH` before starting the server using the same priority: existing `.fastedge-debug/` dir > nearest `package.json`/`Cargo.toml` > cwd. Startup messages go to stderr so MCP stdio transport is not corrupted.
+`startServer()` probes ports 5179-5228 via HTTP `/health` check before binding (50 slots, expanded from 10 on 2026-04-22; port auto-increment moved from the VSCode extension's `DebuggerServerManager.resolvePort()` into the server). Port file written to `{WORKSPACE_PATH}/.fastedge-debug/.debug-port`. Both the CLI and VSCode extension resolve `WORKSPACE_PATH` before starting the server using the same priority: existing `.fastedge-debug/` dir > nearest `package.json`/`Cargo.toml` > cwd. Startup messages go to stderr so MCP stdio transport is not corrupted.
 
 ### Extension Runtime
 

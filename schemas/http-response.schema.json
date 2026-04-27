@@ -12,10 +12,7 @@
           "type": "string"
         },
         "headers": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
+          "$ref": "#/definitions/IncomingHttpHeaders"
         },
         "body": {
           "type": "string"
@@ -56,7 +53,232 @@
         "contentType",
         "logs"
       ],
-      "description": "HTTP Response type for HTTP WASM runner"
+      "description": "HTTP Response type for HTTP WASM runner.\n\n`headers` uses Node's `IncomingHttpHeaders` shape — common single-valued headers (`content-type`, `location`, `etag`, …) are typed as `string`; `set-cookie` is `string[]`; unknown keys are `string | string[] | undefined`. This preserves RFC 6265 Set-Cookie semantics (each cookie kept separate) and matches consumer expectations for Node's fetch/http ecosystem."
+    },
+    "IncomingHttpHeaders": {
+      "type": "object",
+      "properties": {
+        "accept": {
+          "type": "string"
+        },
+        "accept-encoding": {
+          "type": "string"
+        },
+        "accept-language": {
+          "type": "string"
+        },
+        "accept-patch": {
+          "type": "string"
+        },
+        "accept-ranges": {
+          "type": "string"
+        },
+        "access-control-allow-credentials": {
+          "type": "string"
+        },
+        "access-control-allow-headers": {
+          "type": "string"
+        },
+        "access-control-allow-methods": {
+          "type": "string"
+        },
+        "access-control-allow-origin": {
+          "type": "string"
+        },
+        "access-control-expose-headers": {
+          "type": "string"
+        },
+        "access-control-max-age": {
+          "type": "string"
+        },
+        "access-control-request-headers": {
+          "type": "string"
+        },
+        "access-control-request-method": {
+          "type": "string"
+        },
+        "age": {
+          "type": "string"
+        },
+        "allow": {
+          "type": "string"
+        },
+        "alt-svc": {
+          "type": "string"
+        },
+        "authorization": {
+          "type": "string"
+        },
+        "cache-control": {
+          "type": "string"
+        },
+        "connection": {
+          "type": "string"
+        },
+        "content-disposition": {
+          "type": "string"
+        },
+        "content-encoding": {
+          "type": "string"
+        },
+        "content-language": {
+          "type": "string"
+        },
+        "content-length": {
+          "type": "string"
+        },
+        "content-location": {
+          "type": "string"
+        },
+        "content-range": {
+          "type": "string"
+        },
+        "content-type": {
+          "type": "string"
+        },
+        "cookie": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "etag": {
+          "type": "string"
+        },
+        "expect": {
+          "type": "string"
+        },
+        "expires": {
+          "type": "string"
+        },
+        "forwarded": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "if-match": {
+          "type": "string"
+        },
+        "if-modified-since": {
+          "type": "string"
+        },
+        "if-none-match": {
+          "type": "string"
+        },
+        "if-unmodified-since": {
+          "type": "string"
+        },
+        "last-modified": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "pragma": {
+          "type": "string"
+        },
+        "proxy-authenticate": {
+          "type": "string"
+        },
+        "proxy-authorization": {
+          "type": "string"
+        },
+        "public-key-pins": {
+          "type": "string"
+        },
+        "range": {
+          "type": "string"
+        },
+        "referer": {
+          "type": "string"
+        },
+        "retry-after": {
+          "type": "string"
+        },
+        "sec-fetch-site": {
+          "type": "string"
+        },
+        "sec-fetch-mode": {
+          "type": "string"
+        },
+        "sec-fetch-user": {
+          "type": "string"
+        },
+        "sec-fetch-dest": {
+          "type": "string"
+        },
+        "sec-websocket-accept": {
+          "type": "string"
+        },
+        "sec-websocket-extensions": {
+          "type": "string"
+        },
+        "sec-websocket-key": {
+          "type": "string"
+        },
+        "sec-websocket-protocol": {
+          "type": "string"
+        },
+        "sec-websocket-version": {
+          "type": "string"
+        },
+        "set-cookie": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "strict-transport-security": {
+          "type": "string"
+        },
+        "tk": {
+          "type": "string"
+        },
+        "trailer": {
+          "type": "string"
+        },
+        "transfer-encoding": {
+          "type": "string"
+        },
+        "upgrade": {
+          "type": "string"
+        },
+        "user-agent": {
+          "type": "string"
+        },
+        "vary": {
+          "type": "string"
+        },
+        "via": {
+          "type": "string"
+        },
+        "warning": {
+          "type": "string"
+        },
+        "www-authenticate": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
+      }
     }
   }
 }

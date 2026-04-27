@@ -4,7 +4,6 @@ import {
   RequestConfigSchema,
   HttpRequestConfigSchema,
   WasmConfigSchema,
-  ResponseConfigSchema,
 } from '../../../schemas/config';
 
 const minimalValidRequest = { url: 'https://example.com' };
@@ -60,24 +59,6 @@ describe('RequestConfigSchema', () => {
       headers: { 'x-count': 42 },
     });
     expect(result.success).toBe(false);
-  });
-});
-
-describe('ResponseConfigSchema', () => {
-  it('should be valid with empty object', () => {
-    expect(ResponseConfigSchema.safeParse({}).success).toBe(true);
-  });
-
-  it('should default headers to {}', () => {
-    const result = ResponseConfigSchema.safeParse({});
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.headers).toEqual({});
-  });
-
-  it('should default body to empty string', () => {
-    const result = ResponseConfigSchema.safeParse({});
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.body).toBe('');
   });
 });
 

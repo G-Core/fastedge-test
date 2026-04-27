@@ -1,6 +1,6 @@
 # Test Configuration
 
-Configuration file reference for `fastedge-config.test.json` — the per-test JSON file that defines the WASM binary, request, response, CDN properties, and environment variable loading for a single test scenario.
+Configuration file reference for `fastedge-config.test.json` — the per-test JSON file that defines the WASM binary, request, CDN properties, and environment variable loading for a single test scenario.
 
 ## Overview
 
@@ -8,8 +8,8 @@ Each test scenario is described by a `fastedge-config.test.json` file. The file 
 
 The config schema is a union of two variants selected by `appType`:
 
-- **`proxy-wasm`** (CDN mode, default): The WASM module intercepts an upstream HTTP request. Uses `request.url` (full URL). Supports a mock origin `response`.
-- **`http-wasm`**: The WASM module acts as an origin HTTP server. Uses `request.path` (path only). No `response` field.
+- **`proxy-wasm`** (CDN mode, default): The WASM module intercepts an upstream HTTP request. Uses `request.url` (full URL). The upstream response is generated at runtime — either by a real fetch against `request.url`, or by the built-in responder when `request.url === "built-in"`.
+- **`http-wasm`**: The WASM module acts as an origin HTTP server. Uses `request.path` (path only).
 
 **Required fields** (per JSON Schema `required` arrays):
 - Top-level: `properties`, `appType`, and `request`
@@ -36,9 +36,6 @@ The config schema is a union of two variants selected by `appType`:
 | `request.path`       | `string`  | **Yes** (HTTP-WASM only)               | —              | Request path (e.g. `"/api/submit"`). HTTP-WASM mode only. The WASM module acts as the origin server.                                                  |
 | `request.headers`    | `object`  | Yes (schema) / runtime default         | `{}`           | Key/value map of request headers. All keys and values must be strings.                                                                                 |
 | `request.body`       | `string`  | Yes (schema) / runtime default         | `""`           | Request body as a plain string. Use an empty string for requests with no body.                                                                         |
-| `response`           | `object`  | No                                     | —              | Mock origin response for CDN mode. Not applicable to HTTP-WASM.                                                                                        |
-| `response.headers`   | `object`  | Yes (if `response` present)            | `{}`           | Key/value map of mock origin response headers.                                                                                                         |
-| `response.body`      | `string`  | Yes (if `response` present)            | `""`           | Mock origin response body as a plain string.                                                                                                           |
 | `properties`         | `object`  | **Yes** (schema) / runtime default     | `{}`           | CDN property key/value pairs passed to the WASM execution context. Values may be any JSON type.                                                        |
 | `dotenv`             | `object`  | No                                     | —              | Dotenv file loading configuration.                                                                                                                     |
 | `dotenv.enabled`     | `boolean` | No                                     | —              | Whether to load a `.env` file before execution.                                                                                                        |
@@ -203,36 +200,31 @@ An HTTP-WASM scenario simulating a `POST` request with a JSON body. `appType` mu
 }
 ```
 
-### Custom Origin Response
+### Built-In Responder (No Network)
 
-A CDN scenario where the mock origin returns a specific response. Use this to test how the WASM handler transforms or conditionally passes through origin responses.
+A CDN scenario that uses the test runner's built-in responder instead of reaching out to a real origin. Set `request.url` to `"built-in"` — the runner generates a local response and skips the upstream fetch. This is the fastest way to exercise a CDN WASM app without depending on network reachability.
 
 ```json
 {
   "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
-  "description": "CDN handler with custom mock origin response",
+  "description": "CDN handler against the built-in responder",
   "appType": "proxy-wasm",
   "wasm": {
     "path": "./dist/handler.wasm"
   },
   "request": {
     "method": "GET",
-    "url": "https://example.com/cached-resource",
+    "url": "built-in",
     "headers": {},
     "body": ""
-  },
-  "response": {
-    "headers": {
-      "content-type": "application/json",
-      "cache-control": "max-age=86400"
-    },
-    "body": "{\"status\": \"ok\", \"data\": []}"
   },
   "properties": {
     "CACHE_TTL": 86400
   }
 }
 ```
+
+The default built-in response is a full JSON echo of the request. Override via control headers on the request: `x-debugger-status` sets the HTTP status; `x-debugger-content: status-only` omits the body; `x-debugger-content: body-only` echoes only the request body (with its inferred content-type).
 
 ## IDE Integration
 
@@ -290,10 +282,6 @@ type CdnConfig = {
     headers: Record<string, string>;       // default: {}
     body:    string;                       // default: ""
   };
-  response?: {
-    headers: Record<string, string>;       // default: {}
-    body:    string;                       // default: ""
-  };
   properties: Record<string, unknown>;     // default: {}
   dotenv?: {
     enabled?: boolean;
@@ -333,7 +321,6 @@ const config = await loadConfigFile("./fastedge-config.test.json");
 
 if (config.appType === "proxy-wasm") {
   console.log(config.request.url);   // string — CDN full URL
-  console.log(config.response);      // ResponseConfig | undefined
 } else {
   console.log(config.request.path);  // string — HTTP-WASM path
   console.log(config.httpPort);      // number | undefined

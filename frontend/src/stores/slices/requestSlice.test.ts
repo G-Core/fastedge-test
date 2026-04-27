@@ -34,8 +34,6 @@ describe('RequestSlice', () => {
       expect(result.current.url).toBe('http://fastedge-builtin.debug');
       expect(result.current.requestHeaders).toEqual({});
       expect(result.current.requestBody).toBe('');
-      expect(result.current.responseHeaders).toEqual({});
-      expect(result.current.responseBody).toBe('');
     });
   });
 
@@ -133,34 +131,6 @@ describe('RequestSlice', () => {
     });
   });
 
-  describe('setResponseHeaders', () => {
-    it('should replace response headers', () => {
-      const { result } = renderHook(() => useAppStore());
-      const headers = { 'Cache-Control': 'no-cache', 'X-Custom': 'value' };
-
-      act(() => {
-        result.current.setResponseHeaders(headers);
-      });
-
-      expect(result.current.responseHeaders).toEqual(headers);
-    });
-
-  });
-
-  describe('setResponseBody', () => {
-    it('should update response body', () => {
-      const { result } = renderHook(() => useAppStore());
-      const body = '{"result": "success"}';
-
-      act(() => {
-        result.current.setResponseBody(body);
-      });
-
-      expect(result.current.responseBody).toBe(body);
-    });
-
-  });
-
   describe('updateRequestHeader', () => {
     it('should add a new request header', () => {
       const { result } = renderHook(() => useAppStore());
@@ -224,45 +194,6 @@ describe('RequestSlice', () => {
     });
   });
 
-  describe('updateResponseHeader', () => {
-    it('should add a new response header', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.updateResponseHeader('Cache-Control', 'no-cache');
-      });
-
-      expect(result.current.responseHeaders['Cache-Control']).toBe('no-cache');
-    });
-
-    it('should update existing response header', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.updateResponseHeader('Content-Type', 'application/json');
-        result.current.updateResponseHeader('Content-Type', 'text/html');
-      });
-
-      expect(result.current.responseHeaders['Content-Type']).toBe('text/html');
-    });
-
-  });
-
-  describe('removeResponseHeader', () => {
-    it('should remove a response header', () => {
-      const { result } = renderHook(() => useAppStore());
-
-      act(() => {
-        result.current.setResponseHeaders({ 'X-Remove': 'value', 'X-Keep': 'value' });
-        result.current.removeResponseHeader('X-Remove');
-      });
-
-      expect(result.current.responseHeaders['X-Remove']).toBeUndefined();
-      expect(result.current.responseHeaders['X-Keep']).toBe('value');
-    });
-
-  });
-
   describe('resetRequest', () => {
     it('should reset all request state to defaults', () => {
       const { result } = renderHook(() => useAppStore());
@@ -272,8 +203,6 @@ describe('RequestSlice', () => {
         result.current.setUrl('https://example.com');
         result.current.setRequestHeaders({ 'X-Custom': 'value' });
         result.current.setRequestBody('custom body');
-        result.current.setResponseHeaders({ 'X-Response': 'value' });
-        result.current.setResponseBody('custom response');
         result.current.resetRequest();
       });
 
@@ -281,8 +210,6 @@ describe('RequestSlice', () => {
       expect(result.current.url).toBe('http://fastedge-builtin.debug');
       expect(result.current.requestHeaders).toEqual({});
       expect(result.current.requestBody).toBe('');
-      expect(result.current.responseHeaders).toEqual({});
-      expect(result.current.responseBody).toBe('');
     });
 
   });

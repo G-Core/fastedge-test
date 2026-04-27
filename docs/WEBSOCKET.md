@@ -2,6 +2,8 @@
 
 Real-time event stream from the `@gcoredev/fastedge-test` server to connected clients.
 
+> **Note on header values.** All header fields in this protocol use `Record<string, string | string[]>` — single-valued headers are a `string`, multi-valued headers (notably `Set-Cookie` per RFC 6265) are a `string[]`. HTTP-wasm response headers additionally allow `undefined` values (`Record<string, string | string[] | undefined>`), though `undefined` entries are dropped during JSON serialization. JSON examples below use `Record<string, string>` for brevity.
+
 ## Connection
 
 Connect to the WebSocket server at:
@@ -107,16 +109,16 @@ interface RequestStartedEvent {
   data: {
     url: string;
     method: string;
-    headers: Record<string, string>;
+    headers: Record<string, string | string[]>;
   };
 }
 ```
 
-| Field     | Type                     | Description                       |
-| --------- | ------------------------ | --------------------------------- |
-| `url`     | `string`                 | Full request URL                  |
-| `method`  | `string`                 | HTTP method (`GET`, `POST`, etc.) |
-| `headers` | `Record<string, string>` | Request headers                   |
+| Field     | Type                                 | Description                       |
+| --------- | ------------------------------------ | --------------------------------- |
+| `url`     | `string`                             | Full request URL                  |
+| `method`  | `string`                             | HTTP method (`GET`, `POST`, etc.) |
+| `headers` | `Record<string, string \| string[]>` | Request headers                   |
 
 **Example:**
 
@@ -154,12 +156,12 @@ interface HookExecutedEvent {
     returnCode: number | null;
     logCount: number;
     input: {
-      request: { headers: Record<string, string>; body: string };
-      response: { headers: Record<string, string>; body: string };
+      request: { headers: Record<string, string | string[]>; body: string };
+      response: { headers: Record<string, string | string[]>; body: string };
     };
     output: {
-      request: { headers: Record<string, string>; body: string };
-      response: { headers: Record<string, string>; body: string };
+      request: { headers: Record<string, string | string[]>; body: string };
+      response: { headers: Record<string, string | string[]>; body: string };
     };
   };
 }
@@ -226,7 +228,7 @@ interface RequestCompletedEvent {
     finalResponse: {
       status: number;
       statusText: string;
-      headers: Record<string, string>;
+      headers: Record<string, string | string[]>;
       body: string;
       contentType: string;
       isBase64?: boolean;
@@ -241,7 +243,7 @@ interface RequestCompletedEvent {
 | `hookResults`               | `Record<string, any>`                  | Per-hook execution results, keyed by hook name        |
 | `finalResponse.status`      | `number`                               | HTTP status code                                      |
 | `finalResponse.statusText`  | `string`                               | HTTP status text                                      |
-| `finalResponse.headers`     | `Record<string, string>`               | Response headers                                      |
+| `finalResponse.headers`     | `Record<string, string \| string[]>`   | Response headers                                      |
 | `finalResponse.body`        | `string`                               | Response body (may be base64 if `isBase64` is `true`) |
 | `finalResponse.contentType` | `string`                               | Content-Type of the response                          |
 | `finalResponse.isBase64`    | `boolean \| undefined`                 | Whether `body` is base64-encoded                      |
@@ -361,7 +363,7 @@ interface HttpWasmRequestCompletedEvent {
     response: {
       status: number;
       statusText: string;
-      headers: Record<string, string>;
+      headers: Record<string, string | string[] | undefined>;
       body: string;
       contentType: string | null;
       isBase64?: boolean;
@@ -370,14 +372,16 @@ interface HttpWasmRequestCompletedEvent {
 }
 ```
 
-| Field                  | Type                     | Description                                           |
-| ---------------------- | ------------------------ | ----------------------------------------------------- |
-| `response.status`      | `number`                 | HTTP status code                                      |
-| `response.statusText`  | `string`                 | HTTP status text                                      |
-| `response.headers`     | `Record<string, string>` | Response headers                                      |
-| `response.body`        | `string`                 | Response body (may be base64 if `isBase64` is `true`) |
-| `response.contentType` | `string \| null`         | Content-Type, or `null` if absent                     |
-| `response.isBase64`    | `boolean \| undefined`   | Whether `body` is base64-encoded                      |
+`response.headers` mirrors Node's `IncomingHttpHeaders` — `undefined` values are dropped during JSON serialization and will not appear on the wire.
+
+| Field                  | Type                                              | Description                                           |
+| ---------------------- | ------------------------------------------------- | ----------------------------------------------------- |
+| `response.status`      | `number`                                          | HTTP status code                                      |
+| `response.statusText`  | `string`                                          | HTTP status text                                      |
+| `response.headers`     | `Record<string, string \| string[] \| undefined>` | Response headers (`undefined` values omitted in JSON) |
+| `response.body`        | `string`                                          | Response body (may be base64 if `isBase64` is `true`) |
+| `response.contentType` | `string \| null`                                  | Content-Type, or `null` if absent                     |
+| `response.isBase64`    | `boolean \| undefined`                            | Whether `body` is base64-encoded                      |
 
 **Example:**
 

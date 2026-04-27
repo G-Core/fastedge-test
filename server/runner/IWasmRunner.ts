@@ -4,6 +4,7 @@
  * Defines the common contract for both ProxyWasmRunner and HttpWasmRunner
  */
 
+import type { IncomingHttpHeaders } from "node:http";
 import type { IStateManager } from "./IStateManager.js";
 import type { HookCall, HookResult, FullFlowResult } from "./types.js";
 
@@ -43,12 +44,18 @@ export interface HttpRequest {
 }
 
 /**
- * HTTP Response type for HTTP WASM runner
+ * HTTP Response type for HTTP WASM runner.
+ *
+ * `headers` uses Node's `IncomingHttpHeaders` shape — common single-valued
+ * headers (`content-type`, `location`, `etag`, …) are typed as `string`;
+ * `set-cookie` is `string[]`; unknown keys are `string | string[] | undefined`.
+ * This preserves RFC 6265 Set-Cookie semantics (each cookie kept separate)
+ * and matches consumer expectations for Node's fetch/http ecosystem.
  */
 export interface HttpResponse {
   status: number;
   statusText: string;
-  headers: Record<string, string>;
+  headers: IncomingHttpHeaders;
   body: string;
   contentType: string | null;
   isBase64?: boolean;
@@ -96,15 +103,16 @@ export interface IWasmRunner {
   callHook(hookCall: HookCall): Promise<HookResult>;
 
   /**
-   * Execute full request/response flow (Proxy-WASM only)
-   * @param url Request URL
+   * Execute full request/response flow (Proxy-WASM only).
+   *
+   * The upstream response is generated at runtime — either by a real HTTP
+   * fetch against `url`, or by the built-in responder when
+   * `url === "built-in"`. There is no fixture-level mock response.
+   *
+   * @param url Request URL, or `"built-in"` to use the built-in responder
    * @param method HTTP method
    * @param headers Request headers
    * @param body Request body
-   * @param responseHeaders Response headers
-   * @param responseBody Response body
-   * @param responseStatus Response status code
-   * @param responseStatusText Response status text
    * @param properties Shared properties
    * @param enforceProductionPropertyRules Whether to enforce property access rules
    * @returns Full flow execution result
@@ -114,10 +122,6 @@ export interface IWasmRunner {
     method: string,
     headers: Record<string, string>,
     body: string,
-    responseHeaders: Record<string, string>,
-    responseBody: string,
-    responseStatus: number,
-    responseStatusText: string,
     properties: Record<string, unknown>,
     enforceProductionPropertyRules: boolean
   ): Promise<FullFlowResult>;

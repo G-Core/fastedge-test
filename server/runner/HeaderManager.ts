@@ -1,12 +1,40 @@
-import type { HeaderMap, HeaderTuples } from "./types";
+import type { HeaderMap, HeaderRecord, HeaderTuples } from "./types";
 
 const textEncoder = new TextEncoder();
 
 export class HeaderManager {
-  static normalize(headers: HeaderMap): HeaderMap {
-    const normalized: HeaderMap = {};
+  // Read a header value as a single string. For multi-valued headers (string[]) returns the first.
+  // Use when callers know the header is conventionally single-valued (content-type, host, location, etc.)
+  // and need to satisfy APIs that take a string.
+  static firstValue(v: string | string[] | undefined): string | undefined {
+    return Array.isArray(v) ? v[0] : v;
+  }
+
+  // Flatten a HeaderRecord to a HeaderMap (single string per key) for consumers
+  // that can't handle multi-valued headers (e.g. fetch's HeadersInit).
+  // Multi-valued entries are joined with ", " — caller must be sure this is acceptable
+  // (NOT valid for Set-Cookie; route those through a separate channel).
+  static flattenToMap(headers: HeaderMap | HeaderRecord): HeaderMap {
+    const flat: HeaderMap = {};
+    for (const [k, v] of Object.entries(headers)) {
+      if (Array.isArray(v)) {
+        flat[k] = v.join(", ");
+      } else if (v !== undefined) {
+        flat[k] = String(v);
+      }
+    }
+    return flat;
+  }
+
+  static normalize(headers: HeaderMap | HeaderRecord): HeaderRecord {
+    const normalized: HeaderRecord = {};
     for (const [key, value] of Object.entries(headers)) {
-      normalized[key.toLowerCase()] = String(value);
+      const k = key.toLowerCase();
+      if (Array.isArray(value)) {
+        normalized[k] = value.map(String);
+      } else {
+        normalized[k] = String(value);
+      }
     }
     return normalized;
   }
@@ -104,15 +132,33 @@ export class HeaderManager {
 
   // --- Tuple-based methods for multi-valued header support ---
 
-  static recordToTuples(headers: HeaderMap): HeaderTuples {
-    return Object.entries(headers).map(([k, v]) => [k.toLowerCase(), String(v)]);
+  static recordToTuples(headers: HeaderMap | HeaderRecord): HeaderTuples {
+    const tuples: HeaderTuples = [];
+    for (const [k, v] of Object.entries(headers)) {
+      const key = k.toLowerCase();
+      if (Array.isArray(v)) {
+        for (const val of v) tuples.push([key, String(val)]);
+      } else if (v !== undefined) {
+        tuples.push([key, String(v)]);
+      }
+    }
+    return tuples;
   }
 
-  static tuplesToRecord(tuples: HeaderTuples): HeaderMap {
-    const record: HeaderMap = {};
+  // Lossless projection of tuples to a Record: single-valued keys are string,
+  // multi-valued keys are string[] — matching Node's IncomingHttpHeaders shape.
+  // Set-Cookie and other legitimately-repeatable headers are preserved across duplicates.
+  static tuplesToRecord(tuples: HeaderTuples): HeaderRecord {
+    const record: HeaderRecord = {};
     for (const [key, value] of tuples) {
       const existing = record[key];
-      record[key] = existing !== undefined ? `${existing},${value}` : value;
+      if (existing === undefined) {
+        record[key] = value;
+      } else if (Array.isArray(existing)) {
+        existing.push(value);
+      } else {
+        record[key] = [existing, value];
+      }
     }
     return record;
   }
