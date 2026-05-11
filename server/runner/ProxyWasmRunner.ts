@@ -563,6 +563,20 @@ export class ProxyWasmRunner implements IWasmRunner {
         );
       }
 
+      // Merge response-header state set during request phase into the response-phase input.
+      // Production: response headers added via add_http_response_header during onRequestHeaders /
+      // onRequestBody are carried into the response phase. Without this merge the debugger
+      // would only show the simulated origin's headers, silently dropping the request-phase
+      // additions and breaking the proxy-wasm cross-phase response-header pattern.
+      const requestPhaseResponseHeaders = {
+        ...(results.onRequestHeaders.output.response.headers ?? {}),
+        ...(results.onRequestBody.output.response.headers ?? {}),
+      };
+      const mergedResponseHeaders = {
+        ...requestPhaseResponseHeaders,
+        ...responseHeaders,
+      };
+
       // Phase 3: Run response hooks with real response data
       // Use modified request headers from Phase 1, not original
       const responseCall = {
@@ -573,7 +587,7 @@ export class ProxyWasmRunner implements IWasmRunner {
           body: modifiedRequestBody,
         },
         response: {
-          headers: responseHeaders,
+          headers: mergedResponseHeaders,
           body: responseBody,
           status: responseStatus,
           statusText: responseStatusText,
@@ -600,6 +614,27 @@ export class ProxyWasmRunner implements IWasmRunner {
           results.onResponseHeaders.output,
           "system",
         );
+      }
+
+      // Check if WASM sent a local response from onResponseHeaders — short-circuit response chain
+      if (results.onResponseHeaders.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
+        const local = this.hostFunctions.getLocalResponse()!;
+        const headers = results.onResponseHeaders.output.response.headers;
+        this.hostFunctions.resetLocalResponse();
+        const contentType = HeaderManager.firstValue(headers['content-type']) || 'text/plain';
+        const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
+        return {
+          hookResults: results,
+          finalResponse: {
+            status: local.statusCode,
+            statusText: local.statusText,
+            headers,
+            body,
+            contentType,
+            isBase64,
+          },
+          calculatedProperties: this.propertyResolver.getCalculatedProperties(),
+        };
       }
 
       // Pass modified headers from onResponseHeaders to onResponseBody
@@ -631,6 +666,27 @@ export class ProxyWasmRunner implements IWasmRunner {
           results.onResponseBody.output,
           "system",
         );
+      }
+
+      // Check if WASM sent a local response from onResponseBody — short-circuit response chain
+      if (results.onResponseBody.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
+        const local = this.hostFunctions.getLocalResponse()!;
+        const headers = results.onResponseBody.output.response.headers;
+        this.hostFunctions.resetLocalResponse();
+        const contentType = HeaderManager.firstValue(headers['content-type']) || 'text/plain';
+        const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
+        return {
+          hookResults: results,
+          finalResponse: {
+            status: local.statusCode,
+            statusText: local.statusText,
+            headers,
+            body,
+            contentType,
+            isBase64,
+          },
+          calculatedProperties: this.propertyResolver.getCalculatedProperties(),
+        };
       }
 
       // Get final response after WASM modifications
