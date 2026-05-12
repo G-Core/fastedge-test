@@ -10,7 +10,7 @@ The `@gcoredev/fastedge-test` debugger server exposes a REST API for loading WAS
 http://localhost:5179
 ```
 
-The port can be overridden via the `PORT` environment variable. When `WORKSPACE_PATH` is set, the active port is written to `$WORKSPACE_PATH/.fastedge-debug/.debug-port` on startup and deleted on shutdown.
+The port can be overridden via the `PORT` environment variable. The active port is written to `.fastedge-debug/.debug-port` (relative to `WORKSPACE_PATH` if set, otherwise the current working directory) on startup and deleted on shutdown.
 
 ## Common Headers
 
@@ -328,7 +328,7 @@ type HookResult = {
 };
 ```
 
-`hookResults` is keyed by hook name (e.g. `"onRequestHeaders"`, `"onResponseHeaders"`). `calculatedProperties` is present only when the runner derives request-derived properties; keys follow the `request.*` pattern (e.g. `request.url`, `request.host`, `request.path`, `request.query`, `request.scheme`, `request.extension`, `request.method`).
+`hookResults` is keyed by hook name (e.g. `"onRequestHeaders"`, `"onResponseHeaders"`). `calculatedProperties` is present only when the runner derives request-derived properties; keys follow the `request.*` pattern (`request.url`, `request.host`, `request.path`, `request.query`, `request.scheme`, `request.extension`, `request.method`).
 
 **Example — HTTP-WASM**
 
@@ -663,7 +663,7 @@ curl -X POST http://localhost:5179/api/send \
 
 ### GET /api/config
 
-Reads the `fastedge-config.test.json` file from the project root and returns it along with a validation result.
+Reads `fastedge-config.test.json` from the `.fastedge-debug/` directory (relative to `WORKSPACE_PATH` if set, otherwise the current working directory) and returns it along with a validation result.
 
 **Response**
 
@@ -752,7 +752,7 @@ curl http://localhost:5179/api/config
 
 ### POST /api/config
 
-Saves the provided configuration object to `fastedge-config.test.json` in the project root. If the config includes a `properties` field, a WebSocket event is broadcast to connected clients.
+Saves the provided configuration to `.fastedge-debug/fastedge-config.test.json` (relative to `WORKSPACE_PATH` if set, otherwise the current working directory). If the config includes a `properties` field, a WebSocket event is broadcast to connected clients.
 
 Accepts an optional [`X-Source`](#x-source-header) request header.
 

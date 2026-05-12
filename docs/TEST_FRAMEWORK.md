@@ -147,13 +147,13 @@ interface MockOriginsHandle {
 }
 ```
 
-| Field                      | Description                                                                                                                |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `options.allowNetConnect`  | Opt requests out of the default `disableNetConnect` block. `true` allows all; an array allow-lists origins or patterns    |
-| `handle.origin(url)`       | Get or create a `MockPool` for an origin; chain `.intercept({path, method}).reply(...)` on it                             |
-| `handle.agent`             | Raw `MockAgent` escape hatch for `.persist()` / `.times()` / `.delay()` / body matchers                                   |
-| `handle.close()`           | Restore the previous global dispatcher and close the agent; idempotent                                                    |
-| `handle.assertAllCalled()` | Throw if any registered interceptor was never matched by a real request                                                   |
+| Field                      | Description                                                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `options.allowNetConnect`  | Opt requests out of the default `disableNetConnect` block. `true` allows all; an array allow-lists origins or patterns |
+| `handle.origin(url)`       | Get or create a `MockPool` for an origin; chain `.intercept({path, method}).reply(...)` on it                          |
+| `handle.agent`             | Raw `MockAgent` escape hatch for `.persist()` / `.times()` / `.delay()` / body matchers                                |
+| `handle.close()`           | Restore the previous global dispatcher and close the agent; idempotent                                                  |
+| `handle.assertAllCalled()` | Throw if any registered interceptor was never matched by a real request                                                 |
 
 ### HttpRequestOptions
 
@@ -195,13 +195,13 @@ interface RunnerConfig {
 }
 ```
 
-| Field                            | Type                            | Description                                                               |
-| -------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`                       | Enable dotenv loading                                                     |
-| `dotenv.path`                    | `string`                        | Directory to load dotenv files from; defaults to process CWD when omitted |
-| `enforceProductionPropertyRules` | `boolean`                       | Override production property enforcement for the runner; default `true`   |
+| Field                            | Type                           | Description                                                               |
+| -------------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`                      | Enable dotenv loading                                                     |
+| `dotenv.path`                    | `string`                       | Directory to load dotenv files from; defaults to process CWD when omitted |
+| `enforceProductionPropertyRules` | `boolean`                      | Override production property enforcement for the runner; default `true`   |
 | `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                    |
-| `httpPort`                       | `number`                        | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
+| `httpPort`                       | `number`                       | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
 
 ## Functions
 
@@ -301,12 +301,12 @@ type FullFlowResult = {
 
 Hook results are accessed by camelCase key:
 
-| Key                   | Hook                         |
-| --------------------- | ---------------------------- |
-| `onRequestHeaders`    | `on_request_headers` hook    |
-| `onRequestBody`       | `on_request_body` hook       |
-| `onResponseHeaders`   | `on_response_headers` hook   |
-| `onResponseBody`      | `on_response_body` hook      |
+| Key                 | Hook                       |
+| ------------------- | -------------------------- |
+| `onRequestHeaders`  | `on_request_headers` hook  |
+| `onRequestBody`     | `on_request_body` hook     |
+| `onResponseHeaders` | `on_response_headers` hook |
+| `onResponseBody`    | `on_response_body` hook    |
 
 ```typescript
 const result = await runFlow(runner, {
@@ -440,11 +440,9 @@ function assertFinalStatus(result: FullFlowResult, expected: number): void
 function assertFinalHeader(result: FullFlowResult, name: string, expected?: string | string[]): void
 ```
 
-Multi-value semantics on `assertFinalHeader` match `assertRequestHeader`: a `string` expected matches any value when the actual header is multi-valued; a `string[]` expected requires an exact array match. This preserves the RFC 6265 contract for `Set-Cookie` and any other legitimately-repeatable headers.
-
 `assertFinalStatus` asserts the final response status code after the full flow completes.
 
-`assertFinalHeader` asserts a header in `result.finalResponse.headers`. If `expected` is provided, also asserts the value.
+`assertFinalHeader` asserts a header in `result.finalResponse.headers`. If `expected` is provided, also asserts the value. Multi-value semantics match `assertRequestHeader`: a `string` expected matches any value when the actual header is multi-valued; a `string[]` expected requires an exact array match. This preserves the RFC 6265 contract for `Set-Cookie` and any other legitimately-repeatable headers.
 
 ```typescript
 assertFinalStatus(result, 200);
@@ -648,7 +646,7 @@ The handle installs the MockAgent as the global dispatcher on construction and r
 
 `handle.assertAllCalled()` throws if any registered interceptor was never matched. Use it at the end of a test (or in `afterEach`) to catch setup drift — mocks that were registered but never exercised because the WASM under test took a different code path.
 
-### `allowNetConnect` and the HTTP-WASM caveat
+### HTTP-WASM `allowNetConnect` caveat
 
 By default, `mockOrigins()` calls `MockAgent.disableNetConnect()` — every request that doesn't match a registered interceptor is rejected. This is the safer default: missing mocks become loud errors instead of silent live network calls in CI.
 

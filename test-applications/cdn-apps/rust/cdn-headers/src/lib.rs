@@ -145,17 +145,27 @@ impl HttpContext for HttpHeaders {
             .difference(&original_headers_bytes)
             .collect::<HashSet<_>>();
 
-        let diff = diff.difference(&expected).collect::<Vec<_>>();
-
-        if !diff.is_empty() {
-            println!("different headers: {:?}", diff);
+        // Check set equality so both missing and unexpected headers trigger 552.
+        // Earlier this only inspected `diff \ expected`, which silently passed
+        // when the WASM failed to add an expected header.
+        if diff != expected {
+            let missing: Vec<_> = expected.difference(&diff).collect();
+            let extra: Vec<_> = diff.difference(&expected).collect();
+            println!(
+                "header mismatch | missing: {:?} | extra: {:?}",
+                missing, extra
+            );
             self.send_http_response(552, vec![], None);
             return Action::Pause;
         }
 
-        let diff_bytes = diff_bytes.difference(&expected_bytes).collect::<Vec<_>>();
-        if !diff_bytes.is_empty() {
-            println!("different headers bytes: {:?}", diff_bytes);
+        if diff_bytes != expected_bytes {
+            let missing: Vec<_> = expected_bytes.difference(&diff_bytes).collect();
+            let extra: Vec<_> = diff_bytes.difference(&expected_bytes).collect();
+            println!(
+                "header bytes mismatch | missing: {:?} | extra: {:?}",
+                missing, extra
+            );
             self.send_http_response(552, vec![], None);
             return Action::Pause;
         }
@@ -322,16 +332,27 @@ impl HttpContext for HttpHeaders {
             .difference(&original_headers_bytes)
             .collect::<HashSet<_>>();
 
-        if expected != diff {
-            let diff = diff.difference(&expected).collect::<Vec<_>>();
-            println!("different headers: {:?}", diff);
+        // Check set equality so both missing and unexpected headers trigger 552.
+        // Earlier this only inspected `diff \ expected`, which silently passed
+        // when the WASM failed to add an expected header.
+        if diff != expected {
+            let missing: Vec<_> = expected.difference(&diff).collect();
+            let extra: Vec<_> = diff.difference(&expected).collect();
+            println!(
+                "header mismatch | missing: {:?} | extra: {:?}",
+                missing, extra
+            );
             self.send_http_response(552, vec![], None);
             return Action::Pause;
         }
 
-        if expected_bytes != diff_bytes {
-            let diff = diff_bytes.difference(&expected_bytes).collect::<Vec<_>>();
-            println!("different headers bytes: {:?}", diff_bytes);
+        if diff_bytes != expected_bytes {
+            let missing: Vec<_> = expected_bytes.difference(&diff_bytes).collect();
+            let extra: Vec<_> = diff_bytes.difference(&expected_bytes).collect();
+            println!(
+                "header bytes mismatch | missing: {:?} | extra: {:?}",
+                missing, extra
+            );
             self.send_http_response(552, vec![], None);
             return Action::Pause;
         }
@@ -361,9 +382,5 @@ impl HttpContext for HttpHeaders {
         }
 
         Action::Continue
-    }
-
-    fn on_log(&mut self) {
-        println!("#{} completed.", self.context_id);
     }
 }

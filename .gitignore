@@ -12,6 +12,10 @@ fastedge-run/
 
 .vscode/
 
+# Doc-generator failure artifacts — saved tempfiles from rejected `claude -p`
+# attempts so the prompt author can see WHY validation failed. Prune manually.
+docs/.failures/
+
 # Rust build artifacts
 **/target/
 
