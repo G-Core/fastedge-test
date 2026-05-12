@@ -74,6 +74,7 @@ describeFn("CDN runner - cross-phase regression (#12, #15)", () => {
     // Origin returned only content-type. new-response-header is set in the
     // request phase by the WASM and must survive into finalResponse.
     expect(result.finalResponse.headers["new-response-header"]).toBe("value-02");
+    mocks.assertAllCalled();
   }, 15000);
 
   it("preserves both request-phase and origin values when both set the same response header (append-merge)", async () => {
@@ -105,6 +106,7 @@ describeFn("CDN runner - cross-phase regression (#12, #15)", () => {
       "value-02",
       "from-origin",
     ]);
+    mocks.assertAllCalled();
   }, 15000);
 
   it("#12 honours send_http_response short-circuit from onResponseHeaders", async () => {
@@ -130,5 +132,6 @@ describeFn("CDN runner - cross-phase regression (#12, #15)", () => {
     expect(result.finalResponse.status).toBe(552);
     expect(result.finalResponse.body).toBe("Internal server error");
     expect(result.hookResults.onResponseHeaders.returnCode).toBe(1);
+    mocks.assertAllCalled();
   }, 15000);
 });

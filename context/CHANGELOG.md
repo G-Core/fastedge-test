@@ -1,5 +1,46 @@
 # Proxy-WASM Runner - Changelog
 
+## May 12, 2026 - Runner cross-phase append-merge + docgen pipeline hardening
+
+### Overview
+Three connected pieces of plumbing landed together. (1) The Proxy-WASM runner now append-merges request-phase response headers with origin response headers instead of letting origin silently overwrite them — production-parity work surfaced via PR review on `ProxyWasmRunner.ts:576`. (2) The doc-generator (`generate-docs.sh` + `.generation-config.md`) lost two classes of drift: stale field-table restatements the JSON Schema can speak to directly, and a stale "Custom Origin Response" heading that survived after the mock-origin feature was removed. (3) The doc-generator pipeline gained `.failures/` capture + preamble salvage so the model's intermittent "outputting verbatim" preamble leak no longer wastes API quota retrying valid output.
+
+### What Changed
+
+#### 1. Runner cross-phase response-header merge (Option B: append with multi-value)
+- `server/runner/HeaderManager.ts` — new `HeaderManager.appendMerge(left, right): HeaderRecord` static method. Lowercases keys (consistent with `normalize`) and concatenates colliding values into `string[]` rather than overwriting. Mirrors how Envoy serves `add_http_response_header` issued during onRequestHeaders / onRequestBody against the upstream response — both values survive as a multi-value list.
+- `server/runner/ProxyWasmRunner.ts:566-585` — replaced the shallow `{ ...requestPhase, ...origin }` spread with `HeaderManager.appendMerge(requestPhase, responseHeaders)`. Inner merge (onRequestHeaders.output + onRequestBody.output) stays a shallow spread because both snapshots are cumulative host state — appending would double-count.
+- `server/__tests__/integration/cdn-apps/full-flow/cross-phase-regression.test.ts` — added test that puts the two sides in conflict (origin returns `new-response-header: from-origin` while WASM request-phase produces `value-02`), asserts the final response has both as `string[]` in request-phase-first order. Would have flipped red against the old "origin wins" merge.
+- `server/runner/ProxyWasmRunner.ts:1299` — separate one-character cleanup (`request` → `_request` on the unsupported-stub `execute()`) to clear a pre-existing TS6133.
+
+##### Why Option B (append) over Option A (request-phase wins) — decision rationale
+The runner only sees outcome state from each hook (`output.response.headers` is a cumulative snapshot of host state), so it cannot distinguish whether the WASM did `add_http_response_header` vs `replace_http_response_header` in the request phase. Option A would be lossy for `add_*` (origin's value disappears when WASM added the same name in the request phase); Option B is lossy for `replace_*` (origin's value tags along when WASM intended replace). The leading comment on the runner already cites `add_http_response_header` as the documented production pattern, and the codebase already preserves multi-value structure (`HeaderRecord = Record<string, string | string[]>`, explicit `getSetCookie()` handling in the response-read path), so append-with-multi-value matches both the production intent and the existing data model. Option C (per-op intent tracking through the runner) was rejected as out-of-scope.
+
+#### 2. Generator prompt cleanup (`fastedge-plugin-source/.generation-config.md`)
+Three coordinated cleanups, all driven by the same shape of review comment (a docs/feature was removed; the prompt was never synced):
+- **Heading**: `### Custom Origin Response` → `### Built-In Responder (No Network)`. The body had already been swapped to the built-in responder (`request.url: "built-in"`) per the prior CHANGELOG entry on response.* removal; the heading was the leftover. Mirror update in `docs/TEST_CONFIG.md`. Added a defensive "must be 'Built-In Responder (No Network)', NOT 'Custom Origin Response'" guard in the prompt so regens don't drift back.
+- **Removed-feature callout**: added an explicit "schema has no `response` block — DO NOT re-introduce" block in the "Fields that MUST be documented" section; removed the two dead `response.headers` / `response.body` bullets and the stale `response has required: ["headers", "body"]` clause. The JSON schema has zero `response` references; the prompt was the only thing keeping the dead feature alive.
+- **Restated-arrays → pointer pass**: systematically converted hard-coded restatements (`Top-level required: [...]`, per-type field hints in the RUNNER.md and TEST_FRAMEWORK.md `**Types**` blocks, the calculatedProperties derived-key enumeration) into "read source directly — do not paraphrase" pointers. Kept defensive negatives (`DO NOT use snake_case`, `DO NOT invent keys`) and exact-wording instructions (busy-port error verbatim) — those encode lessons from past model regressions and are load-bearing.
+
+Verified by full regen across all 8 doc files: 4 byte-identical to baseline, the other 4 changed only in markdown table-cell trailing whitespace. No content drift introduced by the cleanup.
+
+#### 3. Doc-generator `.failures/` capture + preamble salvage (`fastedge-plugin-source/generate-docs.sh`)
+Failed `claude -p` outputs used to be deleted on every retry/return, so prompt authors had zero diagnostic when validation failed. Now:
+- Rejected outputs are cp'd to `docs/.failures/<target>.attempt-N.<ts>.md` and persist across runs (subdir is outside the startup-cleanup glob). `.gitignore` updated.
+- New validate-and-salvage logic anchors on the first `^# ` line via `awk` and treats everything from there forward as the doc. If anything before that line was stripped (preamble detected), the original is saved to `.failures/<target>.preamble.attempt-N.<ts>.md` for prompt tuning. Replaces the previous "first non-empty line must start with #" validator that discarded otherwise-good output on a single line of conversational leak.
+- Tightened the prompt's OUTPUT CONSTRAINT and existing-content blocks to explicitly forbid `"the existing content is accurate"`, `"no changes needed"`, `"outputting verbatim"`. Suppression bought 1-of-3 improvement on the previously-leaking files (INDEX.md went clean); salvage handles the residual transparently.
+
+Mirrors the port in `fastedge-plugin/scripts/sync/templates/generate-docs-template.sh` (the source of truth that will repopulate child repos via the sync pipeline) and the three SDK sibling repos.
+
+### Testing
+- `pnpm test` — 1016/1016 (461 backend + 340 frontend + 134 cdn integration + 81 http integration). The new cross-phase-regression test brought cdn integration from 133 → 134.
+- Doc regen end-to-end ran clean; salvage captured 2 preamble samples in `.failures/` for future prompt tuning; zero genuine no-`# `-heading failures.
+
+### Notes
+- The deeper prompt-tightening lesson worth recording: when the model's reasoning is highly load-bearing to the task ("does this doc need changes?"), rule-based suppression of the model's narrative tendency hits diminishing returns fast. Sonnet emits the *exact* forbidden phrases by name. The salvage layer is the durable fix; the prompt edits are belt-and-suspenders. Apply the same pattern to other prompt-pipeline failure modes.
+
+---
+
 ## April 23, 2026 - Issue 1: `request.url` as sole routing source (FastEdge parity)
 
 ### Overview

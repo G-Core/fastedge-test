@@ -27,7 +27,10 @@ export class HeaderManager {
   }
 
   static normalize(headers: HeaderMap | HeaderRecord): HeaderRecord {
-    const normalized: HeaderRecord = {};
+    // Null-prototype object: a header named `__proto__` or `constructor` is
+    // stored as an own property rather than triggering prototype setters or
+    // colliding with inherited members. Treat the return as a plain dictionary.
+    const normalized: HeaderRecord = Object.create(null) as HeaderRecord;
     for (const [key, value] of Object.entries(headers)) {
       const k = key.toLowerCase();
       if (Array.isArray(value)) {
@@ -52,13 +55,19 @@ export class HeaderManager {
     left: HeaderMap | HeaderRecord,
     right: HeaderMap | HeaderRecord,
   ): HeaderRecord {
+    // `normalize(left)` returns a null-prototype object, so prototype-chain
+    // members (constructor, __proto__, toString, etc.) cannot leak into the
+    // `Object.hasOwn` check below and incoming names like `__proto__` cannot
+    // pollute the prototype via assignment. `Object.hasOwn` is belt-and-
+    // suspenders — explicit own-property intent even though the null
+    // prototype already eliminates inheritance.
     const result = HeaderManager.normalize(left);
     for (const [key, value] of Object.entries(right)) {
       const k = key.toLowerCase();
       const incoming = Array.isArray(value)
         ? value.map(String)
         : [String(value)];
-      if (k in result) {
+      if (Object.hasOwn(result, k)) {
         const existing = result[k];
         const existingArr = Array.isArray(existing) ? existing : [existing];
         result[k] = [...existingArr, ...incoming];
