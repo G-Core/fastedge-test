@@ -328,7 +328,7 @@ type HookResult = {
 };
 ```
 
-`hookResults` is keyed by hook name (e.g. `"onRequestHeaders"`, `"onResponseHeaders"`). `calculatedProperties` is present only when the runner derives request-derived properties; keys follow the `request.*` pattern (e.g. `request.url`, `request.host`, `request.path`, `request.query`, `request.scheme`, `request.extension`, `request.method`).
+`hookResults` is keyed by hook name (e.g. `"onRequestHeaders"`, `"onResponseHeaders"`). `calculatedProperties` is present only when the runner derives request-derived properties; keys follow the `request.*` pattern (`request.url`, `request.host`, `request.path`, `request.query`, `request.scheme`, `request.extension`, `request.method`).
 
 **Example — HTTP-WASM**
 

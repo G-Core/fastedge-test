@@ -76,6 +76,37 @@ describeFn("CDN runner - cross-phase regression (#12, #15)", () => {
     expect(result.finalResponse.headers["new-response-header"]).toBe("value-02");
   }, 15000);
 
+  it("preserves both request-phase and origin values when both set the same response header (append-merge)", async () => {
+    // Regression: previously the runner spread request-phase response headers
+    // first and origin headers second, so an origin header with the same name
+    // silently overwrote the WASM's request-phase add/replace. With append-merge
+    // both values survive as a string[], matching how Envoy represents a
+    // cross-phase add_http_response_header colliding with the upstream response.
+    mocks = mockOrigins();
+    mocks
+      .origin("https://origin.example")
+      .intercept({ path: "/cross-phase-conflict" })
+      .reply(200, "ok", {
+        headers: {
+          "content-type": "text/plain",
+          "new-response-header": "from-origin",
+        },
+      });
+
+    const result = await runFlow(cdnRunner, {
+      url: "https://origin.example/cross-phase-conflict",
+      requestHeaders: { host: "origin.example" },
+    });
+
+    // Request phase adds new-response-header then replaces to "value-02" (see
+    // headers.ts onRequestHeaders). Origin also returns new-response-header.
+    // Both values must appear; request-phase first, origin appended.
+    expect(result.finalResponse.headers["new-response-header"]).toEqual([
+      "value-02",
+      "from-origin",
+    ]);
+  }, 15000);
+
   it("#12 honours send_http_response short-circuit from onResponseHeaders", async () => {
     mocks = mockOrigins();
     // Inject an unexpected new-header-* value: the WASM's onResponseHeaders

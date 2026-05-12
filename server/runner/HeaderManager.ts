@@ -39,6 +39,36 @@ export class HeaderManager {
     return normalized;
   }
 
+  // Append-merge two header records: for keys present in both, values are
+  // concatenated into a string[] rather than the right-hand side overwriting
+  // the left. Keys are lowercased on the way in (consistent with `normalize`).
+  //
+  // Used by the runner to combine request-phase response-header state with
+  // the origin's response headers, mirroring how Envoy serves
+  // `add_http_response_header` calls issued during onRequestHeaders /
+  // onRequestBody against the actual upstream response — both values survive
+  // as a multi-value list (preserving the proxy-wasm cross-phase pattern).
+  static appendMerge(
+    left: HeaderMap | HeaderRecord,
+    right: HeaderMap | HeaderRecord,
+  ): HeaderRecord {
+    const result = HeaderManager.normalize(left);
+    for (const [key, value] of Object.entries(right)) {
+      const k = key.toLowerCase();
+      const incoming = Array.isArray(value)
+        ? value.map(String)
+        : [String(value)];
+      if (k in result) {
+        const existing = result[k];
+        const existingArr = Array.isArray(existing) ? existing : [existing];
+        result[k] = [...existingArr, ...incoming];
+      } else {
+        result[k] = incoming.length === 1 ? incoming[0] : incoming;
+      }
+    }
+    return result;
+  }
+
   static serialize(headers: HeaderMap): Uint8Array {
     // Kong proxy-wasm AssemblyScript SDK format:
     // [num_pairs: u32][key1_len: u32][val1_len: u32][key2_len: u32][val2_len: u32]...[key1_bytes][0x00][val1_bytes][0x00]...
