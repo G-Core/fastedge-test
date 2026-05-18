@@ -637,16 +637,22 @@ export class ProxyWasmRunner implements IWasmRunner {
       // Check if WASM sent a local response from onResponseHeaders — short-circuit response chain
       if (results.onResponseHeaders.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
         const local = this.hostFunctions.getLocalResponse()!;
-        const headers = results.onResponseHeaders.output.response.headers;
+        const responseHeaders = results.onResponseHeaders.output.response.headers;
         this.hostFunctions.resetLocalResponse();
-        const contentType = HeaderManager.firstValue(headers['content-type']) || 'text/plain';
+
+        // See post-onRequestHeaders short-circuit above for the merge rationale.
+        const mergedHeaders = local.headers.length > 0
+          ? HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))
+          : responseHeaders;
+
+        const contentType = HeaderManager.firstValue(mergedHeaders['content-type']) || 'text/plain';
         const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
         return {
           hookResults: results,
           finalResponse: {
             status: local.statusCode,
             statusText: local.statusText,
-            headers,
+            headers: mergedHeaders,
             body,
             contentType,
             isBase64,
@@ -689,16 +695,22 @@ export class ProxyWasmRunner implements IWasmRunner {
       // Check if WASM sent a local response from onResponseBody — short-circuit response chain
       if (results.onResponseBody.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
         const local = this.hostFunctions.getLocalResponse()!;
-        const headers = results.onResponseBody.output.response.headers;
+        const responseHeaders = results.onResponseBody.output.response.headers;
         this.hostFunctions.resetLocalResponse();
-        const contentType = HeaderManager.firstValue(headers['content-type']) || 'text/plain';
+
+        // See post-onRequestHeaders short-circuit above for the merge rationale.
+        const mergedHeaders = local.headers.length > 0
+          ? HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))
+          : responseHeaders;
+
+        const contentType = HeaderManager.firstValue(mergedHeaders['content-type']) || 'text/plain';
         const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
         return {
           hookResults: results,
           finalResponse: {
             status: local.statusCode,
             statusText: local.statusText,
-            headers,
+            headers: mergedHeaders,
             body,
             contentType,
             isBase64,

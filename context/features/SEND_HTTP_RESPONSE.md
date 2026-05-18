@@ -1,7 +1,7 @@
 # send_http_response (Local Response Short-Circuit)
 
-**Status**: ✅ Complete — Runner support + CDN redirect test app + 5 integration tests
-**Last Updated**: March 24, 2026
+**Status**: ✅ Complete — Runner support + additionalHeaders merge + CDN redirect test app + 5 integration tests
+**Last Updated**: May 18, 2026
 
 ---
 
@@ -38,20 +38,23 @@ onRequestHeaders(a: u32, end_of_stream: bool): FilterHeadersStatusValues {
 
 The runner checks for a local response after each request-phase hook:
 
-1. **`HostFunctions.ts`**: `proxy_send_local_response` stores the response in `localResponse` state
-2. **`ProxyWasmRunner.ts:279`**: After `onRequestHeaders`, if `returnCode === 1` (StopIteration) AND `hasLocalResponse()` is true:
-   - Reads the local response (status, statusText, body)
-   - Merges response headers from the hook's output
+1. **`HostFunctions.ts`**: `proxy_send_local_response` stores the response in `localResponse` — includes `statusCode`, `statusText`, `body`, and **`headers`** (the `additionalHeaders` 4th argument, stored as `HeaderTuples` to preserve order and duplicate-name semantics).
+2. **`ProxyWasmRunner.ts`**: After `onRequestHeaders`, if `returnCode === 1` (StopIteration) AND `hasLocalResponse()` is true:
+   - Reads `local.headers` from `localResponse`
+   - **Merges two header sources** via `HeaderManager.appendMerge`:
+     - Left/base: headers accumulated via `stream_context.headers.response.add/set()` during the hook (`hookResult.output.response.headers`)
+     - Right/overlay: `additionalHeaders` from `send_http_response()` (`local.headers`)
    - Returns `FullFlowResult` immediately — **no origin fetch, no onRequestBody/onResponseHeaders/onResponseBody**
-3. Same check at **`ProxyWasmRunner.ts:328`** after `onRequestBody`
+3. Same merge at the post-`onRequestBody` short-circuit.
+
+**Why two sources?** The proxy-wasm pattern is to set headers via `stream_context` in the hook body, then call `send_http_response` with an empty `[]` for `additionalHeaders`. But the ABI equally supports passing headers directly as the 4th argument (e.g. `send_http_response(401, "Unauthorized", body, [["WWW-Authenticate", "API-Key"]])`). Both paths now reach `finalResponse.headers`.
 
 ### Key Files
 
 | File | Role |
 |------|------|
-| `server/runner/HostFunctions.ts:58-161` | `localResponse` state, `proxy_send_local_response` impl, `hasLocalResponse()`/`getLocalResponse()`/`resetLocalResponse()` |
-| `server/runner/ProxyWasmRunner.ts:279-295` | Short-circuit after `onRequestHeaders` |
-| `server/runner/ProxyWasmRunner.ts:328-345` | Short-circuit after `onRequestBody` |
+| `server/runner/HostFunctions.ts` | `localResponse` state (includes `headers: HeaderTuples`), `proxy_send_local_response` impl, `hasLocalResponse()`/`getLocalResponse()`/`resetLocalResponse()` |
+| `server/runner/ProxyWasmRunner.ts` | Short-circuit after `onRequestHeaders` + after `onRequestBody`; `appendMerge` of stream_context headers with additionalHeaders |
 
 ---
 
@@ -62,7 +65,7 @@ The runner checks for a local response after each request-phase hook:
 
 A simple CDN app that reads `x-redirect-url` from the request header and returns a 302 redirect:
 
-- If `x-redirect-url` header is present: sets `Location` response header, calls `send_http_response(302, "Found", empty, [])`, returns `StopIteration`
+- If `x-redirect-url` header is present: calls `send_http_response(302, "Found", empty, [["location", url]])`, returns `StopIteration` — the `Location` header is passed as `additionalHeaders` (the 4th argument), directly exercising the header-merge path
 - If absent: returns `Continue` (normal flow — allows testing both paths)
 
 ### Build
@@ -105,3 +108,5 @@ assertReturnCode(result.hookResults.onRequestHeaders, 1);
 ```
 
 This validates both the `send_http_response` feature AND the test framework API surface.
+
+> **Note (May 18, 2026):** `cdn-redirect` was updated so the `Location` header is passed via `additionalHeaders` (4th arg of `send_http_response`) rather than via `stream_context.headers.response.add()`. The `assertFinalHeader(result, 'location', ...)` assertion therefore directly covers the additionalHeaders merge path — not just the stream_context path.

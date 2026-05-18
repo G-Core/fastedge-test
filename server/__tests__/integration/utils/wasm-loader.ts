@@ -84,6 +84,7 @@ export const WASM_TEST_BINARIES = {
     },
     redirect: {
       redirect: 'redirect.wasm',
+      redirectExtraHeaders: 'redirect-extra-headers.wasm',
     },
     emptyEnv: {
       emptyEnv: 'empty-env.wasm',
