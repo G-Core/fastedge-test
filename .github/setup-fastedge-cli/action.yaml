@@ -5,7 +5,7 @@ inputs:
   cli_version:
     description: "FastEdge CLI version tag (e.g. v0.5.0) or 'latest'"
     required: false
-    default: "v0.16.5"
+    default: "latest"
   github_token:
     description: "GitHub token for authenticated API requests (avoids rate limiting)"
     required: false
