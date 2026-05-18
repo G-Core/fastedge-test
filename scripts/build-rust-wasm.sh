@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build a Rust workspace targeting wasm32-wasip1 and copy artifacts to the output directory.
+# Build a Rust workspace and copy artifacts to the output directory.
+# The WASM target is read from .cargo/config.toml in the workspace; defaults to wasm32-wasip1.
 #
 # Usage: build-rust-wasm.sh <workspace-dir> <output-dir> [options]
 #
@@ -39,12 +40,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Resolve the WASM target from the workspace's .cargo/config.toml (if present).
+CARGO_TARGET=$(grep -m1 '^target\s*=' "$WORKSPACE_DIR/.cargo/config.toml" 2>/dev/null \
+  | sed 's/.*=\s*"\(.*\)"/\1/')
+CARGO_TARGET="${CARGO_TARGET:-wasm32-wasip1}"
+
 # Build
 cd "$WORKSPACE_DIR"
 cargo build --release
 
 # Copy artifacts
-RELEASE_DIR="target/wasm32-wasip1/release"
+RELEASE_DIR="target/$CARGO_TARGET/release"
 for wasm_file in "$RELEASE_DIR"/*.wasm; do
   [ -f "$wasm_file" ] || continue
 

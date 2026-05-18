@@ -12,8 +12,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0
       '@gcoredev/fastedge-sdk-js':
-        specifier: ^2.2.2
-        version: 2.2.2
+        specifier: ^2.2.3
+        version: 2.3.0
       '@gcoredev/proxy-wasm-sdk-as':
         specifier: ^1.2.3
         version: 1.2.3
@@ -848,8 +848,8 @@ packages:
     engines: {node: '>=20', pnpm: '>=10'}
     hasBin: true
 
-  '@gcoredev/fastedge-sdk-js@2.2.2':
-    resolution: {integrity: sha512-x6cdO7yAXDS5Jp95B83C34xNMIHBq25Qq3L9mbWQkPjYHOhPjTjlySfwrXi8gFhyEBGrRaynk809RC3v8mq21Q==}
+  '@gcoredev/fastedge-sdk-js@2.3.0':
+    resolution: {integrity: sha512-XX9fLjIwdRovP69YX2VHf2iHxfbQi/BgSAUHJ2sWweWn+JeUSncYi7BiLyxCrScashrt+zJE6MJ1w9kXJJ6vaw==}
     engines: {node: '>=22', pnpm: '>=10'}
     hasBin: true
 
@@ -3390,7 +3390,7 @@ snapshots:
       prompts: 2.4.2
       regexpu-core: 5.3.2
 
-  '@gcoredev/fastedge-sdk-js@2.2.2':
+  '@gcoredev/fastedge-sdk-js@2.3.0':
     dependencies:
       '@bytecodealliance/jco': 1.17.6
       '@bytecodealliance/wizer': 10.0.0

@@ -39,7 +39,7 @@ describe('Full-Flow: CDN Headers-Change with Downstream', () => {
       WASM_TEST_BINARIES.httpApps.js.httpResponder
     );
 
-    const downstream = await spawnDownstreamHttpApp(httpResponderWasm, 8100);
+    const downstream = await spawnDownstreamHttpApp(httpResponderWasm);
     downstreamRunner = downstream.runner;
     downstreamPort = downstream.port;
 

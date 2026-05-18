@@ -17,7 +17,7 @@ const sharedPortManager = new PortManager();
  *
  * @returns A configured HttpWasmRunner instance
  */
-export function createHttpWasmRunner(): IWasmRunner {
+export function createHttpWasmRunner(): HttpWasmRunner {
   return new HttpWasmRunner(sharedPortManager, false); // Use shared port manager, disable dotenv
 }
 
@@ -30,7 +30,7 @@ export function createHttpWasmRunner(): IWasmRunner {
  *
  * @returns A configured HttpWasmRunner instance with dotenv enabled
  */
-export function createHttpWasmRunnerWithDotenv(): IWasmRunner {
+export function createHttpWasmRunnerWithDotenv(): HttpWasmRunner {
   return new HttpWasmRunner(sharedPortManager, true);
 }
 
@@ -117,17 +117,14 @@ export function hasContentType(response: HttpResponse, expectedType: string): bo
  */
 export async function spawnDownstreamHttpApp(
   wasmBinary: Uint8Array,
-  expectedPort: number = 8100
 ): Promise<{ runner: IWasmRunner; port: number }> {
   const runner = createHttpWasmRunner();
-
-  // Load the WASM binary (HttpWasmRunner will allocate a port from PortManager)
   await runner.load(Buffer.from(wasmBinary));
 
-  // Return the expected port (PortManager allocates sequentially from 8100)
-  // In a test suite with clean state, first allocation is always 8100
-  return {
-    runner,
-    port: expectedPort,
-  };
+  const port = runner.getPort();
+  if (port === null) {
+    throw new Error('HttpWasmRunner did not allocate a port after load()');
+  }
+
+  return { runner, port };
 }
