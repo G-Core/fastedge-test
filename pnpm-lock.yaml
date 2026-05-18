@@ -120,6 +120,8 @@ importers:
 
   test-applications/cdn-apps/as/as_utils: {}
 
+  test-applications/cdn-apps/as/cdn-empty-env: {}
+
   test-applications/cdn-apps/as/cdn-headers: {}
 
   test-applications/cdn-apps/as/cdn-http-call: {}

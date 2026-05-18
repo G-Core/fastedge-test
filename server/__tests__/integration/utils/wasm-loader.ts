@@ -85,6 +85,9 @@ export const WASM_TEST_BINARIES = {
     redirect: {
       redirect: 'redirect.wasm',
     },
+    emptyEnv: {
+      emptyEnv: 'empty-env.wasm',
+    },
     variablesAndSecrets: {
       variablesAndSecrets: 'variables-and-secrets.wasm',
     },
