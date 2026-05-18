@@ -1,5 +1,78 @@
 # Proxy-WASM Runner - Changelog
 
+## May 18, 2026 - WASI env trap fix + send_http_response additionalHeaders merge
+
+### Overview
+Two runner correctness fixes shipped together. (1) `getEnv()` no longer traps with `memory access out of bounds` when the dictionary is empty (no dotenv). (2) The `additionalHeaders` argument of `send_http_response` is now merged into `finalResponse.headers` instead of being silently discarded. Package bumped to 0.2.1.
+
+### What Changed
+
+#### 1. WASI env init: sentinel env prevents `process.env` trap
+
+**Root cause:** Node WASI's `environ_get` returns `INVAL` when called with an empty env table. The AS wasi-shim calls `__alloc(0)` for the zero-sized buffer, passes the resulting null/invalid pointer to `environ_get`, and Node returns `INVAL`. This aborts `_start` mid-init, leaving `process.env` as a partially-constructed `Map`. The first `process.env.has()` call from user code then traps with `memory access out of bounds`.
+
+**Fix (`server/runner/ProxyWasmRunner.ts`):** When `dictionary.getAll()` returns an empty object, the runner seeds the WASI env with `{ __FASTEDGE_RUNNER__: "1" }` instead of `{}`. The double-underscore sentinel is reserved by convention and won't collide with user env vars. Production FastEdge guarantees an at-least-empty WASI env; this mirrors that.
+
+```ts
+const dictEnv = this.dictionary.getAll();
+const wasiEnv = Object.keys(dictEnv).length === 0
+  ? { __FASTEDGE_RUNNER__: "1" }
+  : dictEnv;
+const wasi = new WASI({ version: "preview1", env: wasiEnv });
+```
+
+**Impact:** Any example or app that calls `getEnv()` without a dotenv fixture previously trapped. Now it returns `""` cleanly, matching production's graceful-absent behaviour.
+
+**Files Modified:**
+- `server/runner/ProxyWasmRunner.ts` — `createImports()`: sentinel env injection
+
+#### 2. send_http_response: additionalHeaders now merged into finalResponse
+
+**Root cause:** `HostFunctions.proxy_send_local_response` was deserialising the `additionalHeaders` tuples but then discarding them — `localResponse` only stored `{ statusCode, statusText, body }`. The `(not merged)` debug log was the tell. Headers like `Location` on 302, `WWW-Authenticate` on 401, and `Set-Cookie` on any hook short-circuit were silently dropped.
+
+**Fix:**
+- `server/runner/HostFunctions.ts` — `localResponse` now includes `headers: HeaderTuples`. `proxy_send_local_response` populates it via `HeaderManager.deserializeBinaryToTuples()`.
+- `server/runner/ProxyWasmRunner.ts` — both short-circuit points (post-`onRequestHeaders` and post-`onRequestBody`) now call `HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))`. `appendMerge` concatenates rather than overwrites, preserving multi-value semantics (e.g. multiple `Set-Cookie` additions).
+
+**Two header sources in the short-circuit result (order matters):**
+1. Headers accumulated via `stream_context.headers.response.add/set()` during the hook — captured in `hookResult.output.response.headers`
+2. Headers passed as the 4th argument to `send_http_response()` — now in `local.headers`
+
+Both are merged into `finalResponse.headers` via `appendMerge` (stream_context headers take left/base position; additionalHeaders are right/overlay).
+
+**Files Modified:**
+- `server/runner/HostFunctions.ts` — `localResponse` type + `proxy_send_local_response` impl
+- `server/runner/ProxyWasmRunner.ts` — post-`onRequestHeaders` and post-`onRequestBody` short-circuit merge
+
+#### 3. New test app + regression test: cdn-empty-env
+
+New minimal CDN test application (`test-applications/cdn-apps/as/cdn-empty-env/`) that calls `getEnv("MISSING_KEY")` in `onRequestHeaders` and logs the result. Pre-fix this trapped; post-fix it logs `empty-env >> MISSING_KEY=""`.
+
+Integration test at `server/__tests__/integration/cdn-apps/empty-env/empty-env.test.ts` (2 tests):
+- `should not trap when getEnv is called on an uninitialized env` — asserts `onRequestHeaders` returns cleanly with `returnCode === 0`
+- `should return empty string for a missing env var` — asserts the logged value is `""`
+
+#### 4. cdn-redirect updated to exercise additionalHeaders path
+
+`test-applications/cdn-apps/as/cdn-redirect/assembly/redirect.ts` updated: the Location header is now passed as the `additionalHeaders` argument of `send_http_response` rather than set via `stream_context.headers.response.add()`. This means `cdn-redirect.test.ts`'s `assertFinalHeader(result, 'location', ...)` assertion directly exercises the new merge path — regression coverage for fix #2 above.
+
+### Testing
+
+`pnpm test` — all tests pass. CDN integration suite gained 2 new tests from `empty-env.test.ts`.
+
+**Files Created:**
+- `server/__tests__/integration/cdn-apps/empty-env/empty-env.test.ts`
+- `test-applications/cdn-apps/as/cdn-empty-env/assembly/empty-env.ts`
+- `test-applications/cdn-apps/as/cdn-empty-env/asconfig.json`
+- `test-applications/cdn-apps/as/cdn-empty-env/package.json`
+- `wasm/cdn-apps/as/empty-env/` (gitkeep; wasm output)
+
+### Notes
+- The WASI sentinel fix is specific to the empty-dict case. When dotenv is enabled and the dict is populated, `dictEnv` is passed directly — no sentinel.
+- `getSecret()` (which uses `proxy_get_secret`, a proxy-wasm host call) was never affected by this trap — it doesn't go through `process.env`. Only `getEnv()` (which uses the WASI env table) was broken.
+
+---
+
 ## May 12, 2026 - Runner cross-phase append-merge + docgen pipeline hardening
 
 ### Overview

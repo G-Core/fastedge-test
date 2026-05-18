@@ -74,3 +74,32 @@ describe('CDN Redirect: send_http_response short-circuit', () => {
     expect(result.finalResponse.body).toBe('');
   });
 });
+
+describe('CDN Redirect: appendMerge — stream_context response headers + send_http_response 4th-arg headers', () => {
+  let runner: ProxyWasmRunner;
+  let result: Awaited<ReturnType<typeof runFlow>>;
+
+  beforeAll(async () => {
+    runner = createTestRunner();
+    const wasmBinary = await loadCdnAppWasm(
+      'redirect',
+      WASM_TEST_BINARIES.cdnApps.redirect.redirectExtraHeaders
+    );
+    await runner.load(Buffer.from(wasmBinary));
+    result = await runFlow(runner, { url: 'http://unused.test/', requestHeaders: {} });
+  }, 30000);
+
+  afterAll(async () => {
+    await runner.cleanup();
+  });
+
+  it('should append-merge Set-Cookie from both stream_context and send_http_response 4th arg, and pass through 4th-arg headers', () => {
+    assertFinalStatus(result, 302);
+    assertFinalHeader(result, 'location', 'https://example.com/');
+    // stream_context value (left) must precede 4th-arg value (right), both preserved
+    expect(result.finalResponse.headers['set-cookie']).toEqual([
+      'session=abc; Path=/',
+      'theme=dark; Path=/',
+    ]);
+  });
+});

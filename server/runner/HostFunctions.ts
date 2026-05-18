@@ -57,11 +57,18 @@ export class HostFunctions {
   } | null = null;
   private streamClosed = false;
 
-  // Local response state (from proxy_send_local_response / send_http_response)
+  // Local response state (from proxy_send_local_response / send_http_response).
+  // `headers` carries the additional headers passed as the 4th argument of
+  // `send_http_response`; ProxyWasmRunner merges these into finalResponse at
+  // the short-circuit points so they reach the caller alongside any headers
+  // accumulated via stream_context.headers.response.add() in the same hook.
+  // Stored as tuples to preserve order and duplicate-name semantics (e.g. for
+  // multi-value Set-Cookie additions).
   private localResponse: {
     statusCode: number;
     statusText: string;
     body: Uint8Array;
+    headers: HeaderTuples;
   } | null = null;
 
   // FastEdge extensions
@@ -162,7 +169,12 @@ export class HostFunctions {
     return this.localResponse !== null;
   }
 
-  getLocalResponse(): { statusCode: number; statusText: string; body: Uint8Array } | null {
+  getLocalResponse(): {
+    statusCode: number;
+    statusText: string;
+    body: Uint8Array;
+    headers: HeaderTuples;
+  } | null {
     return this.localResponse;
   }
 
@@ -573,16 +585,20 @@ export class HostFunctions {
         const statusText = this.memory.readString(statusCodePtr, statusCodeLen);
         const body = this.memory.readBytes(bodyPtr, bodyLen);
 
-        // Parse header pairs from binary format (stored for debugging, not merged into response)
-        // On the real CDN, only headers set via stream_context.headers.response.add() matter.
+        // Parse the additional headers (4th argument of send_http_response).
+        // Stored on `localResponse` and merged into finalResponse by
+        // ProxyWasmRunner at the short-circuit points — these are part of the
+        // app's response contract (e.g. RFC 7235 WWW-Authenticate on 401,
+        // Location on 302), not debug noise.
+        let headers: HeaderTuples = [];
         if (headerPairsLen > 0) {
           const headerBytes = this.memory.readBytes(headerPairsPtr, headerPairsLen);
-          const headers = HeaderManager.deserializeBinary(headerBytes);
-          this.logDebug(`send_local_response headers (not merged): ${JSON.stringify(headers)}`);
+          headers = HeaderManager.deserializeBinaryToTuples(headerBytes);
+          this.logDebug(`send_local_response headers: ${JSON.stringify(headers)}`);
         }
 
         // Store local response as raw bytes — ProxyWasmRunner handles encoding
-        this.localResponse = { statusCode, statusText, body };
+        this.localResponse = { statusCode, statusText, body, headers };
 
         this.logs.push({
           level: 1,

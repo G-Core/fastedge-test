@@ -4,6 +4,7 @@ import {
   FilterHeadersStatusValues,
   log,
   LogLevelValues,
+  makeHeaderPair,
   registerRootContext,
   RootContext,
   send_http_response,
@@ -27,11 +28,11 @@ class Redirect extends Context {
     if (redirectUrl !== null && redirectUrl !== "") {
       log(LogLevelValues.info, "redirect >> redirecting to " + redirectUrl);
 
-      // Set Location header on the response
-      stream_context.headers.response.add("location", redirectUrl);
-
-      // Send 302 local response — no origin fetch
-      send_http_response(302, "Found", new ArrayBuffer(0), []);
+      // Set Location via send_http_response's 4th argument — the proxy-wasm
+      // ABI path for response headers attached to a locally-generated response.
+      send_http_response(302, "Found", new ArrayBuffer(0), [
+        makeHeaderPair("Location", redirectUrl),
+      ]);
 
       return FilterHeadersStatusValues.StopIteration;
     }

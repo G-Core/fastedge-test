@@ -18,12 +18,12 @@ The port can be overridden via the `PORT` environment variable. The active port 
 
 The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
-| Value      | Description                                             |
-| ---------- | ------------------------------------------------------- |
-| `ui`       | Request originated from the web UI (default if omitted) |
-| `ai_agent` | Request originated from an AI agent                     |
-| `api`      | Request originated from direct API usage                |
-| `system`   | Request originated from an automated system             |
+| Value        | Description                                             |
+| ------------ | ------------------------------------------------------- |
+| `ui`         | Request originated from the web UI (default if omitted) |
+| `ai_agent`   | Request originated from an AI agent                     |
+| `api`        | Request originated from direct API usage                |
+| `system`     | Request originated from an automated system             |
 
 ```http
 X-Source: ai_agent
@@ -179,11 +179,11 @@ curl -X POST http://localhost:5179/api/load \
 
 **Error Responses**
 
-| Status | Condition                                                                                                   |
-| ------ | ----------------------------------------------------------------------------------------------------------- |
-| `400`  | Validation failed, missing both `wasmPath` and `wasmBase64`, invalid path, or path does not end in `.wasm` |
-| `400`  | `httpPort` is specified and already in use (HTTP-WASM only)                                                 |
-| `500`  | WASM load failed or runner initialization error                                                             |
+| Status | Condition                                                                                                    |
+| ------ | ------------------------------------------------------------------------------------------------------------ |
+| `400`  | Validation failed, missing both `wasmPath` and `wasmBase64`, invalid path, or path does not end in `.wasm`  |
+| `400`  | `httpPort` is specified and already in use (HTTP-WASM only)                                                  |
+| `500`  | WASM load failed or runner initialization error                                                              |
 
 ---
 
@@ -417,10 +417,10 @@ curl -X POST http://localhost:5179/api/execute \
 
 **Error Responses**
 
-| Status | Condition                                                                                      |
-| ------ | ---------------------------------------------------------------------------------------------- |
-| `400`  | No WASM module loaded, or missing `path`/`url` for HTTP-WASM, or missing `url` for Proxy-WASM |
-| `500`  | Execution failed                                                                               |
+| Status | Condition                                                                                       |
+| ------ | ----------------------------------------------------------------------------------------------- |
+| `400`  | No WASM module loaded, or missing `path`/`url` for HTTP-WASM, or missing `url` for Proxy-WASM  |
+| `500`  | Execution failed                                                                                |
 
 ---
 
@@ -529,10 +529,10 @@ curl -X POST http://localhost:5179/api/call \
 
 **Error Responses**
 
-| Status | Condition                                                                              |
-| ------ | -------------------------------------------------------------------------------------- |
-| `400`  | Validation failed (invalid hook name, missing `properties`), or no WASM module loaded |
-| `500`  | Hook execution failed                                                                  |
+| Status | Condition                                                                               |
+| ------ | --------------------------------------------------------------------------------------- |
+| `400`  | Validation failed (invalid hook name, missing `properties`), or no WASM module loaded  |
+| `500`  | Hook execution failed                                                                   |
 
 ---
 
@@ -652,10 +652,10 @@ curl -X POST http://localhost:5179/api/send \
 
 **Error Responses**
 
-| Status | Condition                                                                    |
-| ------ | ---------------------------------------------------------------------------- |
-| `400`  | Validation failed (missing `url` or `properties`), or no WASM module loaded |
-| `500`  | Execution failed                                                             |
+| Status | Condition                                                                     |
+| ------ | ----------------------------------------------------------------------------- |
+| `400`  | Validation failed (missing `url` or `properties`), or no WASM module loaded  |
+| `500`  | Execution failed                                                              |
 
 ---
 
@@ -744,9 +744,9 @@ curl http://localhost:5179/api/config
 
 **Error Responses**
 
-| Status | Condition                                  |
-| ------ | ------------------------------------------ |
-| `404`  | `fastedge-config.test.json` does not exist |
+| Status | Condition                                   |
+| ------ | ------------------------------------------- |
+| `404`  | `fastedge-config.test.json` does not exist  |
 
 ---
 
@@ -805,10 +805,10 @@ curl -X POST http://localhost:5179/api/config \
 
 **Error Responses**
 
-| Status | Condition                                                                               |
-| ------ | --------------------------------------------------------------------------------------- |
-| `400`  | Validation failed (missing `config.appType`, `config.request`, or `config.properties`) |
-| `500`  | File write failed                                                                       |
+| Status | Condition                                                                                |
+| ------ | ---------------------------------------------------------------------------------------- |
+| `400`  | Validation failed (missing `config.appType`, `config.request`, or `config.properties`)  |
+| `500`  | File write failed                                                                        |
 
 ---
 
@@ -863,10 +863,10 @@ curl -X POST http://localhost:5179/api/config/save-as \
 
 **Error Responses**
 
-| Status | Condition                               |
-| ------ | --------------------------------------- |
-| `400`  | Missing `config` or `filePath`          |
-| `500`  | File write or directory creation failed |
+| Status | Condition                                |
+| ------ | ---------------------------------------- |
+| `400`  | Missing `config` or `filePath`           |
+| `500`  | File write or directory creation failed  |
 
 ---
 
@@ -886,23 +886,23 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Request Schemas
 
-| Name         | Description                                |
-| ------------ | ------------------------------------------ |
-| `api-load`   | Request body schema for `POST /api/load`   |
-| `api-send`   | Request body schema for `POST /api/send`   |
-| `api-call`   | Request body schema for `POST /api/call`   |
-| `api-config` | Request body schema for `POST /api/config` |
+| Name           | Description                                 |
+| -------------- | ------------------------------------------- |
+| `api-load`     | Request body schema for `POST /api/load`    |
+| `api-send`     | Request body schema for `POST /api/send`    |
+| `api-call`     | Request body schema for `POST /api/call`    |
+| `api-config`   | Request body schema for `POST /api/config`  |
 
 #### Response / Type Schemas
 
-| Name                   | Description                                                   |
-| ---------------------- | ------------------------------------------------------------- |
-| `fastedge-config.test` | Schema for `fastedge-config.test.json` config files           |
-| `hook-result`          | Shape of a single `HookResult` object                         |
-| `hook-call`            | Shape of a `HookCall` input object                            |
-| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints |
-| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution             |
-| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
+| Name                    | Description                                                    |
+| ----------------------- | -------------------------------------------------------------- |
+| `fastedge-config.test`  | Schema for `fastedge-config.test.json` config files            |
+| `hook-result`           | Shape of a single `HookResult` object                          |
+| `hook-call`             | Shape of a `HookCall` input object                             |
+| `full-flow-result`      | Shape of the `FullFlowResult` returned by full-flow endpoints  |
+| `http-request`          | Shape of an `HttpRequest` for HTTP-WASM execution              |
+| `http-response`         | Shape of an `HttpResponse` returned by HTTP-WASM execution     |
 
 **Example**
 
@@ -932,9 +932,9 @@ curl http://localhost:5179/api/schema/fastedge-config.test
 
 **Error Responses**
 
-| Status | Condition             |
-| ------ | --------------------- |
-| `404`  | Schema name not found |
+| Status | Condition              |
+| ------ | ---------------------- |
+| `404`  | Schema name not found  |
 
 ---
 
@@ -953,11 +953,11 @@ When a request body fails schema validation (Zod), `error` is the flattened Zod 
 
 **Common status codes**
 
-| Status | Meaning                                                                                       |
-| ------ | --------------------------------------------------------------------------------------------- |
-| `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded) |
-| `404`  | Resource not found (config file, schema file)                                                 |
-| `500`  | Internal server error during execution or I/O                                                 |
+| Status | Meaning                                                                                        |
+| ------ | ---------------------------------------------------------------------------------------------- |
+| `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded)  |
+| `404`  | Resource not found (config file, schema file)                                                  |
+| `500`  | Internal server error during execution or I/O                                                  |
 
 ---
 

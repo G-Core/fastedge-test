@@ -295,7 +295,15 @@ export class ProxyWasmRunner implements IWasmRunner {
       const responseHeaders = results.onRequestHeaders.output.response.headers;
       this.hostFunctions.resetLocalResponse();
 
-      const contentType = HeaderManager.firstValue(responseHeaders['content-type']) || 'text/plain';
+      // Merge the additional headers passed as send_http_response's 4th arg
+      // on top of any headers set via stream_context.headers.response.add().
+      // appendMerge concatenates rather than overwrites, preserving multi-value
+      // semantics (e.g. Set-Cookie).
+      const mergedHeaders = local.headers.length > 0
+        ? HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))
+        : responseHeaders;
+
+      const contentType = HeaderManager.firstValue(mergedHeaders['content-type']) || 'text/plain';
       const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
 
       return {
@@ -303,7 +311,7 @@ export class ProxyWasmRunner implements IWasmRunner {
         finalResponse: {
           status: local.statusCode,
           statusText: local.statusText,
-          headers: responseHeaders,
+          headers: mergedHeaders,
           body,
           contentType,
           isBase64,
@@ -348,7 +356,12 @@ export class ProxyWasmRunner implements IWasmRunner {
       const responseHeaders = results.onRequestBody.output.response.headers;
       this.hostFunctions.resetLocalResponse();
 
-      const contentType = HeaderManager.firstValue(responseHeaders['content-type']) || 'text/plain';
+      // See post-onRequestHeaders short-circuit above for the merge rationale.
+      const mergedHeaders = local.headers.length > 0
+        ? HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))
+        : responseHeaders;
+
+      const contentType = HeaderManager.firstValue(mergedHeaders['content-type']) || 'text/plain';
       const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
 
       return {
@@ -356,7 +369,7 @@ export class ProxyWasmRunner implements IWasmRunner {
         finalResponse: {
           status: local.statusCode,
           statusText: local.statusText,
-          headers: responseHeaders,
+          headers: mergedHeaders,
           body,
           contentType,
           isBase64,
@@ -624,16 +637,22 @@ export class ProxyWasmRunner implements IWasmRunner {
       // Check if WASM sent a local response from onResponseHeaders — short-circuit response chain
       if (results.onResponseHeaders.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
         const local = this.hostFunctions.getLocalResponse()!;
-        const headers = results.onResponseHeaders.output.response.headers;
+        const responseHeaders = results.onResponseHeaders.output.response.headers;
         this.hostFunctions.resetLocalResponse();
-        const contentType = HeaderManager.firstValue(headers['content-type']) || 'text/plain';
+
+        // See post-onRequestHeaders short-circuit above for the merge rationale.
+        const mergedHeaders = local.headers.length > 0
+          ? HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))
+          : responseHeaders;
+
+        const contentType = HeaderManager.firstValue(mergedHeaders['content-type']) || 'text/plain';
         const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
         return {
           hookResults: results,
           finalResponse: {
             status: local.statusCode,
             statusText: local.statusText,
-            headers,
+            headers: mergedHeaders,
             body,
             contentType,
             isBase64,
@@ -676,16 +695,22 @@ export class ProxyWasmRunner implements IWasmRunner {
       // Check if WASM sent a local response from onResponseBody — short-circuit response chain
       if (results.onResponseBody.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
         const local = this.hostFunctions.getLocalResponse()!;
-        const headers = results.onResponseBody.output.response.headers;
+        const responseHeaders = results.onResponseBody.output.response.headers;
         this.hostFunctions.resetLocalResponse();
-        const contentType = HeaderManager.firstValue(headers['content-type']) || 'text/plain';
+
+        // See post-onRequestHeaders short-circuit above for the merge rationale.
+        const mergedHeaders = local.headers.length > 0
+          ? HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))
+          : responseHeaders;
+
+        const contentType = HeaderManager.firstValue(mergedHeaders['content-type']) || 'text/plain';
         const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
         return {
           hookResults: results,
           finalResponse: {
             status: local.statusCode,
             statusText: local.statusText,
-            headers,
+            headers: mergedHeaders,
             body,
             contentType,
             isBase64,
@@ -1159,7 +1184,23 @@ export class ProxyWasmRunner implements IWasmRunner {
   }
 
   private createImports(): WebAssembly.Imports {
-    const wasi = new WASI({ version: "preview1", env: this.dictionary.getAll() });
+    // Node WASI's `environ_get` rejects calls when the env table is empty:
+    // the AS wasi-shim calls `__alloc(0)` for the zero-sized buffer, passes
+    // the resulting null/invalid pointer to `environ_get`, and Node returns
+    // `INVAL`. That throws inside `lazyEnv()`, aborts `_start` mid-init, and
+    // leaves `process.env` as a partially-constructed Map — the first
+    // `process.env.has(...)` call from user code then traps with a memory
+    // access out-of-bounds.
+    //
+    // Production FastEdge guarantees an at-least-empty WASI env table, so we
+    // mirror that here by seeding a runner sentinel when the dictionary is
+    // empty. The double-underscore name is reserved by convention and won't
+    // collide with user-set env vars.
+    const dictEnv = this.dictionary.getAll();
+    const wasiEnv = Object.keys(dictEnv).length === 0
+      ? { __FASTEDGE_RUNNER__: "1" }
+      : dictEnv;
+    const wasi = new WASI({ version: "preview1", env: wasiEnv });
     const wasiImport = wasi.wasiImport as Record<string, unknown>;
 
     return {

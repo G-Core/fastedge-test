@@ -17,7 +17,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          target: wasm32-wasip1
+          targets: wasm32-wasip1,wasm32-wasip2
 
       - name: Setup FastEdge Run CLI
         uses: ./.github/setup-fastedge-cli
