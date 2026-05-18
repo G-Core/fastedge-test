@@ -7,7 +7,7 @@ on:
         description: "FastEdge cli version"
         required: false
         type: string
-        default: "v0.16.5"
+        default: "latest"
 
 jobs:
   determine-cli-version:
