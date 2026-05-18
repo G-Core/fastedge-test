@@ -77,6 +77,7 @@ describe('CDN Redirect: send_http_response short-circuit', () => {
 
 describe('CDN Redirect: appendMerge — stream_context response headers + send_http_response 4th-arg headers', () => {
   let runner: ProxyWasmRunner;
+  let result: Awaited<ReturnType<typeof runFlow>>;
 
   beforeAll(async () => {
     runner = createTestRunner();
@@ -85,35 +86,20 @@ describe('CDN Redirect: appendMerge — stream_context response headers + send_h
       WASM_TEST_BINARIES.cdnApps.redirect.redirectExtraHeaders
     );
     await runner.load(Buffer.from(wasmBinary));
+    result = await runFlow(runner, { url: 'http://unused.test/', requestHeaders: {} });
   }, 30000);
 
   afterAll(async () => {
     await runner.cleanup();
   });
 
-  it('should preserve Set-Cookie from stream_context and from 4th-arg as separate values (append-merge)', async () => {
-    const result = await runFlow(runner, { url: 'http://unused.test/', requestHeaders: {} });
-
+  it('should append-merge Set-Cookie from both stream_context and send_http_response 4th arg, and pass through 4th-arg headers', () => {
     assertFinalStatus(result, 302);
-    const setCookie = result.finalResponse.headers['set-cookie'];
-    expect(Array.isArray(setCookie)).toBe(true);
-    expect(setCookie).toEqual(['session=abc; Path=/', 'theme=dark; Path=/']);
-  });
-
-  it('should include the Location header from 4th-arg alongside the merged Set-Cookie', async () => {
-    const result = await runFlow(runner, { url: 'http://unused.test/', requestHeaders: {} });
-
     assertFinalHeader(result, 'location', 'https://example.com/');
-  });
-
-  it('should not duplicate or lose either Set-Cookie value when only one source provides it', async () => {
-    // Regression guard: appendMerge must not drop the stream_context value (left side)
-    // when the 4th-arg (right side) also contains the same key.
-    const result = await runFlow(runner, { url: 'http://unused.test/', requestHeaders: {} });
-
-    const setCookie = result.finalResponse.headers['set-cookie'] as string[];
-    expect(setCookie).toHaveLength(2);
-    expect(setCookie).toContain('session=abc; Path=/');
-    expect(setCookie).toContain('theme=dark; Path=/');
+    // stream_context value (left) must precede 4th-arg value (right), both preserved
+    expect(result.finalResponse.headers['set-cookie']).toEqual([
+      'session=abc; Path=/',
+      'theme=dark; Path=/',
+    ]);
   });
 });
