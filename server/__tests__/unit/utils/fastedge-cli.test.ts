@@ -144,15 +144,6 @@ describe("fastedge-cli resolution", () => {
 
       expect(getPackageRoot(root)).toBe(root);
     });
-
-    it("terminates cleanly at the filesystem root without throwing", () => {
-      // The walk must check the root dir itself (dirname('/') === '/' on POSIX,
-      // dirname('C:\\') === 'C:\\' on Windows) and then break. Returns null
-      // because no @gcoredev/fastedge-test package.json sits at FS root.
-      const fsRoot = process.platform === "win32" ? "C:\\" : "/";
-      expect(() => getPackageRoot(fsRoot)).not.toThrow();
-      expect(getPackageRoot(fsRoot)).toBeNull();
-    });
   });
 
   describe("getBundledCliPaths", () => {

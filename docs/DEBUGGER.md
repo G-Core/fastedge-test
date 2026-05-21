@@ -4,17 +4,19 @@ Runs the FastEdge debugger HTTP server, which hosts the web UI, REST API, and We
 
 ## CLI Usage
 
-The package exposes a `fastedge-debug` binary. Run it with `npx` without installing:
-
-```bash
-npx @gcoredev/fastedge-test
-```
-
-Or using the explicit binary name:
+The package exposes a single binary, `fastedge-debug`. Run it with `npx` after installing `@gcoredev/fastedge-test` in your project:
 
 ```bash
 npx fastedge-debug
 ```
+
+If the package isn't installed yet, the explicit form fetches and runs it in one shot:
+
+```bash
+npx -p @gcoredev/fastedge-test fastedge-debug
+```
+
+> The shorthand `npx @gcoredev/fastedge-test` happens to work today because the package declares exactly one `bin` entry, and npx falls back to it when no name is given. Prefer the explicit `fastedge-debug` form — it stays correct if a second binary is ever added.
 
 Once started, the server listens on `http://localhost:5179` by default and logs the bound address to stderr.
 
@@ -31,13 +33,13 @@ For setups where the CLI is invoked from a subdirectory of the project (for exam
 ```bash
 # From inside fastedge-test/, point the debugger at the parent project root
 cd fastedge-test
-npx @gcoredev/fastedge-test --project-dir ..
+npx fastedge-debug --project-dir ..
 ```
 
 The flag accepts both `--project-dir <path>` and `--project-dir=<path>`. `-C` is a short alias. The resolved path then drives `WORKSPACE_PATH` and all config / fixture / dotenv resolution that flows from it, exactly as if the user had invoked the CLI from that directory. The flag is stripped before any remaining positional arguments are forwarded to the server, so you can combine it with a fixture path or other options:
 
 ```bash
-npx @gcoredev/fastedge-test --project-dir .. ../fixtures/scenario-1.test.json
+npx fastedge-debug --project-dir .. ../fixtures/scenario-1.test.json
 ```
 
 When omitted, behavior is unchanged from prior versions — the positional argument or `process.cwd()` is used as the starting point.
