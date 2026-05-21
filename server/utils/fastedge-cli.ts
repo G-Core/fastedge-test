@@ -8,7 +8,7 @@
  */
 
 import { execSync } from "child_process";
-import { existsSync, chmodSync } from "fs";
+import { existsSync, chmodSync, readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import os from "os";
@@ -37,25 +37,44 @@ function getCliBinaryName(): string {
 }
 
 /**
- * Get possible bundled CLI paths
- * Checks both production (dist/fastedge-cli/) and source (fastedge-run/) locations
+ * Walk up from _currentDir until a package.json with name "@gcoredev/fastedge-test"
+ * is found. Anchoring on the package name (rather than hardcoded depths or an
+ * unbounded walk) keeps the search robust across bundle layouts and avoids
+ * climbing into a sibling package in workspace/monorepo installs.
+ */
+function getPackageRoot(): string | null {
+  let dir = _currentDir;
+  while (dir !== dirname(dir)) {
+    const pkgPath = join(dir, "package.json");
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+        if (pkg.name === "@gcoredev/fastedge-test") return dir;
+      } catch {
+        // Unreadable or non-JSON — keep walking
+      }
+    }
+    dir = dirname(dir);
+  }
+  return null;
+}
+
+/**
+ * Get possible bundled CLI paths.
+ * Returns paths relative to the resolved package root, covering both the
+ * published layout (dist/fastedge-cli/) and the in-repo source layout
+ * (fastedge-run/).
  */
 function getBundledCliPaths(): string[] {
   const binaryName = getCliBinaryName();
+  const root = getPackageRoot();
+  if (!root) return [];
 
   return [
-    // Installed npm package: dist/lib/index.js → dist/fastedge-cli/
-    join(_currentDir, "..", "fastedge-cli", binaryName),
-
-    // Production: bundled server at dist/server.js → dist/fastedge-cli/
-    join(_currentDir, "fastedge-cli", binaryName),
-
-    // Development/Tests: running from source
-    // _currentDir might be server/utils/, so go up to project root
-    join(_currentDir, "..", "..", "fastedge-run", binaryName),
-
-    // Alternative: if _currentDir is already at project root
-    join(_currentDir, "fastedge-run", binaryName),
+    // Installed npm package
+    join(root, "dist", "fastedge-cli", binaryName),
+    // Development/source tree
+    join(root, "fastedge-run", binaryName),
   ];
 }
 
