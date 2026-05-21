@@ -50,8 +50,13 @@ function getCliBinaryName(): string {
  * synthetic package layouts.
  */
 export function getPackageRoot(startDir: string = _currentDir): string | null {
+  // Check the current dir first, then break only after detecting that the
+  // parent equals the current dir (i.e. we're at the filesystem root). This
+  // ensures the root directory itself is inspected — important if the package
+  // ever lives at "/" (uncommon in practice, common enough in containers/CI
+  // to be worth handling defensively).
   let dir = startDir;
-  while (dir !== dirname(dir)) {
+  while (true) {
     const pkgPath = join(dir, "package.json");
     if (existsSync(pkgPath)) {
       try {
@@ -61,9 +66,10 @@ export function getPackageRoot(startDir: string = _currentDir): string | null {
         // Unreadable or non-JSON — keep walking
       }
     }
-    dir = dirname(dir);
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
   }
-  return null;
 }
 
 /**

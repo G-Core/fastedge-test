@@ -17,8 +17,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm } from "fs/promises";
 import { join } from "path";
-import { tmpdir } from "os";
-import os from "os";
+import { platform, tmpdir } from "os";
 import {
   getPackageRoot,
   getBundledCliPaths,
@@ -31,7 +30,7 @@ async function writePkgJson(dir: string, body: object): Promise<void> {
 }
 
 function expectedBinaryName(): string {
-  switch (os.platform()) {
+  switch (platform()) {
     case "win32":
       return "fastedge-run.exe";
     case "darwin":
@@ -39,7 +38,7 @@ function expectedBinaryName(): string {
     case "linux":
       return "fastedge-run-linux-x64";
     default:
-      throw new Error(`Unsupported test platform: ${os.platform()}`);
+      throw new Error(`Unsupported test platform: ${platform()}`);
   }
 }
 
@@ -133,6 +132,26 @@ describe("fastedge-cli resolution", () => {
       await writePkgJson(root, { name: "@vendor/fastedge-test-fork" });
 
       expect(getPackageRoot(join(root, "dist"))).toBeNull();
+    });
+
+    it("inspects the startDir itself on the first iteration (package.json directly at startDir is found)", async () => {
+      // Regression for the boundary case where the package root coincides
+      // with the search start — the old `while (dir !== dirname(dir))` form
+      // would skip the start dir if it were also the filesystem root.
+      const root = join(workdir, "pkg");
+      await mkdir(root, { recursive: true });
+      await writePkgJson(root, { name: PKG_NAME });
+
+      expect(getPackageRoot(root)).toBe(root);
+    });
+
+    it("terminates cleanly at the filesystem root without throwing", () => {
+      // The walk must check the root dir itself (dirname('/') === '/' on POSIX,
+      // dirname('C:\\') === 'C:\\' on Windows) and then break. Returns null
+      // because no @gcoredev/fastedge-test package.json sits at FS root.
+      const fsRoot = process.platform === "win32" ? "C:\\" : "/";
+      expect(() => getPackageRoot(fsRoot)).not.toThrow();
+      expect(getPackageRoot(fsRoot)).toBeNull();
     });
   });
 
