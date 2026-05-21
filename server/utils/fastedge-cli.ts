@@ -68,22 +68,46 @@ export function getPackageRoot(startDir: string = _currentDir): string | null {
 
 /**
  * Get possible bundled CLI paths.
- * Returns paths relative to the resolved package root, covering both the
- * published layout (dist/fastedge-cli/) and the in-repo source layout
- * (fastedge-run/). `startDir` is forwarded to `getPackageRoot` and is
- * overridable for tests.
+ *
+ * Two resolution modes, both contribute candidates:
+ *
+ *  1. **Package-root anchored** (primary) — when a `@gcoredev/fastedge-test`
+ *     package.json can be located via `getPackageRoot`, candidates resolve
+ *     against it: the published npm layout (`dist/fastedge-cli/`) and the
+ *     in-repo source layout (`fastedge-run/`).
+ *
+ *  2. **startDir-relative fallback** — covers bundle layouts that ship
+ *     without our package.json available nearby. Notably the VSCode extension
+ *     copies `dist/server.js` and `dist/fastedge-cli/` into its own tree, so
+ *     the walker can't anchor on our package root. The fallback lets the
+ *     server bundle locate the sibling `fastedge-cli/` directory directly.
+ *
+ * `findFastEdgeRunCli` filters by existence, so listing extra candidates is
+ * safe — the first one that actually exists wins. `startDir` is overridable
+ * for tests.
  */
 export function getBundledCliPaths(startDir: string = _currentDir): string[] {
   const binaryName = getCliBinaryName();
-  const root = getPackageRoot(startDir);
-  if (!root) return [];
+  const candidates: string[] = [];
 
-  return [
-    // Installed npm package
-    join(root, "dist", "fastedge-cli", binaryName),
-    // Development/source tree
-    join(root, "fastedge-run", binaryName),
-  ];
+  // Primary: anchor on our package.json.
+  const root = getPackageRoot(startDir);
+  if (root) {
+    candidates.push(
+      join(root, "dist", "fastedge-cli", binaryName),
+      join(root, "fastedge-run", binaryName),
+    );
+  }
+
+  // Fallback: startDir-relative candidates for bundles without our
+  // package.json nearby (e.g. the VSCode extension's copy of dist/server.js
+  // sitting next to dist/fastedge-cli/).
+  candidates.push(
+    join(startDir, "fastedge-cli", binaryName),
+    join(startDir, "..", "fastedge-cli", binaryName),
+  );
+
+  return candidates;
 }
 
 /**

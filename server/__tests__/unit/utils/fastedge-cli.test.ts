@@ -137,25 +137,29 @@ describe("fastedge-cli resolution", () => {
   });
 
   describe("getBundledCliPaths", () => {
-    it("anchors candidates on the resolved package root for both layouts", async () => {
+    it("anchors candidates on the resolved package root for both layouts, with startDir-relative fallbacks appended", async () => {
       const root = join(workdir, "pkg");
-      await mkdir(join(root, "dist", "lib", "test-framework"), {
-        recursive: true,
-      });
+      const startDir = join(root, "dist", "lib", "test-framework");
+      await mkdir(startDir, { recursive: true });
       await writePkgJson(root, { name: PKG_NAME });
 
-      const paths = getBundledCliPaths(
-        join(root, "dist", "lib", "test-framework"),
-      );
+      const paths = getBundledCliPaths(startDir);
       const bin = expectedBinaryName();
 
       expect(paths).toEqual([
+        // Package-root anchored
         join(root, "dist", "fastedge-cli", bin),
         join(root, "fastedge-run", bin),
+        // startDir-relative fallback
+        join(startDir, "fastedge-cli", bin),
+        join(startDir, "..", "fastedge-cli", bin),
       ]);
     });
 
     it("yields the same candidates regardless of which export entry the caller starts from", async () => {
+      // Both entries resolve to the same package root, but their startDir
+      // differs — so the fallback portion differs, even though the
+      // root-anchored portion is identical. Compare just the anchored slice.
       const root = join(workdir, "pkg");
       await mkdir(join(root, "dist", "lib", "test-framework"), {
         recursive: true,
@@ -167,14 +171,39 @@ describe("fastedge-cli resolution", () => {
         join(root, "dist", "lib", "test-framework"),
       );
 
-      expect(fromTestFramework).toEqual(fromRunner);
+      // First two entries are the root-anchored candidates and must match.
+      expect(fromTestFramework.slice(0, 2)).toEqual(fromRunner.slice(0, 2));
     });
 
-    it("returns an empty list when the package root cannot be located", async () => {
+    it("falls back to startDir-relative candidates when the package root cannot be located (VSCode bundle scenario)", async () => {
+      // Simulates the VSCode extension layout: dist/server.js is copied into
+      // the extension tree with dist/fastedge-cli/ as a sibling, but no
+      // @gcoredev/fastedge-test package.json is anywhere up the parent chain.
+      const bundleDir = join(workdir, "extension", "dist");
+      await mkdir(join(bundleDir, "fastedge-cli"), { recursive: true });
+
+      const paths = getBundledCliPaths(bundleDir);
+      const bin = expectedBinaryName();
+
+      // No root-anchored candidates (root not found) — only startDir-relative.
+      expect(paths).toEqual([
+        join(bundleDir, "fastedge-cli", bin),
+        join(bundleDir, "..", "fastedge-cli", bin),
+      ]);
+    });
+
+    it("returns startDir-relative candidates even when the directory layout has nothing in it (caller filters by existence)", async () => {
+      // The function does not check existence — that's findFastEdgeRunCli's
+      // job. So even a bare directory returns the two fallback paths; they
+      // simply won't pass the existsSync filter downstream.
       const dir = join(workdir, "no-pkg");
       await mkdir(dir, { recursive: true });
+      const bin = expectedBinaryName();
 
-      expect(getBundledCliPaths(dir)).toEqual([]);
+      expect(getBundledCliPaths(dir)).toEqual([
+        join(dir, "fastedge-cli", bin),
+        join(dir, "..", "fastedge-cli", bin),
+      ]);
     });
   });
 });
