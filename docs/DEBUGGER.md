@@ -24,6 +24,24 @@ The CLI automatically discovers the workspace root by walking up from the curren
 npx fastedge-debug /path/to/my-app
 ```
 
+### `--project-dir <path>` (or `-C <path>`)
+
+For setups where the CLI is invoked from a subdirectory of the project (for example, a Rust app with a `fastedge-test/` Node sandbox holding the debugger install), pass `--project-dir` to anchor workspace discovery at a different path:
+
+```bash
+# From inside fastedge-test/, point the debugger at the parent project root
+cd fastedge-test
+npx @gcoredev/fastedge-test --project-dir ..
+```
+
+The flag accepts both `--project-dir <path>` and `--project-dir=<path>`. `-C` is a short alias. The resolved path then drives `WORKSPACE_PATH` and all config / fixture / dotenv resolution that flows from it, exactly as if the user had invoked the CLI from that directory. The flag is stripped before any remaining positional arguments are forwarded to the server, so you can combine it with a fixture path or other options:
+
+```bash
+npx @gcoredev/fastedge-test --project-dir .. ../fixtures/scenario-1.test.json
+```
+
+When omitted, behavior is unchanged from prior versions — the positional argument or `process.cwd()` is used as the starting point.
+
 ## Programmatic Usage
 
 Import `startServer` from the `./server` export to start the server from your own script or test setup:

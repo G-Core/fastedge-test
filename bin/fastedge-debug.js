@@ -34,8 +34,43 @@ function resolveAppRoot(startPath) {
   return dir;
 }
 
-process.env.WORKSPACE_PATH = resolveAppRoot(
-  process.argv[2] ? resolve(process.argv[2]) : process.cwd()
-);
+// Parse `--project-dir <path>` / `--project-dir=<path>` and strip it from argv
+// before the server import, so the server's own arg handling doesn't see it.
+// When set, it overrides the positional fallback for resolveAppRoot — useful
+// when running from a nested sandbox (e.g. `cd fastedge-test && npm run debug`
+// with the project root one directory up).
+function extractProjectDirFlag(argv) {
+  for (let i = 2; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--project-dir" || a === "-C") {
+      const value = argv[i + 1];
+      if (!value) {
+        console.error(`Error: ${a} requires a path argument.`);
+        process.exit(2);
+      }
+      argv.splice(i, 2);
+      return value;
+    }
+    const eq = a.startsWith("--project-dir=")
+      ? a.slice("--project-dir=".length)
+      : a.startsWith("-C=")
+        ? a.slice("-C=".length)
+        : null;
+    if (eq !== null) {
+      argv.splice(i, 1);
+      return eq;
+    }
+  }
+  return null;
+}
+
+const projectDirFlag = extractProjectDirFlag(process.argv);
+const startPath = projectDirFlag
+  ? resolve(projectDirFlag)
+  : process.argv[2]
+    ? resolve(process.argv[2])
+    : process.cwd();
+
+process.env.WORKSPACE_PATH = resolveAppRoot(startPath);
 
 import("../dist/server.js");
