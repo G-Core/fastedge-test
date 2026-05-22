@@ -3,12 +3,15 @@
  *
  * Discovers the FastEdge-run CLI binary in the following order:
  * 1. FASTEDGE_RUN_PATH environment variable
- * 2. Bundled binary in server/fastedge-cli/ (platform-specific)
+ * 2. Bundled binary inside the @gcoredev/fastedge-test package, anchored on
+ *    the package root (see getPackageRoot):
+ *      • dist/fastedge-cli/<binary>   — published npm layout
+ *      • fastedge-run/<binary>        — in-repo source/dev layout
  * 3. PATH (using 'which' or 'where' command)
  */
 
 import { execSync } from "child_process";
-import { existsSync, chmodSync } from "fs";
+import { existsSync, chmodSync, readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import os from "os";
@@ -37,26 +40,80 @@ function getCliBinaryName(): string {
 }
 
 /**
- * Get possible bundled CLI paths
- * Checks both production (dist/fastedge-cli/) and source (fastedge-run/) locations
+ * Walk up from `startDir` until a package.json with name "@gcoredev/fastedge-test"
+ * is found. Anchoring on the package name (rather than hardcoded depths or an
+ * unbounded walk) keeps the search robust across bundle layouts and avoids
+ * climbing into a sibling package in workspace/monorepo installs.
+ *
+ * `startDir` defaults to the directory of this file (resolved at module load).
+ * It is overridable for tests so the resolver can be exercised against
+ * synthetic package layouts.
  */
-function getBundledCliPaths(): string[] {
+export function getPackageRoot(startDir: string = _currentDir): string | null {
+  // Check the current dir first, then break only after detecting that the
+  // parent equals the current dir (i.e. we're at the filesystem root). This
+  // ensures the root directory itself is inspected — important if the package
+  // ever lives at "/" (uncommon in practice, common enough in containers/CI
+  // to be worth handling defensively).
+  let dir = startDir;
+  while (true) {
+    const pkgPath = join(dir, "package.json");
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+        if (pkg.name === "@gcoredev/fastedge-test") return dir;
+      } catch {
+        // Unreadable or non-JSON — keep walking
+      }
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * Get possible bundled CLI paths.
+ *
+ * Two resolution modes, both contribute candidates:
+ *
+ *  1. **Package-root anchored** (primary) — when a `@gcoredev/fastedge-test`
+ *     package.json can be located via `getPackageRoot`, candidates resolve
+ *     against it: the published npm layout (`dist/fastedge-cli/`) and the
+ *     in-repo source layout (`fastedge-run/`).
+ *
+ *  2. **startDir-relative fallback** — covers bundle layouts that ship
+ *     without our package.json available nearby. Notably the VSCode extension
+ *     copies `dist/server.js` and `dist/fastedge-cli/` into its own tree, so
+ *     the walker can't anchor on our package root. The fallback lets the
+ *     server bundle locate the sibling `fastedge-cli/` directory directly.
+ *
+ * `findFastEdgeRunCli` filters by existence, so listing extra candidates is
+ * safe — the first one that actually exists wins. `startDir` is overridable
+ * for tests.
+ */
+export function getBundledCliPaths(startDir: string = _currentDir): string[] {
   const binaryName = getCliBinaryName();
+  const candidates: string[] = [];
 
-  return [
-    // Installed npm package: dist/lib/index.js → dist/fastedge-cli/
-    join(_currentDir, "..", "fastedge-cli", binaryName),
+  // Primary: anchor on our package.json.
+  const root = getPackageRoot(startDir);
+  if (root) {
+    candidates.push(
+      join(root, "dist", "fastedge-cli", binaryName),
+      join(root, "fastedge-run", binaryName),
+    );
+  }
 
-    // Production: bundled server at dist/server.js → dist/fastedge-cli/
-    join(_currentDir, "fastedge-cli", binaryName),
+  // Fallback: startDir-relative candidates for bundles without our
+  // package.json nearby (e.g. the VSCode extension's copy of dist/server.js
+  // sitting next to dist/fastedge-cli/).
+  candidates.push(
+    join(startDir, "fastedge-cli", binaryName),
+    join(startDir, "..", "fastedge-cli", binaryName),
+  );
 
-    // Development/Tests: running from source
-    // _currentDir might be server/utils/, so go up to project root
-    join(_currentDir, "..", "..", "fastedge-run", binaryName),
-
-    // Alternative: if _currentDir is already at project root
-    join(_currentDir, "fastedge-run", binaryName),
-  ];
+  return candidates;
 }
 
 /**
@@ -124,12 +181,14 @@ export async function findFastEdgeRunCli(): Promise<string> {
   throw new Error(
     "fastedge-run CLI not found in any of these locations:\n" +
       "  1. FASTEDGE_RUN_PATH environment variable\n" +
-      "  2. Bundled binary in fastedge-cli/ (project root)\n" +
-      "  3. System PATH\n\n" +
+      "  2. Bundled inside the @gcoredev/fastedge-test package " +
+      "(dist/fastedge-cli/<binary> when installed, fastedge-run/<binary> in the source tree)\n" +
+      "  3. System PATH (which/where fastedge-run)\n\n" +
       "To fix this:\n" +
-      "  - Set FASTEDGE_RUN_PATH environment variable, or\n" +
+      "  - Set FASTEDGE_RUN_PATH to a fastedge-run binary you have locally, or\n" +
       "  - Install fastedge-run in PATH: cargo install fastedge-run, or\n" +
-      "  - Place the binary in fastedge-cli/ at project root (platform-specific filename)",
+      "  - Reinstall @gcoredev/fastedge-test to restore the bundled binary " +
+      "(or, when developing this repo, place the platform binary in fastedge-run/)",
   );
 }
 

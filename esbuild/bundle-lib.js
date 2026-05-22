@@ -22,15 +22,27 @@ const entryPoint = path.join(projectRoot, "server", "runner", "index.ts");
 const testFrameworkEntry = path.join(projectRoot, "server", "test-framework", "index.ts");
 const distTestFrameworkDir = path.join(distLibDir, "test-framework");
 
-// All Node.js built-in modules to mark external
+// Bare-name Node.js built-ins (the "node:" prefixed forms are handled by the
+// nodeBuiltinsPlugin below — externalizing every "node:*" specifier without
+// needing to enumerate them).
 const nodeBuiltins = [
-  "node:fs", "node:path", "node:os", "node:util", "node:stream",
-  "node:events", "node:crypto", "node:buffer", "node:url", "node:http",
-  "node:https", "node:net", "node:tls", "node:child_process", "node:worker_threads",
   "fs", "path", "os", "util", "stream", "events", "crypto", "buffer",
   "url", "http", "https", "net", "tls", "child_process", "worker_threads",
   "module", "assert", "readline", "v8", "vm",
 ];
+
+// Mark any "node:*" specifier external. esbuild's `external` config only
+// accepts literal strings, so we use a resolve plugin to cover the whole
+// prefix without hand-curating every name.
+const nodeBuiltinsPlugin = {
+  name: "node-builtins-external",
+  setup(build) {
+    build.onResolve({ filter: /^node:/ }, (args) => ({
+      path: args.path,
+      external: true,
+    }));
+  },
+};
 
 async function buildLib() {
   console.log("📦 Building runner + test-framework library (ESM + CJS)...");
@@ -46,6 +58,7 @@ async function buildLib() {
     bundle: true,
     platform: "node",
     target: "node20",
+    plugins: [nodeBuiltinsPlugin],
     external: [
       ...nodeBuiltins,
       // All npm dependencies are external — consumers install their own
@@ -64,10 +77,21 @@ async function buildLib() {
     define: { "import.meta.url": "__importMetaUrl" },
   };
 
+  // Provide a real `require` to the ESM bundle. esbuild emits CJS-style
+  // `require(...)` calls when it inlines CommonJS deps (e.g. undici), and
+  // without this banner those fall through to a shim that throws because
+  // `require` is undefined in ESM module scope.
+  const esmRequireShim = {
+    banner: {
+      js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",
+    },
+  };
+
   try {
     // ── Runner entry (.) ──────────────────────────────────────────────────────
     await esbuild.build({
       ...sharedConfig,
+      ...esmRequireShim,
       entryPoints: [entryPoint],
       format: "esm",
       outfile: path.join(distLibDir, "index.js"),
@@ -86,6 +110,7 @@ async function buildLib() {
     // ── Test framework entry (./test) ─────────────────────────────────────────
     await esbuild.build({
       ...sharedConfig,
+      ...esmRequireShim,
       entryPoints: [testFrameworkEntry],
       format: "esm",
       outfile: path.join(distTestFrameworkDir, "index.js"),

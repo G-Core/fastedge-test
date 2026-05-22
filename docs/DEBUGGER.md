@@ -4,17 +4,19 @@ Runs the FastEdge debugger HTTP server, which hosts the web UI, REST API, and We
 
 ## CLI Usage
 
-The package exposes a `fastedge-debug` binary. Run it with `npx` without installing:
-
-```bash
-npx @gcoredev/fastedge-test
-```
-
-Or using the explicit binary name:
+The package exposes a single binary, `fastedge-debug`. Run it with `npx` after installing `@gcoredev/fastedge-test` in your project:
 
 ```bash
 npx fastedge-debug
 ```
+
+If the package isn't installed yet, the explicit form fetches and runs it in one shot:
+
+```bash
+npx -p @gcoredev/fastedge-test fastedge-debug
+```
+
+> The shorthand `npx @gcoredev/fastedge-test` happens to work today because the package declares exactly one `bin` entry, and npx falls back to it when no name is given. Prefer the explicit `fastedge-debug` form — it stays correct if a second binary is ever added.
 
 Once started, the server listens on `http://localhost:5179` by default and logs the bound address to stderr.
 
@@ -23,6 +25,24 @@ The CLI automatically discovers the workspace root by walking up from the curren
 ```bash
 npx fastedge-debug /path/to/my-app
 ```
+
+### `--project-dir <path>` (or `-C <path>`)
+
+For setups where the CLI is invoked from a subdirectory of the project (for example, a Rust app with a `fastedge-test/` Node sandbox holding the debugger install), pass `--project-dir` to anchor workspace discovery at a different path:
+
+```bash
+# From inside fastedge-test/, point the debugger at the parent project root
+cd fastedge-test
+npx fastedge-debug --project-dir ..
+```
+
+The flag accepts both `--project-dir <path>` and `--project-dir=<path>`. `-C` is a short alias. The resolved path then drives `WORKSPACE_PATH` and all config / fixture / dotenv resolution that flows from it, exactly as if the user had invoked the CLI from that directory. The flag is stripped before any remaining positional arguments are forwarded to the server, so you can combine it with a fixture path or other options:
+
+```bash
+npx fastedge-debug --project-dir .. ../fixtures/scenario-1.test.json
+```
+
+When omitted, behavior is unchanged from prior versions — the positional argument or `process.cwd()` is used as the starting point.
 
 ## Programmatic Usage
 
@@ -98,13 +118,13 @@ curl http://localhost:5179/health
 
 ## Environment Variables
 
-| Variable             | Type     | Default | Description                                                                                      |
-| -------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `PORT`               | `number` | unset   | Port the HTTP server listens on. Defaults to `5179` when not set.                               |
-| `PROXY_RUNNER_DEBUG` | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity.                                  |
-| `VSCODE_INTEGRATION` | `"true"` | unset   | Set to `"true"` when running inside the VSCode extension; enables workspace WASM detection.      |
-| `WORKSPACE_PATH`     | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement.  |
-| `FASTEDGE_RUN_PATH`  | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules.                |
+| Variable             | Type     | Default | Description                                                                                     |
+| -------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------- |
+| `PORT`               | `number` | unset   | Port the HTTP server listens on. Defaults to `5179` when not set.                              |
+| `PROXY_RUNNER_DEBUG` | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity.                                 |
+| `VSCODE_INTEGRATION` | `"true"` | unset   | Set to `"true"` when running inside the VSCode extension; enables workspace WASM detection.     |
+| `WORKSPACE_PATH`     | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement. |
+| `FASTEDGE_RUN_PATH`  | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules.               |
 
 ### Usage examples
 
