@@ -311,10 +311,10 @@ const result: FullFlowResult = await runner.callFullFlow(
 
 **Built-in responder behavior** — controlled by request headers set before the origin phase:
 
-| Header               | Effect                                                                          |
-| -------------------- | ------------------------------------------------------------------------------- |
-| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                    |
-| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default) |
+| Header               | Effect                                                                           |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                     |
+| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default)  |
 
 When `x-debugger-content` is omitted, the built-in responder returns a JSON echo of the request method, headers, body, and URL. Both control headers are stripped before response hooks execute so they do not appear in hook input state.
 

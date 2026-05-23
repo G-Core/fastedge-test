@@ -195,13 +195,13 @@ interface RunnerConfig {
 }
 ```
 
-| Field                            | Type                            | Description                                                               |
-| -------------------------------- | ------------------------------- | ------------------------------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`                       | Enable dotenv loading                                                     |
-| `dotenv.path`                    | `string`                        | Directory to load dotenv files from; defaults to process CWD when omitted |
-| `enforceProductionPropertyRules` | `boolean`                       | Override production property enforcement for the runner; default `true`   |
-| `runnerType`                     | `"http-wasm" \| "proxy-wasm"`  | Override automatic WASM type detection                                    |
-| `httpPort`                       | `number`                        | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
+| Field                            | Type                           | Description                                                               |
+| -------------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`                      | Enable dotenv loading                                                     |
+| `dotenv.path`                    | `string`                       | Directory to load dotenv files from; defaults to process CWD when omitted |
+| `enforceProductionPropertyRules` | `boolean`                      | Override production property enforcement for the runner; default `true`   |
+| `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                    |
+| `httpPort`                       | `number`                       | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
 
 ## Functions
 
