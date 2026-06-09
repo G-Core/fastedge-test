@@ -55,7 +55,7 @@ jobs:
           BRANCH="chore/update-fastedge-cli-${LATEST_VERSION}"
 
           # Skip if branch already exists remotely (idempotent re-runs)
-          if git ls-remote --exit-code origin "$BRANCH" > /dev/null 2>&1; then
+          if git ls-remote --exit-code origin "refs/heads/$BRANCH" > /dev/null 2>&1; then
             echo "Branch $BRANCH already exists — PR may already be open, skipping"
             exit 0
           fi

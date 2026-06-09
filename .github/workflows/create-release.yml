@@ -49,7 +49,7 @@ jobs:
 
   download_fastedge_cli:
     uses: ./.github/workflows/download-cli.yml
-    needs: [test_release, read_cli_version]
+    needs: [check_tags, test_release, read_cli_version]
     if: ${{ needs.check_tags.outputs.has_release_tag == 'true' }}
     with:
       cli_version: ${{ needs.read_cli_version.outputs.cli_version }}
