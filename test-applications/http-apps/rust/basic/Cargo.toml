@@ -3,6 +3,6 @@ members = ["hello-world", "http-responder", "downstream-fetch", "headers", "vari
 resolver = "2"
 
 [workspace.dependencies]
-fastedge = "0.3"
+fastedge = "0.4"
 anyhow = "1"
 serde_json = "1"

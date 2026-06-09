@@ -1,0 +1,75 @@
+name: Check FastEdge CLI Drift
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 09:00 UTC
+
+permissions:
+  contents: write # push new branch
+  pull-requests: write # open PR
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Read pinned CLI version
+        id: pinned
+        run: echo "version=$(cat .fastedge-cli-version)" >> $GITHUB_OUTPUT
+
+      - name: Fetch latest FastEdge-lib release
+        id: latest
+        run: |
+          LATEST=$(curl -fsSL \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            https://api.github.com/repos/G-Core/FastEdge-lib/releases/latest \
+            | jq -r .tag_name)
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "Failed to fetch latest FastEdge-lib release"
+            exit 1
+          fi
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
+
+      - name: Check for drift
+        id: drift
+        run: |
+          PINNED="${{ steps.pinned.outputs.version }}"
+          LATEST="${{ steps.latest.outputs.version }}"
+          if [ "$PINNED" = "$LATEST" ]; then
+            echo "No drift: already pinned to $PINNED"
+            echo "has_drift=false" >> $GITHUB_OUTPUT
+          else
+            echo "Drift detected: $PINNED → $LATEST"
+            echo "has_drift=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create update branch and open PR
+        if: steps.drift.outputs.has_drift == 'true'
+        env:
+          LATEST_VERSION: ${{ steps.latest.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="chore/update-fastedge-cli-${LATEST_VERSION}"
+
+          # Skip if branch already exists remotely (idempotent re-runs)
+          if git ls-remote --exit-code origin "refs/heads/$BRANCH" > /dev/null 2>&1; then
+            echo "Branch $BRANCH already exists — PR may already be open, skipping"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          echo "$LATEST_VERSION" > .fastedge-cli-version
+          git add .fastedge-cli-version
+          git commit -m "fix: update bundled fastedge-cli to ${LATEST_VERSION}"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "fix: update bundled fastedge-cli to ${LATEST_VERSION}" \
+            --body "FastEdge-lib released \`${LATEST_VERSION}\`. Merging this PR will trigger a patch release of \`@gcoredev/fastedge-test\` and rebuild the VSCode extension assets with the updated binary." \
+            --base main \
+            --head "$BRANCH"
