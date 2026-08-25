@@ -1,6 +1,6 @@
 # @gcoredev/fastedge-test
 
-Test FastEdge WASM binaries programmatically — no server required. Use it in CI pipelines, agent scripts, or alongside your existing test runner (vitest, jest, etc.).
+Test FastEdge WASM binaries programmatically — no server required. Use it in CI pipelines, agent scripts, or alongside your existing test runner (vitest, jest, etc.). 
 
 Supports both FastEdge binary types:
 - **CDN (proxy-wasm)** — request/response filter binaries
