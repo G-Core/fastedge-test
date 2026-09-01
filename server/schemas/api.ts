@@ -43,7 +43,21 @@ export const ApiConfigBodySchema = z.object({
   config: TestConfigSchema,
 });
 
+export const SaveAsBodySchema = z.object({
+  config: TestConfigSchema,
+  filePath: z.string(),
+});
+
+export const ApiDotenvBodySchema = z.object({
+  dotenv: z.object({
+    enabled: z.boolean(),
+    path: z.string().optional(),
+  }),
+});
+
 export type ApiLoadBody = z.infer<typeof ApiLoadBodySchema>;
 export type ApiSendBody = z.infer<typeof ApiSendBodySchema>;
 export type ApiCallBody = z.infer<typeof ApiCallBodySchema>;
 export type ApiConfigBody = z.infer<typeof ApiConfigBodySchema>;
+export type SaveAsBody = z.infer<typeof SaveAsBodySchema>;
+export type ApiDotenvBody = z.infer<typeof ApiDotenvBodySchema>;

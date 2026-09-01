@@ -15,6 +15,8 @@ export {
   ApiSendBodySchema,
   ApiCallBodySchema,
   ApiConfigBodySchema,
+  SaveAsBodySchema,
+  ApiDotenvBodySchema,
 } from './api';
 
 export type {
@@ -22,4 +24,6 @@ export type {
   ApiSendBody,
   ApiCallBody,
   ApiConfigBody,
+  SaveAsBody,
+  ApiDotenvBody,
 } from './api';

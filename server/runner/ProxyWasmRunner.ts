@@ -1,4 +1,5 @@
 import { WASI } from "node:wasi";
+import { checkEgressAllowed } from "./egressPolicy.js";
 import type { HookCall, HookResult, HeaderMap, HeaderRecord, HeaderTuples, FullFlowResult } from "./types";
 import type {
   IWasmRunner,
@@ -530,6 +531,7 @@ export class ProxyWasmRunner implements IWasmRunner {
           fetchOptions.body = modifiedRequestBody;
         }
 
+        await checkEgressAllowed(actualTargetUrl);
         const response = await fetch(actualTargetUrl, fetchOptions);
 
         // Extract response headers — preserve multiple Set-Cookie entries as string[]
@@ -970,6 +972,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       let responseBody = new Uint8Array(0);
 
       try {
+        await checkEgressAllowed(url);
         const resp = await fetch(url, {
           method,
           headers: fetchHeaders,

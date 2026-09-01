@@ -25,9 +25,11 @@ export class WebSocketManager {
   private clientIdCounter = 0;
   private pingInterval: NodeJS.Timeout | null = null;
   private debug: boolean;
+  private token: string;
 
-  constructor(server: HTTPServer, debug: boolean = false) {
+  constructor(server: HTTPServer, debug: boolean = false, token: string = "") {
     this.debug = debug;
+    this.token = token;
 
     if (this.debug) {
       console.log(
@@ -48,7 +50,23 @@ export class WebSocketManager {
             `[WebSocketManager] Client attempting connection from ${info.origin}`,
           );
         }
-        return true; // Accept all connections
+        // Require the session token from the ?token= query param.
+        // WebSocket handshakes cannot set custom headers from browsers, so the
+        // token is passed in the URL and read from the query string here.
+        const url = new URL(info.req.url ?? "/", "http://localhost");
+        if (url.searchParams.get("token") !== this.token) {
+          return false;
+        }
+        // Validate origin to block cross-origin WebSocket connections.
+        // Non-browser clients (test tooling, CLI) send no origin — allow those.
+        const origin = info.origin ?? "";
+        if (!origin) return true;
+        const expectedHost = process.env.FASTEDGE_EXPECTED_HOST;
+        return (
+          /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+          origin.startsWith("vscode-webview://") ||
+          (!!expectedHost && origin.includes(expectedHost))
+        );
       },
     });
 

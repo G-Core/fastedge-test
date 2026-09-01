@@ -1,5 +1,5 @@
 import { resolve, normalize, relative, isAbsolute, sep } from "path";
-import { existsSync, statSync } from "fs";
+import { existsSync, statSync, realpathSync } from "fs";
 
 /**
  * Options for path validation
@@ -103,30 +103,55 @@ export function validatePath(
     const resolvedWorkspaceRoot = resolve(workspaceRoot);
     const relativePath = relative(resolvedWorkspaceRoot, absolutePath);
 
-    // If relative path starts with .., it's outside workspace
+    // Lexical check: if relative path starts with .., it's outside workspace
     if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
       return {
         valid: false,
         error: `Path must be within workspace root: ${workspaceRoot}`,
       };
     }
+
+    // Realpath check: catch symlinks inside the workspace that point outside it
+    try {
+      const realRoot = realpathSync(resolvedWorkspaceRoot);
+      const realPath = realpathSync(absolutePath);
+      if (realPath !== realRoot && !realPath.startsWith(realRoot + sep)) {
+        return {
+          valid: false,
+          error: `Path must be within workspace root: ${workspaceRoot}`,
+        };
+      }
+    } catch {
+      // File doesn't exist yet — the checkExists step below will handle that
+    }
   }
 
-  // Check for dangerous paths
+  // Check for dangerous paths. Matching is segment-aware: an absolute dangerous
+  // path must equal or be a prefix of the candidate (with a separator boundary);
+  // a relative segment must appear as a complete path component, not a substring.
+  // This prevents both false positives (/etcetera matching /etc) and bypasses.
   for (const dangerousPath of DANGEROUS_PATHS) {
-    // Normalize dangerous path for comparison
     const normalizedDangerous = normalize(dangerousPath);
-
-    // Check if path starts with or contains dangerous path
-    if (
-      absolutePath.startsWith(normalizedDangerous) ||
-      absolutePath.includes(`${sep}${normalizedDangerous}${sep}`) ||
-      absolutePath.includes(`${sep}${normalizedDangerous}`)
-    ) {
-      return {
-        valid: false,
-        error: `Access to system path '${dangerousPath}' is not allowed`,
-      };
+    if (isAbsolute(normalizedDangerous)) {
+      if (
+        absolutePath === normalizedDangerous ||
+        absolutePath.startsWith(normalizedDangerous + sep)
+      ) {
+        return {
+          valid: false,
+          error: `Access to system path '${dangerousPath}' is not allowed`,
+        };
+      }
+    } else {
+      if (
+        absolutePath.includes(sep + normalizedDangerous + sep) ||
+        absolutePath.endsWith(sep + normalizedDangerous)
+      ) {
+        return {
+          valid: false,
+          error: `Access to system path '${dangerousPath}' is not allowed`,
+        };
+      }
     }
   }
 

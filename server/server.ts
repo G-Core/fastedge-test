@@ -1,25 +1,29 @@
-import express, { type Request, type Response } from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import path from "node:path";
 import {
   promises as fs,
   existsSync,
+  readdirSync,
   mkdirSync,
   writeFileSync,
   unlinkSync,
 } from "node:fs";
 import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import { WasmRunnerFactory } from "./runner/WasmRunnerFactory.js";
 import type { IWasmRunner } from "./runner/IWasmRunner.js";
 import { HttpWasmRunner } from "./runner/HttpWasmRunner.js";
 import { WebSocketManager, StateManager } from "./websocket/index.js";
 import { detectWasmType } from "./utils/wasmTypeDetector.js";
 import { validatePath } from "./utils/pathValidator.js";
-import { resolveDotenvPath } from "./utils/dotenv-loader.js";
+import { resolveDotenvPath, DotenvPathError } from "./utils/dotenv-loader.js";
 import {
   ApiLoadBodySchema,
   ApiSendBodySchema,
   ApiCallBodySchema,
   ApiConfigBodySchema,
+  ApiDotenvBodySchema,
+  SaveAsBodySchema,
   TestConfigSchema,
 } from "./schemas/index.js";
 
@@ -35,17 +39,72 @@ try {
 const app = express();
 const httpServer = createServer(app);
 
+// Per-session capability token. VSCode extension passes FASTEDGE_DEBUG_TOKEN
+// via env; CLI generates one and logs it so only the local user sees it.
+const SESSION_TOKEN = process.env.FASTEDGE_DEBUG_TOKEN ?? randomBytes(32).toString("hex");
+// Bind to loopback by default; non-loopback requires explicit opt-in.
+const HOST = process.env.FASTEDGE_BIND_HOST ?? "127.0.0.1";
+const ALLOWED_HOSTS = new Set<string>(
+  ["localhost", "127.0.0.1", "::1", process.env.FASTEDGE_EXPECTED_HOST].filter(
+    Boolean,
+  ) as string[],
+);
+
 // Initialize WebSocket infrastructure
 const debug = process.env.PROXY_RUNNER_DEBUG === "1";
-const wsManager = new WebSocketManager(httpServer, debug);
+const wsManager = new WebSocketManager(httpServer, debug, SESSION_TOKEN); // token validated in verifyClient
 const stateManager = new StateManager(wsManager, debug);
 
 // Initialize runner factory
 const runnerFactory = new WasmRunnerFactory();
 let currentRunner: IWasmRunner | null = null;
 
+// Allowlist of known schema filenames, built at startup from the schemas/ directory.
+// The /api/schema/:name route uses this instead of building a path from the route
+// param directly, preventing path traversal through encoded slashes in the param.
+const schemasDir = path.join(__dirname, "..", "schemas");
+const knownSchemas = new Set(
+  readdirSync(schemasDir).filter((f) => f.endsWith(".schema.json")),
+);
+
+// Paths vended by /api/config/show-save-dialog that /api/config/save-as is
+// allowed to write to. Single-use: consumed on first write, then removed.
+// Prevents save-as from writing to an arbitrary caller-supplied path.
+const pendingSavePaths = new Set<string>();
+
 app.use(express.json({ limit: "20mb" }));
 app.use(express.static(path.join(__dirname, "frontend")));
+
+// Anti-DNS-rebinding: validate Host header on all /api/* requests.
+// Handles IPv6 bracket notation ([::1]:5179) without splitting on the colon inside the brackets.
+// This prevents a remote page from rebinding its hostname to 127.0.0.1 and issuing same-origin requests.
+app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  const raw = req.headers.host ?? "";
+  const host = raw.startsWith("[") ? raw.slice(1, raw.indexOf("]")) : raw.split(":")[0];
+  if (!ALLOWED_HOSTS.has(host)) {
+    res.status(403).json({ ok: false, error: "Invalid Host" });
+    return;
+  }
+  next();
+});
+
+// Session token authentication on all /api/* requests.
+// The token is generated at server startup and delivered to callers out-of-band:
+//   - VSCode extension: passes it as FASTEDGE_DEBUG_TOKEN env to the forked server and
+//     injects it into the webview iframe URL fragment (#token=...) so the frontend reads it.
+//   - CLI: the token is logged to stderr at startup; the user opens the printed URL.
+// The frontend includes the token as the x-fastedge-token header on every request.
+// ponytail: single token per server lifetime; restart to rotate
+app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  const token =
+    (req.headers["x-fastedge-token"] as string | undefined) ??
+    (req.query["token"] as string | undefined);
+  if (token !== SESSION_TOKEN) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+  next();
+});
 
 // Health check endpoint
 app.get("/health", (req: Request, res: Response) => {
@@ -147,6 +206,23 @@ app.post("/api/load", async (req: Request, res: Response) => {
   }
   const { wasmBase64, wasmPath, dotenv, httpPort } = parsed.data;
 
+  // Resolve and validate the dotenv path before touching runner state so a
+  // containment violation returns 400 rather than triggering the 500 catch block.
+  let dotenvBasePath: string | undefined;
+  if (dotenv?.path !== undefined) {
+    try {
+      dotenvBasePath = resolveDotenvPathFromWorkspace(dotenv.path);
+    } catch (e) {
+      if (e instanceof DotenvPathError) {
+        res.status(400).json({ ok: false, error: e.message });
+        return;
+      }
+      throw e;
+    }
+  } else {
+    dotenvBasePath = process.env.WORKSPACE_PATH || undefined;
+  }
+
   try {
     let bufferOrPath: Buffer | string;
     let fileSize: number;
@@ -176,10 +252,12 @@ app.post("/api/load", async (req: Request, res: Response) => {
         resolvedPath = wasmPath.replace("<workspace>", workspacePath);
       }
 
-      // Validate path for security
+      // Validate path for security; workspaceRoot confines the path to the workspace
+      // (lexically and via realpath to catch symlink escapes)
       const validationResult = validatePath(resolvedPath, {
         requireWasmExtension: true,
         checkExists: true,
+        workspaceRoot: process.env.WORKSPACE_PATH ?? process.cwd(),
       });
 
       if (!validationResult.valid) {
@@ -231,17 +309,12 @@ app.post("/api/load", async (req: Request, res: Response) => {
     );
     currentRunner.setStateManager(stateManager);
 
-    // Precedence: client-provided path → WORKSPACE_PATH (VSCode) → undefined (CWD).
-    // When running inside VSCode the server CWD is the extension's dist/debugger/
-    // directory, so WORKSPACE_PATH is the fallback. A client-provided path wins.
-    const dotenvPath = resolveDotenvPathFromWorkspace(dotenv?.path) || process.env.WORKSPACE_PATH || undefined;
-
     // Load WASM (accepts either Buffer or string path). httpPort is forwarded
     // from the client so it works regardless of which config file the user
     // loaded (picker, default, or an arbitrary *.test.json). Server-side read
     // would be pinned to a single filename and miss the picker flow.
     await currentRunner.load(bufferOrPath, {
-      dotenv: { enabled: dotenv?.enabled ?? false, path: dotenvPath },
+      dotenv: { enabled: dotenv?.enabled ?? false, path: dotenvBasePath },
       httpPort,
     });
 
@@ -274,13 +347,13 @@ app.post("/api/load", async (req: Request, res: Response) => {
 });
 
 app.patch("/api/dotenv", async (req: Request, res: Response) => {
-  const { dotenv } = req.body ?? {};
-  if (!dotenv || typeof dotenv.enabled !== "boolean") {
-    res
-      .status(400)
-      .json({ ok: false, error: "dotenv.enabled must be a boolean" });
+  const parsed = ApiDotenvBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
+
+  const { dotenv } = parsed.data;
 
   if (!currentRunner) {
     res.status(400).json({
@@ -290,11 +363,22 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
     return;
   }
 
+  let dotenvPath: string | undefined;
+  if (dotenv.path !== undefined) {
+    try {
+      dotenvPath = resolveDotenvPathFromWorkspace(dotenv.path);
+    } catch (e) {
+      if (e instanceof DotenvPathError) {
+        res.status(400).json({ ok: false, error: (e as Error).message });
+        return;
+      }
+      throw e;
+    }
+  } else {
+    dotenvPath = process.env.WORKSPACE_PATH || undefined;
+  }
+
   try {
-    const dotenvPath =
-      resolveDotenvPathFromWorkspace(typeof dotenv.path === "string" ? dotenv.path : undefined) ||
-      process.env.WORKSPACE_PATH ||
-      undefined;
     await currentRunner.applyDotenv(dotenv.enabled, dotenvPath);
     res.json({ ok: true });
   } catch (error) {
@@ -587,6 +671,8 @@ app.post(
         return;
       }
 
+      // Register this path as a one-time write capability; save-as will consume it.
+      pendingSavePaths.add(result.filePath);
       res.json({ ok: true, filePath: result.filePath });
     } catch (error) {
       res.status(500).json({ ok: false, error: String(error) });
@@ -594,40 +680,34 @@ app.post(
   },
 );
 
-// Save config to a specific file path
+// Save config to a specific file path.
+// Only accepts paths that were previously vended by /api/config/show-save-dialog
+// (registered in pendingSavePaths). This ensures the write destination was chosen
+// by the user through the dialog, not supplied by an arbitrary caller.
 app.post("/api/config/save-as", async (req: Request, res: Response) => {
+  const parsed = SaveAsBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: parsed.error.flatten() });
+    return;
+  }
+
+  const { config, filePath } = parsed.data;
+
+  if (!pendingSavePaths.has(filePath)) {
+    res.status(403).json({
+      ok: false,
+      error: "filePath was not vended by the save dialog",
+    });
+    return;
+  }
+  pendingSavePaths.delete(filePath); // single-use
+
   try {
-    const { config, filePath } = req.body ?? {};
-    if (!config) {
-      res.status(400).json({ ok: false, error: "Missing config" });
-      return;
-    }
-    if (!filePath) {
-      res.status(400).json({ ok: false, error: "Missing filePath" });
-      return;
-    }
+    let targetPath = filePath;
+    if (!targetPath.endsWith(".json")) targetPath += ".json";
 
-    // Resolve path relative to project root (where server runs)
-    const projectRoot = path.join(__dirname, "..");
-    let targetPath: string;
-
-    // Check if path is absolute or relative
-    if (path.isAbsolute(filePath)) {
-      targetPath = filePath;
-    } else {
-      targetPath = path.join(projectRoot, filePath);
-    }
-
-    // Ensure .json extension
-    if (!targetPath.endsWith(".json")) {
-      targetPath += ".json";
-    }
-
-    // Create directory if it doesn't exist
     const dir = path.dirname(targetPath);
     await fs.mkdir(dir, { recursive: true });
-
-    // Write the file
     await fs.writeFile(targetPath, JSON.stringify(config, null, 2), "utf-8");
 
     res.json({ ok: true, savedPath: targetPath });
@@ -636,20 +716,17 @@ app.post("/api/config/save-as", async (req: Request, res: Response) => {
   }
 });
 
-// Serve JSON Schema files for API consumers and agents
+// Serve JSON Schema files for API consumers and agents.
+// Name is validated against a startup-time allowlist of known files so a
+// caller cannot traverse outside schemas/ via an encoded slash in the param.
 app.get("/api/schema/:name", (req: Request, res: Response) => {
-  const schemaPath = path.join(
-    __dirname,
-    "..",
-    "schemas",
-    `${req.params.name}.schema.json`,
-  );
-  if (!existsSync(schemaPath)) {
+  const file = `${req.params.name}.schema.json`;
+  if (!knownSchemas.has(file)) {
     res.status(404).json({ ok: false, error: "Schema not found" });
     return;
   }
   res.setHeader("Content-Type", "application/json");
-  res.sendFile(schemaPath);
+  res.sendFile(path.join(schemasDir, file));
 });
 
 // SPA fallback - serve index.html for all non-API routes
@@ -740,9 +817,16 @@ async function resolvePort(preferred: number): Promise<number> {
 export async function startServer(port = defaultPort): Promise<void> {
   const resolvedPort = await resolvePort(port);
   return new Promise((resolve) => {
-    httpServer.listen(resolvedPort, () => {
-      console.error(`Proxy runner listening on http://localhost:${resolvedPort}`);
-      console.error(`WebSocket available at ws://localhost:${resolvedPort}/ws`);
+    httpServer.listen(resolvedPort, HOST, () => {
+      console.error(`Proxy runner listening on http://${HOST}:${resolvedPort}`);
+      console.error(`WebSocket available at ws://${HOST}:${resolvedPort}/ws`);
+      // When no token was injected externally (CLI mode), log the full URL with
+      // the token in the fragment so only the local user reading stderr can open it.
+      if (!process.env.FASTEDGE_DEBUG_TOKEN) {
+        console.error(
+          `Open: http://localhost:${resolvedPort}/#token=${SESSION_TOKEN}`,
+        );
+      }
       writePortFile(resolvedPort);
       resolve();
     });

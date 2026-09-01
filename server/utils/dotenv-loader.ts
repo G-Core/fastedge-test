@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import { realpathSync } from "fs";
 import path from "path";
 import type { FastEdgeConfig } from "../fastedge-host/types.js";
 
@@ -114,16 +115,60 @@ export async function hasDotenvFiles(
   return false;
 }
 
+/** Thrown when a dotenv path escapes the workspace root. Routes catch this to return 400. */
+export class DotenvPathError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DotenvPathError";
+  }
+}
+
+/** Walk up to the nearest existing ancestor to get a real path we can compare. */
+function realpathOrNearest(p: string): string {
+  let dir = p;
+  while (true) {
+    try {
+      return realpathSync(dir);
+    } catch {
+      const parent = path.dirname(dir);
+      if (parent === dir) throw new Error(`Cannot resolve real path for: ${p}`);
+      dir = parent;
+    }
+  }
+}
+
 /**
- * Resolve a potentially relative dotenv path to an absolute path.
- * Relative paths are resolved against the provided base directory.
- * Returns undefined for falsy input; absolute paths pass through unchanged.
+ * Resolve a potentially relative dotenv path to an absolute path, and verify it
+ * is contained under `base` (the workspace root). Throws DotenvPathError if the
+ * resolved path escapes the workspace — this includes symlinks that point outside.
+ * Returns undefined for falsy input.
  */
 export function resolveDotenvPath(
   dotenvPath: string | undefined,
   base: string,
 ): string | undefined {
   if (!dotenvPath) return undefined;
-  if (path.isAbsolute(dotenvPath)) return dotenvPath;
-  return path.resolve(base, dotenvPath);
+  const resolved = path.isAbsolute(dotenvPath)
+    ? dotenvPath
+    : path.resolve(base, dotenvPath);
+
+  // Lexical containment check (fast path, handles .. traversal)
+  const rel = path.relative(base, resolved);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
+    throw new DotenvPathError(`dotenv path must be within workspace: ${base}`);
+  }
+
+  // Realpath check: resolve symlinks to detect escapes through links inside the workspace
+  try {
+    const realBase = realpathSync(base);
+    const realResolved = realpathOrNearest(resolved);
+    if (realResolved !== realBase && !realResolved.startsWith(realBase + path.sep)) {
+      throw new DotenvPathError(`dotenv path must be within workspace: ${base}`);
+    }
+  } catch (e) {
+    if (e instanceof DotenvPathError) throw e;
+    // base doesn't exist (fresh workspace) — lexical check above is sufficient
+  }
+
+  return resolved;
 }

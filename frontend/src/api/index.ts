@@ -3,8 +3,15 @@ import type { TestConfig } from "../stores/types";
 export type { TestConfig } from "../stores/types";
 import { hasFilesystemAccess } from "../utils/environment";
 import { getFilePath, hasFilePath, formatFileSize } from "../utils/filePath";
+import { getToken } from "../utils/token";
 
 const API_BASE = "/api";
+
+function apiFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  headers.set("x-fastedge-token", getToken());
+  return fetch(input, { ...init, headers });
+}
 
 /**
  * Environment info from server
@@ -19,7 +26,7 @@ export interface EnvironmentInfo {
  * @returns Environment info indicating if running in VSCode or Node
  */
 export async function getEnvironment(): Promise<EnvironmentInfo> {
-  const response = await fetch(`${API_BASE}/environment`, {
+  const response = await apiFetch(`${API_BASE}/environment`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -45,7 +52,7 @@ export async function getEnvironment(): Promise<EnvironmentInfo> {
  */
 export async function getWorkspaceWasm(): Promise<string | null> {
   try {
-    const response = await fetch(`${API_BASE}/workspace-wasm`, {
+    const response = await apiFetch(`${API_BASE}/workspace-wasm`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -117,7 +124,7 @@ export async function uploadWasm(
       );
 
       try {
-        const response = await fetch(`${API_BASE}/load`, {
+        const response = await apiFetch(`${API_BASE}/load`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -170,7 +177,7 @@ export async function uploadWasm(
     ),
   );
 
-  const response = await fetch(`${API_BASE}/load`, {
+  const response = await apiFetch(`${API_BASE}/load`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -222,7 +229,7 @@ export async function uploadWasmFromPath(
 
   console.log(`📁 Loading WASM from path: ${wasmPath}`);
 
-  const response = await fetch(`${API_BASE}/load`, {
+  const response = await apiFetch(`${API_BASE}/load`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -269,7 +276,7 @@ export async function callHook(
     // logLevel not sent - server always returns all logs for client-side filtering
   };
 
-  const response = await fetch(`${API_BASE}/call`, {
+  const response = await apiFetch(`${API_BASE}/call`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -318,7 +325,7 @@ export async function sendFullFlow(
     // logLevel not sent - server always returns all logs for client-side filtering
   };
 
-  const response = await fetch(`${API_BASE}/send`, {
+  const response = await apiFetch(`${API_BASE}/send`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -358,7 +365,7 @@ export async function sendFullFlow(
 // TestConfig is imported from ../types
 
 export async function loadConfig(): Promise<TestConfig> {
-  const response = await fetch(`${API_BASE}/config`, {
+  const response = await apiFetch(`${API_BASE}/config`, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -375,7 +382,7 @@ export async function loadConfig(): Promise<TestConfig> {
 }
 
 export async function saveConfig(config: TestConfig): Promise<void> {
-  const response = await fetch(`${API_BASE}/config`, {
+  const response = await apiFetch(`${API_BASE}/config`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -392,7 +399,7 @@ export async function saveConfig(config: TestConfig): Promise<void> {
 export async function showSaveDialog(
   suggestedName: string
 ): Promise<{ canceled?: boolean; filePath?: string; fallbackRequired?: boolean }> {
-  const response = await fetch(`${API_BASE}/config/show-save-dialog`, {
+  const response = await apiFetch(`${API_BASE}/config/show-save-dialog`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -408,7 +415,7 @@ export async function saveConfigAs(
   config: TestConfig,
   filePath: string
 ): Promise<{ savedPath: string }> {
-  const response = await fetch(`${API_BASE}/config/save-as`, {
+  const response = await apiFetch(`${API_BASE}/config/save-as`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -457,7 +464,7 @@ export async function executeHttpWasm(
     body,
   };
 
-  const response = await fetch(`${API_BASE}/execute`, {
+  const response = await apiFetch(`${API_BASE}/execute`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -480,7 +487,7 @@ export async function executeHttpWasm(
  * For http-wasm: restarts the fastedge-run process with the updated flag.
  */
 export async function applyDotenv(enabled: boolean, dotenvPath?: string | null): Promise<void> {
-  const response = await fetch(`${API_BASE}/dotenv`, {
+  const response = await apiFetch(`${API_BASE}/dotenv`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ dotenv: { enabled, ...(dotenvPath ? { path: dotenvPath } : {}) } }),

@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { ServerEvent } from "./websocket-types";
+import { getToken } from "../utils/token";
 
 export interface WebSocketStatus {
   connected: boolean;
@@ -52,7 +53,7 @@ export function useWebSocket(
     // - Local production (Express on 5179, port is in URL)
     // - Codespaces forwarded URLs (port is embedded in hostname, location.port is empty)
     const port = window.location.port ? `:${window.location.port}` : "";
-    return `${protocol}//${hostname}${port}/ws`;
+    return `${protocol}//${hostname}${port}/ws?token=${encodeURIComponent(getToken())}`;
   })();
 
   const {
