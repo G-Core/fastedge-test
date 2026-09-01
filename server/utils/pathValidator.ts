@@ -142,6 +142,15 @@ export function validatePath(
           error: `Access to system path '${dangerousPath}' is not allowed`,
         };
       }
+    } else if (normalizedDangerous.includes("\\")) {
+      // Windows-style path in the list (backslash separator): on Linux these
+      // resolve to literal filenames, so use a simple substring check.
+      if (absolutePath.includes(normalizedDangerous)) {
+        return {
+          valid: false,
+          error: `Access to system path '${dangerousPath}' is not allowed`,
+        };
+      }
     } else {
       if (
         absolutePath.includes(sep + normalizedDangerous + sep) ||

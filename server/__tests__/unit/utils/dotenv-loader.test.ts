@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { loadDotenvFiles, hasDotenvFiles, resolveDotenvPath } from "../../../utils/dotenv-loader.js";
+import { loadDotenvFiles, hasDotenvFiles, resolveDotenvPath, DotenvPathError } from "../../../utils/dotenv-loader.js";
 import fs from "fs/promises";
 import path from "path";
 
@@ -853,8 +853,8 @@ DB_PASSWORD=prod-db-pass`;
       expect(resolveDotenvPath("", "/base")).toBeUndefined();
     });
 
-    it("returns absolute paths unchanged", () => {
-      expect(resolveDotenvPath("/abs/path/to/fixtures", "/base")).toBe("/abs/path/to/fixtures");
+    it("rejects absolute paths outside the workspace", () => {
+      expect(() => resolveDotenvPath("/abs/path/to/fixtures", "/base")).toThrow(DotenvPathError);
     });
 
     it("resolves relative path against base directory", () => {
@@ -865,8 +865,8 @@ DB_PASSWORD=prod-db-pass`;
       expect(resolveDotenvPath("fixtures", "/home/user/project")).toBe("/home/user/project/fixtures");
     });
 
-    it("resolves parent-relative path against base directory", () => {
-      expect(resolveDotenvPath("../shared/fixtures", "/home/user/project/config")).toBe("/home/user/project/shared/fixtures");
+    it("rejects parent-relative path that escapes the workspace", () => {
+      expect(() => resolveDotenvPath("../shared/fixtures", "/home/user/project/config")).toThrow(DotenvPathError);
     });
   });
 });

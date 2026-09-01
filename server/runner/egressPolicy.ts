@@ -58,7 +58,13 @@ export async function checkEgressAllowed(urlStr: string): Promise<void> {
     );
   }
 
-  const ip = await resolveToIp(parsed.hostname);
+  let ip: string;
+  try {
+    ip = await resolveToIp(parsed.hostname);
+  } catch {
+    // Unresolvable hostnames cannot reach any IP — the fetch will also fail.
+    return;
+  }
   if (isBlockedIp(ip)) {
     throw new Error(
       `Egress blocked: ${parsed.hostname} resolves to ${ip} which is in a restricted range (cloud metadata / link-local)`,
