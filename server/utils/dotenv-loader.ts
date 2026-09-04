@@ -155,7 +155,7 @@ export function resolveDotenvPath(
   // Lexical containment check (fast path, handles .. traversal)
   const rel = path.relative(base, resolved);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    throw new DotenvPathError(`dotenv path must be within workspace: ${base}`);
+    throw new DotenvPathError(`dotenv path must be within workspace`);
   }
 
   // Realpath check: resolve symlinks to detect escapes through links inside the workspace
@@ -163,7 +163,7 @@ export function resolveDotenvPath(
     const realBase = realpathSync(base);
     const realResolved = realpathOrNearest(resolved);
     if (realResolved !== realBase && !realResolved.startsWith(realBase + path.sep)) {
-      throw new DotenvPathError(`dotenv path must be within workspace: ${base}`);
+      throw new DotenvPathError(`dotenv path must be within workspace`);
     }
   } catch (e) {
     if (e instanceof DotenvPathError) throw e;

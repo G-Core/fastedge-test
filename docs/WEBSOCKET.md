@@ -4,18 +4,27 @@ Real-time event stream from the `@gcoredev/fastedge-test` server to connected cl
 
 > **Note on header values.** All header fields in this protocol use `Record<string, string | string[]>` — single-valued headers are a `string`, multi-valued headers (notably `Set-Cookie` per RFC 6265) are a `string[]`. HTTP-wasm response headers additionally allow `undefined` values (`Record<string, string | string[] | undefined>`), though `undefined` entries are dropped during JSON serialization. JSON examples below use `Record<string, string>` for brevity.
 
+## Authentication
+
+WebSocket connections require the session token as a `?token=` query parameter (browsers cannot set custom headers during the WebSocket handshake). Obtain the token from the `Open:` URL printed to stderr at startup — see the [Authentication section in API.md](./API.md#authentication) for the full flow, including the `x-fastedge-token` header used for HTTP requests and the relevant environment variables.
+
+```
+ws://127.0.0.1:<port>/ws?token=<token>
+```
+
 ## Connection
 
 Connect to the WebSocket server at:
 
 ```
-ws://localhost:{port}/ws
+ws://127.0.0.1:{port}/ws?token={token}
 ```
 
-where `{port}` is the port the server is running on (default `5179`).
+where `{port}` is the port the server is running on (default `5179`) and `{token}` is the session token from the `Open:` stderr line.
 
 ```javascript
-const ws = new WebSocket("ws://localhost:5179/ws");
+const token = new URL(location.href).hash.slice("#token=".length);
+const ws = new WebSocket(`ws://127.0.0.1:5179/ws?token=${token}`);
 
 ws.addEventListener("message", (event) => {
   const msg = JSON.parse(event.data);

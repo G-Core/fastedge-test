@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
+import { safeTokenEqual, hostAllowed } from "./utils/token.js";
 import { WasmRunnerFactory } from "./runner/WasmRunnerFactory.js";
 import type { IWasmRunner } from "./runner/IWasmRunner.js";
 import { HttpWasmRunner } from "./runner/HttpWasmRunner.js";
@@ -44,11 +45,7 @@ const httpServer = createServer(app);
 const SESSION_TOKEN = process.env.FASTEDGE_DEBUG_TOKEN ?? randomBytes(32).toString("hex");
 // Bind to loopback by default; non-loopback requires explicit opt-in.
 const HOST = process.env.FASTEDGE_BIND_HOST ?? "127.0.0.1";
-const ALLOWED_HOSTS = new Set<string>(
-  ["localhost", "127.0.0.1", "::1", process.env.FASTEDGE_EXPECTED_HOST].filter(
-    Boolean,
-  ) as string[],
-);
+const EXPECTED_HOST = process.env.FASTEDGE_EXPECTED_HOST;
 
 // Initialize WebSocket infrastructure
 const debug = process.env.PROXY_RUNNER_DEBUG === "1";
@@ -81,7 +78,7 @@ app.use(express.static(path.join(__dirname, "frontend")));
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
   const raw = req.headers.host ?? "";
   const host = raw.startsWith("[") ? raw.slice(1, raw.indexOf("]")) : raw.split(":")[0];
-  if (!ALLOWED_HOSTS.has(host)) {
+  if (!hostAllowed(host, EXPECTED_HOST)) {
     res.status(403).json({ ok: false, error: "Invalid Host" });
     return;
   }
@@ -94,12 +91,13 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
 //     injects it into the webview iframe URL fragment (#token=...) so the frontend reads it.
 //   - CLI: the token is logged to stderr at startup; the user opens the printed URL.
 // The frontend includes the token as the x-fastedge-token header on every request.
+// ?token= query param is intentionally NOT accepted here — log files and browser
+// history would expose it. WebSocket upgrades use ?token= because browsers cannot
+// set custom headers during the WS handshake.
 // ponytail: single token per server lifetime; restart to rotate
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
-  const token =
-    (req.headers["x-fastedge-token"] as string | undefined) ??
-    (req.query["token"] as string | undefined);
-  if (token !== SESSION_TOKEN) {
+  const token = req.headers["x-fastedge-token"] as string | undefined;
+  if (!token || !safeTokenEqual(token, SESSION_TOKEN)) {
     res.status(401).json({ ok: false, error: "Unauthorized" });
     return;
   }
@@ -774,7 +772,8 @@ async function isPortAvailable(port: number): Promise<boolean> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 500);
   try {
-    await fetch(`http://localhost:${port}/health`, {
+    const hostForUrl = HOST.includes(":") ? `[${HOST}]` : HOST;
+    await fetch(`http://${hostForUrl}:${port}/health`, {
       signal: controller.signal,
     });
     // Something is listening — port is taken

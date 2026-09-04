@@ -31,27 +31,28 @@ export function ConfigEditorModal({
 
       const suggestedName = "fastedge-config.test.json";
 
-      // Strategy 0: VSCode webview (running inside an iframe) — delegate to
-      // the extension's native save dialog so it opens at the app root.
+      // Strategy 0: VSCode webview (running inside an iframe) — send the config
+      // to the extension and let it write the file via the native save dialog.
+      // The server save-as route is not used; the extension writes directly.
       if (window !== window.top) {
-        const filePath = await new Promise<string | null>((resolve) => {
+        const configJson = JSON.stringify(initialConfig, null, 2);
+        const result = await new Promise<{ path: string | null; saved: boolean }>((resolve) => {
           const handleResult = (event: MessageEvent) => {
             if (event.source !== window.parent) return;
-            if (event.data?.command !== "savePickerResult") return;
+            if (event.data?.type !== "savePickerResult") return;
             window.removeEventListener("message", handleResult);
-            resolve(event.data.canceled ? null : event.data.filePath);
+            resolve({ path: event.data.path ?? null, saved: !!event.data.saved });
           };
           window.addEventListener("message", handleResult);
-          window.parent.postMessage({ command: "openSavePicker", suggestedName }, "*");
+          window.parent.postMessage({ type: "openSavePicker", config: configJson }, "*");
         });
 
-        if (!filePath) {
+        if (!result.saved) {
           setIsSaving(false);
           return;
         }
 
-        const result = await saveConfigAs(initialConfig, filePath);
-        alert(`✅ Config saved to: ${result.savedPath}`);
+        alert(`✅ Config saved to: ${result.path}`);
         onClose();
         return;
       }
@@ -107,24 +108,18 @@ export function ConfigEditorModal({
         // Fall through to next strategy
       }
 
-      // Strategy 3: Fallback - prompt for path
-      const selectedPath = prompt(
-        "Enter the file path to save (relative to project root or absolute):\n\n" +
-          "Examples:\n" +
-          "  configs/my-test.json\n" +
-          "  /absolute/path/config.json\n" +
-          "  my-config.json",
-        suggestedName
-      );
-
-      if (!selectedPath) {
-        setIsSaving(false);
-        return;
-      }
-
-      const result = await saveConfigAs(initialConfig, selectedPath);
-      alert(`✅ Config saved to: ${result.savedPath}`);
+      // Strategy 3: Fallback — trigger a browser download. Works in all browsers
+      // (Firefox, Safari) that don't support showSaveFilePicker. The file lands
+      // in the browser's default downloads folder.
+      const blob = new Blob([JSON.stringify(initialConfig, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = suggestedName;
+      a.click();
+      URL.revokeObjectURL(url);
       onClose();
+      return;
     } catch (error) {
       console.error("Save error:", error);
       const msg = error instanceof Error ? error.message : "Unknown error";

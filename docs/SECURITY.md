@@ -70,13 +70,21 @@ upstream-forward path. Both are checked against a default egress policy before
 the request is sent:
 
 - Non-`http/https` schemes are rejected.
-- `169.254.0.0/16` (cloud instance metadata — AWS, GCP, Azure) and IPv6
-  link-local / metadata ranges are blocked.
+- `169.254.0.0/16` (cloud instance metadata — AWS, GCP, Azure), IPv6
+  link-local (`fe80::/10`), ULA (`fc00::/7`), and IPv4-mapped IPv6
+  (`::ffff:169.254.x.x` and equivalent hex forms) are blocked.
 - Loopback and RFC-1918 ranges are intentionally **allowed** — proxy-wasm
   tests routinely target local and LAN mock origins.
+- HTTP redirects are **not followed** — the upstream response is returned to
+  the WASM as-is, so a redirect target that was not present at policy-check
+  time cannot be reached.
+- All IP addresses a hostname resolves to are checked; a single blocked
+  address is enough to block the request.
 
-Hostnames are resolved via DNS before the check so the policy cannot be
-bypassed by a hostname that resolves to a blocked IP at connect time.
+Hostnames are resolved via DNS before the check, and all returned addresses
+are checked. **DNS rebinding between the policy check and the actual
+connect is not mitigated** — an attacker who controls DNS TTL could
+(in theory) swap the address between check and connect.
 
 ### Schema route allowlist
 

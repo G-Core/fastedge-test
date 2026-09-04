@@ -18,7 +18,13 @@ npx -p @gcoredev/fastedge-test fastedge-debug
 
 > The shorthand `npx @gcoredev/fastedge-test` happens to work today because the package declares exactly one `bin` entry, and npx falls back to it when no name is given. Prefer the explicit `fastedge-debug` form — it stays correct if a second binary is ever added.
 
-Once started, the server listens on `http://localhost:5179` by default and logs the bound address to stderr.
+Once started, the server listens on `http://localhost:5179` by default and logs the bound address to stderr. In CLI mode it also prints the full browser URL with the session token in the fragment:
+
+```
+Open: http://localhost:5179/#token=<hex>
+```
+
+Use that URL to open the web UI, or copy the token for API and WebSocket access. See [Authentication in API.md](./API.md#authentication) for the full details, including the `x-fastedge-token` header, WebSocket token parameter, and auth-related environment variables.
 
 The CLI automatically discovers the workspace root by walking up from the current directory, looking first for an existing `.fastedge-debug/` directory, then for a `package.json` or `Cargo.toml`. The resolved root is used as the base for port file and configuration file placement. Pass a path as the first argument to anchor discovery to a specific starting location:
 
@@ -164,13 +170,13 @@ Or press `Ctrl+C` in the terminal to send `SIGINT`.
 
 ## Web UI
 
-When the server starts, it serves a browser-based UI at the root URL:
+When the server starts, it serves a browser-based UI at the root URL. In CLI mode the full URL including the session token is printed to stderr:
 
 ```
-http://localhost:5179
+Open: http://localhost:5179/#token=<hex>
 ```
 
-The UI provides a graphical interface for loading WASM modules, configuring requests, and inspecting results. All UI interactions use the same REST and WebSocket endpoints available to API consumers.
+Open that URL directly — the frontend reads the `#token=` fragment and includes it as an `x-fastedge-token` header on every API request. The UI provides a graphical interface for loading WASM modules, configuring requests, and inspecting results. All UI interactions use the same REST and WebSocket endpoints available to API consumers.
 
 ## See Also
 

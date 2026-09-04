@@ -288,6 +288,9 @@ function App() {
           <ConnectionStatus status={wsStatus} />
         </header>
 
+        {wsStatus.error?.startsWith("Missing session token") && (
+          <div className="error">{wsStatus.error}</div>
+        )}
         {error && <div className="error">{error}</div>}
 
         <WasmLoader

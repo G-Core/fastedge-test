@@ -43,11 +43,11 @@ describe("debugger HTTP server — security middleware", () => {
     expect(body.environment).toBe("node");
   });
 
-  it("GET /api/environment → 200 with token as ?token= query param", async () => {
+  it("GET /api/environment → 401 with token as ?token= query param (header required)", async () => {
     const res = await fetch(
       `${server.base}/api/environment?token=${server.token}`,
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
   // ── Host header validation ────────────────────────────────────────────────

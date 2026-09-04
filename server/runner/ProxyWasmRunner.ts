@@ -521,6 +521,8 @@ export class ProxyWasmRunner implements IWasmRunner {
         const fetchOptions: RequestInit = {
           method: requestMethod,
           headers: fetchHeaders,
+          // Redirects are not followed; the redirect target was not checked against the egress policy.
+          redirect: "manual",
         };
 
         // Add body for methods that support it
@@ -978,6 +980,8 @@ export class ProxyWasmRunner implements IWasmRunner {
           headers: fetchHeaders,
           body: pending.body && method !== 'GET' && method !== 'HEAD' ? Buffer.from(pending.body) : undefined,
           signal: AbortSignal.timeout(pending.timeoutMs),
+          // Redirects are not followed; the redirect target was not checked against the egress policy.
+          redirect: "manual",
         });
         resp.headers.forEach((v, k) => {
           if (k.toLowerCase() !== 'set-cookie') responseHeaders.push([k, v]);

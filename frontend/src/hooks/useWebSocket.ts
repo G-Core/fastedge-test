@@ -39,6 +39,8 @@ export interface UseWebSocketReturn {
 export function useWebSocket(
   options: UseWebSocketOptions = {},
 ): UseWebSocketReturn {
+  const sessionToken = getToken();
+
   // Construct WebSocket URL - handle both dev (with port) and production (without)
   const defaultUrl = (() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -53,7 +55,7 @@ export function useWebSocket(
     // - Local production (Express on 5179, port is in URL)
     // - Codespaces forwarded URLs (port is embedded in hostname, location.port is empty)
     const port = window.location.port ? `:${window.location.port}` : "";
-    return `${protocol}//${hostname}${port}/ws?token=${encodeURIComponent(getToken())}`;
+    return `${protocol}//${hostname}${port}/ws?token=${encodeURIComponent(sessionToken)}`;
   })();
 
   const {
@@ -65,11 +67,17 @@ export function useWebSocket(
     debug = false,
   } = options;
 
+  // When no custom URL is provided and the token is absent, bail immediately
+  // rather than hammering the server with doomed 401s.
+  const missingToken = !options.url && !sessionToken;
+
   const [status, setStatus] = useState<WebSocketStatus>({
     connected: false,
     reconnecting: false,
     clientCount: 0,
-    error: null,
+    error: missingToken
+      ? "Missing session token — reopen the URL printed by the server"
+      : null,
   });
 
   const [lastEvent, setLastEvent] = useState<ServerEvent | null>(null);
@@ -295,6 +303,7 @@ export function useWebSocket(
    */
   useEffect(() => {
     if (autoConnect) {
+      if (missingToken) return; // banner already set in initial state
       connect();
     }
 

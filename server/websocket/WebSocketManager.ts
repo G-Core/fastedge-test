@@ -8,6 +8,7 @@
 import WebSocket, { WebSocketServer } from "ws";
 import { IncomingMessage, Server as HTTPServer } from "http";
 import { ServerEvent } from "./types.js";
+import { safeTokenEqual, hostAllowed } from "../utils/token.js";
 
 /**
  * Client metadata for tracking connections
@@ -54,19 +55,28 @@ export class WebSocketManager {
         // WebSocket handshakes cannot set custom headers from browsers, so the
         // token is passed in the URL and read from the query string here.
         const url = new URL(info.req.url ?? "/", "http://localhost");
-        if (url.searchParams.get("token") !== this.token) {
+        const reqToken = url.searchParams.get("token") ?? "";
+        if (!safeTokenEqual(reqToken, this.token)) {
           return false;
         }
         // Validate origin to block cross-origin WebSocket connections.
         // Non-browser clients (test tooling, CLI) send no origin — allow those.
         const origin = info.origin ?? "";
         if (!origin) return true;
-        const expectedHost = process.env.FASTEDGE_EXPECTED_HOST;
-        return (
+        if (
           /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
-          origin.startsWith("vscode-webview://") ||
-          (!!expectedHost && origin.includes(expectedHost))
-        );
+          origin.startsWith("vscode-webview://")
+        ) {
+          return true;
+        }
+        // Parse the origin and check via hostAllowed, which supports exact match
+        // and suffix match (needed for Codespaces where the forwarded hostname
+        // is <name>-<port>.<domain> and the server picks its own port).
+        try {
+          return hostAllowed(new URL(origin).hostname, process.env.FASTEDGE_EXPECTED_HOST);
+        } catch {
+          return false; // malformed origin → reject
+        }
       },
     });
 

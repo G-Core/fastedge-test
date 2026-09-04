@@ -107,7 +107,8 @@ export function validatePath(
     if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
       return {
         valid: false,
-        error: `Path must be within workspace root: ${workspaceRoot}`,
+        error:
+          "Path is outside the workspace root. If your build output lives above this directory (e.g. a Cargo workspace), restart the debugger with --project-dir <workspace root>.",
       };
     }
 
@@ -118,7 +119,8 @@ export function validatePath(
       if (realPath !== realRoot && !realPath.startsWith(realRoot + sep)) {
         return {
           valid: false,
-          error: `Path must be within workspace root: ${workspaceRoot}`,
+          error:
+            "Path is outside the workspace root. If your build output lives above this directory (e.g. a Cargo workspace), restart the debugger with --project-dir <workspace root>.",
         };
       }
     } catch {
@@ -177,7 +179,7 @@ export function validatePath(
     if (!existsSync(absolutePath)) {
       return {
         valid: false,
-        error: `File not found: ${absolutePath}`,
+        error: "File not found",
       };
     }
 
@@ -187,7 +189,7 @@ export function validatePath(
       if (!stats.isFile()) {
         return {
           valid: false,
-          error: `Path is not a file: ${absolutePath}`,
+          error: "Path is not a file",
         };
       }
     } catch (error) {

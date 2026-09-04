@@ -12,6 +12,43 @@ http://localhost:5179
 
 The port can be overridden via the `PORT` environment variable. The active port is written to `.fastedge-debug/.debug-port` (relative to `WORKSPACE_PATH` if set, otherwise the current working directory) on startup and deleted on shutdown.
 
+## Authentication
+
+The debugger server requires a session token on all `/api/*` requests. `/health` is the only unauthenticated endpoint.
+
+When started from the CLI (`npx fastedge-debug`), the server generates a random 32-byte hex token and prints the full browser URL to stderr:
+
+```
+Open: http://localhost:5179/#token=<hex>
+```
+
+The fragment after `#token=` is your session token. Copy it for use in API calls or WebSocket connections.
+
+**HTTP requests** — send the token as a header on every `/api/*` call:
+
+```
+x-fastedge-token: <token>
+```
+
+**WebSocket** — pass the token as a query parameter when connecting (browsers cannot set custom headers during the WebSocket handshake):
+
+```
+ws://127.0.0.1:<port>/ws?token=<token>
+```
+
+**Environment variables related to authentication and binding:**
+
+| Variable                 | Default       | Description                                                                                      |
+| ------------------------ | ------------- | ------------------------------------------------------------------------------------------------ |
+| `FASTEDGE_DEBUG_TOKEN`   | unset         | Inject a known token instead of generating one. When set, the `Open:` URL is not printed to stderr (the VSCode extension uses this path). |
+| `FASTEDGE_BIND_HOST`     | `127.0.0.1`   | Interface the HTTP server binds to.                                                              |
+| `FASTEDGE_EXPECTED_HOST` | unset         | Extra hostname (suffix match) allowed in `Host` / `Origin` headers — for Codespaces forwarded URLs. |
+| `WORKSPACE_PATH`         | `process.cwd()` | Workspace root; affects `.env` resolution, port file, and config file placement.              |
+
+> **Open question — token file for local tooling**: Should the server also write the session token to `.fastedge-debug/.debug-token` (mode `0600`, same trust boundary as `.env`) alongside `.fastedge-debug/.debug-port`, so local tooling can find the token without parsing stderr? Decision pending from repo owner — document the answer here when made. If yes, implement in `writePortFile` and update this section; if no, note that tooling must capture the `Open:` stderr line.
+
+---
+
 ## Common Headers
 
 ### X-Source Header
@@ -76,7 +113,7 @@ Returns the number of currently connected WebSocket clients. Useful in CI toolin
 **Example**
 
 ```bash
-curl http://localhost:5179/api/client-count
+curl -H "x-fastedge-token: <token>" http://localhost:5179/api/client-count
 ```
 
 ```json
