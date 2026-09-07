@@ -56,13 +56,20 @@ const stateManager = new StateManager(wsManager, debug);
 const runnerFactory = new WasmRunnerFactory();
 let currentRunner: IWasmRunner | null = null;
 
-// Allowlist of known schema filenames, built at startup from the schemas/ directory.
-// The /api/schema/:name route uses this instead of building a path from the route
-// param directly, preventing path traversal through encoded slashes in the param.
-const schemasDir = path.join(__dirname, "..", "schemas");
-const knownSchemas = new Set(
-  readdirSync(schemasDir).filter((f) => f.endsWith(".schema.json")),
-);
+// Allowlist of known schema filenames. The /api/schema/:name route checks this
+// before serving a file, preventing path traversal through encoded slashes.
+// We scan the directory when it's present; if it's missing (e.g. the VSCode
+// extension packaging stripped it), the set is empty and every schema request
+// returns 404 — safe, since no file can be served without being allowlisted.
+const schemasDir = path.join(__dirname, "schemas");
+let knownSchemas: Set<string>;
+try {
+  knownSchemas = new Set(
+    readdirSync(schemasDir).filter((f) => f.endsWith(".schema.json")),
+  );
+} catch {
+  knownSchemas = new Set();
+}
 
 // Paths vended by /api/config/show-save-dialog that /api/config/save-as is
 // allowed to write to. Single-use: consumed on first write, then removed.

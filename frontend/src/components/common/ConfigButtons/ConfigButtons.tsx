@@ -5,7 +5,7 @@ import type { TestConfig } from '../../../api';
 import styles from './ConfigButtons.module.css';
 
 export function ConfigButtons() {
-  const { loadFromConfig, exportConfig, loadWasm } = useAppStore();
+  const { loadFromConfig, exportConfig, loadWasm, setError } = useAppStore();
   const [showConfigEditor, setShowConfigEditor] = useState(false);
   const [configEditorInitial, setConfigEditorInitial] = useState<TestConfig | null>(null);
 
@@ -37,6 +37,7 @@ export function ConfigButtons() {
           .catch((wasmError: unknown) => {
             const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
             alert(`✅ Configuration loaded from ${event.data.fileName}\n⚠️ Failed to auto-load WASM: ${wasmMsg}`);
+            setError(null); // config loaded fine; don't leave WASM-load error as persistent banner
           });
       } else {
         alert(`✅ Configuration loaded from ${event.data.fileName}!`);
@@ -95,6 +96,7 @@ export function ConfigButtons() {
           } catch (wasmError) {
             const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
             alert(`✅ Configuration loaded from ${file.name}\n⚠️ Failed to auto-load WASM: ${wasmMsg}`);
+            setError(null); // config loaded fine; don't leave WASM-load error as persistent banner
           }
         } else {
           alert(`✅ Configuration loaded from ${file.name}!`);

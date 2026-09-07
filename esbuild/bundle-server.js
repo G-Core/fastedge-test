@@ -51,6 +51,20 @@ async function bundle() {
     console.log("✅ Server built successfully: dist/server.js");
     console.log("   TypeScript compiled + all dependencies bundled");
 
+    // Copy schemas/ alongside server.js so the path is consistent in both the
+    // fastedge-test dist and the VSCode extension embedding (dist/debugger/).
+    const schemasSourceDir = path.join(projectRoot, "schemas");
+    const schemasDestDir = path.join(distDir, "schemas");
+    if (fs.existsSync(schemasSourceDir)) {
+      if (fs.existsSync(schemasDestDir)) {
+        fs.rmSync(schemasDestDir, { recursive: true });
+      }
+      fs.cpSync(schemasSourceDir, schemasDestDir, { recursive: true });
+      console.log("✅ schemas/ copied to dist/schemas/");
+    } else {
+      console.warn("⚠️  Warning: schemas/ not found — run build:schemas first");
+    }
+
     // Copy fastedge-run directory to dist/fastedge-cli/ (required for HTTP WASM runner)
     const cliSourceDir = path.join(projectRoot, "fastedge-run");
     const cliDestDir = path.join(distDir, "fastedge-cli");
