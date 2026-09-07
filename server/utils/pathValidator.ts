@@ -113,10 +113,17 @@ export function validatePath(
     }
 
     // Realpath check: catch symlinks inside the workspace that point outside it
+    // (works even when the final leaf does not exist yet by walking up to an existing ancestor)
     try {
       const realRoot = realpathSync(resolvedWorkspaceRoot);
-      const realPath = realpathSync(absolutePath);
-      if (realPath !== realRoot && !realPath.startsWith(realRoot + sep)) {
+      let probe = absolutePath;
+      while (!existsSync(probe)) {
+        const parent = resolve(probe, "..");
+        if (parent === probe) break;
+        probe = parent;
+      }
+      const realProbe = realpathSync(probe);
+      if (realProbe !== realRoot && !realProbe.startsWith(realRoot + sep)) {
         return {
           valid: false,
           error:
@@ -124,7 +131,7 @@ export function validatePath(
         };
       }
     } catch {
-      // File doesn't exist yet — the checkExists step below will handle that
+      // If we can't resolve real paths (e.g. missing root), fall back to lexical check above.
     }
   }
 
