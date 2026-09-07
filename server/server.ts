@@ -103,7 +103,8 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
 // set custom headers during the WS handshake.
 // ponytail: single token per server lifetime; restart to rotate
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
-  const token = req.headers["x-fastedge-token"] as string | undefined;
+  const raw = req.headers["x-fastedge-token"];
+  const token = Array.isArray(raw) ? raw[0] : raw;
   if (!token || !safeTokenEqual(token, SESSION_TOKEN)) {
     res.status(401).json({ ok: false, error: "Unauthorized" });
     return;
@@ -825,8 +826,9 @@ export async function startServer(port = defaultPort): Promise<void> {
   const resolvedPort = await resolvePort(port);
   return new Promise((resolve) => {
     httpServer.listen(resolvedPort, HOST, () => {
-      console.error(`Proxy runner listening on http://${HOST}:${resolvedPort}`);
-      console.error(`WebSocket available at ws://${HOST}:${resolvedPort}/ws`);
+      const hostForUrl = HOST.includes(":") ? `[${HOST}]` : HOST;
+      console.error(`Proxy runner listening on http://${hostForUrl}:${resolvedPort}`);
+      console.error(`WebSocket available at ws://${hostForUrl}:${resolvedPort}/ws`);
       // When no token was injected externally (CLI mode), log the full URL with
       // the token in the fragment so only the local user reading stderr can open it.
       if (!process.env.FASTEDGE_DEBUG_TOKEN) {

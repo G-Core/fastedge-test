@@ -9,6 +9,7 @@
 - [REST API Reference](docs/API.md)
 - [Debugger Server](docs/DEBUGGER.md)
 - [Runner API](docs/RUNNER.md)
+- [Security](docs/SECURITY.md)
 - [Test Configuration](docs/TEST_CONFIG.md)
 - [Test Framework API](docs/TEST_FRAMEWORK.md)
 - [WebSocket API](docs/WEBSOCKET.md)

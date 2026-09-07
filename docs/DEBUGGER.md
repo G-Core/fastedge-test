@@ -89,9 +89,9 @@ process.kill(process.pid, "SIGTERM");
 ## Port Configuration
 
 | Source         | Value                 |
-| -------------- | --------------------- |
-| Default        | `5179`                |
-| `PORT` env var | Any valid port number |
+| --------------- | --------------------- |
+| Default         | `5179`                |
+| `PORT` env var  | Any valid port number |
 
 ```bash
 PORT=8080 npx fastedge-debug
@@ -125,12 +125,12 @@ curl http://localhost:5179/health
 ## Environment Variables
 
 | Variable             | Type     | Default | Description                                                                                     |
-| -------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------- |
-| `PORT`               | `number` | unset   | Port the HTTP server listens on. Defaults to `5179` when not set.                              |
-| `PROXY_RUNNER_DEBUG` | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity.                                 |
-| `VSCODE_INTEGRATION` | `"true"` | unset   | Set to `"true"` when running inside the VSCode extension; enables workspace WASM detection.     |
-| `WORKSPACE_PATH`     | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement. |
-| `FASTEDGE_RUN_PATH`  | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules.               |
+| --------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `PORT`                | `number` | unset   | Port the HTTP server listens on. Defaults to `5179` when not set.                                |
+| `PROXY_RUNNER_DEBUG`  | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity.                                  |
+| `VSCODE_INTEGRATION`  | `"true"` | unset   | Set to `"true"` when running inside the VSCode extension; enables workspace WASM detection.      |
+| `WORKSPACE_PATH`      | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement.   |
+| `FASTEDGE_RUN_PATH`   | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules.                 |
 
 ### Usage examples
 

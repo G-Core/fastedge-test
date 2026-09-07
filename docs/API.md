@@ -933,12 +933,12 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 #### Response / Type Schemas
 
 | Name                   | Description                                                   |
-| ---------------------- | ------------------------------------------------------------- |
+| ---------------------- | --------------------------------------------------------------|
 | `fastedge-config.test` | Schema for `fastedge-config.test.json` config files           |
 | `hook-result`          | Shape of a single `HookResult` object                         |
-| `hook-call`            | Shape of a `HookCall` input object                            |
+| `hook-call`            | Shape of a `HookCall` input object                             |
 | `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints |
-| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution             |
+| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution              |
 | `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
 
 **Example**
@@ -970,7 +970,7 @@ curl http://localhost:5179/api/schema/fastedge-config.test
 **Error Responses**
 
 | Status | Condition             |
-| ------ | --------------------- |
+| ------ | ---------------------- |
 | `404`  | Schema name not found |
 
 ---
@@ -991,8 +991,8 @@ When a request body fails schema validation (Zod), `error` is the flattened Zod 
 **Common status codes**
 
 | Status | Meaning                                                                                       |
-| ------ | --------------------------------------------------------------------------------------------- |
-| `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded) |
+| ------ | ----------------------------------------------------------------------------------------------|
+| `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded)  |
 | `404`  | Resource not found (config file, schema file)                                                 |
 | `500`  | Internal server error during execution or I/O                                                 |
 

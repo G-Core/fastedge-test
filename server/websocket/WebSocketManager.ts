@@ -28,7 +28,7 @@ export class WebSocketManager {
   private debug: boolean;
   private token: string;
 
-  constructor(server: HTTPServer, debug: boolean = false, token: string = "") {
+  constructor(server: HTTPServer, debug: boolean = false, token: string) {
     this.debug = debug;
     this.token = token;
 

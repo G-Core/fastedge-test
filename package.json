@@ -63,7 +63,7 @@
     "start": "node bin/fastedge-debug.js",
     "test": "npm-run-all -s test:unit test:server test:integration",
     "test:unit": "npm-run-all -p test:backend test:frontend",
-    "test:server": "vitest run --config vitest.server.config.ts",
+    "test:server": "pnpm run build:backend && vitest run --config vitest.server.config.ts",
     "test:backend": "vitest run",
     "test:frontend": "cd frontend && vitest run",
     "test:integration": "run-s test:integration:cdn test:integration:http",

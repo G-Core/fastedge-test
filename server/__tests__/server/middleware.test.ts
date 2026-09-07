@@ -61,23 +61,17 @@ describe("debugger HTTP server — security middleware", () => {
   });
 
   it("GET /api/environment → 200 with Host: localhost", async () => {
-    const res = await fetch(`${server.base}/api/environment`, {
-      headers: {
-        "x-fastedge-token": server.token,
-        Host: "localhost",
-      },
+    const { statusCode } = await rawRequest(server.base, "/api/environment", {
+      headers: { "x-fastedge-token": server.token, host: "localhost" },
     });
-    expect(res.status).toBe(200);
+    expect(statusCode).toBe(200);
   });
 
   it("GET /api/environment → 200 with Host: 127.0.0.1", async () => {
-    const res = await fetch(`${server.base}/api/environment`, {
-      headers: {
-        "x-fastedge-token": server.token,
-        Host: "127.0.0.1",
-      },
+    const { statusCode } = await rawRequest(server.base, "/api/environment", {
+      headers: { "x-fastedge-token": server.token, host: "127.0.0.1" },
     });
-    expect(res.status).toBe(200);
+    expect(statusCode).toBe(200);
   });
 
   // ── schema route allowlist ────────────────────────────────────────────────
