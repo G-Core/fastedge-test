@@ -41,6 +41,14 @@ export class WebSocketManager {
     this.wss = new WebSocketServer({
       server,
       path: "/ws",
+      // Echo back the fastedge-token subprotocol when the client uses it (preferred
+      // path — keeps the token out of the WS query string and proxy access logs).
+      // Accept no-subprotocol connections for the query-param fallback path.
+      handleProtocols: (protocols: Set<string>): string | false => {
+        if (protocols.size === 0) return ""; // query-param path — no protocol to echo
+        const proto = [...protocols].find((p) => p.startsWith("fastedge-token."));
+        return proto ?? false; // reject unrecognised subprotocols
+      },
       verifyClient: (info: {
         origin: string;
         secure: boolean;
@@ -51,16 +59,23 @@ export class WebSocketManager {
             `[WebSocketManager] Client attempting connection from ${info.origin}`,
           );
         }
-        // Require the session token from the ?token= query param.
-        // WebSocket handshakes cannot set custom headers from browsers, so the
-        // token is passed in the URL and read from the query string here.
+        // Token may arrive via Sec-WebSocket-Protocol header (preferred — not logged
+        // by Codespaces/SSH forwarding proxies) or via the legacy ?token= query param
+        // (CLI direct-browser flow where there is no proxy in between).
         let url: URL;
         try {
           url = new URL(info.req.url ?? "/", "http://localhost");
         } catch {
           return false; // malformed handshake URL → reject
         }
-        const reqToken = url.searchParams.get("token") ?? "";
+        const rawProtos = (info.req.headers["sec-websocket-protocol"] as string) ?? "";
+        const tokenProto = rawProtos
+          .split(",")
+          .map((s) => s.trim())
+          .find((p) => p.startsWith("fastedge-token."));
+        const reqToken = tokenProto
+          ? tokenProto.slice("fastedge-token.".length)
+          : url.searchParams.get("token") ?? "";
         if (!safeTokenEqual(reqToken, this.token)) {
           return false;
         }

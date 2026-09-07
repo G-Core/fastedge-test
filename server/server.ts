@@ -5,11 +5,16 @@ import {
   existsSync,
   readdirSync,
   mkdirSync,
-  writeFileSync,
+  openSync,
+  writeSync,
+  closeSync,
+  realpathSync,
+  lstatSync,
   unlinkSync,
+  constants as fsConst,
 } from "node:fs";
 import { createServer } from "node:http";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { safeTokenEqual, hostAllowed } from "./utils/token.js";
 import { WasmRunnerFactory } from "./runner/WasmRunnerFactory.js";
 import type { IWasmRunner } from "./runner/IWasmRunner.js";
@@ -17,7 +22,7 @@ import { HttpWasmRunner } from "./runner/HttpWasmRunner.js";
 import { WebSocketManager, StateManager } from "./websocket/index.js";
 import { detectWasmType } from "./utils/wasmTypeDetector.js";
 import { validatePath } from "./utils/pathValidator.js";
-import { resolveDotenvPath, DotenvPathError } from "./utils/dotenv-loader.js";
+import { resolveDotenvPath, validateDotenvLeafs, DotenvPathError } from "./utils/dotenv-loader.js";
 import {
   ApiLoadBodySchema,
   ApiSendBodySchema,
@@ -77,7 +82,31 @@ try {
 const pendingSavePaths = new Set<string>();
 
 app.use(express.json({ limit: "20mb" }));
-app.use(express.static(path.join(__dirname, "frontend")));
+
+// Content-Security-Policy for the debugger frontend (served inside a VS Code webview
+// iframe). Restricts scripts to same-origin only and caps connect-src so a compromised
+// page cannot exfiltrate the session token to an external host.
+// connect-src explicitly includes ws://127.0.0.1:* and ws://localhost:* because the
+// frontend converts `localhost` → `127.0.0.1` in the WS URL to avoid IPv6 timeouts,
+// making the WebSocket cross-origin relative to a page loaded at http://localhost:PORT.
+// These two loopback aliases are equivalent trust-wise; external origins remain blocked.
+// frame-ancestors is intentionally omitted: VS Code webview origins vary across versions
+// and adding it risks a blank iframe; the session token already gates all useful access.
+const FRONTEND_CSP =
+  "default-src 'self'; " +
+  "connect-src 'self' ws://127.0.0.1:* wss://127.0.0.1:* ws://localhost:* wss://localhost:*; " +
+  "img-src 'self' data: blob:; " +
+  "style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self';";
+
+app.use(
+  express.static(path.join(__dirname, "frontend"), {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Content-Security-Policy", FRONTEND_CSP);
+      }
+    },
+  }),
+);
 
 // Anti-DNS-rebinding: validate Host header on all /api/* requests.
 // Handles IPv6 bracket notation ([::1]:5179) without splitting on the colon inside the brackets.
@@ -242,6 +271,20 @@ app.post("/api/load", async (req: Request, res: Response) => {
     dotenvBasePath = process.env.WORKSPACE_PATH || undefined;
   }
 
+  // Guard against leaf symlinks escaping the workspace — catches HTTP-WASM where
+  // fastedge-run reads the dotenv files directly, bypassing loadDotenvFiles().
+  if (dotenvBasePath) {
+    try {
+      validateDotenvLeafs(dotenvBasePath);
+    } catch (e) {
+      if (e instanceof DotenvPathError) {
+        res.status(400).json({ ok: false, error: (e as Error).message });
+        return;
+      }
+      throw e;
+    }
+  }
+
   try {
     let bufferOrPath: Buffer | string;
     let fileSize: number;
@@ -395,6 +438,18 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
     }
   } else {
     dotenvPath = process.env.WORKSPACE_PATH || undefined;
+  }
+
+  if (dotenvPath) {
+    try {
+      validateDotenvLeafs(dotenvPath);
+    } catch (e) {
+      if (e instanceof DotenvPathError) {
+        res.status(400).json({ ok: false, error: (e as Error).message });
+        return;
+      }
+      throw e;
+    }
   }
 
   try {
@@ -750,6 +805,7 @@ app.get("/api/schema/:name", (req: Request, res: Response) => {
 
 // SPA fallback - serve index.html for all non-API routes
 app.get("*", (req: Request, res: Response) => {
+  res.setHeader("Content-Security-Policy", FRONTEND_CSP);
   res.sendFile(path.join(__dirname, "frontend", "index.html"));
 });
 
@@ -768,8 +824,45 @@ function writePortFile(port: number): void {
   const portFilePath = getPortFilePath();
   if (!portFilePath) return;
   try {
-    mkdirSync(path.dirname(portFilePath), { recursive: true });
-    writeFileSync(portFilePath, String(port), "utf8");
+    const debugDir = path.dirname(portFilePath);
+    mkdirSync(debugDir, { recursive: true });
+
+    // Reject if .fastedge-debug is itself a symlink pointing outside the workspace.
+    const appRoot = process.env.WORKSPACE_PATH || process.cwd();
+    try {
+      const realDir = realpathSync(debugDir);
+      const realRoot = realpathSync(appRoot);
+      if (realDir !== realRoot && !realDir.startsWith(realRoot + path.sep)) {
+        console.warn("Port file directory is outside workspace — refusing to write");
+        return;
+      }
+    } catch { /* unreachable in practice — let the write attempt fail naturally */ }
+
+    const tokenHash = createHash("sha256").update(SESSION_TOKEN).digest("hex");
+    const content = `${port}:${tokenHash}`;
+    // O_NOFOLLOW atomically rejects a symlink at the leaf. On Windows it is
+    // unavailable (undefined → 0), so fall back to an explicit lstat check.
+    // The lstat path has a narrow TOCTOU window, but a static malicious workspace
+    // cannot exploit it without active intervention between the check and the open.
+    const O_NOFOLLOW: number = (fsConst.O_NOFOLLOW as number | undefined) ?? 0;
+    if (O_NOFOLLOW === 0) {
+      try {
+        if (lstatSync(portFilePath).isSymbolicLink()) {
+          console.warn("Port file is a symlink — refusing to write");
+          return;
+        }
+      } catch { /* file does not exist — OK */ }
+    }
+    const fd = openSync(
+      portFilePath,
+      fsConst.O_WRONLY | fsConst.O_CREAT | fsConst.O_TRUNC | O_NOFOLLOW,
+      0o600,
+    );
+    try {
+      writeSync(fd, content);
+    } finally {
+      closeSync(fd);
+    }
   } catch (err) {
     console.warn(`Could not write port file: ${(err as Error).message}`);
   }
@@ -778,7 +871,16 @@ function writePortFile(port: number): void {
 function deletePortFile(): void {
   const portFilePath = getPortFilePath();
   if (!portFilePath) return;
+  // Apply the same parent-directory containment check as writePortFile so that
+  // cleanup cannot delete a file in an external directory if .fastedge-debug is
+  // (or was replaced with) a symlink pointing outside the workspace.
   try {
+    const appRoot = process.env.WORKSPACE_PATH || process.cwd();
+    try {
+      const realDir = realpathSync(path.dirname(portFilePath));
+      const realRoot = realpathSync(appRoot);
+      if (realDir !== realRoot && !realDir.startsWith(realRoot + path.sep)) return;
+    } catch { /* unreachable in practice */ }
     unlinkSync(portFilePath);
   } catch {
     // File may not exist — not an error

@@ -72,6 +72,10 @@ async function resolveAllIps(hostname: string): Promise<string[]> {
  * "manual" is set on the fetch); the redirect target is not checked here.
  *
  * DNS rebinding between this check and the actual connect is not mitigated.
+ * Accepted for a local dev tool: exploiting it requires external DNS control, precise
+ * sub-TTL timing, AND a cloud metadata endpoint reachable from the dev machine. For HTTPS
+ * targets the TLS cert must match the original hostname anyway, so rebinding is ineffective.
+ * If this server is deployed in a cloud environment, consider pinning the resolved IP.
  */
 export async function checkEgressAllowed(urlStr: string): Promise<void> {
   let parsed: URL;

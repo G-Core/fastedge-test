@@ -9,10 +9,13 @@ import { startTestServer, type TestServer } from "./helpers.js";
 function wsConnect(
   url: string,
   origin?: string,
+  protocols?: string[],
 ): Promise<"open" | number> {
   return new Promise((resolve) => {
     const opts = origin ? { origin } : {};
-    const ws = new WebSocket(url, opts);
+    const ws = protocols?.length
+      ? new WebSocket(url, protocols, opts)
+      : new WebSocket(url, opts);
     ws.once("open", () => {
       ws.close();
       resolve("open");
@@ -73,6 +76,26 @@ describe("debugger WebSocket server — origin and token checks", () => {
     const port = new URL(server.base).port;
     const result = await wsConnect(
       `ws://127.0.0.1:${port}/ws?token=wrong-token`,
+    );
+    expect(result).not.toBe("open");
+  });
+
+  it("WS upgrade with valid subprotocol token → accepted", async () => {
+    const port = new URL(server.base).port;
+    const result = await wsConnect(
+      `ws://127.0.0.1:${port}/ws`,
+      undefined,
+      [`fastedge-token.${server.token}`],
+    );
+    expect(result).toBe("open");
+  });
+
+  it("WS upgrade with wrong subprotocol token → rejected", async () => {
+    const port = new URL(server.base).port;
+    const result = await wsConnect(
+      `ws://127.0.0.1:${port}/ws`,
+      undefined,
+      [`fastedge-token.wrong-token`],
     );
     expect(result).not.toBe("open");
   });
