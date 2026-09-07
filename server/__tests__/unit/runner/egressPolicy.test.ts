@@ -7,7 +7,7 @@ vi.mock("node:dns", () => ({
   },
 }));
 
-import { promises as dns } from "node:dns";
+import { promises as dns, type LookupAddress } from "node:dns";
 import { checkEgressAllowed } from "../../../runner/egressPolicy.js";
 
 describe("checkEgressAllowed — IPv4-mapped IPv6 bypass", () => {
@@ -43,7 +43,7 @@ describe("checkEgressAllowed — all DNS addresses checked", () => {
     vi.mocked(dns.lookup).mockResolvedValue([
       { address: "1.2.3.4", family: 4 },
       { address: "169.254.169.254", family: 4 },
-    ] as any);
+    ] as unknown as LookupAddress);
 
     await expect(
       checkEgressAllowed("http://dual-homed.example/"),

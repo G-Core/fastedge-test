@@ -9,10 +9,10 @@ vi.mock("../../api", () => ({
 }));
 
 const minimalConfig: TestConfig = {
-  envVars: {},
-  secrets: {},
+  request: { method: "GET", path: "/", headers: {}, body: "" },
   properties: {},
-} as any;
+  logLevel: 0,
+};
 
 describe("ConfigEditorModal — Strategy 0 (VSCode iframe)", () => {
   let originalTop: typeof window.top;

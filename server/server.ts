@@ -49,7 +49,7 @@ const EXPECTED_HOST = process.env.FASTEDGE_EXPECTED_HOST;
 
 // Initialize WebSocket infrastructure
 const debug = process.env.PROXY_RUNNER_DEBUG === "1";
-const wsManager = new WebSocketManager(httpServer, debug, SESSION_TOKEN); // token validated in verifyClient
+const wsManager = new WebSocketManager(httpServer, SESSION_TOKEN, debug); // token validated in verifyClient
 const stateManager = new StateManager(wsManager, debug);
 
 // Initialize runner factory
@@ -678,9 +678,12 @@ app.post(
         return;
       }
 
-      // Register this path as a one-time write capability; save-as will consume it.
-      pendingSavePaths.add(result.filePath);
-      res.json({ ok: true, filePath: result.filePath });
+      // Normalize now so the registered path and the eventual write target are identical.
+      const filePath = result.filePath.endsWith(".json")
+        ? result.filePath
+        : result.filePath + ".json";
+      pendingSavePaths.add(filePath);
+      res.json({ ok: true, filePath });
     } catch (error) {
       res.status(500).json({ ok: false, error: String(error) });
     }
@@ -710,14 +713,11 @@ app.post("/api/config/save-as", async (req: Request, res: Response) => {
   pendingSavePaths.delete(filePath); // single-use
 
   try {
-    let targetPath = filePath;
-    if (!targetPath.endsWith(".json")) targetPath += ".json";
-
-    const dir = path.dirname(targetPath);
+    const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(targetPath, JSON.stringify(config, null, 2), "utf-8");
+    await fs.writeFile(filePath, JSON.stringify(config, null, 2), "utf-8");
 
-    res.json({ ok: true, savedPath: targetPath });
+    res.json({ ok: true, savedPath: filePath });
   } catch (error) {
     res.status(500).json({ ok: false, error: String(error) });
   }

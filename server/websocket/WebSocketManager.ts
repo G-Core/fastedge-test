@@ -28,7 +28,7 @@ export class WebSocketManager {
   private debug: boolean;
   private token: string;
 
-  constructor(server: HTTPServer, debug: boolean = false, token: string) {
+  constructor(server: HTTPServer, token: string, debug: boolean = false) {
     this.debug = debug;
     this.token = token;
 
@@ -54,7 +54,12 @@ export class WebSocketManager {
         // Require the session token from the ?token= query param.
         // WebSocket handshakes cannot set custom headers from browsers, so the
         // token is passed in the URL and read from the query string here.
-        const url = new URL(info.req.url ?? "/", "http://localhost");
+        let url: URL;
+        try {
+          url = new URL(info.req.url ?? "/", "http://localhost");
+        } catch {
+          return false; // malformed handshake URL → reject
+        }
         const reqToken = url.searchParams.get("token") ?? "";
         if (!safeTokenEqual(reqToken, this.token)) {
           return false;
