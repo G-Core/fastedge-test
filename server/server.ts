@@ -126,7 +126,8 @@ app.get("/api/environment", (req: Request, res: Response) => {
   const isVSCode = process.env.VSCODE_INTEGRATION === "true";
   res.json({
     environment: isVSCode ? "vscode" : "node",
-    supportsPathLoading: true, // Both environments support path loading
+    supportsPathLoading: true,
+    workspaceRoot: process.env.WORKSPACE_PATH ?? null,
   });
 });
 

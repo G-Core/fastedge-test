@@ -19,6 +19,7 @@ function apiFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
 export interface EnvironmentInfo {
   environment: 'vscode' | 'node';
   supportsPathLoading: boolean;
+  workspaceRoot: string | null;
 }
 
 /**
@@ -39,6 +40,7 @@ export async function getEnvironment(): Promise<EnvironmentInfo> {
     return {
       environment: 'node',
       supportsPathLoading: true,
+      workspaceRoot: null,
     };
   }
 

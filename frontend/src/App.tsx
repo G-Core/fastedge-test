@@ -54,6 +54,7 @@ function App() {
     // UI state
     wsStatus,
     setWsStatus,
+    setWorkspaceRoot,
   } = useAppStore();
 
   // WebSocket connection for real-time updates
@@ -77,6 +78,7 @@ function App() {
       try {
         const envInfo = await getEnvironment();
         setEnvironment(envInfo);
+        setWorkspaceRoot(envInfo.workspaceRoot ?? null);
         console.log(`[App] Detected environment: ${envInfo.environment}`);
       } catch (error) {
         console.error("[App] Failed to initialize environment:", error);

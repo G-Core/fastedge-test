@@ -15,6 +15,7 @@ const DEFAULT_UI_STATE: UIState = {
     clientCount: 0,
     error: null,
   },
+  workspaceRoot: null,
 };
 
 // ============================================================================
@@ -57,5 +58,10 @@ export const createUISlice: StateCreator<
   setWsStatus: (status) =>
     set((state) => {
       state.wsStatus = status;
+    }),
+
+  setWorkspaceRoot: (root) =>
+    set((state) => {
+      state.workspaceRoot = root;
     }),
 });

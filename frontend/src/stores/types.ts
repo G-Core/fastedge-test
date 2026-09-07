@@ -116,6 +116,7 @@ export interface UIState {
   activeSubView: "logs" | "inputs" | "outputs";
   expandedPanels: Record<string, boolean>;
   wsStatus: WebSocketStatus;
+  workspaceRoot: string | null;
 }
 
 export interface UIActions {
@@ -124,6 +125,7 @@ export interface UIActions {
   togglePanel: (panel: string) => void;
   setPanelExpanded: (panel: string, expanded: boolean) => void;
   setWsStatus: (status: WebSocketStatus) => void;
+  setWorkspaceRoot: (root: string | null) => void;
 }
 
 export type UISlice = UIState & UIActions;
