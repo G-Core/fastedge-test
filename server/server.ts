@@ -42,7 +42,7 @@ const httpServer = createServer(app);
 
 // Per-session capability token. VSCode extension passes FASTEDGE_DEBUG_TOKEN
 // via env; CLI generates one and logs it so only the local user sees it.
-const SESSION_TOKEN = process.env.FASTEDGE_DEBUG_TOKEN ?? randomBytes(32).toString("hex");
+const SESSION_TOKEN = process.env.FASTEDGE_DEBUG_TOKEN || randomBytes(32).toString("hex");
 // Bind to loopback by default; non-loopback requires explicit opt-in.
 const HOST = process.env.FASTEDGE_BIND_HOST ?? "127.0.0.1";
 const EXPECTED_HOST = process.env.FASTEDGE_EXPECTED_HOST;
@@ -84,7 +84,19 @@ app.use(express.static(path.join(__dirname, "frontend")));
 // This prevents a remote page from rebinding its hostname to 127.0.0.1 and issuing same-origin requests.
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
   const raw = req.headers.host ?? "";
-  const host = raw.startsWith("[") ? raw.slice(1, raw.indexOf("]")) : raw.split(":")[0];
+  let host: string;
+  if (raw.startsWith("[")) {
+    // Bracketed IPv6: require exactly [addr] or [addr]:<numeric-port>.
+    const close = raw.indexOf("]");
+    const suffix = close === -1 ? "" : raw.slice(close + 1);
+    if (close === -1 || (suffix !== "" && !/^:\d{1,5}$/.test(suffix))) {
+      res.status(403).json({ ok: false, error: "Invalid Host" });
+      return;
+    }
+    host = raw.slice(1, close);
+  } else {
+    host = raw.split(":")[0];
+  }
   if (!hostAllowed(host, EXPECTED_HOST)) {
     res.status(403).json({ ok: false, error: "Invalid Host" });
     return;

@@ -50,3 +50,11 @@ describe("checkEgressAllowed — all DNS addresses checked", () => {
     ).rejects.toThrow("Egress blocked");
   });
 });
+
+describe("checkEgressAllowed — Alibaba Cloud metadata endpoint", () => {
+  it("blocks 100.100.100.200 directly", async () => {
+    await expect(
+      checkEgressAllowed("http://100.100.100.200/latest/meta-data/"),
+    ).rejects.toThrow("Egress blocked");
+  });
+});

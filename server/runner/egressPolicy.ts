@@ -37,8 +37,10 @@ function isBlockedIp(ip: string): boolean {
   // IPv4-mapped IPv6 (::ffff:a.b.c.d or ::ffff:hex:hex): check the embedded IPv4
   const embedded = extractMappedIpv4(ip);
   if (embedded !== null) return isBlockedIp(embedded);
-  // Link-local IPv4 (169.254.0.0/16)
+  // Link-local IPv4 (169.254.0.0/16) — covers AWS/GCP/Azure/OpenStack metadata
   if (/^169\.254\./.test(ip)) return true;
+  // Alibaba Cloud instance metadata (100.100.100.200) — not link-local, blocked explicitly
+  if (ip === "100.100.100.200") return true;
   // Link-local IPv6 (fe80::/10 = fe80:: through febf::)
   if (/^fe[89ab][0-9a-f]/i.test(ip)) return true;
   // ULA IPv6 (fc00::/7 = fc00:: through fdff::)

@@ -78,7 +78,10 @@ export class WebSocketManager {
         // and suffix match (needed for Codespaces where the forwarded hostname
         // is <name>-<port>.<domain> and the server picks its own port).
         try {
-          return hostAllowed(new URL(origin).hostname, process.env.FASTEDGE_EXPECTED_HOST);
+          // URL.hostname returns "[::1]" for IPv6 literals; strip brackets so
+          // hostAllowed can match against "::1".
+          const h = new URL(origin).hostname.replace(/^\[(.+)\]$/, "$1");
+          return hostAllowed(h, process.env.FASTEDGE_EXPECTED_HOST);
         } catch {
           return false; // malformed origin → reject
         }

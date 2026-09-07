@@ -60,6 +60,21 @@ describe("debugger HTTP server — security middleware", () => {
     expect(statusCode).toBe(403);
   });
 
+  it("GET /api/environment → 403 with malformed bracketed IPv6 Host ([::1]evil.com)", async () => {
+    const { statusCode } = await rawRequest(server.base, "/api/environment", {
+      headers: { "x-fastedge-token": server.token, host: "[::1]evil.com" },
+    });
+    expect(statusCode).toBe(403);
+  });
+
+  it("GET /api/environment → 403 with bracketed IPv6 and non-numeric port ([::1]:evil.com)", async () => {
+    // [::1]:evil.com must be rejected — the suffix after ] must be empty or :digits only.
+    const { statusCode } = await rawRequest(server.base, "/api/environment", {
+      headers: { "x-fastedge-token": server.token, host: "[::1]:evil.com" },
+    });
+    expect(statusCode).toBe(403);
+  });
+
   it("GET /api/environment → 200 with Host: localhost", async () => {
     const { statusCode } = await rawRequest(server.base, "/api/environment", {
       headers: { "x-fastedge-token": server.token, host: "localhost" },
