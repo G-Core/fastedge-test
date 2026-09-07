@@ -2,13 +2,14 @@ import { timingSafeEqual } from "node:crypto";
 
 /**
  * Compare two token strings in constant time to prevent timing attacks.
- * Returns false immediately when lengths differ (length is not secret —
- * SESSION_TOKEN is always 64 hex chars — but the check is needed to keep
- * Buffer.byteLength equal so timingSafeEqual does not throw).
+ * Buffers must be equal in byte length for timingSafeEqual not to throw;
+ * we check byte length (not string .length) to handle non-ASCII input safely.
  */
 export function safeTokenEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  const ba = Buffer.from(a, "utf8");
+  const bb = Buffer.from(b, "utf8");
+  if (ba.byteLength !== bb.byteLength) return false;
+  return timingSafeEqual(ba, bb);
 }
 
 /**
