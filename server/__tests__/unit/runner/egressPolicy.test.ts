@@ -43,7 +43,7 @@ describe("checkEgressAllowed — all DNS addresses checked", () => {
     vi.mocked(dns.lookup).mockResolvedValue([
       { address: "1.2.3.4", family: 4 },
       { address: "169.254.169.254", family: 4 },
-    ] as unknown as LookupAddress);
+    ] as unknown as LookupAddress[]);
 
     await expect(
       checkEgressAllowed("http://dual-homed.example/"),

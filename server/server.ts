@@ -895,7 +895,9 @@ async function isPortAvailable(port: number): Promise<boolean> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 500);
   try {
-    const hostForUrl = HOST.includes(":") ? `[${HOST}]` : HOST;
+    // Unspecified bind addresses (0.0.0.0 / ::) aren't connectable — probe loopback instead.
+    const probeHost = HOST === "0.0.0.0" ? "127.0.0.1" : HOST === "::" ? "::1" : HOST;
+    const hostForUrl = probeHost.includes(":") ? `[${probeHost}]` : probeHost;
     await fetch(`http://${hostForUrl}:${port}/health`, {
       signal: controller.signal,
     });
