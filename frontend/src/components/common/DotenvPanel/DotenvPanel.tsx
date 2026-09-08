@@ -25,8 +25,8 @@ export function DotenvPanel({
   const { workspaceRoot } = useAppStore();
   const [resolvedRoot, setResolvedRoot] = useState<string | null>(null);
   const toForward = (p: string) => p.replace(/\\/g, "/");
-  const normPath = path ? toForward(path) : "";
-  const normRoot = workspaceRoot ? toForward(workspaceRoot) : "";
+  const normPath = path ? toForward(path).replace(/\/+$/, "") : "";
+  const normRoot = workspaceRoot ? toForward(workspaceRoot).replace(/\/+$/, "") : "";
   const pathError =
     normRoot && normPath && !(normPath === normRoot || normPath.startsWith(normRoot + "/"))
       ? `Path is outside the workspace root (${workspaceRoot}). Restart the debugger with --project-dir <workspace root> to allow this path.`

@@ -947,7 +947,7 @@ export async function startServer(port = defaultPort): Promise<void> {
       // the token in the fragment so only the local user reading stderr can open it.
       if (!process.env.FASTEDGE_DEBUG_TOKEN) {
         console.error(
-          `Open: http://localhost:${resolvedPort}/#token=${SESSION_TOKEN}`,
+          `Open: http://${hostForUrl}:${resolvedPort}/#token=${SESSION_TOKEN}`,
         );
       }
       writePortFile(resolvedPort);
