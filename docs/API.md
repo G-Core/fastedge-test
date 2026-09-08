@@ -30,7 +30,17 @@ The fragment after `#token=` is your session token. Copy it for use in API calls
 x-fastedge-token: <token>
 ```
 
-**WebSocket** — pass the token as a query parameter when connecting (browsers cannot set custom headers during the WebSocket handshake):
+**WebSocket** — two mechanisms exist, tried in preference order:
+
+1. **`Sec-WebSocket-Protocol: fastedge-token.<token>`** (preferred) — the token is embedded in the subprotocol list rather than the URL, keeping it out of proxy and server access logs. The server echoes the subprotocol back on accept.
+2. **`?token=<token>` query parameter** (fallback) — for legacy or non-browser tooling that cannot set subprotocols on the WebSocket handshake. Avoid this form in new consumers: the token appears in server and proxy logs.
+
+```javascript
+const ws = new WebSocket(
+  `ws://127.0.0.1:5179/ws`,
+  [`fastedge-token.${token}`],
+);
+```
 
 ```
 ws://127.0.0.1:<port>/ws?token=<token>
@@ -60,7 +70,7 @@ The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints acce
 | `ui`       | Request originated from the web UI (default if omitted) |
 | `ai_agent` | Request originated from an AI agent                     |
 | `api`      | Request originated from direct API usage                |
-| `system`   | Request originated from an automated system             |
+| `system`   | Request originated from an automated system              |
 
 ```http
 X-Source: ai_agent
@@ -217,7 +227,7 @@ curl -X POST http://localhost:5179/api/load \
 **Error Responses**
 
 | Status | Condition                                                                                                   |
-| ------ | ----------------------------------------------------------------------------------------------------------- |
+| ------ | ------------------------------------------------------------------------------------------------------------|
 | `400`  | Validation failed, missing both `wasmPath` and `wasmBase64`, invalid path, or path does not end in `.wasm` |
 | `400`  | `httpPort` is specified and already in use (HTTP-WASM only)                                                 |
 | `500`  | WASM load failed or runner initialization error                                                             |
@@ -267,10 +277,10 @@ curl -X PATCH http://localhost:5179/api/dotenv \
 
 **Error Responses**
 
-| Status | Condition                                                      |
-| ------ | -------------------------------------------------------------- |
+| Status | Condition                                                       |
+| ------ | ----------------------------------------------------------------|
 | `400`  | `dotenv.enabled` is not a boolean, or no WASM module is loaded |
-| `500`  | Failed to apply dotenv settings                                |
+| `500`  | Failed to apply dotenv settings                                 |
 
 ---
 
@@ -365,7 +375,7 @@ type HookResult = {
 };
 ```
 
-`hookResults` is keyed by hook name (e.g. `"onRequestHeaders"`, `"onResponseHeaders"`). `calculatedProperties` is present only when the runner derives request-derived properties; keys follow the `request.*` pattern (`request.url`, `request.host`, `request.path`, `request.query`, `request.scheme`, `request.extension`, `request.method`).
+`hookResults` is keyed by hook name (e.g. `"onRequestHeaders"`, `"onResponseHeaders"`). `calculatedProperties` is present only when the runner derives request-derived properties; read `PropertyResolver.getCalculatedProperties()` in the runner source for the current list of derived `request.*` keys.
 
 **Example — HTTP-WASM**
 
@@ -443,21 +453,17 @@ curl -X POST http://localhost:5179/api/execute \
   "calculatedProperties": {
     "request.url": "https://example.com/page",
     "request.host": "example.com",
-    "request.path": "/page",
-    "request.query": "",
-    "request.scheme": "https",
-    "request.extension": "",
-    "request.method": "GET"
+    "request.path": "/page"
   }
 }
 ```
 
 **Error Responses**
 
-| Status | Condition                                                                                      |
-| ------ | ---------------------------------------------------------------------------------------------- |
-| `400`  | No WASM module loaded, or missing `path`/`url` for HTTP-WASM, or missing `url` for Proxy-WASM |
-| `500`  | Execution failed                                                                               |
+| Status | Condition                                                                                       |
+| ------ | --------------------------------------------------------------------------------------------------|
+| `400`  | No WASM module loaded, or missing `path`/`url` for HTTP-WASM, or missing `url` for Proxy-WASM   |
+| `500`  | Execution failed                                                                                  |
 
 ---
 
@@ -566,10 +572,10 @@ curl -X POST http://localhost:5179/api/call \
 
 **Error Responses**
 
-| Status | Condition                                                                              |
-| ------ | -------------------------------------------------------------------------------------- |
-| `400`  | Validation failed (invalid hook name, missing `properties`), or no WASM module loaded |
-| `500`  | Hook execution failed                                                                  |
+| Status | Condition                                                                               |
+| ------ | -----------------------------------------------------------------------------------------|
+| `400`  | Validation failed (invalid hook name, missing `properties`), or no WASM module loaded  |
+| `500`  | Hook execution failed                                                                    |
 
 ---
 
@@ -614,7 +620,7 @@ The upstream response is generated at runtime — either by a real fetch against
 }
 ```
 
-`HookResult` has the same shape as documented in [`POST /api/call`](#post-apicall). `hookResults` is keyed by hook name. `calculatedProperties` keys follow the `request.*` pattern.
+`HookResult` has the same shape as documented in [`POST /api/call`](#post-apicall). `hookResults` is keyed by hook name. `calculatedProperties` is optional; keys follow the `request.*` pattern derived by `PropertyResolver.getCalculatedProperties()`.
 
 **Example**
 
@@ -678,21 +684,17 @@ curl -X POST http://localhost:5179/api/send \
   "calculatedProperties": {
     "request.url": "https://example.com/api/resource",
     "request.host": "example.com",
-    "request.path": "/api/resource",
-    "request.query": "",
-    "request.scheme": "https",
-    "request.extension": "",
-    "request.method": "POST"
+    "request.path": "/api/resource"
   }
 }
 ```
 
 **Error Responses**
 
-| Status | Condition                                                                    |
-| ------ | ---------------------------------------------------------------------------- |
-| `400`  | Validation failed (missing `url` or `properties`), or no WASM module loaded |
-| `500`  | Execution failed                                                             |
+| Status | Condition                                                                     |
+| ------ | -------------------------------------------------------------------------------|
+| `400`  | Validation failed (missing `url` or `properties`), or no WASM module loaded  |
+| `500`  | Execution failed                                                               |
 
 ---
 
@@ -781,9 +783,9 @@ curl http://localhost:5179/api/config
 
 **Error Responses**
 
-| Status | Condition                                  |
-| ------ | ------------------------------------------ |
-| `404`  | `fastedge-config.test.json` does not exist |
+| Status | Condition                                    |
+| ------ | ----------------------------------------------|
+| `404`  | `fastedge-config.test.json` does not exist   |
 
 ---
 
@@ -842,23 +844,23 @@ curl -X POST http://localhost:5179/api/config \
 
 **Error Responses**
 
-| Status | Condition                                                                               |
-| ------ | --------------------------------------------------------------------------------------- |
-| `400`  | Validation failed (missing `config.appType`, `config.request`, or `config.properties`) |
-| `500`  | File write failed                                                                       |
+| Status | Condition                                                                                |
+| ------ | -------------------------------------------------------------------------------------------|
+| `400`  | Validation failed (missing `config.appType`, `config.request`, or `config.properties`)   |
+| `500`  | File write failed                                                                          |
 
 ---
 
 ### POST /api/config/save-as
 
-Saves the provided configuration to an arbitrary file path. The path can be absolute or relative to the project root. Creates intermediate directories as needed. Appends `.json` if the path does not already end in `.json`.
+Saves the provided configuration to a file path previously vended by the (Electron-only) save dialog. The path must have been registered by `/api/config/show-save-dialog` first; unregistered paths are rejected. The path is single-use — it is removed from the pending set once consumed. Creates intermediate directories as needed.
 
 **Request Body**
 
 ```typescript
 {
   config: object;    // The configuration object to serialize as JSON
-  filePath: string;  // Target file path (absolute or relative to project root)
+  filePath: string;  // A path previously returned by the save dialog
 }
 ```
 
@@ -867,7 +869,7 @@ Saves the provided configuration to an arbitrary file path. The path can be abso
 ```typescript
 {
   ok: true;
-  savedPath: string; // Resolved absolute path where the file was written
+  savedPath: string; // The file path where the config was written
 }
 ```
 
@@ -887,7 +889,7 @@ curl -X POST http://localhost:5179/api/config/save-as \
       },
       "properties": {}
     },
-    "filePath": "configs/staging.test"
+    "filePath": "/home/user/project/configs/staging.test.json"
   }'
 ```
 
@@ -900,10 +902,11 @@ curl -X POST http://localhost:5179/api/config/save-as \
 
 **Error Responses**
 
-| Status | Condition                               |
-| ------ | --------------------------------------- |
-| `400`  | Missing `config` or `filePath`          |
-| `500`  | File write or directory creation failed |
+| Status | Condition                                                          |
+| ------ | ---------------------------------------------------------------------|
+| `400`  | Missing `config` or `filePath`                                     |
+| `403`  | `filePath` was not vended by the save dialog (or was already used) |
+| `500`  | File write or directory creation failed                             |
 
 ---
 
@@ -923,23 +926,23 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Request Schemas
 
-| Name         | Description                                |
-| ------------ | ------------------------------------------ |
-| `api-load`   | Request body schema for `POST /api/load`   |
-| `api-send`   | Request body schema for `POST /api/send`   |
-| `api-call`   | Request body schema for `POST /api/call`   |
-| `api-config` | Request body schema for `POST /api/config` |
+| Name         | Description                                 |
+| ------------ | -------------------------------------------- |
+| `api-load`   | Request body schema for `POST /api/load`    |
+| `api-send`   | Request body schema for `POST /api/send`    |
+| `api-call`   | Request body schema for `POST /api/call`    |
+| `api-config` | Request body schema for `POST /api/config`  |
 
 #### Response / Type Schemas
 
-| Name                   | Description                                                   |
-| ---------------------- | --------------------------------------------------------------|
-| `fastedge-config.test` | Schema for `fastedge-config.test.json` config files           |
-| `hook-result`          | Shape of a single `HookResult` object                         |
+| Name                   | Description                                                    |
+| ---------------------- | -----------------------------------------------------------------|
+| `fastedge-config.test` | Schema for `fastedge-config.test.json` config files            |
+| `hook-result`          | Shape of a single `HookResult` object                          |
 | `hook-call`            | Shape of a `HookCall` input object                             |
-| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints |
-| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution              |
-| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
+| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints  |
+| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution               |
+| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution     |
 
 **Example**
 
@@ -969,9 +972,9 @@ curl http://localhost:5179/api/schema/fastedge-config.test
 
 **Error Responses**
 
-| Status | Condition             |
-| ------ | ---------------------- |
-| `404`  | Schema name not found |
+| Status | Condition              |
+| ------ | ------------------------|
+| `404`  | Schema name not found  |
 
 ---
 
@@ -990,11 +993,12 @@ When a request body fails schema validation (Zod), `error` is the flattened Zod 
 
 **Common status codes**
 
-| Status | Meaning                                                                                       |
-| ------ | ----------------------------------------------------------------------------------------------|
-| `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded)  |
-| `404`  | Resource not found (config file, schema file)                                                 |
-| `500`  | Internal server error during execution or I/O                                                 |
+| Status | Meaning                                                                                        |
+| ------ | -------------------------------------------------------------------------------------------------|
+| `400`  | Invalid request body, missing required fields, or precondition not met (e.g. no WASM loaded)   |
+| `403`  | Host/token check failed, or a save-as path was not vended by the save dialog                    |
+| `404`  | Resource not found (config file, schema file)                                                   |
+| `500`  | Internal server error during execution or I/O                                                   |
 
 ---
 
