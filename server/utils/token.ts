@@ -24,9 +24,12 @@ export function safeTokenEqual(a: string, b: string): boolean {
  * Strip any ":port" suffix before calling (IPv6 brackets handled by caller).
  */
 export function hostAllowed(hostname: string, expectedHost?: string): boolean {
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+  // DNS hostnames are case-insensitive; normalize before comparing.
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h === "127.0.0.1" || h === "::1") {
     return true;
   }
   if (!expectedHost) return false;
-  return hostname === expectedHost || hostname.endsWith("." + expectedHost);
+  const e = expectedHost.toLowerCase();
+  return h === e || h.endsWith("." + e);
 }
