@@ -86,6 +86,7 @@ function App() {
         setEnvironment({
           environment: 'node',
           supportsPathLoading: true,
+          workspaceRoot: null,
         });
       }
     };
