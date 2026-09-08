@@ -6,7 +6,21 @@ Real-time event stream from the `@gcoredev/fastedge-test` server to connected cl
 
 ## Authentication
 
-WebSocket connections require the session token as a `?token=` query parameter (browsers cannot set custom headers during the WebSocket handshake). Obtain the token from the `Open:` URL printed to stderr at startup — see the [Authentication section in API.md](./API.md#authentication) for the full flow, including the `x-fastedge-token` header used for HTTP requests and the relevant environment variables.
+The server accepts the session token via two mechanisms, tried in this order:
+
+1. **`Sec-WebSocket-Protocol: fastedge-token.<token>`** (preferred) — the browser WebSocket API accepts a list of subprotocols, so the token can be embedded there instead of in the URL. This keeps it out of URLs and out of proxy access logs. The server echoes the matching subprotocol back on accept.
+2. **`?token=<token>` query parameter** (fallback) — used only when the client cannot set subprotocols (legacy or non-browser tooling). Avoid this path in new consumers: the token appears in server logs and in any forwarding-proxy access logs.
+
+Obtain the token from the `Open:` URL printed to stderr at startup — see the [Authentication section in API.md](./API.md#authentication) for the full flow, including the `x-fastedge-token` header used for HTTP requests and the relevant environment variables.
+
+**Preferred — subprotocol:**
+
+```javascript
+const token = new URL(location.href).hash.slice("#token=".length);
+const ws = new WebSocket(`ws://127.0.0.1:5179/ws`, [`fastedge-token.${token}`]);
+```
+
+**Fallback — query parameter:**
 
 ```
 ws://127.0.0.1:<port>/ws?token=<token>
@@ -17,14 +31,14 @@ ws://127.0.0.1:<port>/ws?token=<token>
 Connect to the WebSocket server at:
 
 ```
-ws://127.0.0.1:{port}/ws?token={token}
+ws://127.0.0.1:{port}/ws
 ```
 
-where `{port}` is the port the server is running on (default `5179`) and `{token}` is the session token from the `Open:` stderr line.
+where `{port}` is the port the server is running on (default `5179`) and the token is passed via one of the two mechanisms described above.
 
 ```javascript
 const token = new URL(location.href).hash.slice("#token=".length);
-const ws = new WebSocket(`ws://127.0.0.1:5179/ws?token=${token}`);
+const ws = new WebSocket(`ws://127.0.0.1:5179/ws`, [`fastedge-token.${token}`]);
 
 ws.addEventListener("message", (event) => {
   const msg = JSON.parse(event.data);
@@ -34,7 +48,7 @@ ws.addEventListener("message", (event) => {
 
 ### Lifecycle
 
-1. **Connect** — the server accepts all connections and immediately sends a `connection_status` event confirming the connection and the current client count.
+1. **Connect** — the server validates the token and origin, then immediately sends a `connection_status` event confirming the connection and the current client count.
 2. **Ping / pong** — the server sends WebSocket `ping` frames every 15 seconds. Clients that have not responded within 30 seconds are terminated. Standard WebSocket clients handle pong automatically.
 3. **Disconnect** — when a client disconnects, the server broadcasts an updated `connection_status` to remaining clients.
 

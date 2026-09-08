@@ -10,7 +10,7 @@ The `@gcoredev/fastedge-test` debugger server exposes a REST API for loading WAS
 http://localhost:5179
 ```
 
-The port can be overridden via the `PORT` environment variable. The active port is written to `.fastedge-debug/.debug-port` (relative to `WORKSPACE_PATH` if set, otherwise the current working directory) on startup and deleted on shutdown.
+The port can be overridden via the `PORT` environment variable. The active port is written to `.fastedge-debug/.debug-port` (relative to `WORKSPACE_PATH` if set, otherwise the current working directory) on startup and deleted on shutdown. The file contains `PORT:SHA256_HASH`, where `PORT` is the decimal port number and `SHA256_HASH` is the hex-encoded SHA-256 of the session token. Consumers that only need the port should parse the prefix up to the first colon (e.g. `parseInt(content.split(":")[0], 10)`).
 
 ## Authentication
 

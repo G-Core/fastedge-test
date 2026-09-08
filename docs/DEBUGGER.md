@@ -99,7 +99,13 @@ PORT=8080 npx fastedge-debug
 
 If the preferred port is already in use, the server tries the next port sequentially, up to 50 ports (for example, `5179` through `5228` by default). If no free port is found in that range, the server exits with an error. Set `PORT` to a specific value to bypass auto-increment when a predictable port is required.
 
-The server writes the bound port number to `.fastedge-debug/.debug-port` under `WORKSPACE_PATH` (if set) or the current working directory, and deletes the file on shutdown. Use this file for programmatic port discovery when starting the server as a subprocess.
+The server writes the bound port to `.fastedge-debug/.debug-port` under `WORKSPACE_PATH` (if set) or the current working directory, and deletes the file on shutdown. Use this file for programmatic port discovery when starting the server as a subprocess.
+
+The file format is `PORT:SHA256_HASH` — the decimal port number, a colon, then the hex-encoded SHA-256 of the session token (used by the VS Code extension to verify server identity before reuse). To extract just the port:
+
+```js
+const port = parseInt(fs.readFileSync(".fastedge-debug/.debug-port", "utf8").trim().split(":")[0], 10);
+```
 
 ## Health Check
 

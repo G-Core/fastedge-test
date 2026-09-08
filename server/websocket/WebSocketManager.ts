@@ -68,7 +68,8 @@ export class WebSocketManager {
         } catch {
           return false; // malformed handshake URL → reject
         }
-        const rawProtos = (info.req.headers["sec-websocket-protocol"] as string) ?? "";
+        const rawHeader = info.req.headers["sec-websocket-protocol"];
+        const rawProtos = Array.isArray(rawHeader) ? rawHeader.join(",") : (rawHeader ?? "");
         const tokenProto = rawProtos
           .split(",")
           .map((s) => s.trim())
