@@ -39,12 +39,12 @@ export function ConfigEditorModal({
         const result = await new Promise<{ path: string | null; saved: boolean }>((resolve) => {
           const handleResult = (event: MessageEvent) => {
             if (event.source !== window.parent) return;
-            if (event.data?.type !== "savePickerResult") return;
+            if (event.data?.type !== "savePickerResult" && event.data?.command !== "savePickerResult") return;
             window.removeEventListener("message", handleResult);
             resolve({ path: event.data.path ?? null, saved: !!event.data.saved });
           };
           window.addEventListener("message", handleResult);
-          window.parent.postMessage({ type: "openSavePicker", config: configJson }, "*");
+          window.parent.postMessage({ type: "openSavePicker", command: "openSavePicker", config: configJson }, "*");
         });
 
         if (!result.saved) {
@@ -117,7 +117,7 @@ export function ConfigEditorModal({
       a.href = url;
       a.download = suggestedName;
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
       onClose();
       return;
     } catch (error) {
