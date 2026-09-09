@@ -73,7 +73,7 @@ function createRunnerFromBuffer(
 **Parameters**
 
 | Parameter | Type           | Description            |
-| --------- | -------------- | ---------------------- |
+| --------- | -------------- | ----------------------- |
 | `buffer`  | `Buffer`       | WASM binary content    |
 | `config`  | `RunnerConfig` | Optional configuration |
 
@@ -196,13 +196,13 @@ callFullFlow(
 **Parameters**
 
 | Parameter                        | Type                      | Description                                                                                                           |
-| -------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| --------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `url`                            | `string`                  | Full request URL, or `BUILTIN_SHORTHAND` (`"built-in"`) to use the built-in responder instead of a real origin fetch |
 | `method`                         | `string`                  | HTTP method                                                                                                           |
 | `headers`                        | `Record<string, string>`  | Request headers                                                                                                       |
 | `body`                           | `string`                  | Request body                                                                                                          |
 | `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                                                                                 |
-| `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior                                               |
+| `enforceProductionPropertyRules` | `boolean`                 | When `true`, restricts property access to match CDN production behavior                                              |
 
 The upstream response is generated at runtime — either by a real HTTP fetch against `url`, or by the built-in responder when `url === "built-in"`. There is no caller-provided mock response.
 
@@ -312,7 +312,7 @@ const result: FullFlowResult = await runner.callFullFlow(
 **Built-in responder behavior** — controlled by request headers set before the origin phase:
 
 | Header               | Effect                                                                           |
-| -------------------- | -------------------------------------------------------------------------------- |
+| --------------------- | ---------------------------------------------------------------------------------- |
 | `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                     |
 | `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default)  |
 
@@ -337,7 +337,7 @@ interface RunnerConfig {
 ```
 
 | Field                            | Type       | Default         | Description                                                                                                                                                                                                                                                                                                                                   |
-| -------------------------------- | ---------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ---------------------------------- | ---------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `dotenv.enabled`                 | `boolean`  | `false`         | Whether to load `.env` files                                                                                                                                                                                                                                                                                                                  |
 | `dotenv.path`                    | `string`   | `undefined`     | Directory to load dotenv files from. When omitted, `fastedge-run` uses the process CWD — correct for most npm package users whose `.env` files live at the project root. Only set this when your dotenv files are in a non-standard location (e.g. a test fixture directory).                                                                 |
 | `enforceProductionPropertyRules` | `boolean`  | `true`          | Restrict property access to match CDN production behavior                                                                                                                                                                                                                                                                                     |
@@ -417,7 +417,7 @@ type HookCall = {
 ```
 
 | Field                            | Description                                                                                                                                                              |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hook`                           | Hook name: `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`                                                                            |
 | `request`                        | Request state passed to the hook                                                                                                                                         |
 | `response`                       | Seed state for response hooks called via `callHook()`. Ignored by `callFullFlow()` and by request hooks — the full-flow path generates the upstream response at runtime. |
@@ -448,7 +448,7 @@ type HookResult = {
 ```
 
 | Field        | Description                                                                                |
-| ------------ | ------------------------------------------------------------------------------------------ |
+| ------------ | -------------------------------------------------------------------------------------------- |
 | `returnCode` | The numeric value returned by the WASM hook export, or `null` if the export was not found |
 | `logs`       | Log entries emitted via `proxy_log` during hook execution                                  |
 | `input`      | Request/response state as seen by the hook before execution                                |
@@ -473,7 +473,7 @@ type FullFlowResult = {
 ```
 
 | Field                  | Description                                                                                                                                                                  |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hookResults`          | A `Record` keyed by hook name (`"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`), each containing a `HookResult`                          |
 | `finalResponse`        | The final response after all hooks have executed, or the local response if a hook short-circuited (see `callFullFlow`). `body` is base64-encoded when `isBase64` is `true`. |
 | `calculatedProperties` | Runtime properties computed from the request URL (e.g. `request.path`, `request.host`)                                                                                      |

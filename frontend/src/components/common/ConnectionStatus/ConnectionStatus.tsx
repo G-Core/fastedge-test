@@ -26,7 +26,7 @@ export function ConnectionStatus({ status }: ConnectionStatusProps) {
         : "Connected";
     }
     if (status.reconnecting) return "Reconnecting...";
-    if (status.error) return "Disconnected";
+    if (status.error) return status.error;
     return "Not connected";
   };
 

@@ -148,7 +148,7 @@ interface MockOriginsHandle {
 ```
 
 | Field                      | Description                                                                                                             |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `options.allowNetConnect`  | Opt requests out of the default `disableNetConnect` block. `true` allows all; an array allow-lists origins or patterns |
 | `handle.origin(url)`       | Get or create a `MockPool` for an origin; chain `.intercept({path, method}).reply(...)` on it                          |
 | `handle.agent`             | Raw `MockAgent` escape hatch for `.persist()` / `.times()` / `.delay()` / body matchers                                |
@@ -169,7 +169,7 @@ interface HttpRequestOptions {
 ```
 
 | Field     | Type                     | Required | Default | Description         |
-| --------- | ------------------------ | -------- | ------- | ------------------- |
+| --------- | ------------------------ | -------- | ------- | -------------------- |
 | `path`    | `string`                 | Yes      | —       | Request path        |
 | `method`  | `string`                 | No       | `"GET"` | HTTP method         |
 | `headers` | `Record<string, string>` | No       | `{}`    | Request headers     |
@@ -196,7 +196,7 @@ interface RunnerConfig {
 ```
 
 | Field                            | Type                           | Description                                                               |
-| -------------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| --------------------------------- | ------------------------------ | --------------------------------------------------------------------------- |
 | `dotenv.enabled`                 | `boolean`                      | Enable dotenv loading                                                     |
 | `dotenv.path`                    | `string`                       | Directory to load dotenv files from; defaults to process CWD when omitted |
 | `enforceProductionPropertyRules` | `boolean`                      | Override production property enforcement for the runner; default `true`   |
@@ -302,7 +302,7 @@ type FullFlowResult = {
 Hook results are accessed by camelCase key:
 
 | Key                 | Hook                       |
-| ------------------- | -------------------------- |
+| ------------------- | --------------------------- |
 | `onRequestHeaders`  | `on_request_headers` hook  |
 | `onRequestBody`     | `on_request_body` hook     |
 | `onResponseHeaders` | `on_response_headers` hook |

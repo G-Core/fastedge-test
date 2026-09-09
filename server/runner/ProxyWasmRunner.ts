@@ -1,4 +1,5 @@
 import { WASI } from "node:wasi";
+import { checkEgressAllowed } from "./egressPolicy.js";
 import type { HookCall, HookResult, HeaderMap, HeaderRecord, HeaderTuples, FullFlowResult } from "./types";
 import type {
   IWasmRunner,
@@ -520,6 +521,8 @@ export class ProxyWasmRunner implements IWasmRunner {
         const fetchOptions: RequestInit = {
           method: requestMethod,
           headers: fetchHeaders,
+          // Redirects are not followed; the redirect target was not checked against the egress policy.
+          redirect: "manual",
         };
 
         // Add body for methods that support it
@@ -530,6 +533,7 @@ export class ProxyWasmRunner implements IWasmRunner {
           fetchOptions.body = modifiedRequestBody;
         }
 
+        await checkEgressAllowed(actualTargetUrl);
         const response = await fetch(actualTargetUrl, fetchOptions);
 
         // Extract response headers — preserve multiple Set-Cookie entries as string[]
@@ -970,11 +974,14 @@ export class ProxyWasmRunner implements IWasmRunner {
       let responseBody = new Uint8Array(0);
 
       try {
+        await checkEgressAllowed(url);
         const resp = await fetch(url, {
           method,
           headers: fetchHeaders,
           body: pending.body && method !== 'GET' && method !== 'HEAD' ? Buffer.from(pending.body) : undefined,
           signal: AbortSignal.timeout(pending.timeoutMs),
+          // Redirects are not followed; the redirect target was not checked against the egress policy.
+          redirect: "manual",
         });
         resp.headers.forEach((v, k) => {
           if (k.toLowerCase() !== 'set-cookie') responseHeaders.push([k, v]);

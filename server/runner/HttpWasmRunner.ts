@@ -23,11 +23,19 @@ import {
   removeTempWasmFile,
 } from "../utils/temp-file-manager.js";
 import { isLegacySyncWasm } from "../utils/legacy-wasm-detect.js";
+import { validateDotenvLeafs } from "../utils/dotenv-loader.js";
 
 /**
  * HttpWasmRunner implementation
  *
- * Spawns a long-running fastedge-run process and forwards HTTP requests to it
+ * Spawns a long-running fastedge-run process and forwards HTTP requests to it.
+ *
+ * Egress policy note: outbound HTTP calls made by the WASM module go through
+ * fastedge-run directly and are not subject to the checkEgressAllowed policy
+ * that ProxyWasmRunner applies. This is an accepted limitation for a local dev
+ * tool — intercepting a child process's network stack would require OS-level
+ * sandboxing. Developers running HTTP-WASM on a cloud VM should be aware that
+ * metadata endpoints (169.254.169.254 etc.) are reachable from the module.
  */
 export class HttpWasmRunner implements IWasmRunner {
   private process: ChildProcess | null = null;
@@ -124,9 +132,17 @@ export class HttpWasmRunner implements IWasmRunner {
     // and non-standard project layouts. npm package users with .env files at their
     // project root can use dotenvEnabled: true without specifying a path.
     if (this.dotenvEnabled) {
+      // Guard before handing the path to fastedge-run, which reads files itself
+      // without going through loadDotenvFiles(). Enforced here (not only at the
+      // HTTP server route layer) so npm-package consumers are protected too.
       if (this.dotenvPath) {
+        validateDotenvLeafs(this.dotenvPath);
         args.push("--dotenv", this.dotenvPath);
       } else {
+        // No explicit path — fastedge-run reads dotenv files from CWD.
+        // Validate CWD dotenv leafs so a workspace-planted symlink cannot
+        // redirect the implicit load to files outside the workspace.
+        validateDotenvLeafs(process.cwd());
         args.push("--dotenv");
       }
     }
@@ -283,8 +299,10 @@ export class HttpWasmRunner implements IWasmRunner {
 
     if (this.dotenvEnabled) {
       if (this.dotenvPath) {
+        validateDotenvLeafs(this.dotenvPath);
         args.push("--dotenv", this.dotenvPath);
       } else {
+        validateDotenvLeafs(process.cwd());
         args.push("--dotenv");
       }
     }

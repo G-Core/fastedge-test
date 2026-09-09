@@ -18,7 +18,13 @@ npx -p @gcoredev/fastedge-test fastedge-debug
 
 > The shorthand `npx @gcoredev/fastedge-test` happens to work today because the package declares exactly one `bin` entry, and npx falls back to it when no name is given. Prefer the explicit `fastedge-debug` form — it stays correct if a second binary is ever added.
 
-Once started, the server listens on `http://localhost:5179` by default and logs the bound address to stderr.
+Once started, the server listens on `http://localhost:5179` by default and logs the bound address to stderr. In CLI mode it also prints the full browser URL with the session token in the fragment:
+
+```
+Open: http://localhost:5179/#token=<hex>
+```
+
+Use that URL to open the web UI, or copy the token for API and WebSocket access. See [Authentication in API.md](./API.md#authentication) for the full details, including the `x-fastedge-token` header, WebSocket token parameter, and auth-related environment variables.
 
 The CLI automatically discovers the workspace root by walking up from the current directory, looking first for an existing `.fastedge-debug/` directory, then for a `package.json` or `Cargo.toml`. The resolved root is used as the base for port file and configuration file placement. Pass a path as the first argument to anchor discovery to a specific starting location:
 
@@ -83,9 +89,9 @@ process.kill(process.pid, "SIGTERM");
 ## Port Configuration
 
 | Source         | Value                 |
-| -------------- | --------------------- |
-| Default        | `5179`                |
-| `PORT` env var | Any valid port number |
+| --------------- | --------------------- |
+| Default         | `5179`                |
+| `PORT` env var  | Any valid port number |
 
 ```bash
 PORT=8080 npx fastedge-debug
@@ -93,7 +99,13 @@ PORT=8080 npx fastedge-debug
 
 If the preferred port is already in use, the server tries the next port sequentially, up to 50 ports (for example, `5179` through `5228` by default). If no free port is found in that range, the server exits with an error. Set `PORT` to a specific value to bypass auto-increment when a predictable port is required.
 
-The server writes the bound port number to `.fastedge-debug/.debug-port` under `WORKSPACE_PATH` (if set) or the current working directory, and deletes the file on shutdown. Use this file for programmatic port discovery when starting the server as a subprocess.
+The server writes the bound port to `.fastedge-debug/.debug-port` under `WORKSPACE_PATH` (if set) or the current working directory, and deletes the file on shutdown. Use this file for programmatic port discovery when starting the server as a subprocess.
+
+The file format is `PORT:SHA256_HASH` — the decimal port number, a colon, then the hex-encoded SHA-256 of the session token (used by the VS Code extension to verify server identity before reuse). To extract just the port:
+
+```js
+const port = parseInt(fs.readFileSync(".fastedge-debug/.debug-port", "utf8").trim().split(":")[0], 10);
+```
 
 ## Health Check
 
@@ -119,12 +131,12 @@ curl http://localhost:5179/health
 ## Environment Variables
 
 | Variable             | Type     | Default | Description                                                                                     |
-| -------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------- |
-| `PORT`               | `number` | unset   | Port the HTTP server listens on. Defaults to `5179` when not set.                              |
-| `PROXY_RUNNER_DEBUG` | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity.                                 |
-| `VSCODE_INTEGRATION` | `"true"` | unset   | Set to `"true"` when running inside the VSCode extension; enables workspace WASM detection.     |
-| `WORKSPACE_PATH`     | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement. |
-| `FASTEDGE_RUN_PATH`  | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules.               |
+| --------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `PORT`                | `number` | unset   | Port the HTTP server listens on. Defaults to `5179` when not set.                                |
+| `PROXY_RUNNER_DEBUG`  | `"1"`    | unset   | Enable verbose debug logging for WebSocket and runner activity.                                  |
+| `VSCODE_INTEGRATION`  | `"true"` | unset   | Set to `"true"` when running inside the VSCode extension; enables workspace WASM detection.      |
+| `WORKSPACE_PATH`      | `string` | unset   | Absolute path to the workspace root; used as the `.env` file base and for port file placement.   |
+| `FASTEDGE_RUN_PATH`   | `string` | unset   | Override the path to the `fastedge-run` CLI binary used to execute WASM modules.                 |
 
 ### Usage examples
 
@@ -164,13 +176,13 @@ Or press `Ctrl+C` in the terminal to send `SIGINT`.
 
 ## Web UI
 
-When the server starts, it serves a browser-based UI at the root URL:
+When the server starts, it serves a browser-based UI at the root URL. In CLI mode the full URL including the session token is printed to stderr:
 
 ```
-http://localhost:5179
+Open: http://localhost:5179/#token=<hex>
 ```
 
-The UI provides a graphical interface for loading WASM modules, configuring requests, and inspecting results. All UI interactions use the same REST and WebSocket endpoints available to API consumers.
+Open that URL directly — the frontend reads the `#token=` fragment and includes it as an `x-fastedge-token` header on every API request. The UI provides a graphical interface for loading WASM modules, configuring requests, and inspecting results. All UI interactions use the same REST and WebSocket endpoints available to API consumers.
 
 ## See Also
 

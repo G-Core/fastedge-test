@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Toggle } from "../Toggle";
+import { useAppStore } from "../../../stores";
 import styles from "./DotenvPanel.module.css";
 
 interface DotenvPanelProps {
@@ -21,7 +22,15 @@ export function DotenvPanel({
   isExpanded,
   onExpandedChange,
 }: DotenvPanelProps) {
+  const { workspaceRoot } = useAppStore();
   const [resolvedRoot, setResolvedRoot] = useState<string | null>(null);
+  const toForward = (p: string) => p.replace(/\\/g, "/");
+  const normPath = path ? toForward(path).replace(/\/+$/, "") : "";
+  const normRoot = workspaceRoot ? toForward(workspaceRoot).replace(/\/+$/, "") : "";
+  const pathError =
+    normRoot && normPath && !(normPath === normRoot || normPath.startsWith(normRoot + "/"))
+      ? `Path is outside the workspace root (${workspaceRoot}). Restart the debugger with --project-dir <workspace root> to allow this path.`
+      : null;
   const listenerRef = useRef<((e: MessageEvent) => void) | null>(null);
   const pathRef = useRef(path);
   const onPathChangeRef = useRef(onPathChange);
@@ -144,7 +153,7 @@ export function DotenvPanel({
             ) : (
               <>
                 <input
-                  className={styles.pathInput}
+                  className={`${styles.pathInput}${pathError ? ` ${styles.pathInputErr}` : ""}`}
                   type="text"
                   value={path ?? ""}
                   onChange={(e) => onPathChange(e.target.value || null)}
@@ -164,6 +173,9 @@ export function DotenvPanel({
               </>
             )}
           </div>
+          {pathError && (
+            <p className={styles.pathError}>{pathError}</p>
+          )}
         </div>
       )}
     </div>

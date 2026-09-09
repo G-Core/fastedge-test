@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { ServerEvent } from "./websocket-types";
+import { getToken } from "../utils/token";
 
 export interface WebSocketStatus {
   connected: boolean;
@@ -38,6 +39,8 @@ export interface UseWebSocketReturn {
 export function useWebSocket(
   options: UseWebSocketOptions = {},
 ): UseWebSocketReturn {
+  const sessionToken = getToken();
+
   // Construct WebSocket URL - handle both dev (with port) and production (without)
   const defaultUrl = (() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -52,6 +55,8 @@ export function useWebSocket(
     // - Local production (Express on 5179, port is in URL)
     // - Codespaces forwarded URLs (port is embedded in hostname, location.port is empty)
     const port = window.location.port ? `:${window.location.port}` : "";
+    // Token is NOT put in the query string — in Codespaces the WS URL traverses
+    // the forwarding proxy and would be logged. Delivered via subprotocol instead.
     return `${protocol}//${hostname}${port}/ws`;
   })();
 
@@ -64,11 +69,17 @@ export function useWebSocket(
     debug = false,
   } = options;
 
+  // When no custom URL is provided and the token is absent, bail immediately
+  // rather than hammering the server with doomed 401s.
+  const missingToken = !options.url && !sessionToken;
+
   const [status, setStatus] = useState<WebSocketStatus>({
     connected: false,
     reconnecting: false,
     clientCount: 0,
-    error: null,
+    error: missingToken
+      ? "Missing session token — reopen the URL printed by the server"
+      : null,
   });
 
   const [lastEvent, setLastEvent] = useState<ServerEvent | null>(null);
@@ -184,7 +195,10 @@ export function useWebSocket(
     try {
       const connectStart = performance.now();
       logDebug(`Connecting to ${url}`);
-      const ws = new WebSocket(url);
+      // Pass token as a Sec-WebSocket-Protocol header — not visible in proxy logs.
+      // Falls back to empty protocols for connections that pass ?token= directly.
+      const protocols = sessionToken ? [`fastedge-token.${sessionToken}`] : [];
+      const ws = new WebSocket(url, protocols);
 
       ws.onopen = () => {
         const connectTime = performance.now() - connectStart;
@@ -239,7 +253,7 @@ export function useWebSocket(
       // Retry connection
       attemptReconnect();
     }
-  }, [url, handleMessage, attemptReconnect, logDebug]);
+  }, [url, sessionToken, handleMessage, attemptReconnect, logDebug]);
 
   /**
    * Disconnect from WebSocket server
@@ -294,6 +308,7 @@ export function useWebSocket(
    */
   useEffect(() => {
     if (autoConnect) {
+      if (missingToken) return; // banner already set in initial state
       connect();
     }
 

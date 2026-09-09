@@ -1,5 +1,5 @@
 import { resolve, normalize, relative, isAbsolute, sep } from "path";
-import { existsSync, statSync } from "fs";
+import { existsSync, statSync, realpathSync } from "fs";
 
 /**
  * Options for path validation
@@ -103,30 +103,73 @@ export function validatePath(
     const resolvedWorkspaceRoot = resolve(workspaceRoot);
     const relativePath = relative(resolvedWorkspaceRoot, absolutePath);
 
-    // If relative path starts with .., it's outside workspace
+    // Lexical check: if relative path starts with .., it's outside workspace
     if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
       return {
         valid: false,
-        error: `Path must be within workspace root: ${workspaceRoot}`,
+        error:
+          "Path is outside the workspace root. If your build output lives above this directory (e.g. a Cargo workspace), restart the debugger with --project-dir <workspace root>.",
       };
+    }
+
+    // Realpath check: catch symlinks inside the workspace that point outside it
+    // (works even when the final leaf does not exist yet by walking up to an existing ancestor)
+    try {
+      const realRoot = realpathSync(resolvedWorkspaceRoot);
+      let probe = absolutePath;
+      while (!existsSync(probe)) {
+        const parent = resolve(probe, "..");
+        if (parent === probe) break;
+        probe = parent;
+      }
+      const realProbe = realpathSync(probe);
+      if (realProbe !== realRoot && !realProbe.startsWith(realRoot + sep)) {
+        return {
+          valid: false,
+          error:
+            "Path is outside the workspace root. If your build output lives above this directory (e.g. a Cargo workspace), restart the debugger with --project-dir <workspace root>.",
+        };
+      }
+    } catch {
+      // If we can't resolve real paths (e.g. missing root), fall back to lexical check above.
     }
   }
 
-  // Check for dangerous paths
+  // Check for dangerous paths. Matching is segment-aware: an absolute dangerous
+  // path must equal or be a prefix of the candidate (with a separator boundary);
+  // a relative segment must appear as a complete path component, not a substring.
+  // This prevents both false positives (/etcetera matching /etc) and bypasses.
   for (const dangerousPath of DANGEROUS_PATHS) {
-    // Normalize dangerous path for comparison
     const normalizedDangerous = normalize(dangerousPath);
-
-    // Check if path starts with or contains dangerous path
-    if (
-      absolutePath.startsWith(normalizedDangerous) ||
-      absolutePath.includes(`${sep}${normalizedDangerous}${sep}`) ||
-      absolutePath.includes(`${sep}${normalizedDangerous}`)
-    ) {
-      return {
-        valid: false,
-        error: `Access to system path '${dangerousPath}' is not allowed`,
-      };
+    if (isAbsolute(normalizedDangerous)) {
+      if (
+        absolutePath === normalizedDangerous ||
+        absolutePath.startsWith(normalizedDangerous + sep)
+      ) {
+        return {
+          valid: false,
+          error: `Access to system path '${dangerousPath}' is not allowed`,
+        };
+      }
+    } else if (normalizedDangerous.includes("\\")) {
+      // Windows-style path in the list (backslash separator): on Linux these
+      // resolve to literal filenames, so use a simple substring check.
+      if (absolutePath.includes(normalizedDangerous)) {
+        return {
+          valid: false,
+          error: `Access to system path '${dangerousPath}' is not allowed`,
+        };
+      }
+    } else {
+      if (
+        absolutePath.includes(sep + normalizedDangerous + sep) ||
+        absolutePath.endsWith(sep + normalizedDangerous)
+      ) {
+        return {
+          valid: false,
+          error: `Access to system path '${dangerousPath}' is not allowed`,
+        };
+      }
     }
   }
 
@@ -143,7 +186,7 @@ export function validatePath(
     if (!existsSync(absolutePath)) {
       return {
         valid: false,
-        error: `File not found: ${absolutePath}`,
+        error: "File not found",
       };
     }
 
@@ -153,7 +196,7 @@ export function validatePath(
       if (!stats.isFile()) {
         return {
           valid: false,
-          error: `Path is not a file: ${absolutePath}`,
+          error: "Path is not a file",
         };
       }
     } catch (error) {

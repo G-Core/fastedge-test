@@ -123,7 +123,7 @@ describe("Path Validator", () => {
       });
 
       expect(result.valid).toBe(false);
-      expect(result.error).toContain("within workspace root");
+      expect(result.error).toContain("outside the workspace root");
     });
 
     it("should prevent path traversal attacks", () => {
@@ -136,7 +136,7 @@ describe("Path Validator", () => {
       });
 
       expect(result.valid).toBe(false);
-      expect(result.error).toContain("within workspace root");
+      expect(result.error).toContain("outside the workspace root");
     });
   });
 
@@ -261,6 +261,32 @@ describe("Path Validator", () => {
       } finally {
         process.chdir(originalCwd);
       }
+    });
+  });
+
+  describe("workspace root error messages", () => {
+    it("should suggest --project-dir when path is outside workspace (lexical check)", () => {
+      const outsidePath = join(tmpdir(), "outside.wasm");
+
+      const result = validatePath(outsidePath, {
+        workspaceRoot: tempDir,
+        checkExists: false,
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("--project-dir");
+    });
+
+    it("should not include the workspace root path in the error message", () => {
+      const outsidePath = join(tmpdir(), "outside.wasm");
+
+      const result = validatePath(outsidePath, {
+        workspaceRoot: tempDir,
+        checkExists: false,
+      });
+
+      expect(result.valid).toBe(false);
+      expect(result.error).not.toContain(tempDir);
     });
   });
 });

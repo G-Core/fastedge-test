@@ -8,6 +8,7 @@
 import WebSocket, { WebSocketServer } from "ws";
 import { IncomingMessage, Server as HTTPServer } from "http";
 import { ServerEvent } from "./types.js";
+import { safeTokenEqual, hostAllowed } from "../utils/token.js";
 
 /**
  * Client metadata for tracking connections
@@ -25,9 +26,11 @@ export class WebSocketManager {
   private clientIdCounter = 0;
   private pingInterval: NodeJS.Timeout | null = null;
   private debug: boolean;
+  private token: string;
 
-  constructor(server: HTTPServer, debug: boolean = false) {
+  constructor(server: HTTPServer, token: string, debug: boolean = false) {
     this.debug = debug;
+    this.token = token;
 
     if (this.debug) {
       console.log(
@@ -38,6 +41,14 @@ export class WebSocketManager {
     this.wss = new WebSocketServer({
       server,
       path: "/ws",
+      // Echo back the fastedge-token subprotocol when the client uses it (preferred
+      // path — keeps the token out of the WS query string and proxy access logs).
+      // Accept no-subprotocol connections for the query-param fallback path.
+      handleProtocols: (protocols: Set<string>): string | false => {
+        if (protocols.size === 0) return ""; // query-param path — no protocol to echo
+        const proto = [...protocols].find((p) => p.startsWith("fastedge-token."));
+        return proto ?? false; // reject unrecognised subprotocols
+      },
       verifyClient: (info: {
         origin: string;
         secure: boolean;
@@ -48,7 +59,48 @@ export class WebSocketManager {
             `[WebSocketManager] Client attempting connection from ${info.origin}`,
           );
         }
-        return true; // Accept all connections
+        // Token may arrive via Sec-WebSocket-Protocol header (preferred — not logged
+        // by Codespaces/SSH forwarding proxies) or via the legacy ?token= query param
+        // (CLI direct-browser flow where there is no proxy in between).
+        let url: URL;
+        try {
+          url = new URL(info.req.url ?? "/", "http://localhost");
+        } catch {
+          return false; // malformed handshake URL → reject
+        }
+        const rawHeader = info.req.headers["sec-websocket-protocol"];
+        const rawProtos = Array.isArray(rawHeader) ? rawHeader.join(",") : (rawHeader ?? "");
+        const tokenProto = rawProtos
+          .split(",")
+          .map((s) => s.trim())
+          .find((p) => p.startsWith("fastedge-token."));
+        const reqToken = tokenProto
+          ? tokenProto.slice("fastedge-token.".length)
+          : url.searchParams.get("token") ?? "";
+        if (!safeTokenEqual(reqToken, this.token)) {
+          return false;
+        }
+        // Validate origin to block cross-origin WebSocket connections.
+        // Non-browser clients (test tooling, CLI) send no origin — allow those.
+        const origin = info.origin ?? "";
+        if (!origin) return true;
+        if (
+          /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+          origin.startsWith("vscode-webview://")
+        ) {
+          return true;
+        }
+        // Parse the origin and check via hostAllowed, which supports exact match
+        // and suffix match (needed for Codespaces where the forwarded hostname
+        // is <name>-<port>.<domain> and the server picks its own port).
+        try {
+          // URL.hostname returns "[::1]" for IPv6 literals; strip brackets so
+          // hostAllowed can match against "::1".
+          const h = new URL(origin).hostname.replace(/^\[(.+)\]$/, "$1");
+          return hostAllowed(h, process.env.FASTEDGE_EXPECTED_HOST);
+        } catch {
+          return false; // malformed origin → reject
+        }
       },
     });
 

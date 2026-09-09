@@ -1,25 +1,35 @@
-import express, { type Request, type Response } from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import path from "node:path";
 import {
   promises as fs,
   existsSync,
+  readdirSync,
   mkdirSync,
-  writeFileSync,
+  openSync,
+  writeSync,
+  closeSync,
+  realpathSync,
+  lstatSync,
   unlinkSync,
+  constants as fsConst,
 } from "node:fs";
 import { createServer } from "node:http";
+import { randomBytes, createHash } from "node:crypto";
+import { safeTokenEqual, hostAllowed } from "./utils/token.js";
 import { WasmRunnerFactory } from "./runner/WasmRunnerFactory.js";
 import type { IWasmRunner } from "./runner/IWasmRunner.js";
 import { HttpWasmRunner } from "./runner/HttpWasmRunner.js";
 import { WebSocketManager, StateManager } from "./websocket/index.js";
 import { detectWasmType } from "./utils/wasmTypeDetector.js";
 import { validatePath } from "./utils/pathValidator.js";
-import { resolveDotenvPath } from "./utils/dotenv-loader.js";
+import { resolveDotenvPath, validateDotenvLeafs, DotenvPathError } from "./utils/dotenv-loader.js";
 import {
   ApiLoadBodySchema,
   ApiSendBodySchema,
   ApiCallBodySchema,
   ApiConfigBodySchema,
+  ApiDotenvBodySchema,
+  SaveAsBodySchema,
   TestConfigSchema,
 } from "./schemas/index.js";
 
@@ -35,17 +45,113 @@ try {
 const app = express();
 const httpServer = createServer(app);
 
+// Per-session capability token. VSCode extension passes FASTEDGE_DEBUG_TOKEN
+// via env; CLI generates one and logs it so only the local user sees it.
+const SESSION_TOKEN = process.env.FASTEDGE_DEBUG_TOKEN || randomBytes(32).toString("hex");
+// Bind to loopback by default; non-loopback requires explicit opt-in.
+const HOST = process.env.FASTEDGE_BIND_HOST ?? "127.0.0.1";
+const EXPECTED_HOST = process.env.FASTEDGE_EXPECTED_HOST;
+
 // Initialize WebSocket infrastructure
 const debug = process.env.PROXY_RUNNER_DEBUG === "1";
-const wsManager = new WebSocketManager(httpServer, debug);
+const wsManager = new WebSocketManager(httpServer, SESSION_TOKEN, debug); // token validated in verifyClient
 const stateManager = new StateManager(wsManager, debug);
 
 // Initialize runner factory
 const runnerFactory = new WasmRunnerFactory();
 let currentRunner: IWasmRunner | null = null;
 
+// Allowlist of known schema filenames. The /api/schema/:name route checks this
+// before serving a file, preventing path traversal through encoded slashes.
+// We scan the directory when it's present; if it's missing (e.g. the VSCode
+// extension packaging stripped it), the set is empty and every schema request
+// returns 404 — safe, since no file can be served without being allowlisted.
+const schemasDir = path.join(__dirname, "schemas");
+let knownSchemas: Set<string>;
+try {
+  knownSchemas = new Set(
+    readdirSync(schemasDir).filter((f) => f.endsWith(".schema.json")),
+  );
+} catch {
+  knownSchemas = new Set();
+}
+
+// Paths vended by /api/config/show-save-dialog that /api/config/save-as is
+// allowed to write to. Single-use: consumed on first write, then removed.
+// Prevents save-as from writing to an arbitrary caller-supplied path.
+const pendingSavePaths = new Set<string>();
+
 app.use(express.json({ limit: "20mb" }));
-app.use(express.static(path.join(__dirname, "frontend")));
+
+// Content-Security-Policy for the debugger frontend (served inside a VS Code webview
+// iframe). Restricts scripts to same-origin only and caps connect-src so a compromised
+// page cannot exfiltrate the session token to an external host.
+// connect-src explicitly includes ws://127.0.0.1:* and ws://localhost:* because the
+// frontend converts `localhost` → `127.0.0.1` in the WS URL to avoid IPv6 timeouts,
+// making the WebSocket cross-origin relative to a page loaded at http://localhost:PORT.
+// These two loopback aliases are equivalent trust-wise; external origins remain blocked.
+// frame-ancestors is intentionally omitted: VS Code webview origins vary across versions
+// and adding it risks a blank iframe; the session token already gates all useful access.
+const FRONTEND_CSP =
+  "default-src 'self'; " +
+  "connect-src 'self' ws://127.0.0.1:* wss://127.0.0.1:* ws://localhost:* wss://localhost:*; " +
+  "img-src 'self' data: blob:; " +
+  "style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self';";
+
+app.use(
+  express.static(path.join(__dirname, "frontend"), {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Content-Security-Policy", FRONTEND_CSP);
+      }
+    },
+  }),
+);
+
+// Anti-DNS-rebinding: validate Host header on all /api/* requests.
+// Handles IPv6 bracket notation ([::1]:5179) without splitting on the colon inside the brackets.
+// This prevents a remote page from rebinding its hostname to 127.0.0.1 and issuing same-origin requests.
+app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  const raw = req.headers.host ?? "";
+  let host: string;
+  if (raw.startsWith("[")) {
+    // Bracketed IPv6: require exactly [addr] or [addr]:<numeric-port>.
+    const close = raw.indexOf("]");
+    const suffix = close === -1 ? "" : raw.slice(close + 1);
+    if (close === -1 || (suffix !== "" && !/^:\d{1,5}$/.test(suffix))) {
+      res.status(403).json({ ok: false, error: "Invalid Host" });
+      return;
+    }
+    host = raw.slice(1, close);
+  } else {
+    host = raw.split(":")[0];
+  }
+  if (!hostAllowed(host, EXPECTED_HOST)) {
+    res.status(403).json({ ok: false, error: "Invalid Host" });
+    return;
+  }
+  next();
+});
+
+// Session token authentication on all /api/* requests.
+// The token is generated at server startup and delivered to callers out-of-band:
+//   - VSCode extension: passes it as FASTEDGE_DEBUG_TOKEN env to the forked server and
+//     injects it into the webview iframe URL fragment (#token=...) so the frontend reads it.
+//   - CLI: the token is logged to stderr at startup; the user opens the printed URL.
+// The frontend includes the token as the x-fastedge-token header on every request.
+// ?token= query param is intentionally NOT accepted here — log files and browser
+// history would expose it. WebSocket upgrades use ?token= because browsers cannot
+// set custom headers during the WS handshake.
+// ponytail: single token per server lifetime; restart to rotate
+app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  const raw = req.headers["x-fastedge-token"];
+  const token = Array.isArray(raw) ? raw[0] : raw;
+  if (!token || !safeTokenEqual(token, SESSION_TOKEN)) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+  next();
+});
 
 // Health check endpoint
 app.get("/health", (req: Request, res: Response) => {
@@ -62,7 +168,8 @@ app.get("/api/environment", (req: Request, res: Response) => {
   const isVSCode = process.env.VSCODE_INTEGRATION === "true";
   res.json({
     environment: isVSCode ? "vscode" : "node",
-    supportsPathLoading: true, // Both environments support path loading
+    supportsPathLoading: true,
+    workspaceRoot: process.env.WORKSPACE_PATH ?? null,
   });
 });
 
@@ -147,6 +254,37 @@ app.post("/api/load", async (req: Request, res: Response) => {
   }
   const { wasmBase64, wasmPath, dotenv, httpPort } = parsed.data;
 
+  // Resolve and validate the dotenv path before touching runner state so a
+  // containment violation returns 400 rather than triggering the 500 catch block.
+  let dotenvBasePath: string | undefined;
+  if (dotenv?.path !== undefined) {
+    try {
+      dotenvBasePath = resolveDotenvPathFromWorkspace(dotenv.path);
+    } catch (e) {
+      if (e instanceof DotenvPathError) {
+        res.status(400).json({ ok: false, error: e.message });
+        return;
+      }
+      throw e;
+    }
+  } else {
+    dotenvBasePath = process.env.WORKSPACE_PATH || undefined;
+  }
+
+  // Guard against leaf symlinks escaping the workspace — catches HTTP-WASM where
+  // fastedge-run reads the dotenv files directly, bypassing loadDotenvFiles().
+  if (dotenvBasePath) {
+    try {
+      validateDotenvLeafs(dotenvBasePath);
+    } catch (e) {
+      if (e instanceof DotenvPathError) {
+        res.status(400).json({ ok: false, error: (e as Error).message });
+        return;
+      }
+      throw e;
+    }
+  }
+
   try {
     let bufferOrPath: Buffer | string;
     let fileSize: number;
@@ -176,10 +314,12 @@ app.post("/api/load", async (req: Request, res: Response) => {
         resolvedPath = wasmPath.replace("<workspace>", workspacePath);
       }
 
-      // Validate path for security
+      // Validate path for security; workspaceRoot confines the path to the workspace
+      // (lexically and via realpath to catch symlink escapes)
       const validationResult = validatePath(resolvedPath, {
         requireWasmExtension: true,
         checkExists: true,
+        workspaceRoot: process.env.WORKSPACE_PATH ?? process.cwd(),
       });
 
       if (!validationResult.valid) {
@@ -231,17 +371,12 @@ app.post("/api/load", async (req: Request, res: Response) => {
     );
     currentRunner.setStateManager(stateManager);
 
-    // Precedence: client-provided path → WORKSPACE_PATH (VSCode) → undefined (CWD).
-    // When running inside VSCode the server CWD is the extension's dist/debugger/
-    // directory, so WORKSPACE_PATH is the fallback. A client-provided path wins.
-    const dotenvPath = resolveDotenvPathFromWorkspace(dotenv?.path) || process.env.WORKSPACE_PATH || undefined;
-
     // Load WASM (accepts either Buffer or string path). httpPort is forwarded
     // from the client so it works regardless of which config file the user
     // loaded (picker, default, or an arbitrary *.test.json). Server-side read
     // would be pinned to a single filename and miss the picker flow.
     await currentRunner.load(bufferOrPath, {
-      dotenv: { enabled: dotenv?.enabled ?? false, path: dotenvPath },
+      dotenv: { enabled: dotenv?.enabled ?? false, path: dotenvBasePath },
       httpPort,
     });
 
@@ -274,13 +409,13 @@ app.post("/api/load", async (req: Request, res: Response) => {
 });
 
 app.patch("/api/dotenv", async (req: Request, res: Response) => {
-  const { dotenv } = req.body ?? {};
-  if (!dotenv || typeof dotenv.enabled !== "boolean") {
-    res
-      .status(400)
-      .json({ ok: false, error: "dotenv.enabled must be a boolean" });
+  const parsed = ApiDotenvBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
+
+  const { dotenv } = parsed.data;
 
   if (!currentRunner) {
     res.status(400).json({
@@ -290,11 +425,34 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
     return;
   }
 
+  let dotenvPath: string | undefined;
+  if (dotenv.path !== undefined) {
+    try {
+      dotenvPath = resolveDotenvPathFromWorkspace(dotenv.path);
+    } catch (e) {
+      if (e instanceof DotenvPathError) {
+        res.status(400).json({ ok: false, error: (e as Error).message });
+        return;
+      }
+      throw e;
+    }
+  } else {
+    dotenvPath = process.env.WORKSPACE_PATH || undefined;
+  }
+
+  if (dotenvPath) {
+    try {
+      validateDotenvLeafs(dotenvPath);
+    } catch (e) {
+      if (e instanceof DotenvPathError) {
+        res.status(400).json({ ok: false, error: (e as Error).message });
+        return;
+      }
+      throw e;
+    }
+  }
+
   try {
-    const dotenvPath =
-      resolveDotenvPathFromWorkspace(typeof dotenv.path === "string" ? dotenv.path : undefined) ||
-      process.env.WORKSPACE_PATH ||
-      undefined;
     await currentRunner.applyDotenv(dotenv.enabled, dotenvPath);
     res.json({ ok: true });
   } catch (error) {
@@ -587,73 +745,67 @@ app.post(
         return;
       }
 
-      res.json({ ok: true, filePath: result.filePath });
+      // Normalize now so the registered path and the eventual write target are identical.
+      const filePath = result.filePath.endsWith(".json")
+        ? result.filePath
+        : result.filePath + ".json";
+      pendingSavePaths.add(filePath);
+      res.json({ ok: true, filePath });
     } catch (error) {
       res.status(500).json({ ok: false, error: String(error) });
     }
   },
 );
 
-// Save config to a specific file path
+// Save config to a specific file path.
+// Only accepts paths that were previously vended by /api/config/show-save-dialog
+// (registered in pendingSavePaths). This ensures the write destination was chosen
+// by the user through the dialog, not supplied by an arbitrary caller.
 app.post("/api/config/save-as", async (req: Request, res: Response) => {
+  const parsed = SaveAsBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: parsed.error.flatten() });
+    return;
+  }
+
+  const { config, filePath } = parsed.data;
+
+  if (!pendingSavePaths.has(filePath)) {
+    res.status(403).json({
+      ok: false,
+      error: "filePath was not vended by the save dialog",
+    });
+    return;
+  }
+  pendingSavePaths.delete(filePath); // single-use
+
   try {
-    const { config, filePath } = req.body ?? {};
-    if (!config) {
-      res.status(400).json({ ok: false, error: "Missing config" });
-      return;
-    }
-    if (!filePath) {
-      res.status(400).json({ ok: false, error: "Missing filePath" });
-      return;
-    }
-
-    // Resolve path relative to project root (where server runs)
-    const projectRoot = path.join(__dirname, "..");
-    let targetPath: string;
-
-    // Check if path is absolute or relative
-    if (path.isAbsolute(filePath)) {
-      targetPath = filePath;
-    } else {
-      targetPath = path.join(projectRoot, filePath);
-    }
-
-    // Ensure .json extension
-    if (!targetPath.endsWith(".json")) {
-      targetPath += ".json";
-    }
-
-    // Create directory if it doesn't exist
-    const dir = path.dirname(targetPath);
+    const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(filePath, JSON.stringify(config, null, 2), "utf-8");
 
-    // Write the file
-    await fs.writeFile(targetPath, JSON.stringify(config, null, 2), "utf-8");
-
-    res.json({ ok: true, savedPath: targetPath });
+    res.json({ ok: true, savedPath: filePath });
   } catch (error) {
     res.status(500).json({ ok: false, error: String(error) });
   }
 });
 
-// Serve JSON Schema files for API consumers and agents
+// Serve JSON Schema files for API consumers and agents.
+// Name is validated against a startup-time allowlist of known files so a
+// caller cannot traverse outside schemas/ via an encoded slash in the param.
 app.get("/api/schema/:name", (req: Request, res: Response) => {
-  const schemaPath = path.join(
-    __dirname,
-    "..",
-    "schemas",
-    `${req.params.name}.schema.json`,
-  );
-  if (!existsSync(schemaPath)) {
+  const file = `${req.params.name}.schema.json`;
+  if (!knownSchemas.has(file)) {
     res.status(404).json({ ok: false, error: "Schema not found" });
     return;
   }
   res.setHeader("Content-Type", "application/json");
-  res.sendFile(schemaPath);
+  res.sendFile(path.join(schemasDir, file));
 });
 
 // SPA fallback - serve index.html for all non-API routes
 app.get("*", (req: Request, res: Response) => {
+  res.setHeader("Content-Security-Policy", FRONTEND_CSP);
   res.sendFile(path.join(__dirname, "frontend", "index.html"));
 });
 
@@ -672,8 +824,45 @@ function writePortFile(port: number): void {
   const portFilePath = getPortFilePath();
   if (!portFilePath) return;
   try {
-    mkdirSync(path.dirname(portFilePath), { recursive: true });
-    writeFileSync(portFilePath, String(port), "utf8");
+    const debugDir = path.dirname(portFilePath);
+    mkdirSync(debugDir, { recursive: true });
+
+    // Reject if .fastedge-debug is itself a symlink pointing outside the workspace.
+    const appRoot = process.env.WORKSPACE_PATH || process.cwd();
+    try {
+      const realDir = realpathSync(debugDir);
+      const realRoot = realpathSync(appRoot);
+      if (realDir !== realRoot && !realDir.startsWith(realRoot + path.sep)) {
+        console.warn("Port file directory is outside workspace — refusing to write");
+        return;
+      }
+    } catch { /* unreachable in practice — let the write attempt fail naturally */ }
+
+    const tokenHash = createHash("sha256").update(SESSION_TOKEN).digest("hex");
+    const content = `${port}:${tokenHash}`;
+    // O_NOFOLLOW atomically rejects a symlink at the leaf. On Windows it is
+    // unavailable (undefined → 0), so fall back to an explicit lstat check.
+    // The lstat path has a narrow TOCTOU window, but a static malicious workspace
+    // cannot exploit it without active intervention between the check and the open.
+    const O_NOFOLLOW: number = (fsConst.O_NOFOLLOW as number | undefined) ?? 0;
+    if (O_NOFOLLOW === 0) {
+      try {
+        if (lstatSync(portFilePath).isSymbolicLink()) {
+          console.warn("Port file is a symlink — refusing to write");
+          return;
+        }
+      } catch { /* file does not exist — OK */ }
+    }
+    const fd = openSync(
+      portFilePath,
+      fsConst.O_WRONLY | fsConst.O_CREAT | fsConst.O_TRUNC | O_NOFOLLOW,
+      0o600,
+    );
+    try {
+      writeSync(fd, content);
+    } finally {
+      closeSync(fd);
+    }
   } catch (err) {
     console.warn(`Could not write port file: ${(err as Error).message}`);
   }
@@ -682,7 +871,16 @@ function writePortFile(port: number): void {
 function deletePortFile(): void {
   const portFilePath = getPortFilePath();
   if (!portFilePath) return;
+  // Apply the same parent-directory containment check as writePortFile so that
+  // cleanup cannot delete a file in an external directory if .fastedge-debug is
+  // (or was replaced with) a symlink pointing outside the workspace.
   try {
+    const appRoot = process.env.WORKSPACE_PATH || process.cwd();
+    try {
+      const realDir = realpathSync(path.dirname(portFilePath));
+      const realRoot = realpathSync(appRoot);
+      if (realDir !== realRoot && !realDir.startsWith(realRoot + path.sep)) return;
+    } catch { /* unreachable in practice */ }
     unlinkSync(portFilePath);
   } catch {
     // File may not exist — not an error
@@ -697,7 +895,10 @@ async function isPortAvailable(port: number): Promise<boolean> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 500);
   try {
-    await fetch(`http://localhost:${port}/health`, {
+    // Unspecified bind addresses (0.0.0.0 / ::) aren't connectable — probe loopback instead.
+    const probeHost = HOST === "0.0.0.0" ? "127.0.0.1" : HOST === "::" ? "::1" : HOST;
+    const hostForUrl = probeHost.includes(":") ? `[${probeHost}]` : probeHost;
+    await fetch(`http://${hostForUrl}:${port}/health`, {
       signal: controller.signal,
     });
     // Something is listening — port is taken
@@ -740,9 +941,17 @@ async function resolvePort(preferred: number): Promise<number> {
 export async function startServer(port = defaultPort): Promise<void> {
   const resolvedPort = await resolvePort(port);
   return new Promise((resolve) => {
-    httpServer.listen(resolvedPort, () => {
-      console.error(`Proxy runner listening on http://localhost:${resolvedPort}`);
-      console.error(`WebSocket available at ws://localhost:${resolvedPort}/ws`);
+    httpServer.listen(resolvedPort, HOST, () => {
+      const hostForUrl = HOST.includes(":") ? `[${HOST}]` : HOST;
+      console.error(`Proxy runner listening on http://${hostForUrl}:${resolvedPort}`);
+      console.error(`WebSocket available at ws://${hostForUrl}:${resolvedPort}/ws`);
+      // When no token was injected externally (CLI mode), log the full URL with
+      // the token in the fragment so only the local user reading stderr can open it.
+      if (!process.env.FASTEDGE_DEBUG_TOKEN) {
+        console.error(
+          `Open: http://${hostForUrl}:${resolvedPort}/#token=${SESSION_TOKEN}`,
+        );
+      }
       writePortFile(resolvedPort);
       resolve();
     });
