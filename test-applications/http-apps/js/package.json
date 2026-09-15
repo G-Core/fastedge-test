@@ -22,9 +22,8 @@
     "mv:file": "mv build/$NAME.wasm ../../../wasm/http-apps/js/$NAME.wasm",
     "clean": "rm -rf build"
   },
-  "dependencies": {},
   "devDependencies": {
-    "@gcoredev/fastedge-sdk-js": "*"
+    "@gcoredev/fastedge-sdk-js": "2.5.2-beta.1"
   },
   "license": "ISC"
 }

@@ -3,7 +3,7 @@ import { getEnv } from "fastedge::env";
 async function eventHandler(event: FetchEvent): Promise<Response> {
   const request = event.request;
 
-  const customEnvVariable = getEnv("MY_CUSTOM_ENV_VAR");
+  const customEnvVariable = getEnv("MY_CUSTOM_ENV_VAR") ?? '';
 
   const responseHeaders = new Headers(request.headers);
   responseHeaders.set("my-custom-header", customEnvVariable);
