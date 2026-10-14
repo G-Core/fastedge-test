@@ -1,5 +1,15 @@
 # Proxy-WASM Runner - Changelog
 
+## October 14, 2026 - SDK and AssemblyScript test-app dependencies moved to devDependencies
+
+### Overview
+`@gcoredev/fastedge-sdk-js`, `@gcoredev/proxy-wasm-sdk-as` and `@assemblyscript/wasi-shim` were production dependencies since the initial commit, but nothing the package ships (`server/`, `frontend/`, `bin/`, built `dist/`) imports them; server code only mentions them in comments. They are used only by the workspace test fixtures, resolved from the root: `test-applications/http-apps/js` (the SDK, `"*"`), and the AS apps under `test-applications/cdn-apps/as/*` (they import `@gcoredev/proxy-wasm-sdk-as` and extend `node_modules/@assemblyscript/wasi-shim/asconfig.json`; `assemblyscript` itself was already a devDependency). Every consumer installing `@gcoredev/fastedge-test` downloaded them, including the SDK's native packages, for nothing.
+
+### What Changed
+- `package.json`: the three packages moved from `dependencies` to `devDependencies` with unchanged ranges. Lockfile importer entries moved; no version changes.
+- Done by editing `package.json` and running `pnpm install`: `pnpm add` re-checks `trustPolicy: no-downgrade` for everything it resolves and rejects `undici-types@6.21.0` (via `@types/node@20.19.30`), which is already in main's lockfile and unrelated to this change.
+- Verified: `check-types`, `build`, `build:cdn-test-apps:as`, `build:http-test-apps:js`, `test:unit`, `test:server`, `test:integration` all pass; built `dist/` references none of the three.
+
 ## May 18, 2026 - WASI env trap fix + send_http_response additionalHeaders merge
 
 ### Overview
