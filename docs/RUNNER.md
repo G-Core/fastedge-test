@@ -466,7 +466,6 @@ type HookCall = {
     statusText?: string;
   };
   properties: Record<string, unknown>;
-  dotenvEnabled?: boolean;
   enforceProductionPropertyRules?: boolean; // Default: true - Enforce property access control rules
 };
 ```
@@ -477,13 +476,11 @@ type HookCall = {
 | `request`                        | Request state passed to the hook               |
 | `response`                       | Seed state for response hooks via `callHook()` |
 | `properties`                     | Shared properties                              |
-| `dotenvEnabled`                  | Optional per-call dotenv flag                  |
 | `enforceProductionPropertyRules` | Defaults to `true`                             |
 
 - `hook`: one of `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`.
 - `response`: not consumed by `callFullFlow()` or by request hooks. The full-flow path generates the upstream response at runtime.
 - `properties`: for example `request.path`, `vm_config`, `plugin_config`.
-- `dotenvEnabled`: use `applyDotenv()` for persistent changes.
 - `enforceProductionPropertyRules`: set to `false` to allow property access that the production CDN blocks.
 
 `HeaderRecord` is `Record<string, string | string[]>` — multi-valued headers (for example multiple `Set-Cookie`) are represented as `string[]`.

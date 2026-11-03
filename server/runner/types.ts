@@ -30,7 +30,6 @@ export type HookCall = {
     statusText?: string;
   };
   properties: Record<string, unknown>;
-  dotenvEnabled?: boolean;
   enforceProductionPropertyRules?: boolean; // Default: true - Enforce property access control rules
 };
 

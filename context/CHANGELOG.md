@@ -9,6 +9,8 @@
 - `server/runner/HttpWasmRunner.ts` - `applyDotenv()` clears `this.logs` after killing the old process
 - `server/__tests__/integration/http-apps/variables-and-secrets/variables-and-secrets.test.ts` - load with dotenv off, `applyDotenv(true, …)`, then request (fails without the fix)
 
+Also removed `HookCall.dotenvEnabled` (`server/runner/types.ts`, `schemas/hook-call.schema.json`, `docs/RUNNER.md`). Nothing read it, so `callHook()` ignored it. Dotenv is set with `RunnerConfig.dotenv` or `applyDotenv()`.
+
 ## November 3, 2026 - Header get/remove match the FastEdge edge
 
 ### Overview
