@@ -242,7 +242,7 @@ applyDotenv(enabled: boolean, path?: string): Promise<void>
 **Behavior by runner type:**
 
 - **ProxyWasmRunner**: Resets the secret and dictionary stores to empty, then re-reads dotenv files from `path` (or the previously set path if omitted) when `enabled` is `true`. The compiled WASM module is not recompiled.
-- **HttpWasmRunner**: Kills the current `fastedge-run` process and restarts it with the updated `--dotenv` flag. If no process is running, the settings apply on the next `load()`.
+- **HttpWasmRunner**: Kills the current `fastedge-run` process and restarts it with the updated `--dotenv` flag. The returned promise resolves once the restarted process is listening. If no process is running, the settings apply on the next `load()`.
 
 ### cleanup
 
