@@ -58,7 +58,9 @@ A discriminated union requiring exactly one of `wasmPath` or `wasmBuffer`. Suppl
 
 ```typescript
 type TestSuiteBase = {
+  /** Optional runner configuration */
   runnerConfig?: RunnerConfig;
+  /** Test cases to execute */
   tests: TestCase[];
 };
 
@@ -67,11 +69,11 @@ type TestSuite =
   | (TestSuiteBase & { wasmBuffer: Buffer; wasmPath?: never });
 ```
 
-| Field          | Type           | Required | Description                                                 |
-| -------------- | -------------- | -------- | ----------------------------------------------------------- |
-| `wasmPath`     | `string`       | One of   | Filesystem path to the `.wasm` file                         |
-| `wasmBuffer`   | `Buffer`       | One of   | Pre-loaded WASM binary                                      |
-| `tests`        | `TestCase[]`   | Yes      | Test cases to execute; must be non-empty                    |
+| Field          | Type           | Required | Description                                                |
+| -------------- | -------------- | -------- | ---------------------------------------------------------- |
+| `wasmPath`     | `string`       | One of   | Filesystem path to the `.wasm` file                        |
+| `wasmBuffer`   | `Buffer`       | One of   | Pre-loaded WASM binary                                     |
+| `tests`        | `TestCase[]`   | Yes      | Test cases to execute; must be non-empty                   |
 | `runnerConfig` | `RunnerConfig` | No       | Optional runner configuration (see [RUNNER.md](RUNNER.md)) |
 
 ### TestCase
@@ -88,13 +90,16 @@ interface TestCase {
 ### TestResult & SuiteResult
 
 ```typescript
+/** Result for a single test case */
 interface TestResult {
   name: string;
   passed: boolean;
-  error?: string;      // Present when passed is false
+  /** Error message when passed is false */
+  error?: string;
   durationMs: number;
 }
 
+/** Aggregate result for a full test suite */
 interface SuiteResult {
   passed: number;
   failed: number;
@@ -111,11 +116,12 @@ Object-based options for `runFlow()`. HTTP/2 pseudo-headers (`:method`, `:path`,
 ```typescript
 interface FlowOptions {
   url: string;
-  method?: string;                           // Default: "GET"
+  method?: string;
   requestHeaders?: Record<string, string>;
-  requestBody?: string;                      // Default: ""
-  properties?: Record<string, unknown>;      // Default: {}
-  enforceProductionPropertyRules?: boolean;  // Default: true
+  requestBody?: string;
+  properties?: Record<string, unknown>;
+  /** Default: true — matches production FastEdge behaviour */
+  enforceProductionPropertyRules?: boolean;
 }
 ```
 
@@ -147,29 +153,33 @@ interface MockOriginsHandle {
 }
 ```
 
-| Field                      | Description                                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Member                     | Description                                                                                                            |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `options.allowNetConnect`  | Opt requests out of the default `disableNetConnect` block. `true` allows all; an array allow-lists origins or patterns |
 | `handle.origin(url)`       | Get or create a `MockPool` for an origin; chain `.intercept({path, method}).reply(...)` on it                          |
 | `handle.agent`             | Raw `MockAgent` escape hatch for `.persist()` / `.times()` / `.delay()` / body matchers                                |
-| `handle.close()`           | Restore the previous global dispatcher and close the agent; idempotent                                                  |
-| `handle.assertAllCalled()` | Throw if any registered interceptor was never matched by a real request                                                 |
+| `handle.close()`           | Restore the previous global dispatcher and close the agent; idempotent                                                 |
+| `handle.assertAllCalled()` | Throw if any registered interceptor was never matched by a real request                                               |
 
 ### HttpRequestOptions
 
 Object-based options for `runHttpRequest()`. Used with HTTP WASM apps (as opposed to CDN proxy-wasm filter apps tested with `runFlow`).
 
 ```typescript
+/**
+ * Options for runHttpRequest() — execute a request through an HTTP WASM app.
+ * Only path is required; method defaults to "GET", headers to {}, body to "".
+ */
 interface HttpRequestOptions {
   path: string;
-  method?: string;                   // Default: "GET"
-  headers?: Record<string, string>;  // Default: {}
-  body?: string;                     // Default: ""
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
 }
 ```
 
 | Field     | Type                     | Required | Default | Description         |
-| --------- | ------------------------ | -------- | ------- | -------------------- |
+| --------- | ------------------------ | -------- | ------- | ------------------- |
 | `path`    | `string`                 | Yes      | —       | Request path        |
 | `method`  | `string`                 | No       | `"GET"` | HTTP method         |
 | `headers` | `Record<string, string>` | No       | `{}`    | Request headers     |
@@ -195,13 +205,13 @@ interface RunnerConfig {
 }
 ```
 
-| Field                            | Type                           | Description                                                               |
-| --------------------------------- | ------------------------------ | --------------------------------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`                      | Enable dotenv loading                                                     |
-| `dotenv.path`                    | `string`                       | Directory to load dotenv files from; defaults to process CWD when omitted |
-| `enforceProductionPropertyRules` | `boolean`                      | Override production property enforcement for the runner; default `true`   |
+| Field                            | Type                          | Description                                                               |
+| -------------------------------- | ----------------------------- | ------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`                     | Enable dotenv loading                                                     |
+| `dotenv.path`                    | `string`                      | Directory to load dotenv files from; defaults to process CWD when omitted |
+| `enforceProductionPropertyRules` | `boolean`                     | Override production property enforcement for the runner; default `true`   |
 | `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                    |
-| `httpPort`                       | `number`                       | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
+| `httpPort`                       | `number`                      | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
 
 ## Functions
 
@@ -214,6 +224,12 @@ function defineTestSuite(suite: TestSuite): TestSuite
 Validates and returns a typed `TestSuite` definition. Throws if neither `wasmPath` nor `wasmBuffer` is provided, or if `tests` is empty.
 
 ```typescript
+import {
+  defineTestSuite,
+  runFlow,
+  assertRequestHeader,
+} from "@gcoredev/fastedge-test/test";
+
 const suite = defineTestSuite({
   wasmPath: "./build/my-filter.wasm",
   tests: [
@@ -239,7 +255,17 @@ function runTestSuite(suite: TestSuite): Promise<SuiteResult>
 Executes all test cases in the suite sequentially. Each test receives a **fresh runner instance** — tests are fully isolated. A thrown error or failed assertion marks that test as failed; remaining tests still execute.
 
 ```typescript
-const suite = defineTestSuite({ wasmPath: "./filter.wasm", tests: [...] });
+import { defineTestSuite, runTestSuite } from "@gcoredev/fastedge-test/test";
+
+const suite = defineTestSuite({
+  wasmPath: "./filter.wasm",
+  tests: [
+    {
+      name: "loads",
+      async run() {},
+    },
+  ],
+});
 const result = await runTestSuite(suite);
 
 console.log(`${result.passed}/${result.total} passed`);
@@ -260,7 +286,15 @@ Runs the suite, prints a summary to stdout, then calls `process.exit(0)` if all 
 // test.mjs
 import { defineTestSuite, runAndExit } from "@gcoredev/fastedge-test/test";
 
-const suite = defineTestSuite({ wasmPath: "./filter.wasm", tests: [...] });
+const suite = defineTestSuite({
+  wasmPath: "./filter.wasm",
+  tests: [
+    {
+      name: "loads",
+      async run() {},
+    },
+  ],
+});
 await runAndExit(suite);
 ```
 
@@ -280,7 +314,7 @@ Output format:
 function runFlow(runner: IWasmRunner, options: FlowOptions): Promise<FullFlowResult>
 ```
 
-Executes a complete request/response flow through the WASM filter. Object-based wrapper around the runner's low-level `callFullFlow` method — callers do not need to construct pseudo-headers manually.
+Executes a complete request/response flow through the WASM filter. Object-based wrapper around the runner's low-level `callFullFlow` method — callers do not need to construct pseudo-headers manually. Throws if `url` is not a full URL and is not `"built-in"`.
 
 The returned `FullFlowResult` has this shape:
 
@@ -302,7 +336,7 @@ type FullFlowResult = {
 Hook results are accessed by camelCase key:
 
 | Key                 | Hook                       |
-| ------------------- | --------------------------- |
+| ------------------- | -------------------------- |
 | `onRequestHeaders`  | `on_request_headers` hook  |
 | `onRequestBody`     | `on_request_body` hook     |
 | `onResponseHeaders` | `on_response_headers` hook |
@@ -370,9 +404,11 @@ const body = assertHttpJson(response);
 function loadConfigFile(configPath: string): Promise<TestConfig>
 ```
 
-Reads and validates a `fastedge-config.test.json` file. Returns the parsed `TestConfig` or throws with a descriptive error. See [TEST_CONFIG.md](TEST_CONFIG.md) for the full config schema.
+Reads and validates a `fastedge-config.test.json` file. Returns the parsed `TestConfig` or throws with a descriptive error. A relative `dotenv.path` in the file is resolved against the config file's directory. See [TEST_CONFIG.md](TEST_CONFIG.md) for the full config schema.
 
 ```typescript
+import { loadConfigFile } from "@gcoredev/fastedge-test/test";
+
 const config = await loadConfigFile("./fastedge-config.test.json");
 ```
 
@@ -387,6 +423,8 @@ Install an undici `MockAgent` as the global fetch dispatcher for the duration of
 See [Origin Mocking](#origin-mocking) for the full usage pattern including lifecycle, multi-upstream setup, and the HTTP-WASM `allowNetConnect` caveat.
 
 ```typescript
+import { mockOrigins } from "@gcoredev/fastedge-test/test";
+
 const mocks = mockOrigins();
 mocks.origin("https://api.example.com").intercept({ path: "/users" }).reply(200, "[]");
 // ... run your test ...
@@ -442,7 +480,7 @@ function assertFinalHeader(result: FullFlowResult, name: string, expected?: stri
 
 `assertFinalStatus` asserts the final response status code after the full flow completes.
 
-`assertFinalHeader` asserts a header in `result.finalResponse.headers`. If `expected` is provided, also asserts the value. Multi-value semantics match `assertRequestHeader`: a `string` expected matches any value when the actual header is multi-valued; a `string[]` expected requires an exact array match. This preserves the RFC 6265 contract for `Set-Cookie` and any other legitimately-repeatable headers.
+`assertFinalHeader` asserts a header in `result.finalResponse.headers`. If `expected` is provided, also asserts the value. Multi-value semantics match `assertResponseHeader`: a `string` expected matches any value when the actual header is multi-valued; a `string[]` expected requires an exact array match. This preserves the RFC 6265 contract for `Set-Cookie` and any other legitimately-repeatable headers.
 
 ```typescript
 assertFinalStatus(result, 200);
@@ -456,7 +494,7 @@ assertFinalHeader(result, "content-encoding"); // exists, any value
 function assertReturnCode(result: HookResult, expected: number): void
 ```
 
-Asserts the hook's return code. Common values: `0` = Continue, `1` = Pause/StopIteration.
+Asserts the hook's return code. Common values: `0` = Ok, `1` = Pause.
 
 ```typescript
 assertReturnCode(result.hookResults.onRequestHeaders, 0); // filter continued
@@ -582,7 +620,13 @@ The runner's origin fetch inside `callFullFlow` and every `proxy_http_call` upst
 ### Basic Usage
 
 ```typescript
-import { mockOrigins } from "@gcoredev/fastedge-test/test";
+import {
+  mockOrigins,
+  runFlow,
+  assertFinalStatus,
+  assertFinalHeader,
+} from "@gcoredev/fastedge-test/test";
+import type { MockOriginsHandle } from "@gcoredev/fastedge-test/test";
 
 let mocks: MockOriginsHandle | null = null;
 
@@ -599,13 +643,14 @@ it("renders a retry UI when the origin returns 503", async () => {
   mocks!
     .origin("https://origin.example.com")
     .intercept({ path: "/api/resource" })
-    .reply(503, "upstream down");
+    .reply(503, "upstream down", { headers: { "retry-after": "5" } });
 
   const result = await runFlow(runner, {
     url: "https://origin.example.com/api/resource",
   });
 
   assertFinalStatus(result, 503);
+  assertFinalHeader(result, "retry-after", "5");
   mocks!.assertAllCalled();
 });
 ```
@@ -646,11 +691,27 @@ The handle installs the MockAgent as the global dispatcher on construction and r
 
 `handle.assertAllCalled()` throws if any registered interceptor was never matched. Use it at the end of a test (or in `afterEach`) to catch setup drift — mocks that were registered but never exercised because the WASM under test took a different code path.
 
+```typescript
+import { mockOrigins } from "@gcoredev/fastedge-test/test";
+import type { MockOriginsHandle } from "@gcoredev/fastedge-test/test";
+
+let mocks: MockOriginsHandle;
+
+beforeEach(() => {
+  mocks = mockOrigins();
+});
+
+afterEach(async () => {
+  mocks.assertAllCalled(); // fail tests that registered mocks they never hit
+  await mocks.close();
+});
+```
+
 ### HTTP-WASM `allowNetConnect` caveat
 
 By default, `mockOrigins()` calls `MockAgent.disableNetConnect()` — every request that doesn't match a registered interceptor is rejected. This is the safer default: missing mocks become loud errors instead of silent live network calls in CI.
 
-**HTTP-WASM tests do not compose with the default.** `HttpWasmRunner.execute()` forwards requests to a spawned `fastedge-run` subprocess on `localhost:<port>`, and that localhost fetch is also blocked by `disableNetConnect()`. Use `allowNetConnect` to exempt localhost:
+**HTTP-WASM tests do not compose with the default.** `HttpWasmRunner.execute()` forwards requests to a spawned `fastedge-run` subprocess on `localhost:<port>`, and that localhost fetch is also blocked by `disableNetConnect()`. The failure surfaces as an opaque fetch error. Use `allowNetConnect` to exempt localhost:
 
 ```typescript
 mocks = mockOrigins({
@@ -684,14 +745,14 @@ The runner strips HTTP/2 pseudo-headers (`:method`, `:path`, `:authority`, `:sch
 
 ## CI Integration
 
-`runAndExit` is the primary entry point for CI pipelines. It exits with code `0` on full pass and `1` on any failure, compatible with standard CI exit-code conventions.
+`runAndExit` is the primary entry point for CI pipelines. It exits with code `0` on full pass and `1` on any failure, compatible with standard CI exit-code conventions. Per-test results and a summary line are written to stdout (see the output format under [runAndExit](#runandexit)); failed tests print their error message indented beneath the test name.
 
 **package.json script:**
 
 ```json
 {
   "scripts": {
-    "test:wasm": "node --experimental-vm-modules test/suite.mjs"
+    "test:wasm": "node test/suite.mjs"
   }
 }
 ```
@@ -724,7 +785,6 @@ import {
   defineTestSuite,
   runAndExit,
   runFlow,
-  runHttpRequest,
   assertRequestHeader,
   assertNoRequestHeader,
   assertResponseHeader,
@@ -734,9 +794,6 @@ import {
   assertLog,
   assertPropertyAllowed,
   assertPropertyDenied,
-  assertHttpStatus,
-  assertHttpJson,
-  assertHttpContentType,
 } from "@gcoredev/fastedge-test/test";
 
 const suite = defineTestSuite({
@@ -809,21 +866,6 @@ const suite = defineTestSuite({
         const req = result.hookResults.onRequestHeaders;
         assertPropertyAllowed(req, "request.path");
         assertPropertyDenied(req, "upstream.address");
-      },
-    },
-
-    {
-      name: "HTTP app returns JSON response",
-      async run(runner) {
-        const response = await runHttpRequest(runner, {
-          path: "/api/status",
-          headers: { accept: "application/json" },
-        });
-
-        assertHttpStatus(response, 200);
-        assertHttpContentType(response, "application/json");
-        const body = assertHttpJson<{ ok: boolean }>(response);
-        if (!body.ok) throw new Error("Expected ok: true in response body");
       },
     },
   ],
