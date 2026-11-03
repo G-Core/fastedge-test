@@ -111,15 +111,14 @@ class HttpHeaders extends Context {
     // a non-nullable `string` so it cannot distinguish "missing" from
     // "present-but-empty". The Rust counterpart uses `is_none()` (which *can*
     // discriminate via the Option type); AS has no equivalent, so this
-    // hook simply tolerates an empty host value — matching how nginx
-    // pre-allocates `host:""` in the response phase.
+    // hook does not check host.
 
     // Add new headers
     stream_context.headers.request.add("new-header-01", "value-01");
     stream_context.headers.request.add("new-header-02", "value-02");
     stream_context.headers.request.add("new-header-03", "value-03");
 
-    // Remove — FastEdge/nginx sets to empty value, does not delete the entry
+    // Remove — deletes every entry for the name
     stream_context.headers.request.remove("new-header-01");
 
     // Replace an existing header's value
@@ -148,9 +147,8 @@ class HttpHeaders extends Context {
     }
 
     // Expected `new-header-*` state after the add/remove/replace sequence.
-    // Remove sets to empty string (FastEdge/nginx behavior), not delete.
+    // new-header-01 was removed, so it must not appear at all.
     const expectedHeaders = new Set<string>();
-    expectedHeaders.add("new-header-01:");
     expectedHeaders.add("new-header-02:new-value-02");
     expectedHeaders.add("new-header-03:value-03");
     expectedHeaders.add("new-header-03:value-03-a");
@@ -196,8 +194,6 @@ class HttpHeaders extends Context {
     }
 
     // See comment in onRequestHeaders — no 551-style check here either.
-    // The response phase in nginx/FastEdge pre-allocates `host:""`, which
-    // this hook must treat as a normal valid state.
 
     stream_context.headers.response.add("new-header-01", "value-01");
     stream_context.headers.response.add("new-header-02", "value-02");
@@ -219,7 +215,6 @@ class HttpHeaders extends Context {
     stream_context.headers.response.add("set-cookie", "theme=dark; Path=/");
 
     const expectedHeaders = new Set<string>();
-    expectedHeaders.add("new-header-01:");
     expectedHeaders.add("new-header-02:new-value-02");
     expectedHeaders.add("new-header-03:value-03");
     expectedHeaders.add("new-header-03:value-03-a");

@@ -1,5 +1,34 @@
 # Proxy-WASM Runner - Changelog
 
+## November 3, 2026 - Header get/remove match the FastEdge edge
+
+### Overview
+Two proxy-wasm header host functions behaved like an older edge. The runner returned `Some("")` where the edge returns `None`, and left an empty entry after `remove`. Rust filters that test `is_none()` failed locally but worked on the edge. Behaviour was measured on preprod and prod with a probe app that runs the same binary on both sides.
+
+### 🎯 What Was Completed
+
+#### 1. `proxy_get_header_map_value`
+- A missing header or an empty value returns `NotFound` (Rust SDK `None`, AS `""`), in every phase. It used to return `Ok("")`.
+
+#### 2. `proxy_remove_header_map_value`
+- Deletes every entry for the key. It used to replace them with a single `[key, ""]`, which `get_headers` listed and clients saw as an empty header (e.g. an extra `Set-Cookie: ""` after a clear-then-add).
+
+#### 3. cdn-headers test apps (Rust + AS)
+- Expected sets no longer contain the removed `new-header-01` entries.
+- Rust: the request-phase read of the response `host` must be `None` (553); the response phase checks that the removed header reads `None` (553). Code 554 is gone.
+
+**Files Modified:**
+- `server/runner/HostFunctions.ts` — get returns `NotFound` on missing/empty; remove deletes
+- `test-applications/cdn-apps/rust/cdn-headers/src/lib.rs`, `test-applications/cdn-apps/as/cdn-headers/assembly/headers.ts` — edge semantics
+- `server/__tests__/integration/cdn-apps/headers/multi-value-headers.test.ts` — remove asserts absence; response fixtures use `host: "example.com"`
+- `context/features/MULTI_VALUE_HEADERS.md` — current behaviour
+
+### 🧪 Testing
+`pnpm run build:cdn-test-apps`, then `test:integration:cdn` (137/137), `test:integration:http`, `test:unit`, `test:server` all pass.
+
+### 📝 Notes
+- Breaking for tests that asserted the old `Some("")` / empty-entry behaviour. Those tests were also wrong against the edge.
+
 ## October 14, 2026 - SDK and AssemblyScript test-app dependencies moved to devDependencies
 
 ### Overview

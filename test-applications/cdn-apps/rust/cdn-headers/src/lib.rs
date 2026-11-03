@@ -66,7 +66,7 @@ impl HttpContext for HttpHeaders {
         self.add_http_request_header("new-header-03", "value-03");
         self.add_http_request_header_bytes("new-header-bytes-03", b"value-bytes-03");
 
-        //remove header new-header-01, expected empty value
+        // remove deletes every entry for the name
         self.set_http_request_header("new-header-01", None);
         self.set_http_request_header_bytes("new-header-bytes-01", None);
 
@@ -94,8 +94,6 @@ impl HttpContext for HttpHeaders {
             .collect::<HashSet<(String, Bytes)>>();
 
         let expected = [
-            ("new-header-01".to_string(), "".to_string()),
-            ("new-header-bytes-01".to_string(), "".to_string()),
             ("new-header-02".to_string(), "new-value-02".to_string()),
             (
                 "new-header-bytes-02".to_string(),
@@ -116,8 +114,6 @@ impl HttpContext for HttpHeaders {
         let expected = expected.iter().collect::<HashSet<_>>();
 
         let expected_bytes = [
-            ("new-header-01".to_string(), b"".to_vec()),
-            ("new-header-bytes-01".to_string(), b"".to_vec()),
             ("new-header-02".to_string(), b"new-value-02".to_vec()),
             (
                 "new-header-bytes-02".to_string(),
@@ -170,21 +166,11 @@ impl HttpContext for HttpHeaders {
             return Action::Pause;
         }
 
-        // check if the response header is not returned
-        let Some(value) = self.get_http_response_header("host") else {
+        // no response exists yet, so a response header read returns None
+        if self.get_http_response_header("host").is_some()
+            || self.get_http_response_header_bytes("host").is_some()
+        {
             self.send_http_response(553, vec![], None);
-            return Action::Pause;
-        };
-        if !value.is_empty() {
-            self.send_http_response(554, vec![], None);
-            return Action::Pause;
-        }
-        let Some(value) = self.get_http_response_header_bytes("host") else {
-            self.send_http_response(553, vec![], None);
-            return Action::Pause;
-        };
-        if !value.is_empty() {
-            self.send_http_response(554, vec![], None);
             return Action::Pause;
         }
 
@@ -243,7 +229,7 @@ impl HttpContext for HttpHeaders {
         self.add_http_response_header("new-header-03", "value-03");
         self.add_http_response_header_bytes("new-header-bytes-03", b"value-bytes-03");
 
-        //remove header new-header-01, expected empty value
+        // remove deletes every entry for the name
         self.set_http_response_header("new-header-01", None);
         self.set_http_response_header_bytes("new-header-bytes-01", None);
 
@@ -271,8 +257,6 @@ impl HttpContext for HttpHeaders {
             .collect::<HashSet<(String, Bytes)>>();
 
         let expected = [
-            ("new-header-01".to_string(), "".to_string()),
-            ("new-header-bytes-01".to_string(), "".to_string()),
             ("new-header-02".to_string(), "new-value-02".to_string()),
             (
                 "new-header-bytes-02".to_string(),
@@ -298,8 +282,6 @@ impl HttpContext for HttpHeaders {
         let expected = expected.iter().collect::<HashSet<_>>();
 
         let expected_bytes = [
-            ("new-header-01".to_string(), b"".to_vec()),
-            ("new-header-bytes-01".to_string(), b"".to_vec()),
             ("new-header-02".to_string(), b"new-value-02".to_vec()),
             (
                 "new-header-bytes-02".to_string(),
@@ -357,21 +339,11 @@ impl HttpContext for HttpHeaders {
             return Action::Pause;
         }
 
-        // check if the response header is not returned
-        let Some(value) = self.get_http_response_header("host") else {
+        // a removed header reads as None
+        if self.get_http_response_header("new-header-01").is_some()
+            || self.get_http_response_header_bytes("new-header-bytes-01").is_some()
+        {
             self.send_http_response(553, vec![], None);
-            return Action::Pause;
-        };
-        if !value.is_empty() {
-            self.send_http_response(554, vec![], None);
-            return Action::Pause;
-        }
-        let Some(value) = self.get_http_response_header_bytes("host") else {
-            self.send_http_response(553, vec![], None);
-            return Action::Pause;
-        };
-        if !value.is_empty() {
-            self.send_http_response(554, vec![], None);
             return Action::Pause;
         }
 
