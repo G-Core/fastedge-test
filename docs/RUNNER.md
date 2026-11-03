@@ -334,10 +334,10 @@ await runner.cleanup();
 
 **Built-in responder behavior** — controlled by request headers present after the request hooks run:
 
-| Header               | Effect                                                                                    |
-| -------------------- | ----------------------------------------------------------------------------------------- |
-| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                              |
-| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default)           |
+| Header               | Effect                                                                          |
+| -------------------- | ------------------------------------------------------------------------------- |
+| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                    |
+| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default) |
 
 An `x-debugger-status` value that is not an integer between 100 and 599 produces status `400`.
 
@@ -471,14 +471,14 @@ type HookCall = {
 };
 ```
 
-| Field                            | Description                                   |
-| -------------------------------- | --------------------------------------------- |
-| `hook`                           | Hook name (see below)                         |
-| `request`                        | Request state passed to the hook              |
+| Field                            | Description                                    |
+| -------------------------------- | ---------------------------------------------- |
+| `hook`                           | Hook name (see below)                          |
+| `request`                        | Request state passed to the hook               |
 | `response`                       | Seed state for response hooks via `callHook()` |
-| `properties`                     | Shared properties                             |
-| `dotenvEnabled`                  | Optional per-call dotenv flag                 |
-| `enforceProductionPropertyRules` | Defaults to `true`                            |
+| `properties`                     | Shared properties                              |
+| `dotenvEnabled`                  | Optional per-call dotenv flag                  |
+| `enforceProductionPropertyRules` | Defaults to `true`                             |
 
 - `hook`: one of `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`.
 - `response`: not consumed by `callFullFlow()` or by request hooks. The full-flow path generates the upstream response at runtime.

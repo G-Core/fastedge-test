@@ -142,13 +142,44 @@ Returned by `mockOrigins()` to scope an undici `MockAgent` to a single test (see
 
 ```typescript
 interface MockOriginsOptions {
-  allowNetConnect?: boolean | (string | RegExp)[];  // Default: false
+  /**
+   * Control whether unmocked requests can reach the real network.
+   *
+   * - `false` (default): block everything except what's mocked. Unmocked
+   *   requests throw. Safer — missing mocks become loud failures rather
+   *   than silent live calls in CI.
+   * - `true`: allow all unmocked requests to hit the network.
+   * - `(string | RegExp)[]`: block everything, then allow-list specific
+   *   origins or patterns. Use this for HTTP-WASM tests, where the runner
+   *   forwards to a spawned `fastedge-run` on localhost that the mock
+   *   dispatcher must not intercept (e.g. `[/^127\.0\.0\.1/, /^localhost/]`).
+   */
+  allowNetConnect?: boolean | (string | RegExp)[];
 }
 
 interface MockOriginsHandle {
+  /**
+   * Get or create a MockPool for the given origin URL. Chain
+   * `.intercept({ path, method, ... }).reply(status, body)` on the returned
+   * pool to register a mock. Despite the name, `method` defaults to `GET`
+   * and accepts any HTTP verb (string, RegExp, or predicate function).
+   */
   origin(url: string): MockPool;
+  /**
+   * The raw undici MockAgent — escape hatch for advanced features not
+   * exposed by the wrapper (`.persist()`, `.times(n)`, `.delay(ms)`,
+   * custom body matchers, etc.).
+   */
   readonly agent: MockAgent;
+  /**
+   * Close the MockAgent and restore the previous global dispatcher. Safe
+   * to call multiple times; later calls are no-ops.
+   */
   close(): Promise<void>;
+  /**
+   * Throw if any registered interceptor was never called. Run this in
+   * `afterEach` to catch tests that set up mocks they never exercised.
+   */
   assertAllCalled(): void;
 }
 ```

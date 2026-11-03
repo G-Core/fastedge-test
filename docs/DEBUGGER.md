@@ -62,9 +62,9 @@ The module also exports `startServer`:
 function startServer(port?: number): Promise<void>;
 ```
 
-| Parameter | Type     | Default                      | Description                                             |
-| --------- | -------- | ---------------------------- | ------------------------------------------------------- |
-| `port`    | `number` | `PORT` env var, or `5179`    | Preferred port. A later free port is used if it is busy. |
+| Parameter | Type     | Default                   | Description                                              |
+| --------- | -------- | ------------------------- | -------------------------------------------------------- |
+| `port`    | `number` | `PORT` env var, or `5179` | Preferred port. A later free port is used if it is busy. |
 
 The returned promise resolves once the server is bound and accepting connections. The actual bound port is printed to stderr and written to the port file (see [Port Configuration](#port-configuration)); it can differ from the requested port when the preferred port is in use.
 

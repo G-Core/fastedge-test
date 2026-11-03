@@ -113,7 +113,7 @@ SOURCE_FILES[API.md]="server/server.ts schemas/api-load.schema.json schemas/api-
 SOURCE_FILES[WEBSOCKET.md]="server/websocket/WebSocketManager.ts server/websocket/types.ts server/websocket/index.ts"
 SOURCE_FILES[TEST_FRAMEWORK.md]="server/test-framework/index.ts server/test-framework/suite-runner.ts server/test-framework/assertions.ts server/test-framework/types.ts"
 SOURCE_FILES[RUNNER.md]="server/runner/index.ts server/runner/standalone.ts server/runner/IWasmRunner.ts server/runner/types.ts server/runner/IStateManager.ts server/runner/ProxyWasmRunner.ts server/runner/HttpWasmRunner.ts"
-SOURCE_FILES[TEST_CONFIG.md]="schemas/fastedge-config.test.schema.json server/schemas/config.ts server/test-framework/suite-runner.ts"
+SOURCE_FILES[TEST_CONFIG.md]="schemas/fastedge-config.test.schema.json server/schemas/config.ts server/test-framework/suite-runner.ts server/utils/dotenv-loader.ts"
 SOURCE_FILES[DEBUGGER.md]="server/server.ts bin/fastedge-debug.js package.json"
 
 generate_file() {
