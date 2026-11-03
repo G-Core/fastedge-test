@@ -137,7 +137,10 @@ Exactly one of `wasmPath` or `wasmBuffer` is required — TypeScript enforces th
 
 ```typescript
 interface RunnerConfig {
-  dotenvEnabled?: boolean;                  // Load .env file (default: false)
+  dotenv?: {
+    enabled?: boolean;                      // Load .env files (default: false)
+    path?: string;                          // Directory to load them from (default: process cwd)
+  };
   enforceProductionPropertyRules?: boolean; // CDN property access control (default: true)
 }
 ```
