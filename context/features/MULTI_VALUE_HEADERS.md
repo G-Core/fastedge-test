@@ -15,6 +15,8 @@ Two requirements converge here:
    - Multi-value `add_header` comma-joined values into one entry
    - `remove_header` deleted entries outright instead of setting them empty (nginx semantics)
    - `remove` on a non-existent header created a phantom empty entry
+
+   **Superseded 2026-11:** the edge changed since (FastEdge v0.8.5: empty or missing value → `NotFound`; v0.9.11: header reads answered from a FastEdge-side cache where remove deletes). The runner now matches the measured edge: `remove` deletes, missing or empty `get` → `None`. See "Key implementation details".
 2. **RFC 6265 §3 `Set-Cookie` correctness.** `Set-Cookie` is the canonical exception to HTTP's "combine duplicates with commas" rule. Browsers and every ecosystem tool (Node `http`, undici, supertest, axios, fetch's `Headers.getSetCookie()`) model it as an array. Collapsing multiple Set-Cookies to one string silently drops cookies — tests on a handler that sets `sid=…` plus `theme=…` would see only the last one.
 
 Both requirements are now satisfied in the same pipeline.
@@ -102,8 +104,8 @@ All `proxy_*` header host functions operate on tuples directly (`tuples.push(...
 |----------|-----------|
 | `proxy_add_header_map_value` | `tuples.push([key, value])` — creates a separate entry each call |
 | `proxy_replace_header_map_value` | Filter out key, push `[key, value]` (replaces any duplicates with a single entry) |
-| `proxy_remove_header_map_value` | If key exists: filter out, push `[key, ""]` (nginx: empty, not delete). If absent: no-op. |
-| `proxy_get_header_map_value` | `tuples.find(...)` — first match. Absent → `Ok("")` (matches nginx; Rust SDK interprets a non-null pointer as `Some("")`). |
+| `proxy_remove_header_map_value` | Filter out every entry for the key (absent → no-op). |
+| `proxy_get_header_map_value` | `tuples.find(...)` — first match. Absent or empty value → `NotFound` (SDKs see `None`/`null`). |
 | `proxy_get_header_map_pairs` | `HeaderManager.serializeTuples(tuples)` |
 | `proxy_set_header_map_pairs` | `HeaderManager.deserializeToTuples(payload)` |
 | `setHttpCallResponse(token, headers, body)` | Accepts `HeaderMap \| HeaderRecord \| HeaderTuples`; stores as tuples. Response-phase `proxy_get_header_map_pairs` on `HttpCallResponseHeaders` sees duplicates (e.g. multiple `Set-Cookie` from an upstream fetch). |
@@ -183,7 +185,7 @@ All three http-responder variants (`test-applications/http-apps/{js, rust/basic,
 `server/__tests__/integration/cdn-apps/headers/multi-value-headers.test.ts` — 22 tests, 11 per variant (Rust + AS). Coverage:
 - Multi-value `add` creating separate entries (includes duplicate `new-header-03`)
 - `replace` → single new value
-- `remove` → empty-string entry (nginx behaviour)
+- `remove` → every entry deleted
 - Response-header access from request phase
 - 550 (no headers) Pause path
 - **Set-Cookie as `string[]`** (RFC 6265 §3) — runs on both Rust and AS
@@ -205,15 +207,13 @@ Rust-only `_bytes` variant assertions stay behind the `hasBytesVariants` flag be
 
 ## Key implementation details
 
-### nginx `remove` behaviour
+### `remove` behaviour
 
-`proxy_remove_header_map_value` on nginx sets the header value to empty string rather than deleting the entry (nginx's internal header structure doesn't support true deletion). The runner matches:
-- Header exists → filter out all entries, add one `[key, ""]`
-- Header missing → no-op (no phantom entry)
+`proxy_remove_header_map_value` deletes every entry for the key; a later `get` reads `None` and `get_headers` does not list it, in both phases. This is what the guest sees on the edge (measured 2026-11, preprod and prod).
 
-### Missing-header `get`
+### Missing or empty `get`
 
-`proxy_get_header_map_value` on a non-existent header returns `Ok` with empty string (not `NotFound`). The Rust SDK interprets a non-null return pointer as `Some("")`, distinct from `None` (null pointer). `writeStringResult("")` always writes a non-null pointer, so behaviour aligns with nginx.
+`proxy_get_header_map_value` returns `NotFound` for a missing header and for one whose value is empty, so the Rust SDK sees `None` and AS sees `""`. Matches the FastEdge host since v0.8.5. A client header sent with an empty value is still listed by `get_headers` with value `""`.
 
 ### Response headers during request phase
 
@@ -221,7 +221,7 @@ On the real FastEdge CDN, response headers are accessible during `onRequestHeade
 
 ### Fixture: response-phase host header
 
-The `onResponseHeaders` test fixtures use `host: ""` (empty string), not `host: "example.com"`. On the real server, the response header map has a pre-allocated `host` field initialized to empty. The runner mirrors this; the WASM apps read the empty value and continue normally.
+The `onResponseHeaders` test fixtures pass `host: "example.com"`. The Rust app returns 551 if the response `host` reads `None`, and an empty value now reads `None`.
 
 ## Files touched (historical summary)
 
@@ -277,8 +277,7 @@ pnpm test
 | 550 | `get_headers()` empty | No headers present |
 | 551 | *(Rust only)* `get_header("host")` is `None` | Host header missing in request phase |
 | 552 | Header diff mismatch | add/replace/remove didn't produce the expected set |
-| 553 | Response header inaccessible | `get_response_header()` returned `None` |
-| 554 | Response header non-empty | Expected empty value for a pre-allocated header |
+| 553 | *(Rust only)* Unexpected `Some` | Request phase: response `host` read is not `None` (no response yet). Response phase: removed `new-header-01` read is not `None` |
 | 555 | Response header count wrong | Unexpected number of response headers |
 | 556 | Response header value wrong | Specific header name/value validation failed |
 

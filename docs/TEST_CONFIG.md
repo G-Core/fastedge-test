@@ -15,6 +15,7 @@ The config schema is a union of two variants selected by `appType`:
 - Top-level: `properties`, `appType`, and `request`
 - Within `request` (CDN): `method`, `url`, `headers`, `body`
 - Within `request` (HTTP-WASM): `method`, `path`, `headers`, `body`
+- Within `wasm` (when present): `path`
 
 **Runtime defaults**: The Zod runtime fills in `appType` (`"proxy-wasm"` for CDN), `method`, `headers`, `body`, and `properties` if absent, so those fields are optional in practice. The JSON Schema marks them required because it cannot express Zod's default-filling behaviour. Supplying explicit values avoids editor warnings. For HTTP-WASM configs, `appType: "http-wasm"` has no runtime default and **must** be specified.
 
@@ -23,37 +24,37 @@ The config schema is a union of two variants selected by `appType`:
 ### Top-Level Fields
 
 | JSON Path          | Type      | Required (Schema)                      | Default        | Description                                                                                                                                            |
-| ------------------ | --------- | --------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ------------------ | --------- | -------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `$schema`          | `string`  | No                                     | —              | URI pointing to the JSON Schema file for IDE autocompletion and validation.                                                                            |
 | `description`      | `string`  | No                                     | —              | Human-readable label for this test scenario.                                                                                                           |
 | `wasm`             | `object`  | No                                     | —              | WASM binary configuration. Required when running without a programmatic `wasmBuffer`.                                                                  |
 | `wasm.path`        | `string`  | Yes (if `wasm` present)                | —              | Path to the compiled `.wasm` binary, relative to the config file or absolute.                                                                          |
 | `wasm.description` | `string`  | No                                     | —              | Human-readable label for the WASM binary.                                                                                                              |
 | `appType`          | `string`  | Yes (schema) / CDN has runtime default | `"proxy-wasm"` | App variant. `"proxy-wasm"` for CDN mode; `"http-wasm"` for HTTP mode. HTTP-WASM has no default.                                                       |
+| `httpPort`         | `integer` | No                                     | —              | HTTP-WASM only. Pin the subprocess to a specific port (1024–65535) instead of dynamic allocation from the 8100–8199 pool. Throws if the port is busy.  |
 | `request`          | `object`  | **Yes**                                | —              | Incoming HTTP request to simulate.                                                                                                                     |
-| `request.method`   | `string`  | Yes (schema) / runtime default         | `"GET"`        | HTTP method (e.g. `"GET"`, `"POST"`).                                                                                                                   |
+| `request.method`   | `string`  | Yes (schema) / runtime default         | `"GET"`        | HTTP method (e.g. `"GET"`, `"POST"`).                                                                                                                  |
 | `request.url`      | `string`  | **Yes** (CDN only)                     | —              | Full URL for the simulated upstream request (e.g. `"https://example.com/api"`). CDN mode only. Use `"built-in"` for the local responder.               |
-| `request.path`     | `string`  | **Yes** (HTTP-WASM only)                | —              | Request path (e.g. `"/api/submit"`). HTTP-WASM mode only. The WASM module acts as the origin server and receives only the path portion of the request. |
+| `request.path`     | `string`  | **Yes** (HTTP-WASM only)               | —              | Request path (e.g. `"/api/submit"`). HTTP-WASM mode only. The WASM module acts as the origin server and receives only the path portion of the request. |
 | `request.headers`  | `object`  | Yes (schema) / runtime default         | `{}`           | Key/value map of request headers. All keys and values must be strings.                                                                                 |
 | `request.body`     | `string`  | Yes (schema) / runtime default         | `""`           | Request body as a plain string. Use an empty string for requests with no body.                                                                         |
 | `properties`       | `object`  | **Yes** (schema) / runtime default     | `{}`           | CDN property key/value pairs passed to the WASM execution context. Values may be any JSON type.                                                        |
 | `dotenv`           | `object`  | No                                     | —              | Dotenv file loading configuration.                                                                                                                     |
 | `dotenv.enabled`   | `boolean` | No                                     | —              | Whether to load a `.env` file before execution.                                                                                                        |
 | `dotenv.path`      | `string`  | No                                     | —              | Path to the `.env` file. If omitted, resolves `.env` relative to the config file directory.                                                            |
-| `httpPort`         | `integer` | No                                     | —              | HTTP-WASM only. Pin the subprocess to a specific port (1024–65535) instead of dynamic allocation from the 8100–8199 pool. Throws if the port is busy.  |
 
 ### Required vs. Default Distinction
 
 The JSON Schema's `required` arrays drive editor validation. Fields like `appType`, `request.method`, `request.headers`, `request.body`, and `properties` appear in the schema's `required` array, so a strict JSON Schema validator will flag them as missing. At runtime, the Zod schema fills in their defaults (`"proxy-wasm"`, `"GET"`, `{}`, `""`, and `{}` respectively), so the test runner accepts configs that omit them — with the exception of `appType: "http-wasm"`, which has no Zod default and must always be specified for HTTP-WASM configs.
 
-To avoid editor warnings while keeping configs concise, either supply the fields explicitly or add the `$schema` field and accept that your editor may warn on omission.
+To avoid editor warnings while keeping configs concise, supply the fields explicitly.
 
 ## Dotenv Configuration
 
 When `dotenv.enabled` is `true`, the runner loads a `.env` file and merges its contents into `process.env` before executing the WASM binary. This allows secrets and environment-specific values to be injected without embedding them in the config file.
 
 **File resolution order:**
-1. If `dotenv.path` is set, that path is used (relative to the directory containing the config file, or absolute).
+1. If `dotenv.path` is set, that path is used. A relative path is resolved against the directory containing the config file when the config is loaded with `loadConfigFile`; an absolute path is used as-is.
 2. If `dotenv.path` is omitted, `.env` is resolved relative to the directory containing the config file.
 
 **CDN mode**: Properties passed to the WASM context come from the `properties` field in the config. Dotenv variables are available to the Node.js host process but are not automatically injected as CDN properties. To expose a `.env` value as a CDN property, reference `process.env.VAR_NAME` programmatically when constructing the runner config.
@@ -78,7 +79,7 @@ Without `httpPort`, the runner allocates a port from the 8100–8199 range for e
 
 ### Fail-Fast Semantics
 
-If the pinned port is already in use, `HttpWasmRunner.load()` throws immediately:
+If the pinned port is already in use, `HttpWasmRunner.load()` throws an `Error` immediately:
 
 ```
 fastedge-run port 8250 is not available — release it or choose a different httpPort in fastedge-config.test.json
@@ -261,7 +262,7 @@ console.log(config.properties);    // Record<string, unknown>
 console.log(config.wasm?.path);    // string | undefined
 ```
 
-`loadConfigFile` reads the file, parses JSON, and validates it through the Zod schema (applying defaults). It throws a descriptive `Error` if the file cannot be read, is not valid JSON, or fails schema validation.
+`loadConfigFile` reads the file, parses JSON, and validates it through the Zod schema (applying defaults). It throws a descriptive `Error` if the file cannot be read, is not valid JSON, or fails schema validation. A relative `dotenv.path` in the returned config is resolved to an absolute path against the config file's directory.
 
 The returned `TestConfig` type is a union discriminated by `appType`:
 

@@ -1,5 +1,44 @@
 # Proxy-WASM Runner - Changelog
 
+## November 3, 2026 - Header get/remove match the FastEdge edge
+
+### Overview
+Two proxy-wasm header host functions behaved like an older edge. The runner returned `Some("")` where the edge returns `None`, and left an empty entry after `remove`. Rust filters that test `is_none()` failed locally but worked on the edge. Behaviour was measured on preprod and prod with a probe app that runs the same binary on both sides.
+
+### 🎯 What Was Completed
+
+#### 1. `proxy_get_header_map_value`
+- A missing header or an empty value returns `NotFound` (Rust SDK `None`, AS `""`), in every phase. It used to return `Ok("")`.
+
+#### 2. `proxy_remove_header_map_value`
+- Deletes every entry for the key. It used to replace them with a single `[key, ""]`, which `get_headers` listed and clients saw as an empty header (e.g. an extra `Set-Cookie: ""` after a clear-then-add).
+
+#### 3. cdn-headers test apps (Rust + AS)
+- Expected sets no longer contain the removed `new-header-01` entries.
+- Rust: the request-phase read of the response `host` must be `None` (553); the response phase checks that the removed header reads `None` (553). Code 554 is gone.
+
+**Files Modified:**
+- `server/runner/HostFunctions.ts` — get returns `NotFound` on missing/empty; remove deletes
+- `test-applications/cdn-apps/rust/cdn-headers/src/lib.rs`, `test-applications/cdn-apps/as/cdn-headers/assembly/headers.ts` — edge semantics
+- `server/__tests__/integration/cdn-apps/headers/multi-value-headers.test.ts` — remove asserts absence; response fixtures use `host: "example.com"`
+- `context/features/MULTI_VALUE_HEADERS.md` — current behaviour
+
+### 🧪 Testing
+`pnpm run build:cdn-test-apps`, then `test:integration:cdn` (137/137), `test:integration:http`, `test:unit`, `test:server` all pass.
+
+### 📝 Notes
+- Breaking for tests that asserted the old `Some("")` / empty-entry behaviour. Those tests were also wrong against the edge.
+
+## October 14, 2026 - SDK and AssemblyScript test-app dependencies moved to devDependencies
+
+### Overview
+`@gcoredev/fastedge-sdk-js`, `@gcoredev/proxy-wasm-sdk-as` and `@assemblyscript/wasi-shim` were production dependencies since the initial commit, but nothing the package ships (`server/`, `frontend/`, `bin/`, built `dist/`) imports them; server code only mentions them in comments. They are used only by the workspace test fixtures, resolved from the root: `test-applications/http-apps/js` (the SDK, `"*"`), and the AS apps under `test-applications/cdn-apps/as/*` (they import `@gcoredev/proxy-wasm-sdk-as` and extend `node_modules/@assemblyscript/wasi-shim/asconfig.json`; `assemblyscript` itself was already a devDependency). Every consumer installing `@gcoredev/fastedge-test` downloaded them, including the SDK's native packages, for nothing.
+
+### What Changed
+- `package.json`: the three packages moved from `dependencies` to `devDependencies` with unchanged ranges. Lockfile importer entries moved; no version changes.
+- Done by editing `package.json` and running `pnpm install`: `pnpm add` re-checks `trustPolicy: no-downgrade` for everything it resolves and rejects `undici-types@6.21.0` (via `@types/node@20.19.30`), which is already in main's lockfile and unrelated to this change.
+- Verified: `check-types`, `build`, `build:cdn-test-apps:as`, `build:http-test-apps:js`, `test:unit`, `test:server`, `test:integration` all pass; built `dist/` references none of the three.
+
 ## May 18, 2026 - WASI env trap fix + send_http_response additionalHeaders merge
 
 ### Overview

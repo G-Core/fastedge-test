@@ -12,7 +12,7 @@ npm install --save-dev @gcoredev/fastedge-test
 pnpm add -D @gcoredev/fastedge-test
 ```
 
-Requires Node.js >= 22.12.
+The supported Node.js version is declared in the `engines.node` field of the package's `package.json`.
 
 ## Option 1: Interactive Debugger
 
@@ -22,9 +22,15 @@ Launch the interactive debugger UI to inspect your WASM module's request/respons
 npx fastedge-debug
 ```
 
-The server starts on port `5179` by default. Open `http://localhost:5179` in your browser to use the debugger interface.
+The server binds to `127.0.0.1` and starts on port `5179` by default. If that port is in use, it tries the next ports in sequence (up to 50 ports in total). On startup it prints the URL to open to stderr, including a per-session access token in the URL fragment:
 
-Use the `PORT` environment variable to override the default port:
+```text
+Open: http://127.0.0.1:5179/#token=<session-token>
+```
+
+Open that URL in your browser. A URL without the token fragment cannot authenticate to the server's API. The token is regenerated each time the server starts.
+
+Use the `PORT` environment variable to override the default starting port:
 
 ```bash
 PORT=8080 npx fastedge-debug
@@ -76,6 +82,8 @@ const suite = defineTestSuite({
 await runAndExit(suite);
 ```
 
+Each test runs against a fresh runner instance, and a thrown error marks the test as failed. `defineTestSuite` throws if neither `wasmPath` nor `wasmBuffer` is provided, or if `tests` is empty.
+
 `runAndExit` prints a test summary and exits with code `0` (all pass) or `1` (any fail), making it suitable for CI pipelines.
 
 See [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) for the full API reference including `runTestSuite`, `loadConfigFile`, and all `FlowOptions` fields.
@@ -110,6 +118,8 @@ try {
 }
 ```
 
+`createRunner(wasmPath: string, config?: RunnerConfig): Promise<IWasmRunner>` detects the WASM type (proxy-wasm or http-wasm) automatically. Set `runnerType` in `RunnerConfig` to override detection.
+
 You can also load from an in-memory buffer using `createRunnerFromBuffer`:
 
 ```typescript
@@ -118,6 +128,13 @@ import { readFile } from "fs/promises";
 
 const buffer = await readFile("./dist/my-module.wasm");
 const runner = await createRunnerFromBuffer(buffer);
+
+try {
+  const result = await runner.callFullFlow("https://example.com/", "GET", {}, "", {}, true);
+  console.log(result.finalResponse);
+} finally {
+  await runner.cleanup();
+}
 ```
 
 See [RUNNER.md](RUNNER.md) for the full `IWasmRunner` interface, `RunnerConfig` options, and `FullFlowResult` shape.
@@ -148,6 +165,8 @@ Place a `fastedge-config.test.json` file in `.fastedge-debug/` at your project r
 ```
 
 The `$schema` field enables editor autocompletion and inline validation.
+
+For HTTP WASM apps, set `"appType": "http-wasm"` and use `request.path` instead of `request.url`.
 
 See [TEST_CONFIG.md](TEST_CONFIG.md) for all configuration fields and their defaults.
 

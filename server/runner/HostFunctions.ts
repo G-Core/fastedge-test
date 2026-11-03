@@ -368,13 +368,11 @@ export class HostFunctions {
         const key = this.memory.readString(keyPtr, keyLen).toLowerCase();
         const tuples = this.getInternalHeaders(mapType);
         const found = tuples.find(([k]) => k === key);
-        if (found === undefined) {
+        // FastEdge host returns NotFound for a missing header and for an
+        // empty value alike (SDKs see None/null), in every phase.
+        if (found === undefined || found[1] === "") {
           this.logDebug(`get_header_map_value miss: map=${mapType} key=${key}`);
-          // nginx behavior: missing headers return Ok with empty string.
-          // The writeStringResult writes a non-null pointer, so the Rust SDK
-          // interprets this as Some("") rather than None.
-          this.memory.writeStringResult("", valuePtrPtr, valueLenPtr);
-          return ProxyStatus.Ok;
+          return ProxyStatus.NotFound;
         }
         this.memory.writeStringResult(found[1], valuePtrPtr, valueLenPtr);
         return ProxyStatus.Ok;
@@ -464,15 +462,8 @@ export class HostFunctions {
         );
         const key = this.memory.readString(keyPtr, keyLen).toLowerCase();
         const tuples = this.getInternalHeaders(mapType);
-        const exists = tuples.some(([k]) => k === key);
-        if (exists) {
-          // Match nginx behavior: set to empty string instead of deleting.
-          // nginx does not allow truly removing headers — remove() sets value to "".
-          const filtered = tuples.filter(([k]) => k !== key);
-          filtered.push([key, ""]);
-          this.setInternalHeaders(mapType, filtered);
-        }
-        // If header doesn't exist, remove is a no-op
+        // Removes every entry for the key (edge-measured: no empty entry is left).
+        this.setInternalHeaders(mapType, tuples.filter(([k]) => k !== key));
         return ProxyStatus.Ok;
       },
 
@@ -847,6 +838,11 @@ export class HostFunctions {
       mapType === MapType.ResponseTrailers
     ) {
       this.responseHeaders = normalized;
+    } else if (
+      mapType === MapType.HttpCallResponseHeaders ||
+      mapType === MapType.HttpCallResponseTrailers
+    ) {
+      if (this.httpCallResponse) this.httpCallResponse.headers = normalized;
     } else {
       this.requestHeaders = normalized;
     }

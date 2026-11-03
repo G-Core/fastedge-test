@@ -2,28 +2,31 @@
 
 Real-time event stream from the `@gcoredev/fastedge-test` server to connected clients.
 
-> **Note on header values.** All header fields in this protocol use `Record<string, string | string[]>` — single-valued headers are a `string`, multi-valued headers (notably `Set-Cookie` per RFC 6265) are a `string[]`. HTTP-wasm response headers additionally allow `undefined` values (`Record<string, string | string[] | undefined>`), though `undefined` entries are dropped during JSON serialization. JSON examples below use `Record<string, string>` for brevity.
+> **Note on header values.** All header fields in this protocol use `Record<string, string | string[]>`. Single-valued headers are a `string`, and multi-valued headers (notably `Set-Cookie` per RFC 6265) are a `string[]`. HTTP-wasm response headers additionally allow `undefined` values (`Record<string, string | string[] | undefined>`), though `undefined` entries are dropped during JSON serialization. JSON examples below use `Record<string, string>` for brevity.
 
 ## Authentication
 
 The server accepts the session token via two mechanisms, tried in this order:
 
-1. **`Sec-WebSocket-Protocol: fastedge-token.<token>`** (preferred) — the browser WebSocket API accepts a list of subprotocols, so the token can be embedded there instead of in the URL. This keeps it out of URLs and out of proxy access logs. The server echoes the matching subprotocol back on accept.
-2. **`?token=<token>` query parameter** (fallback) — used only when the client cannot set subprotocols (legacy or non-browser tooling). Avoid this path in new consumers: the token appears in server logs and in any forwarding-proxy access logs.
+1. **`Sec-WebSocket-Protocol: fastedge-token.<token>`** (preferred): the browser WebSocket API accepts a list of subprotocols, so the token can be embedded there instead of in the URL. This keeps it out of URLs and out of proxy access logs. The server echoes the matching subprotocol back on accept.
+2. **`?token=<token>` query parameter** (fallback): used only when the client cannot set subprotocols (legacy or non-browser tooling). Avoid this path in new consumers: the token appears in server logs and in any forwarding-proxy access logs.
 
-Obtain the token from the `Open:` URL printed to stderr at startup — see the [Authentication section in API.md](./API.md#authentication) for the full flow, including the `x-fastedge-token` header used for HTTP requests and the relevant environment variables.
+Obtain the token from the `Open:` URL printed to stderr at startup. See the [Authentication section in API.md](./API.md#authentication) for the full flow, including the `x-fastedge-token` header used for HTTP requests and the relevant environment variables.
 
-**Preferred — subprotocol:**
+A handshake is rejected if the token is missing or incorrect, or if the client offers subprotocols and none of them starts with `fastedge-token.`.
+
+**Preferred: subprotocol**
 
 ```javascript
 const token = new URL(location.href).hash.slice("#token=".length);
-const ws = new WebSocket(`ws://127.0.0.1:5179/ws`, [`fastedge-token.${token}`]);
+const ws = new WebSocket("ws://localhost:5179/ws", [`fastedge-token.${token}`]);
 ```
 
-**Fallback — query parameter:**
+**Fallback: query parameter**
 
-```
-ws://127.0.0.1:<port>/ws?token=<token>
+```javascript
+const token = new URL(location.href).hash.slice("#token=".length);
+const ws = new WebSocket(`ws://localhost:5179/ws?token=${token}`);
 ```
 
 ## Connection
@@ -31,14 +34,14 @@ ws://127.0.0.1:<port>/ws?token=<token>
 Connect to the WebSocket server at:
 
 ```
-ws://127.0.0.1:{port}/ws
+ws://localhost:{port}/ws
 ```
 
 where `{port}` is the port the server is running on (default `5179`) and the token is passed via one of the two mechanisms described above.
 
 ```javascript
 const token = new URL(location.href).hash.slice("#token=".length);
-const ws = new WebSocket(`ws://127.0.0.1:5179/ws`, [`fastedge-token.${token}`]);
+const ws = new WebSocket("ws://localhost:5179/ws", [`fastedge-token.${token}`]);
 
 ws.addEventListener("message", (event) => {
   const msg = JSON.parse(event.data);
@@ -46,11 +49,14 @@ ws.addEventListener("message", (event) => {
 });
 ```
 
+Browser connections are also subject to an origin check. Origins on `localhost`, `127.0.0.1`, and `vscode-webview://` are accepted. Other hosts are accepted only if they match the host configured through the `FASTEDGE_EXPECTED_HOST` environment variable (see [API.md](./API.md#authentication)). Clients that send no `Origin` header, such as Node.js test tooling, are not subject to the origin check.
+
 ### Lifecycle
 
-1. **Connect** — the server validates the token and origin, then immediately sends a `connection_status` event confirming the connection and the current client count.
-2. **Ping / pong** — the server sends WebSocket `ping` frames every 15 seconds. Clients that have not responded within 30 seconds are terminated. Standard WebSocket clients handle pong automatically.
-3. **Disconnect** — when a client disconnects, the server broadcasts an updated `connection_status` to remaining clients.
+1. **Connect**: the server validates the token and origin, then immediately sends a `connection_status` event to the new client with the current client count. It then broadcasts an updated `connection_status` to all connected clients, including the new one.
+2. **Ping / pong**: the server sends WebSocket `ping` frames every 15 seconds. Clients that have not responded with a `pong` within 30 seconds are terminated. Standard WebSocket clients handle `pong` automatically.
+3. **Disconnect**: when a client disconnects, the server broadcasts an updated `connection_status` to the remaining clients.
+4. **Server shutdown**: the server closes all connections with close code `1000` and reason `Server shutting down`.
 
 ## Event Format
 
@@ -65,12 +71,12 @@ interface BaseEvent {
 }
 ```
 
-| Field       | Type                                      | Description                                          |
-| ----------- | ------------------------------------------ | ---------------------------------------------------- |
-| `type`      | `string`                                   | Event discriminant — one of the values listed below  |
-| `timestamp` | `number`                                   | Unix epoch in milliseconds                           |
-| `source`    | `'ui' \| 'ai_agent' \| 'api' \| 'system'`  | What triggered the event                             |
-| `data`      | `object`                                   | Event-specific payload                               |
+| Field       | Type                                      | Description                                         |
+| ----------- | ----------------------------------------- | --------------------------------------------------- |
+| `type`      | `string`                                  | Event discriminant — one of the values listed below |
+| `timestamp` | `number`                                  | Unix epoch in milliseconds                          |
+| `source`    | `'ui' \| 'ai_agent' \| 'api' \| 'system'` | What triggered the event                            |
+| `data`      | `object`                                  | Event-specific payload                              |
 
 ## Event Types
 
@@ -93,13 +99,13 @@ interface WasmLoadedEvent {
 }
 ```
 
-| Field           | Type                          | Description                                                          |
-| --------------- | ------------------------------ | --------------------------------------------------------------------- |
-| `filename`      | `string`                       | Name of the loaded WASM file                                          |
-| `size`          | `number`                       | File size in bytes                                                     |
-| `runnerPort?`   | `number \| null`               | Port the runner is listening on, if applicable. Omitted when not set   |
-| `wasmType`      | `'proxy-wasm' \| 'http-wasm'`  | The WASM filter type                                                   |
-| `resolvedPath?` | `string \| null`               | Absolute filesystem path to the loaded binary. Omitted when not set    |
+| Field           | Type                          | Description                                              |
+| --------------- | ----------------------------- | -------------------------------------------------------- |
+| `filename`      | `string`                      | Name of the loaded WASM file                             |
+| `size`          | `number`                      | File size in bytes                                       |
+| `runnerPort?`   | `number \| null`              | Runner port, if applicable. Omitted when not set         |
+| `wasmType`      | `'proxy-wasm' \| 'http-wasm'` | The WASM filter type                                     |
+| `resolvedPath?` | `string \| null`              | Absolute path to the loaded binary. Omitted when not set |
 
 **Example:**
 
@@ -137,11 +143,11 @@ interface RequestStartedEvent {
 }
 ```
 
-| Field     | Type                                 | Description                        |
-| --------- | ------------------------------------- | ----------------------------------- |
-| `url`     | `string`                              | Full request URL                    |
-| `method`  | `string`                              | HTTP method (`GET`, `POST`, etc.)   |
-| `headers` | `Record<string, string \| string[]>`  | Request headers                     |
+| Field     | Type                                 | Description                       |
+| --------- | ------------------------------------ | --------------------------------- |
+| `url`     | `string`                             | Full request URL                  |
+| `method`  | `string`                             | HTTP method (`GET`, `POST`, etc.) |
+| `headers` | `Record<string, string \| string[]>` | Request headers                   |
 
 **Example:**
 
@@ -165,7 +171,7 @@ interface RequestStartedEvent {
 
 ### hook_executed
 
-Fired after each individual proxy-wasm hook completes. Multiple `hook_executed` events are emitted per request — one per hook phase that runs.
+Fired after each individual proxy-wasm hook completes. Multiple `hook_executed` events are emitted per request, one per hook phase that runs.
 
 Hook names are camelCase: `onRequestHeaders`, `onRequestBody`, `onResponseHeaders`, `onResponseBody`.
 
@@ -190,13 +196,13 @@ interface HookExecutedEvent {
 }
 ```
 
-| Field        | Type              | Description                                                 |
-| ------------ | ------------------ | ------------------------------------------------------------ |
-| `hook`       | `string`           | Hook name (e.g. `onRequestHeaders`)                          |
-| `returnCode` | `number \| null`   | Return code from the WASM filter, or `null` if unavailable   |
-| `logCount`   | `number`           | Number of log lines emitted during this hook                 |
-| `input`      | `object`           | Request and response state passed into the hook              |
-| `output`     | `object`           | Request and response state after the hook ran                |
+| Field        | Type             | Description                                                |
+| ------------ | ---------------- | ---------------------------------------------------------- |
+| `hook`       | `string`         | Hook name (e.g. `onRequestHeaders`)                        |
+| `returnCode` | `number \| null` | Return code from the WASM filter, or `null` if unavailable |
+| `logCount`   | `number`         | Number of log lines emitted during this hook               |
+| `input`      | `object`         | Request and response state passed into the hook            |
+| `output`     | `object`         | Request and response state after the hook ran              |
 
 **Example:**
 
@@ -261,16 +267,16 @@ interface RequestCompletedEvent {
 }
 ```
 
-| Field                        | Type                                     | Description                                             |
-| ---------------------------- | ------------------------------------------ | --------------------------------------------------------- |
-| `hookResults`                | `Record<string, any>`                      | Per-hook execution results, keyed by hook name             |
-| `finalResponse.status`       | `number`                                   | HTTP status code                                            |
-| `finalResponse.statusText`   | `string`                                   | HTTP status text                                            |
-| `finalResponse.headers`      | `Record<string, string \| string[]>`       | Response headers                                            |
-| `finalResponse.body`         | `string`                                   | Response body (may be base64 if `isBase64` is `true`)       |
-| `finalResponse.contentType`  | `string`                                   | Content-Type of the response                                |
-| `finalResponse.isBase64`     | `boolean \| undefined`                     | Whether `body` is base64-encoded                            |
-| `calculatedProperties`       | `Record<string, unknown> \| undefined`     | Properties computed during execution, if any                |
+| Field                       | Type                                   | Description                                           |
+| --------------------------- | -------------------------------------- | ----------------------------------------------------- |
+| `hookResults`               | `Record<string, any>`                  | Per-hook execution results, keyed by hook name        |
+| `finalResponse.status`      | `number`                               | HTTP status code                                      |
+| `finalResponse.statusText`  | `string`                               | HTTP status text                                      |
+| `finalResponse.headers`     | `Record<string, string \| string[]>`   | Response headers                                      |
+| `finalResponse.body`        | `string`                               | Response body (may be base64 if `isBase64` is `true`) |
+| `finalResponse.contentType` | `string`                               | Content-Type of the response                          |
+| `finalResponse.isBase64`    | `boolean \| undefined`                 | Whether `body` is base64-encoded                      |
+| `calculatedProperties`      | `Record<string, unknown> \| undefined` | Properties computed during execution, if any          |
 
 **Example:**
 
@@ -315,10 +321,10 @@ interface RequestFailedEvent {
 }
 ```
 
-| Field     | Type                   | Description                                          |
-| --------- | ----------------------- | ------------------------------------------------------ |
-| `error`   | `string`                 | Short error message                                    |
-| `details` | `string \| undefined`    | Extended error detail or stack trace, if available     |
+| Field     | Type                  | Description                                        |
+| --------- | --------------------- | -------------------------------------------------- |
+| `error`   | `string`              | Short error message                                |
+| `details` | `string \| undefined` | Extended error detail or stack trace, if available |
 
 **Example:**
 
@@ -351,9 +357,9 @@ interface PropertiesUpdatedEvent {
 }
 ```
 
-| Field        | Type                      | Description                                  |
-| ------------ | -------------------------- | ---------------------------------------------- |
-| `properties` | `Record<string, string>`   | Full current property map after the update     |
+| Field        | Type                     | Description                                |
+| ------------ | ------------------------ | ------------------------------------------ |
+| `properties` | `Record<string, string>` | Full current property map after the update |
 
 **Example:**
 
@@ -395,16 +401,16 @@ interface HttpWasmRequestCompletedEvent {
 }
 ```
 
-`response.headers` mirrors Node's `IncomingHttpHeaders` — `undefined` values are dropped during JSON serialization and will not appear on the wire.
+`response.headers` mirrors Node's `IncomingHttpHeaders`. `undefined` values are dropped during JSON serialization and do not appear on the wire.
 
-| Field                   | Type                                                | Description                                             |
-| ------------------------ | ----------------------------------------------------- | ---------------------------------------------------------- |
-| `response.status`       | `number`                                              | HTTP status code                                            |
-| `response.statusText`   | `string`                                              | HTTP status text                                            |
-| `response.headers`      | `Record<string, string \| string[] \| undefined>`     | Response headers (`undefined` values omitted in JSON)       |
-| `response.body`         | `string`                                              | Response body (may be base64 if `isBase64` is `true`)       |
-| `response.contentType`  | `string \| null`                                      | Content-Type, or `null` if absent                           |
-| `response.isBase64`     | `boolean \| undefined`                                | Whether `body` is base64-encoded                            |
+| Field                  | Type                                              | Description                                           |
+| ---------------------- | ------------------------------------------------- | ----------------------------------------------------- |
+| `response.status`      | `number`                                          | HTTP status code                                      |
+| `response.statusText`  | `string`                                          | HTTP status text                                      |
+| `response.headers`     | `Record<string, string \| string[] \| undefined>` | Response headers (`undefined` values omitted in JSON) |
+| `response.body`        | `string`                                          | Response body (may be base64 if `isBase64` is `true`) |
+| `response.contentType` | `string \| null`                                  | Content-Type, or `null` if absent                     |
+| `response.isBase64`    | `boolean \| undefined`                            | Whether `body` is base64-encoded                      |
 
 **Example:**
 
@@ -430,7 +436,7 @@ interface HttpWasmRequestCompletedEvent {
 
 ### http_wasm_log
 
-Fired in real-time as the http-wasm filter emits log lines during both execute and live modes. One event is emitted per log line.
+Fired in real time as the http-wasm filter emits log lines during both execute and live modes. One event is emitted per log line.
 
 ```typescript
 interface HttpWasmLogEvent {
@@ -444,10 +450,10 @@ interface HttpWasmLogEvent {
 }
 ```
 
-| Field     | Type      | Description         |
-| --------- | ---------- | --------------------- |
-| `level`   | `number`   | Numeric log level     |
-| `message` | `string`   | Log message text      |
+| Field     | Type     | Description       |
+| --------- | -------- | ----------------- |
+| `level`   | `number` | Numeric log level |
+| `message` | `string` | Log message text  |
 
 **Example:**
 
@@ -470,7 +476,7 @@ interface HttpWasmLogEvent {
 Fired by the server in three situations:
 
 1. Immediately after a client connects (sent only to the connecting client).
-2. When any client connects or disconnects (broadcast to all clients).
+2. When any client connects or disconnects (broadcast to all clients, including a newly connected one).
 3. In response to a client `ping` message.
 
 ```typescript
@@ -485,10 +491,10 @@ interface ConnectionStatusEvent {
 }
 ```
 
-| Field         | Type       | Description                                                       |
-| ------------- | ----------- | -------------------------------------------------------------------- |
-| `connected`   | `boolean`   | Always `true` when received (indicates this client is connected)     |
-| `clientCount` | `number`    | Total number of currently connected clients including this one       |
+| Field         | Type      | Description                                                      |
+| ------------- | --------- | ---------------------------------------------------------------- |
+| `connected`   | `boolean` | Always `true` when received (indicates this client is connected) |
+| `clientCount` | `number`  | Total number of currently connected clients including this one   |
 
 **Example:**
 
@@ -506,7 +512,7 @@ interface ConnectionStatusEvent {
 
 ## Client Messages
 
-The server accepts one client-to-server message type over WebSocket.
+The server accepts one client-to-server message type over WebSocket. Messages must be JSON text. Unparseable messages and unrecognised message types are ignored.
 
 ### ping
 
@@ -522,5 +528,5 @@ All other commands (loading WASM, triggering requests, updating properties) are 
 
 ## See Also
 
-- `API.md` — REST endpoints for triggering requests, loading WASM, and updating properties
-- `TEST_FRAMEWORK.md` — Using WebSocket events in automated tests
+- [API.md](./API.md): REST endpoints for triggering requests, loading WASM, and updating properties
+- [TEST_FRAMEWORK.md](./TEST_FRAMEWORK.md): Using WebSocket events in automated tests
