@@ -838,6 +838,11 @@ export class HostFunctions {
       mapType === MapType.ResponseTrailers
     ) {
       this.responseHeaders = normalized;
+    } else if (
+      mapType === MapType.HttpCallResponseHeaders ||
+      mapType === MapType.HttpCallResponseTrailers
+    ) {
+      if (this.httpCallResponse) this.httpCallResponse.headers = normalized;
     } else {
       this.requestHeaders = normalized;
     }
