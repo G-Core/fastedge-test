@@ -4,7 +4,7 @@
  * Tests that the proxy-wasm host correctly handles multi-valued headers:
  *   - add_header with same key creates separate entries
  *   - replace_header removes all entries for a key and sets one
- *   - remove_header sets entries to empty string (nginx behavior)
+ *   - remove_header deletes every entry for a key
  *   - get_headers returns separate entries (not comma-joined)
  *
  * Uses the FastEdge-sdk-rust cdn/headers example which performs extensive
@@ -12,20 +12,21 @@
  *
  * App behavior (onRequestHeaders):
  *   - Validates initial headers exist (returns 550 if empty)
- *   - Validates host header present (returns 551 if missing — but on nginx,
- *     get_header for a missing key returns Some(""), so 551 only triggers
- *     when the header truly doesn't exist at the proxy level)
+ *   - Validates host header present (returns 551 if missing or empty — the
+ *     FastEdge host returns None for both)
  *   - Adds new-header-01..03 and new-header-bytes-01..03
- *   - Removes *-01 headers via set(None) → expects empty string entries
+ *   - Removes *-01 headers via set(None) → expects them gone
  *   - Replaces *-02 headers with new values
  *   - Adds second value to *-03 headers (multi-value)
  *   - Validates diff against expected set (returns 552 on mismatch)
- *   - Validates response header access from request phase (returns 553-556 on failure)
+ *   - Validates response headers from the request phase: none yet, so `host`
+ *     reads None (553), and only its own new-response-header is listed (555-556)
  *   - Returns Action::Continue on success
  *
  * App behavior (onResponseHeaders):
  *   - Same pattern as onRequestHeaders but for response headers
- *   - Requires initial response headers to contain "host" for validation
+ *   - Requires a non-empty response "host" header (551), and the removed
+ *     *-01 headers to read None (553)
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -113,7 +114,7 @@ for (const variant of CDN_APP_VARIANTS) {
         }
       });
 
-      it("should handle remove — headers set to empty string (nginx behavior)", async () => {
+      it("should handle remove — every entry deleted", async () => {
         const result = await runner.callHook(
           createHookCall("onRequestHeaders", {
             host: "example.com",
@@ -122,10 +123,10 @@ for (const variant of CDN_APP_VARIANTS) {
         expect(result.returnCode).toBe(0);
 
         const outputHeaders = result.output.request.headers;
-        // set(None) / remove() calls proxy_remove_header_map_value which sets to empty (nginx behavior)
-        expect(outputHeaders["new-header-01"]).toBe("");
+        // set(None) / remove() calls proxy_remove_header_map_value, which deletes every entry
+        expect(outputHeaders).not.toHaveProperty("new-header-01");
         if (hasBytesVariants) {
-          expect(outputHeaders["new-header-bytes-01"]).toBe("");
+          expect(outputHeaders).not.toHaveProperty("new-header-bytes-01");
         }
       });
 
@@ -162,7 +163,7 @@ for (const variant of CDN_APP_VARIANTS) {
             body: "",
           },
           response: {
-            headers: { host: "" },
+            headers: { host: "example.com" },
             body: "",
           },
           properties: {},
@@ -178,7 +179,7 @@ for (const variant of CDN_APP_VARIANTS) {
             body: "",
           },
           response: {
-            headers: { host: "" },
+            headers: { host: "example.com" },
             body: "",
           },
           properties: {},
@@ -194,7 +195,7 @@ for (const variant of CDN_APP_VARIANTS) {
         expect(outputHeaders["new-header-03"]).toContain("value-03-a");
       });
 
-      it("should handle remove in response headers — set to empty (nginx behavior)", async () => {
+      it("should handle remove in response headers — every entry deleted", async () => {
         const result = await runner.callHook({
           hook: "onResponseHeaders",
           request: {
@@ -202,7 +203,7 @@ for (const variant of CDN_APP_VARIANTS) {
             body: "",
           },
           response: {
-            headers: { host: "" },
+            headers: { host: "example.com" },
             body: "",
           },
           properties: {},
@@ -210,9 +211,9 @@ for (const variant of CDN_APP_VARIANTS) {
         expect(result.returnCode).toBe(0);
 
         const outputHeaders = result.output.response.headers;
-        expect(outputHeaders["new-header-01"]).toBe("");
+        expect(outputHeaders).not.toHaveProperty("new-header-01");
         if (hasBytesVariants) {
-          expect(outputHeaders["new-header-bytes-01"]).toBe("");
+          expect(outputHeaders).not.toHaveProperty("new-header-bytes-01");
         }
       });
 
@@ -222,7 +223,7 @@ for (const variant of CDN_APP_VARIANTS) {
         const result = await runner.callHook({
           hook: "onResponseHeaders",
           request: { headers: {}, body: "" },
-          response: { headers: { host: "" }, body: "" },
+          response: { headers: { host: "example.com" }, body: "" },
           properties: {},
         });
         expect(result.returnCode).toBe(0);
@@ -239,7 +240,7 @@ for (const variant of CDN_APP_VARIANTS) {
         const result = await runner.callHook({
           hook: "onResponseHeaders",
           request: { headers: {}, body: "" },
-          response: { headers: { host: "" }, body: "" },
+          response: { headers: { host: "example.com" }, body: "" },
           properties: {},
         });
         expect(result.returnCode).toBe(0);

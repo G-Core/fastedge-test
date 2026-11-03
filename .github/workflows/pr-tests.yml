@@ -19,9 +19,15 @@ jobs:
         with:
           targets: wasm32-wasip1,wasm32-wasip2
 
+      # Test with the CLI version releases ship (npm-release.yml reads the same file).
+      - name: Read pinned CLI version
+        id: cli
+        run: echo "version=$(cat .fastedge-cli-version)" >> "$GITHUB_OUTPUT"
+
       - name: Setup FastEdge Run CLI
         uses: ./.github/setup-fastedge-cli
         with:
+          cli_version: ${{ steps.cli.outputs.version }}
           github_token: ${{ github.token }}
 
       - name: Build (including WASM test apps)
