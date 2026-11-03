@@ -58,20 +58,20 @@ When `dotenv.enabled` is `true`, the runner loads dotenv files and supplies thei
 
 **`dotenv.path` is a directory**, not a file. The runner reads these files from it:
 
-- `.env` — keys need a `FASTEDGE_VAR_ENV_` prefix (env var) or `FASTEDGE_VAR_SECRET_` prefix (secret). The prefix is stripped. Keys without either prefix are ignored.
+- `.env` — keys with a `FASTEDGE_VAR_ENV_` prefix are env vars and keys with `FASTEDGE_VAR_SECRET_` are secrets. The prefix is stripped.
 - `.env.secrets` — secrets, no prefix.
 - `.env.variables` — env vars, no prefix.
 
-Missing files are skipped. For the same key, `.env.secrets` and `.env.variables` take precedence over the prefixed entries in `.env`.
+Missing files are skipped.
 
 **Path resolution:**
 
 1. If `dotenv.path` is relative, `loadConfigFile` resolves it against the directory containing the config file. An absolute path is used as-is.
 2. If `dotenv.path` is omitted, the runner uses the process current working directory, not the config file's directory.
 
-**CDN (proxy-wasm)**: The runner loads the files itself. Dotenv values override secrets and env vars of the same name that were already set.
+**CDN (proxy-wasm)**: The runner loads the files itself. Keys in `.env` without a prefix are ignored. For the same key, `.env.secrets` and `.env.variables` win over `.env`. Dotenv values override secrets and env vars of the same name that were already set.
 
-**HTTP-WASM**: The runner passes the directory to `fastedge-run --dotenv`, which reads the files itself. In addition to the three files above, `fastedge-run` reads `.env.req_headers`, `.env.rsp_headers`, and `.env.kv_stores` from the directory.
+**HTTP-WASM**: The runner passes the directory to `fastedge-run --dotenv`, which reads the files itself. Keys in `.env` without a prefix are env vars. For the same key, `.env` wins over `.env.secrets` and `.env.variables`. `fastedge-run` also reads `.env.req_headers`, `.env.rsp_headers` and `.env.kv_stores`, and the matching `.env` prefixes `FASTEDGE_VAR_REQ_HEADER_` and `FASTEDGE_VAR_RSP_HEADER_`.
 
 **Security note**: Do not commit files that contain secrets. Add them to `.gitignore`. Point `dotenv.path` at a directory, not a file — a path to a file such as `./.env.test` is treated as a directory and no files are found in it.
 
