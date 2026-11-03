@@ -691,6 +691,8 @@ The handle installs the MockAgent as the global dispatcher on construction and r
 
 `handle.assertAllCalled()` throws if any registered interceptor was never matched. Use it at the end of a test (or in `afterEach`) to catch setup drift — mocks that were registered but never exercised because the WASM under test took a different code path.
 
+`assertAllCalled()` throws on an unused interceptor, and only `close()` restores the previous global dispatcher. When calling `assertAllCalled()` in `afterEach`, put it in `try` and `close()` in `finally`; otherwise one failed assertion leaves the MockAgent (with `disableNetConnect`) installed for every later test.
+
 ```typescript
 import { mockOrigins } from "@gcoredev/fastedge-test/test";
 import type { MockOriginsHandle } from "@gcoredev/fastedge-test/test";
@@ -702,8 +704,11 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  mocks.assertAllCalled(); // fail tests that registered mocks they never hit
-  await mocks.close();
+  try {
+    mocks.assertAllCalled(); // fail tests that registered mocks they never hit
+  } finally {
+    await mocks.close(); // always restore the previous global dispatcher
+  }
 });
 ```
 
