@@ -377,7 +377,7 @@ FASTEDGE_VAR_ENV_VAR1=value1`;
         });
       });
 
-      it("should handle .env.secrets overriding .env secrets", async () => {
+      it("should keep the .env secret over .env.secrets (fastedge-run order)", async () => {
         const envContent = "FASTEDGE_VAR_SECRET_API_KEY=env-value";
         const secretsContent = "API_KEY=secrets-value";
 
@@ -387,11 +387,11 @@ FASTEDGE_VAR_ENV_VAR1=value1`;
 
         const result = await loadDotenvFiles("/test");
 
-        // .env.secrets should override .env
-        expect(result.secrets?.API_KEY).toBe("secrets-value");
+        // fastedge-run reads .env first; later files only fill missing keys
+        expect(result.secrets?.API_KEY).toBe("env-value");
       });
 
-      it("should handle .env.variables overriding .env dictionary", async () => {
+      it("should keep the .env variable over .env.variables (fastedge-run order)", async () => {
         const envContent = "FASTEDGE_VAR_ENV_APP_NAME=env-value";
         const variablesContent = "APP_NAME=variables-value";
 
@@ -402,8 +402,8 @@ FASTEDGE_VAR_ENV_VAR1=value1`;
 
         const result = await loadDotenvFiles("/test");
 
-        // .env.variables should override .env
-        expect(result.dictionary?.APP_NAME).toBe("variables-value");
+        // fastedge-run reads .env first; later files only fill missing keys
+        expect(result.dictionary?.APP_NAME).toBe("env-value");
       });
     });
 
@@ -500,20 +500,31 @@ FASTEDGE_VAR_ENV_VAR1=value1`;
     });
 
     describe("prefix filtering", () => {
-      it("should ignore non-prefixed variables in .env", async () => {
+      it("should treat non-prefixed .env keys as env vars and skip other FASTEDGE_VAR_ keys", async () => {
         const mockContent = `FASTEDGE_VAR_SECRET_KEY=secret
 FASTEDGE_VAR_ENV_VAR=value
-REGULAR_VAR=ignored
-ANOTHER_VAR=also-ignored`;
+REGULAR_VAR=plain
+FASTEDGE_VAR_REQ_HEADER_x-a=header`;
         vi.mocked(fs.readFile).mockResolvedValueOnce(mockContent);
 
         const result = await loadDotenvFiles("/test");
 
         expect(result.secrets).toEqual({ KEY: "secret" });
-        expect(result.dictionary).toEqual({ VAR: "value" });
+        expect(result.dictionary).toEqual({ VAR: "value", REGULAR_VAR: "plain" });
       });
 
-      it("should process all variables in .env.secrets regardless of prefix", async () => {
+      it("should strip a repeated prefix like fastedge-run (trim_start_matches)", async () => {
+        const mockContent = `FASTEDGE_VAR_SECRET_FASTEDGE_VAR_SECRET_KEY=s
+FASTEDGE_VAR_ENV_FASTEDGE_VAR_ENV_VAR=v`;
+        vi.mocked(fs.readFile).mockResolvedValueOnce(mockContent);
+
+        const result = await loadDotenvFiles("/test");
+
+        expect(result.secrets).toEqual({ KEY: "s" });
+        expect(result.dictionary).toEqual({ VAR: "v" });
+      });
+
+      it("should skip FASTEDGE_VAR_ keys in .env.secrets", async () => {
         const secretsContent = `API_KEY=secret1
 FASTEDGE_VAR_SECRET_KEY=secret2
 REGULAR_KEY=secret3`;
@@ -526,12 +537,11 @@ REGULAR_KEY=secret3`;
 
         expect(result.secrets).toEqual({
           API_KEY: "secret1",
-          FASTEDGE_VAR_SECRET_KEY: "secret2",
           REGULAR_KEY: "secret3",
         });
       });
 
-      it("should process all variables in .env.variables regardless of prefix", async () => {
+      it("should skip FASTEDGE_VAR_ keys in .env.variables", async () => {
         const variablesContent = `APP_NAME=value1
 FASTEDGE_VAR_ENV_VAR=value2
 REGULAR_VAR=value3`;
@@ -545,7 +555,6 @@ REGULAR_VAR=value3`;
 
         expect(result.dictionary).toEqual({
           APP_NAME: "value1",
-          FASTEDGE_VAR_ENV_VAR: "value2",
           REGULAR_VAR: "value3",
         });
       });
@@ -792,7 +801,7 @@ FASTEDGE_VAR_SECRET_API_KEY="dev-api-key-123"
 FASTEDGE_VAR_ENV_APP_NAME="My FastEdge App"
 FASTEDGE_VAR_ENV_LOG_LEVEL=debug
 
-# Ignored variable
+# Unprefixed: an env var, as in fastedge-run
 NODE_ENV=development`;
 
       const secretsContent = `# Additional secrets
@@ -821,6 +830,7 @@ TIMEOUT=30000`;
         LOG_LEVEL: "debug",
         API_ENDPOINT: "https://api.example.com",
         TIMEOUT: "30000",
+        NODE_ENV: "development",
       });
     });
 

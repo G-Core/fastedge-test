@@ -58,9 +58,9 @@ When `dotenv.enabled` is `true`, the runner loads dotenv files and supplies thei
 
 **`dotenv.path` is a directory**, not a file. The runner reads these files from it:
 
-- `.env` — keys with a `FASTEDGE_VAR_ENV_` prefix are env vars and keys with `FASTEDGE_VAR_SECRET_` are secrets. The prefix is stripped.
-- `.env.secrets` — secrets, no prefix.
-- `.env.variables` — env vars, no prefix.
+- `.env` — a key with a `FASTEDGE_VAR_ENV_` prefix is an env var and a key with a `FASTEDGE_VAR_SECRET_` prefix is a secret; the prefix is stripped. A key with no `FASTEDGE_VAR_` prefix is an env var. Any other `FASTEDGE_VAR_` key (headers, KV) is neither an env var nor a secret.
+- `.env.secrets` — secrets. Unprefixed keys only; keys starting with `FASTEDGE_VAR_` are skipped.
+- `.env.variables` — env vars. Unprefixed keys only; keys starting with `FASTEDGE_VAR_` are skipped.
 
 Missing files are skipped.
 
@@ -69,9 +69,13 @@ Missing files are skipped.
 1. If `dotenv.path` is relative, `loadConfigFile` resolves it against the directory containing the config file. An absolute path is used as-is.
 2. If `dotenv.path` is omitted, the runner uses the process current working directory, not the config file's directory.
 
-**CDN (proxy-wasm)**: The runner loads the files itself. Keys in `.env` without a prefix are ignored. For the same key, `.env.secrets` and `.env.variables` win over `.env`. Dotenv values override secrets and env vars of the same name that were already set.
+**Key rules (both app types):** Env vars and secrets follow the same rules for CDN (proxy-wasm) and HTTP-WASM apps. CDN apps load the files in the runner; HTTP-WASM apps pass the directory to `fastedge-run --dotenv`, which applies the same rules.
 
-**HTTP-WASM**: The runner passes the directory to `fastedge-run --dotenv`, which reads the files itself. Keys in `.env` without a prefix are env vars. For the same key, `.env` wins over `.env.secrets` and `.env.variables`. `fastedge-run` also reads `.env.req_headers`, `.env.rsp_headers` and `.env.kv_stores`, and the matching `.env` prefixes `FASTEDGE_VAR_REQ_HEADER_` and `FASTEDGE_VAR_RSP_HEADER_`.
+- In `.env`, a key with no `FASTEDGE_VAR_` prefix is an env var. Any other `FASTEDGE_VAR_` key (headers, KV) is neither an env var nor a secret.
+- In `.env.secrets` and `.env.variables`, keys that start with `FASTEDGE_VAR_` are skipped.
+- `.env` is read first and later files only fill keys that are not set yet, so for the same key `.env` wins over `.env.secrets` and `.env.variables`.
+
+**HTTP-WASM only:** `fastedge-run` also reads `.env.req_headers`, `.env.rsp_headers` and `.env.kv_stores`, and the matching `.env` prefixes `FASTEDGE_VAR_REQ_HEADER_` and `FASTEDGE_VAR_RSP_HEADER_`. CDN apps do not.
 
 **Security note**: Do not commit files that contain secrets. Add them to `.gitignore`. Point `dotenv.path` at a directory, not a file — a path to a file such as `./.env.test` is treated as a directory and no files are found in it.
 
@@ -193,7 +197,7 @@ Corresponding `fixtures/.env.variables`:
 DEBUG_MODE=false
 ```
 
-The app reads `API_SECRET` through the SDK's secret API and `DEBUG_MODE` through its env API. The equivalent entries in a single `fixtures/.env` file use prefixes:
+The app reads `API_SECRET` through the SDK's secret API and `DEBUG_MODE` through its env API. The equivalent entries in a single `fixtures/.env` file use prefixes for secrets (an unprefixed key is an env var, so the `FASTEDGE_VAR_ENV_` prefix is optional):
 
 ```
 FASTEDGE_VAR_SECRET_API_SECRET=supersecret

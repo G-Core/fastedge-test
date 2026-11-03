@@ -41,12 +41,24 @@ function parseDotenv(content: string): Record<string, string> {
 }
 
 /**
- * Load dotenv files and return FastEdge configuration
- * Supports:
- * - .env with FASTEDGE_VAR_SECRET_ and FASTEDGE_VAR_ENV_ prefixes
- * - .env.secrets (no prefix needed)
- * - .env.variables (no prefix needed)
+ * Load dotenv files and return FastEdge configuration.
+ * Matches fastedge-run (FastEdge-lib src/dotenv.rs), which HTTP apps use:
+ * - .env: FASTEDGE_VAR_SECRET_ -> secret, FASTEDGE_VAR_ENV_ -> env var,
+ *   unprefixed -> env var, any other FASTEDGE_VAR_ key -> skipped. A repeated
+ *   prefix is stripped in full, like Rust's trim_start_matches
+ * - .env.secrets / .env.variables: no prefix; FASTEDGE_VAR_ keys are skipped
+ * - .env is read first; later files only fill keys that are not set yet
  */
+function setIfAbsent(target: Record<string, string>, key: string, value: string): void {
+  if (!Object.hasOwn(target, key)) target[key] = value;
+}
+
+function fillUnprefixed(target: Record<string, string>, parsed: Record<string, string>): void {
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!key.startsWith("FASTEDGE_VAR_")) setIfAbsent(target, key, value);
+  }
+}
+
 export async function loadDotenvFiles(
   dotenvPath: string = ".",
 ): Promise<FastEdgeConfig> {
@@ -77,11 +89,11 @@ export async function loadDotenvFiles(
 
       for (const [key, value] of Object.entries(parsed)) {
         if (key.startsWith("FASTEDGE_VAR_SECRET_")) {
-          const secretKey = key.replace("FASTEDGE_VAR_SECRET_", "");
-          secrets[secretKey] = value;
+          setIfAbsent(secrets, key.replace(/^(?:FASTEDGE_VAR_SECRET_)+/, ""), value);
         } else if (key.startsWith("FASTEDGE_VAR_ENV_")) {
-          const dictKey = key.replace("FASTEDGE_VAR_ENV_", "");
-          dictionary[dictKey] = value;
+          setIfAbsent(dictionary, key.replace(/^(?:FASTEDGE_VAR_ENV_)+/, ""), value);
+        } else if (!key.startsWith("FASTEDGE_VAR_")) {
+          setIfAbsent(dictionary, key, value);
         }
       }
     } catch (error) {
@@ -94,8 +106,7 @@ export async function loadDotenvFiles(
   if (fileContained(secretsPath)) {
     try {
       const secretsContent = await fs.readFile(secretsPath, "utf-8");
-      const parsed = parseDotenv(secretsContent);
-      Object.assign(secrets, parsed);
+      fillUnprefixed(secrets, parseDotenv(secretsContent));
     } catch (error) {
       // .env.secrets not found - this is OK
     }
@@ -106,8 +117,7 @@ export async function loadDotenvFiles(
   if (fileContained(variablesPath)) {
     try {
       const variablesContent = await fs.readFile(variablesPath, "utf-8");
-      const parsed = parseDotenv(variablesContent);
-      Object.assign(dictionary, parsed);
+      fillUnprefixed(dictionary, parseDotenv(variablesContent));
     } catch (error) {
       // .env.variables not found - this is OK
     }

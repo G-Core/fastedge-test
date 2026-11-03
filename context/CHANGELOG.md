@@ -9,6 +9,11 @@
 - `server/runner/HttpWasmRunner.ts` - `applyDotenv()` clears `this.logs` after killing the old process
 - `server/__tests__/integration/http-apps/variables-and-secrets/variables-and-secrets.test.ts` - load with dotenv off, `applyDotenv(true, …)`, then request (fails without the fix)
 
+**CDN dotenv loader matches `fastedge-run`** (`server/utils/dotenv-loader.ts`). HTTP apps already went through `fastedge-run` (FastEdge-lib `src/dotenv.rs`); CDN apps now follow the same rules, so one fixture directory gives both app types the same values. Checked against the pinned v0.21.0 binary. Changes for CDN apps:
+- An unprefixed key in `.env` is an env var (it was ignored).
+- For the same key, `.env` wins over `.env.secrets` / `.env.variables` (the type-split file used to win).
+- Keys starting with `FASTEDGE_VAR_` in `.env.secrets` / `.env.variables` are skipped (they were kept, prefix and all).
+
 Also removed `HookCall.dotenvEnabled` (`server/runner/types.ts`, `schemas/hook-call.schema.json`, `docs/RUNNER.md`). Nothing read it, so `callHook()` ignored it. Dotenv is set with `RunnerConfig.dotenv` or `applyDotenv()`.
 
 ## November 3, 2026 - Header get/remove match the FastEdge edge
