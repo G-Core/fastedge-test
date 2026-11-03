@@ -285,6 +285,8 @@ export class HttpWasmRunner implements IWasmRunner {
     // Kill current process and respawn with updated dotenv flag
     await this.killProcess();
     this.process = null;
+    // Drop the old process's "Listening on" so waitForServerReady waits for the new one.
+    this.logs = [];
 
     const wasi_http = !this.isLegacySync;
     const args = [

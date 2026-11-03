@@ -1,5 +1,14 @@
 # Proxy-WASM Runner - Changelog
 
+## November 3, 2026 - HttpWasmRunner.applyDotenv() no longer breaks the next request
+
+### Overview
+`applyDotenv()` restarts `fastedge-run` with the new `--dotenv` flag but kept the old process's logs. If no request had run since `load()`, the old "Listening on" line was still there, `waitForServerReady()` returned at once, and the next request failed with "fetch failed". It now clears the logs before respawning.
+
+**Files Modified:**
+- `server/runner/HttpWasmRunner.ts` - `applyDotenv()` clears `this.logs` after killing the old process
+- `server/__tests__/integration/http-apps/variables-and-secrets/variables-and-secrets.test.ts` - load with dotenv off, `applyDotenv(true, …)`, then request (fails without the fix)
+
 ## November 3, 2026 - Header get/remove match the FastEdge edge
 
 ### Overview
