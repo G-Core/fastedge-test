@@ -14,6 +14,8 @@
 - For the same key, `.env` wins over `.env.secrets` / `.env.variables` (the type-split file used to win).
 - Keys starting with `FASTEDGE_VAR_` in `.env.secrets` / `.env.variables` are skipped (they were kept, prefix and all).
 
+**Dependencies:** `undici` ^6 → ^7.30.1 (the version Node 24.22.1 bundles) and `@types/node` ^20 → ^24. `mockOrigins()` behaves the same, but `MockOriginsHandle` now exposes undici 7's `MockAgent` / `MockPool` types, so TypeScript users who mix in their own undici 6 types may see mismatches. `@types/node` 20 locked `undici-types` 6.21.0, which the `no-downgrade` trust policy rejects; that made every `pnpm update` fail. proxy-addr 2.0.7 → 2.0.8 (GHSA-jqcg-44mw-7w3h).
+
 Also removed `HookCall.dotenvEnabled` (`server/runner/types.ts`, `schemas/hook-call.schema.json`, `docs/RUNNER.md`). Nothing read it, so `callHook()` ignored it. Dotenv is set with `RunnerConfig.dotenv` or `applyDotenv()`.
 
 ## November 3, 2026 - Header get/remove match the FastEdge edge
