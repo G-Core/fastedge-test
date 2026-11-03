@@ -5,11 +5,12 @@
  * no server, no WebSocket, no state manager required.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 import { createRunner, createRunnerFromBuffer } from '../../../runner/standalone';
 import { NullStateManager } from '../../../runner/NullStateManager';
+import { HttpWasmRunner } from '../../../runner/HttpWasmRunner';
 import type { IStateManager } from '../../../runner/IStateManager';
 
 const PROXY_WASM = resolve(__dirname, '../../../../wasm/cdn-apps/as/headers/headers-change.wasm');
@@ -115,13 +116,16 @@ describe('runnerType override', () => {
   it('runnerType in config bypasses auto-detection', async () => {
     const buffer = await readFile(PROXY_WASM);
     // Force http-wasm even though the binary is proxy-wasm — tests the override path.
-    // (The runner will fail to load, but the type routing must be respected.)
-    const runnerPromise = createRunnerFromBuffer(buffer, { runnerType: 'http-wasm' });
-    // HttpWasmRunner will error trying to spawn fastedge-run with a proxy-wasm binary,
-    // but the important assertion is that an HttpWasmRunner was chosen, not ProxyWasmRunner.
-    // We catch to avoid unhandled rejection; the test passes if no TypeError is thrown
-    // (i.e., the factory instantiated HttpWasmRunner rather than crashing before that).
-    await runnerPromise.then((r) => r.cleanup()).catch(() => {/* expected load failure */});
+    // load() is stubbed: the point is the routing, not what fastedge-run does with
+    // a proxy-wasm binary (which never happens in real use).
+    const load = vi.spyOn(HttpWasmRunner.prototype, 'load').mockResolvedValue();
+    try {
+      const runner = await createRunnerFromBuffer(buffer, { runnerType: 'http-wasm' });
+      expect(runner).toBeInstanceOf(HttpWasmRunner);
+      expect(load).toHaveBeenCalledOnce();
+    } finally {
+      load.mockRestore();
+    }
   });
 
   it('proxy-wasm binary with runnerType proxy-wasm produces proxy-wasm runner', async () => {
