@@ -190,7 +190,7 @@ interface MockOriginsHandle {
 | `handle.origin(url)`       | Get or create a `MockPool` for an origin; chain `.intercept({path, method}).reply(...)` on it                          |
 | `handle.agent`             | Raw `MockAgent` escape hatch for `.persist()` / `.times()` / `.delay()` / body matchers                                |
 | `handle.close()`           | Restore the previous global dispatcher and close the agent; idempotent                                                 |
-| `handle.assertAllCalled()` | Throw if any registered interceptor was never matched by a real request                                               |
+| `handle.assertAllCalled()` | Throw if any registered interceptor was never matched by a real request                                                |
 
 ### HttpRequestOptions
 

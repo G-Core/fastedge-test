@@ -509,12 +509,12 @@ curl -X POST http://localhost:5179/api/execute \
 
 **Error Responses**
 
-| Status | Condition                                                       |
-| ------ | --------------------------------------------------------------- |
-| `400`  | No WASM module is loaded                                        |
+| Status | Condition                                                        |
+| ------ | ---------------------------------------------------------------- |
+| `400`  | No WASM module is loaded                                         |
 | `400`  | HTTP-WASM: `path`/`url` missing, or `url` is not an absolute URL |
-| `400`  | Proxy-WASM: `url` missing or not a string                       |
-| `500`  | Execution failed                                                |
+| `400`  | Proxy-WASM: `url` missing or not a string                        |
+| `500`  | Execution failed                                                 |
 
 ---
 
@@ -967,7 +967,7 @@ curl -X POST http://localhost:5179/api/config/save-as \
 
 | Status | Condition                                                                  |
 | ------ | -------------------------------------------------------------------------- |
-| `400`  | Body failed validation (`config` invalid or `filePath` missing)            |
+| `400`  | Body failed validation (`config` invalid or `filePath` missing)           |
 | `403`  | `filePath` was not approved by the host's save dialog, or was already used |
 | `500`  | File write or directory creation failed                                    |
 
