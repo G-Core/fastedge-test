@@ -861,21 +861,22 @@ export enum MapType {
 **Usage in Host Functions:**
 
 ```typescript
-private getHeaderMap(mapType: number): HeaderMap {
-  if (mapType === MapType.ResponseHeaders || mapType === MapType.ResponseTrailers) {
-    return this.responseHeaders;
+private getInternalHeaders(mapType: number): HeaderTuples {
+  if (mapType === MapType.ResponseHeaders) return this.responseHeaders;
+  if (mapType === MapType.HttpCallResponseHeaders) {
+    return this.httpCallResponse?.headers ?? [];
   }
   return this.requestHeaders;
 }
-
-private setHeaderMap(mapType: number, map: HeaderMap): void {
-  if (mapType === MapType.ResponseHeaders || mapType === MapType.ResponseTrailers) {
-    this.responseHeaders = HeaderManager.normalize(map);
-  } else {
-    this.requestHeaders = HeaderManager.normalize(map);
-  }
-}
 ```
+
+Every header host call first runs `unsupportedMapStatus(mapType, op)`. Like the
+edge, only request and response headers are writable, `HttpCallResponseHeaders` is
+read-only, trailer and gRPC maps (1, 3, 4, 5, 7) return `Unimplemented` (12), and
+unknown map types return `BadArgument` (2). Writes also depend on the current hook:
+request headers are read-only in `onResponseHeaders` (replace → `NotFound`, other
+writes → `BadArgument`), and every header write in `onRequestBody` and
+`onResponseBody` is `NotFound`.
 
 ### Other Enums
 

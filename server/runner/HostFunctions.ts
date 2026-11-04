@@ -365,6 +365,8 @@ export class HostFunctions {
         this.setLastHostCall(
           `proxy_get_header_map_value map=${mapType} keyLen=${keyLen}`,
         );
+        const unsupported = this.unsupportedMapStatus(mapType, "read");
+        if (unsupported !== undefined) return unsupported;
         const key = this.memory.readString(keyPtr, keyLen).toLowerCase();
         const tuples = this.getInternalHeaders(mapType);
         const found = tuples.find(([k]) => k === key);
@@ -384,6 +386,8 @@ export class HostFunctions {
         valueLenPtr: number,
       ) => {
         this.setLastHostCall(`proxy_get_header_map_pairs map=${mapType}`);
+        const unsupported = this.unsupportedMapStatus(mapType, "read");
+        if (unsupported !== undefined) return unsupported;
         const tuples = this.getInternalHeaders(mapType);
         const bytes = HeaderManager.serializeTuples(tuples);
         const ptr = this.memory.writeToWasm(bytes);
@@ -406,6 +410,8 @@ export class HostFunctions {
 
       proxy_get_header_map_size: (mapType: number, sizePtr: number) => {
         this.setLastHostCall(`proxy_get_header_map_size map=${mapType}`);
+        const unsupported = this.unsupportedMapStatus(mapType, "read");
+        if (unsupported !== undefined) return unsupported;
         const tuples = this.getInternalHeaders(mapType);
         const size = tuples.length;
         this.memory.writeU32(sizePtr, size);
@@ -425,6 +431,8 @@ export class HostFunctions {
         this.setLastHostCall(
           `proxy_add_header_map_value map=${mapType} keyLen=${keyLen} valueLen=${valueLen}`,
         );
+        const unsupported = this.unsupportedMapStatus(mapType, "write");
+        if (unsupported !== undefined) return unsupported;
         const key = this.memory.readString(keyPtr, keyLen).toLowerCase();
         const value = this.memory.readString(valuePtr, valueLen);
         const tuples = this.getInternalHeaders(mapType);
@@ -443,6 +451,8 @@ export class HostFunctions {
         this.setLastHostCall(
           `proxy_replace_header_map_value map=${mapType} keyLen=${keyLen} valueLen=${valueLen}`,
         );
+        const unsupported = this.unsupportedMapStatus(mapType, "replace");
+        if (unsupported !== undefined) return unsupported;
         const key = this.memory.readString(keyPtr, keyLen).toLowerCase();
         const value = this.memory.readString(valuePtr, valueLen);
         const tuples = this.getInternalHeaders(mapType);
@@ -460,6 +470,8 @@ export class HostFunctions {
         this.setLastHostCall(
           `proxy_remove_header_map_value map=${mapType} keyLen=${keyLen}`,
         );
+        const unsupported = this.unsupportedMapStatus(mapType, "write");
+        if (unsupported !== undefined) return unsupported;
         const key = this.memory.readString(keyPtr, keyLen).toLowerCase();
         const tuples = this.getInternalHeaders(mapType);
         // Removes every entry for the key (edge-measured: no empty entry is left).
@@ -475,6 +487,8 @@ export class HostFunctions {
         this.setLastHostCall(
           `proxy_set_header_map_pairs map=${mapType} valueLen=${valueLen}`,
         );
+        const unsupported = this.unsupportedMapStatus(mapType, "write");
+        if (unsupported !== undefined) return unsupported;
         const raw = this.memory.readString(valuePtr, valueLen);
         const tuples = HeaderManager.deserializeToTuples(raw);
         this.setInternalHeaders(mapType, tuples);
@@ -815,17 +829,49 @@ export class HostFunctions {
     };
   }
 
-  private getInternalHeaders(mapType: number): HeaderTuples {
-    if (
-      mapType === MapType.ResponseHeaders ||
-      mapType === MapType.ResponseTrailers
-    ) {
-      return this.responseHeaders;
+  /**
+   * Status the FastEdge host returns for a header call it rejects
+   * (edge-measured). Undefined means the call is served.
+   * - Only request/response headers are served; http_call response headers are
+   *   read-only; trailer and gRPC maps are Unimplemented; unknown types BadArgument.
+   * - onResponseHeaders: request headers are read-only (replace NotFound, other
+   *   writes BadArgument). onRequestBody/onResponseBody: every header write is
+   *   NotFound.
+   * A rejected write leaves the headers unchanged.
+   */
+  private unsupportedMapStatus(
+    mapType: number,
+    op: "read" | "replace" | "write",
+  ): ProxyStatus | undefined {
+    if (!Number.isInteger(mapType) || mapType < 0 || mapType > 7) {
+      return ProxyStatus.BadArgument;
     }
-    if (
-      mapType === MapType.HttpCallResponseHeaders ||
-      mapType === MapType.HttpCallResponseTrailers
-    ) {
+    const served =
+      mapType === MapType.RequestHeaders ||
+      mapType === MapType.ResponseHeaders ||
+      (mapType === MapType.HttpCallResponseHeaders && op === "read");
+    if (!served) {
+      this.logDebug(`header map ${mapType} unsupported (${op})`);
+      return ProxyStatus.Unimplemented;
+    }
+    if (op === "read" || mapType === MapType.HttpCallResponseHeaders) {
+      return undefined;
+    }
+    const hook = this.getCurrentHook();
+    if (hook === HookContext.OnRequestBody || hook === HookContext.OnResponseBody) {
+      this.logDebug(`header write rejected in ${hook} (map ${mapType})`);
+      return ProxyStatus.NotFound;
+    }
+    if (hook === HookContext.OnResponseHeaders && mapType === MapType.RequestHeaders) {
+      this.logDebug(`request header write rejected in ${hook}`);
+      return op === "replace" ? ProxyStatus.NotFound : ProxyStatus.BadArgument;
+    }
+    return undefined;
+  }
+
+  private getInternalHeaders(mapType: number): HeaderTuples {
+    if (mapType === MapType.ResponseHeaders) return this.responseHeaders;
+    if (mapType === MapType.HttpCallResponseHeaders) {
       return this.httpCallResponse?.headers ?? [];
     }
     return this.requestHeaders;
@@ -833,20 +879,13 @@ export class HostFunctions {
 
   private setInternalHeaders(mapType: number, tuples: HeaderTuples): void {
     const normalized = HeaderManager.normalizeTuples(tuples);
-    if (
-      mapType === MapType.ResponseHeaders ||
-      mapType === MapType.ResponseTrailers
-    ) {
+    if (mapType === MapType.ResponseHeaders) {
       this.responseHeaders = normalized;
-    } else if (
-      mapType === MapType.HttpCallResponseHeaders ||
-      mapType === MapType.HttpCallResponseTrailers
-    ) {
-      if (this.httpCallResponse) this.httpCallResponse.headers = normalized;
     } else {
       this.requestHeaders = normalized;
     }
   }
+
 
   private getBody(bufferType: number): string {
     if (bufferType === BufferType.ResponseBody) {

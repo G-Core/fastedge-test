@@ -53,6 +53,7 @@ export enum ProxyStatus {
   Ok = 0,
   NotFound = 1,
   BadArgument = 2,
+  Unimplemented = 12,
 }
 
 export enum BufferType {
