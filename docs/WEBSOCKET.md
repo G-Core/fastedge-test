@@ -479,11 +479,13 @@ Fired by the server in three situations:
 2. When any client connects or disconnects (broadcast to all clients, including a newly connected one).
 3. In response to a client `ping` message.
 
+The server always sets `source` to `"system"` for this event.
+
 ```typescript
 interface ConnectionStatusEvent {
   type: "connection_status";
   timestamp: number;
-  source: "system";
+  source: "ui" | "ai_agent" | "api" | "system";
   data: {
     connected: boolean;
     clientCount: number;

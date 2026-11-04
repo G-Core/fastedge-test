@@ -130,7 +130,7 @@ export class HttpWasmRunner implements IWasmRunner {
     // Add dotenv flag if enabled; pass explicit path when provided so fastedge-run
     // reads from that directory instead of its CWD. This is needed for test fixtures
     // and non-standard project layouts. npm package users with .env files at their
-    // project root can use dotenvEnabled: true without specifying a path.
+    // project root can use dotenv.enabled without specifying a path.
     if (this.dotenvEnabled) {
       // Guard before handing the path to fastedge-run, which reads files itself
       // without going through loadDotenvFiles(). Enforced here (not only at the
@@ -285,6 +285,8 @@ export class HttpWasmRunner implements IWasmRunner {
     // Kill current process and respawn with updated dotenv flag
     await this.killProcess();
     this.process = null;
+    // Drop the old process's "Listening on" so waitForServerReady waits for the new one.
+    this.logs = [];
 
     const wasi_http = !this.isLegacySync;
     const args = [

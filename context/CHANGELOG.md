@@ -1,5 +1,23 @@
 # Proxy-WASM Runner - Changelog
 
+## November 3, 2026 - HttpWasmRunner.applyDotenv() no longer breaks the next request
+
+### Overview
+`applyDotenv()` restarts `fastedge-run` with the new `--dotenv` flag but kept the old process's logs. If no request had run since `load()`, the old "Listening on" line was still there, `waitForServerReady()` returned at once, and the next request failed with "fetch failed". It now clears the logs before respawning.
+
+**Files Modified:**
+- `server/runner/HttpWasmRunner.ts` - `applyDotenv()` clears `this.logs` after killing the old process
+- `server/__tests__/integration/http-apps/variables-and-secrets/variables-and-secrets.test.ts` - load with dotenv off, `applyDotenv(true, …)`, then request (fails without the fix)
+
+**CDN dotenv loader matches `fastedge-run`** (`server/utils/dotenv-loader.ts`). HTTP apps already went through `fastedge-run` (FastEdge-lib `src/dotenv.rs`); CDN apps now follow the same rules, so one fixture directory gives both app types the same values. Checked against the pinned v0.21.0 binary. Changes for CDN apps:
+- An unprefixed key in `.env` is an env var (it was ignored).
+- For the same key, `.env` wins over `.env.secrets` / `.env.variables` (the type-split file used to win).
+- Keys starting with `FASTEDGE_VAR_` in `.env.secrets` / `.env.variables` are skipped (they were kept, prefix and all).
+
+**Dependencies:** `undici` ^6 → ^7.30.1 (the version Node 24.22.1 bundles) and `@types/node` ^20 → ^24. `mockOrigins()` behaves the same, but `MockOriginsHandle` now exposes undici 7's `MockAgent` / `MockPool` types, so TypeScript users who mix in their own undici 6 types may see mismatches. `@types/node` 20 locked `undici-types` 6.21.0, which the `no-downgrade` trust policy rejects; that made every `pnpm update` fail. proxy-addr 2.0.7 → 2.0.8 (GHSA-jqcg-44mw-7w3h).
+
+Also removed `HookCall.dotenvEnabled` (`server/runner/types.ts`, `schemas/hook-call.schema.json`, `docs/RUNNER.md`). Nothing read it, so `callHook()` ignored it. Dotenv is set with `RunnerConfig.dotenv` or `applyDotenv()`.
+
 ## November 3, 2026 - Header get/remove match the FastEdge edge
 
 ### Overview

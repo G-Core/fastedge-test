@@ -242,7 +242,7 @@ applyDotenv(enabled: boolean, path?: string): Promise<void>
 **Behavior by runner type:**
 
 - **ProxyWasmRunner**: Resets the secret and dictionary stores to empty, then re-reads dotenv files from `path` (or the previously set path if omitted) when `enabled` is `true`. The compiled WASM module is not recompiled.
-- **HttpWasmRunner**: Kills the current `fastedge-run` process and restarts it with the updated `--dotenv` flag. If no process is running, the settings apply on the next `load()`.
+- **HttpWasmRunner**: Kills the current `fastedge-run` process and restarts it with the updated `--dotenv` flag. The returned promise resolves once the restarted process is listening. If no process is running, the settings apply on the next `load()`.
 
 ### cleanup
 
@@ -334,10 +334,10 @@ await runner.cleanup();
 
 **Built-in responder behavior** — controlled by request headers present after the request hooks run:
 
-| Header               | Effect                                                                                    |
-| -------------------- | ----------------------------------------------------------------------------------------- |
-| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                              |
-| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default)           |
+| Header               | Effect                                                                          |
+| -------------------- | ------------------------------------------------------------------------------- |
+| `x-debugger-status`  | HTTP status code for the generated response (default: `200`)                    |
+| `x-debugger-content` | Response body mode: `"body-only"`, `"status-only"`, or full JSON echo (default) |
 
 An `x-debugger-status` value that is not an integer between 100 and 599 produces status `400`.
 
@@ -466,24 +466,21 @@ type HookCall = {
     statusText?: string;
   };
   properties: Record<string, unknown>;
-  dotenvEnabled?: boolean;
   enforceProductionPropertyRules?: boolean; // Default: true - Enforce property access control rules
 };
 ```
 
-| Field                            | Description                                   |
-| -------------------------------- | --------------------------------------------- |
-| `hook`                           | Hook name (see below)                         |
-| `request`                        | Request state passed to the hook              |
+| Field                            | Description                                    |
+| -------------------------------- | ---------------------------------------------- |
+| `hook`                           | Hook name (see below)                          |
+| `request`                        | Request state passed to the hook               |
 | `response`                       | Seed state for response hooks via `callHook()` |
-| `properties`                     | Shared properties                             |
-| `dotenvEnabled`                  | Optional per-call dotenv flag                 |
-| `enforceProductionPropertyRules` | Defaults to `true`                            |
+| `properties`                     | Shared properties                              |
+| `enforceProductionPropertyRules` | Defaults to `true`                             |
 
 - `hook`: one of `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`.
 - `response`: not consumed by `callFullFlow()` or by request hooks. The full-flow path generates the upstream response at runtime.
 - `properties`: for example `request.path`, `vm_config`, `plugin_config`.
-- `dotenvEnabled`: use `applyDotenv()` for persistent changes.
 - `enforceProductionPropertyRules`: set to `false` to allow property access that the production CDN blocks.
 
 `HeaderRecord` is `Record<string, string | string[]>` — multi-valued headers (for example multiple `Set-Cookie`) are represented as `string[]`.

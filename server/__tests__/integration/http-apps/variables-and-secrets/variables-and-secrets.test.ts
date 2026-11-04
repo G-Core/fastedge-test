@@ -86,5 +86,22 @@ for (const variant of HTTP_APP_VARIANTS) {
         );
       }
     });
+
+    // Reloads the runner, so keep this last. No request between load() and
+    // applyDotenv(): the startup logs must not satisfy the restart's readiness wait.
+    it("should serve requests right after applyDotenv restarts the process", async () => {
+      await runner.load(wasmPath, { dotenv: { enabled: false } });
+      await runner.applyDotenv(true, FIXTURES_DIR);
+
+      const response = await runHttpRequest(runner, {
+        path: "/",
+        method: "GET",
+        headers: {},
+        body: "",
+      });
+
+      assertHttpStatus(response, 200);
+      assertHttpBody(response, "Username: test-username, Password: test-password");
+    });
   });
 }

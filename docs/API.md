@@ -49,6 +49,8 @@ ws.addEventListener("open", () => {
 });
 ```
 
+Fallback form:
+
 ```
 ws://127.0.0.1:<port>/ws?token=<token>
 ```
@@ -303,12 +305,12 @@ curl -X PATCH http://localhost:5179/api/dotenv \
 
 **Error Responses**
 
-| Status | Condition                                                                        |
-| ------ | -------------------------------------------------------------------------------- |
-| `400`  | Body failed validation (`dotenv.enabled` missing or not a boolean)               |
-| `400`  | No WASM module is loaded                                                         |
+| Status | Condition                                                                         |
+| ------ | --------------------------------------------------------------------------------- |
+| `400`  | Body failed validation (`dotenv.enabled` missing or not a boolean)                |
+| `400`  | No WASM module is loaded                                                          |
 | `400`  | `dotenv.path` resolves outside the workspace root or contains an escaping symlink |
-| `500`  | Failed to apply dotenv settings                                                  |
+| `500`  | Failed to apply dotenv settings                                                   |
 
 ---
 
@@ -328,13 +330,16 @@ The server destructures `{ url, path, method, headers, body }` from the top leve
 {
   // HTTP-WASM
   path?: string;                     // Request path and query string (preferred)
-  url?: string;                      // Absolute URL — pathname and query are extracted (legacy fallback)
   method?: string;                   // HTTP method (default: "GET")
   headers?: Record<string, string>;  // Request headers (default: {})
   body?: string;                     // Request body (default: "")
 
+  // Both runner types
+  url?: string;                      // HTTP-WASM: absolute URL, pathname and query are extracted
+                                     //   (legacy fallback when `path` is absent).
+                                     // Proxy-WASM: request URL, or "built-in" (required).
+
   // Proxy-WASM
-  url?: string;                      // Request URL, or "built-in" (required for Proxy-WASM)
   request?: {
     method?: string;                 // HTTP method (default: "GET")
     headers?: Record<string, string>; // Request headers (default: {})
@@ -344,15 +349,15 @@ The server destructures `{ url, path, method, headers, body }` from the top leve
 }
 ```
 
-| Field                | HTTP-WASM                       | Proxy-WASM                      |
-| -------------------- | ------------------------------- | ------------------------------- |
-| `path`               | Used (preferred over `url`)     | Ignored                         |
-| `url`                | Used if `path` is absent        | Required                        |
-| `method`             | Used                            | Ignored (use `request.method`)  |
-| `headers`            | Used                            | Ignored (use `request.headers`) |
-| `body`               | Used                            | Ignored (use `request.body`)    |
-| `request`            | Ignored                         | Used                            |
-| `properties`         | Ignored                         | Used                            |
+| Field        | HTTP-WASM                   | Proxy-WASM                      |
+| ------------ | --------------------------- | ------------------------------- |
+| `path`       | Used (preferred over `url`) | Ignored                         |
+| `url`        | Used if `path` is absent    | Required                        |
+| `method`     | Used                        | Ignored (use `request.method`)  |
+| `headers`    | Used                        | Ignored (use `request.headers`) |
+| `body`       | Used                        | Ignored (use `request.body`)    |
+| `request`    | Ignored                     | Used                            |
+| `properties` | Ignored                     | Used                            |
 
 For HTTP-WASM, when `path` is given it is used directly as the request path (e.g. `/api/hello?q=1`). When only `url` is given, the path and query string are extracted from it.
 
@@ -619,11 +624,11 @@ curl -X POST http://localhost:5179/api/call \
 
 **Error Responses**
 
-| Status | Condition                                                              |
-| ------ | ---------------------------------------------------------------------- |
+| Status | Condition                                                                  |
+| ------ | -------------------------------------------------------------------------- |
 | `400`  | Body failed validation (invalid `hook`, malformed `request` or `response`) |
-| `400`  | No WASM module is loaded                                               |
-| `500`  | Hook execution failed, including calling a hook on an HTTP-WASM module |
+| `400`  | No WASM module is loaded                                                   |
+| `500`  | Hook execution failed, including calling a hook on an HTTP-WASM module     |
 
 ---
 
@@ -744,11 +749,11 @@ curl -X POST http://localhost:5179/api/send \
 
 **Error Responses**
 
-| Status | Condition                                                                   |
-| ------ | --------------------------------------------------------------------------- |
+| Status | Condition                                                                    |
+| ------ | ---------------------------------------------------------------------------- |
 | `400`  | Body failed validation (`url` missing or neither `built-in` nor a valid URL) |
-| `400`  | No WASM module is loaded                                                    |
-| `500`  | Execution failed, including use against an HTTP-WASM module                 |
+| `400`  | No WASM module is loaded                                                     |
+| `500`  | Execution failed, including use against an HTTP-WASM module                  |
 
 ---
 
@@ -899,10 +904,10 @@ curl -X POST http://localhost:5179/api/config \
 
 **Error Responses**
 
-| Status | Condition                                                                   |
-| ------ | --------------------------------------------------------------------------- |
+| Status | Condition                                                                    |
+| ------ | ---------------------------------------------------------------------------- |
 | `400`  | Body failed validation (`config` does not match either `TestConfig` variant) |
-| `500`  | File write failed                                                           |
+| `500`  | File write failed                                                            |
 
 ---
 
@@ -962,7 +967,7 @@ curl -X POST http://localhost:5179/api/config/save-as \
 
 | Status | Condition                                                                  |
 | ------ | -------------------------------------------------------------------------- |
-| `400`  | Body failed validation (`config` invalid or `filePath` missing)            |
+| `400`  | Body failed validation (`config` invalid or `filePath` missing)           |
 | `403`  | `filePath` was not approved by the host's save dialog, or was already used |
 | `500`  | File write or directory creation failed                                    |
 
@@ -1051,13 +1056,13 @@ When a request body fails schema validation, `error` is the flattened validation
 
 **Common status codes**
 
-| Status | Meaning                                                                                           |
-| ------ | ------------------------------------------------------------------------------------------------- |
+| Status | Meaning                                                                                            |
+| ------ | -------------------------------------------------------------------------------------------------- |
 | `400`  | Invalid request body, missing required fields, or unmet precondition (for example, no WASM loaded) |
-| `401`  | Missing or invalid `x-fastedge-token` header on an `/api/*` request                               |
-| `403`  | `Host` header not allowed, or a save-as path not approved by the save dialog                      |
-| `404`  | Resource not found (config file, schema file)                                                     |
-| `500`  | Internal error during execution or I/O                                                            |
+| `401`  | Missing or invalid `x-fastedge-token` header on an `/api/*` request                                |
+| `403`  | `Host` header not allowed, or a save-as path not approved by the save dialog                       |
+| `404`  | Resource not found (config file, schema file)                                                      |
+| `500`  | Internal error during execution or I/O                                                             |
 
 ---
 
