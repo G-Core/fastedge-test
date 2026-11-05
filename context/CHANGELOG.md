@@ -1,5 +1,64 @@
 # Proxy-WASM Runner - Changelog
 
+## November 4, 2026 - Header maps and per-hook header writes match the FastEdge edge
+
+### Overview
+The runner aliased the trailer maps to the header maps and served every map type.
+The FastEdge host serves only request and response headers, plus read-only
+`http_call` response headers. It also accepted every header write in every hook,
+while the edge rejects some by hook. A filter that used trailers, or changed request
+headers in `onResponseHeaders`, worked locally and then failed or did nothing on the
+edge. Measured on preprod with a probe that records the raw status of every header
+host call for map types 0 to 8 in all four CDN hooks.
+
+### 🎯 What Was Completed
+
+#### 1. Header map support follows the edge
+- Trailer maps (1, 3, 7) and gRPC metadata maps (4, 5) return `Unimplemented` (12)
+  for get, get-all, size, add, replace, remove and set-all. They no longer read or
+  overwrite the header maps; set-all on "request trailers" used to wipe the request
+  headers.
+- `HttpCallResponseHeaders` is read-only: writes return `Unimplemented`.
+- Unknown map types return `BadArgument` (2) instead of falling through to the
+  request headers.
+- The Rust SDK panics on these statuses (`unexpected status: 12`), so the hook now
+  traps locally as it does on the edge (531 with `interrupt_on_error`).
+
+#### 2. Header writes follow the hook
+| Hook | Request-header writes | Response-header writes |
+|---|---|---|
+| `onRequestHeaders` | accepted | accepted |
+| `onResponseHeaders` | replace → NotFound (1); add, remove, set-all → BadArgument (2) | accepted |
+| `onRequestBody`, `onResponseBody` | all → NotFound (1) | all → NotFound (1) |
+
+A rejected write leaves the headers unchanged. Reads are unchanged.
+
+Two edge behaviours are deliberately **not** copied:
+- after a rejected write, the edge's reads return the value that was written;
+- in the body hooks, reading a missing response header returns BadArgument instead
+  of NotFound, so Rust SDK getters panic there.
+
+**Files Modified:**
+- `server/runner/HostFunctions.ts` - `unsupportedMapStatus()` guard on every header
+  host call (map type and current hook); trailer aliasing removed from
+  `getInternalHeaders`/`setInternalHeaders`
+- `server/runner/types.ts` - `ProxyStatus.Unimplemented = 12`
+- `server/__tests__/unit/runner/HostFunctions.test.ts` - read-only http-call headers;
+  table tests of the edge-measured status per map type and per hook
+- `context/features/HTTP_CALL_IMPLEMENTATION.md`, `context/PROJECT_OVERVIEW.md`,
+  `context/development/IMPLEMENTATION_GUIDE.md` - trailer notes
+
+### 🧪 Testing
+`pnpm test` passes. The same probe binary run through the runner gives the edge's
+status for every trailer, gRPC, http-call and unknown map call, and for every
+header write in `onResponseHeaders`, `onRequestBody` and `onResponseBody`.
+
+### 📝 Notes
+- Production never calls `proxy_on_request_trailers`/`proxy_on_response_trailers`;
+  the runner doesn't either.
+- Breaking for tests that relied on trailer aliasing, on writing http-call response
+  headers, or on header writes the edge rejects. None of these work on the edge.
+
 ## November 3, 2026 - HttpWasmRunner.applyDotenv() no longer breaks the next request
 
 ### Overview

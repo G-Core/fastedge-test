@@ -266,7 +266,7 @@ The test server responds with `user-agent: fastedge-test-server/1.0` in its head
 
 - **No `is_public_host` check**: All hosts are allowed in the debugger (unlike production Rust runtime).
 - **Sequential callouts only**: Multiple http_calls can be made sequentially (one at a time per hook invocation). Concurrent calls from the same hook are not supported (not part of the proxy-wasm spec either).
-- **No trailer support**: `HttpCallResponseTrailers` returns an empty map (trailers are uncommon in practice).
+- **No trailer support, same as the edge**: every header call on `HttpCallResponseTrailers` returns `Unimplemented` (12), and `num_trailers` is always 0. `HttpCallResponseHeaders` is read-only: writes return `Unimplemented`. Rust SDK getters and setters panic on that status, as they do on the edge.
 
 ---
 

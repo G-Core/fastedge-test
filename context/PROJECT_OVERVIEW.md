@@ -149,7 +149,7 @@ Build a Postman-like test runner for debugging WASM binaries that run on FastEdg
 - Shared data/queue operations (stubs return NotFound/Ok; not functional)
 - Metrics support
 - Full property path coverage (only common paths implemented)
-- Request/response trailers (map types implemented but not tested)
+- Request/response trailers: not supported on the edge either. Trailer and gRPC map calls return `Unimplemented` (12), matching production
 
 ---
 
