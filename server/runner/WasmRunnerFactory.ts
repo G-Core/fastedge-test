@@ -5,7 +5,8 @@
  */
 
 import type { IWasmRunner, WasmType } from "./IWasmRunner.js";
-import { WorkerProxyWasmRunner, type RunnerStores } from "./WorkerProxyWasmRunner.js";
+import { WorkerProxyWasmRunner } from "./WorkerProxyWasmRunner.js";
+import type { RunnerStores } from "../stores/StoresManager.js";
 import { HttpWasmRunner } from "./HttpWasmRunner.js";
 import { PortManager } from "./PortManager.js";
 
@@ -20,12 +21,12 @@ export class WasmRunnerFactory {
    * Create a runner for the specified WASM type
    * @param wasmType The type of WASM binary
    * @param dotenvEnabled Whether to enable dotenv file loading
-   * @param stores Storage service connection for CDN apps (null = stores off)
+   * @param stores Storage service connection (null = stores off)
    * @returns The appropriate runner instance
    */
   createRunner(wasmType: WasmType, dotenvEnabled: boolean = true, stores: RunnerStores | null = null): IWasmRunner {
     if (wasmType === "http-wasm") {
-      return new HttpWasmRunner(this.portManager, dotenvEnabled);
+      return new HttpWasmRunner(this.portManager, dotenvEnabled, stores);
     } else if (wasmType === "proxy-wasm") {
       return new WorkerProxyWasmRunner(undefined, dotenvEnabled, stores);
     } else {

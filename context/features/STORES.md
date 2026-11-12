@@ -1,7 +1,7 @@
 # Stores: the local storage service (cache and Edge KV)
 
 **Status (November 2026):** core, HTTP API, service manager and the CDN host functions are
-in place; CDN apps use the stores by default. Not yet wired in
+in place; CDN and HTTP apps use the stores by default. Not yet done
 (`proxy_cache_*`, `proxy_kv_store_*`), and pointing fastedge-run at it. Until then nothing
 in the runner uses it.
 
@@ -21,6 +21,19 @@ cache is shared per account per POP by HTTP and CDN apps.
 | `server/stores/StoresManager.ts` | `connectStores(root)`: find or start the service, hold a lease; `resolveStoresRoot` |
 | `server/runner/StoresHost.ts` | CDN host functions `proxy_cache_*` (8) and `proxy_kv_store_*` (6) |
 | `server/runner/storesBridge.ts` | Synchronous calls from the CDN worker (Atomics.wait); the parent makes the HTTP call |
+
+## HTTP apps (fastedge-run)
+
+- With stores on, `HttpWasmRunner` starts fastedge-run with
+  `FASTEDGE_STORES_SERVICE=<url>,<token>,<dc>` (read at each spawn, so a restarted service is
+  picked up on the next load or dotenv change).
+- fastedge-run asks the service for its seeded stores (`admin kv-stores`) and attaches each one
+  **unless** `--kv-stores` or dotenv already names it, so a `redis://` entry in `.env.kv_stores`
+  still wins.
+- Needs fastedge-run from FastEdge-lib `feat/stores-forward` (not released yet). The released
+  binary ignores the variable: HTTP apps keep its in-memory cache until `.fastedge-cli-version`
+  moves to a release with it. The end-to-end tests (`integration/http-apps/stores/`) run only with
+  `FASTEDGE_TEST_STORES_E2E=1 FASTEDGE_RUN_PATH=<that build>`.
 
 ## CDN apps (proxy-wasm)
 

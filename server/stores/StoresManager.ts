@@ -29,6 +29,15 @@ export type StoresConnection = {
   close(): Promise<void>;
 };
 
+/** What a runner gets: the connection, its cache bucket, and whether it owns the connection. */
+export type RunnerStores = {
+  connection: StoresConnection;
+  /** The cache bucket (edge location); `local` by default. */
+  dc: string;
+  /** Close the connection on cleanup() (true when the runner opened it). */
+  owned: boolean;
+};
+
 export type ConnectOptions = { leaseTtlMs?: number; startTimeoutMs?: number };
 
 const STALE_LOCK_MS = 20_000;

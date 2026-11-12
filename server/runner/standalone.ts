@@ -40,19 +40,18 @@ export async function createRunnerFromBuffer(
 ): Promise<IWasmRunner> {
   const wasmType = config?.runnerType ?? await detectWasmType(buffer);
 
+  // Stores on by default: this runner opens (and on cleanup releases) its own lease.
+  const connection =
+    config?.stores === false
+      ? null
+      : await connectStores(resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd()));
+  const stores = connection && { connection, dc: config?.dc ?? "local", owned: true };
+
   let runner: IWasmRunner;
   if (wasmType === "http-wasm") {
-    runner = new HttpWasmRunner(new PortManager(), config?.dotenv?.enabled ?? false);
+    runner = new HttpWasmRunner(new PortManager(), config?.dotenv?.enabled ?? false, stores);
   } else {
-    const connection =
-      config?.stores === false
-        ? null
-        : await connectStores(resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd()));
-    runner = new WorkerProxyWasmRunner(
-      undefined,
-      config?.dotenv?.enabled ?? false,
-      connection && { connection, dc: config?.dc ?? "local", owned: true },
-    );
+    runner = new WorkerProxyWasmRunner(undefined, config?.dotenv?.enabled ?? false, stores);
   }
 
   await runner.load(buffer, config);

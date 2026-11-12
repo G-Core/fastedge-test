@@ -24,6 +24,7 @@ import {
 } from "../utils/temp-file-manager.js";
 import { isLegacySyncWasm } from "../utils/legacy-wasm-detect.js";
 import { validateDotenvLeafs } from "../utils/dotenv-loader.js";
+import type { RunnerStores } from "../stores/StoresManager.js";
 
 /**
  * HttpWasmRunner implementation
@@ -53,9 +54,28 @@ export class HttpWasmRunner implements IWasmRunner {
   /** @deprecated Legacy sync support — remove when #[fastedge::http] is retired */
   private isLegacySync: boolean = false;
 
-  constructor(portManager: PortManager, dotenvEnabled: boolean = true) {
+  constructor(
+    portManager: PortManager,
+    dotenvEnabled: boolean = true,
+    private stores: RunnerStores | null = null,
+  ) {
     this.portManager = portManager;
     this.dotenvEnabled = dotenvEnabled;
+  }
+
+  /**
+   * fastedge-run's environment. With stores on, FASTEDGE_STORES_SERVICE points it at the
+   * storage service: the cache and the seeded Edge KV stores are shared with every other
+   * runner (a store named in .env.kv_stores, e.g. redis://, still wins). Read at each spawn,
+   * since the service may have restarted.
+   */
+  private spawnEnv(): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { RUST_LOG: "info", ...process.env };
+    if (this.stores) {
+      const { url, token } = this.stores.connection;
+      env.FASTEDGE_STORES_SERVICE = `${url},${token},${this.stores.dc}`;
+    }
+    return env;
   }
 
   /**
@@ -73,8 +93,8 @@ export class HttpWasmRunner implements IWasmRunner {
       this.dotenvPath = config.dotenv.path;
     }
 
-    // Cleanup previous process if any
-    await this.cleanup();
+    // Stop the previous process if any
+    await this.stopProcess();
 
     // Find fastedge-run CLI
     this.cliPath = await findFastEdgeRunCli();
@@ -153,10 +173,7 @@ export class HttpWasmRunner implements IWasmRunner {
     // Spawn process
     this.process = spawn(this.cliPath, args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        RUST_LOG: "info",
-        ...process.env,
-      },
+      env: this.spawnEnv(),
     });
 
     // Setup log capture
@@ -311,10 +328,7 @@ export class HttpWasmRunner implements IWasmRunner {
 
     this.process = spawn(this.cliPath, args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        RUST_LOG: "info",
-        ...process.env,
-      },
+      env: this.spawnEnv(),
     });
 
     this.setupLogCapture();
@@ -329,6 +343,12 @@ export class HttpWasmRunner implements IWasmRunner {
    * Clean up resources
    */
   async cleanup(): Promise<void> {
+    await this.stopProcess();
+    if (this.stores?.owned) await this.stores.connection.close();
+  }
+
+  /** Stop fastedge-run and release its port and temp file (load() reuses this). */
+  private async stopProcess(): Promise<void> {
     // Kill process
     if (this.process) {
       await this.killProcess();

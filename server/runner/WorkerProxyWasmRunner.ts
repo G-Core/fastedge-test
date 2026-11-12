@@ -31,15 +31,7 @@ import type { HookCall, HookResult, FullFlowResult } from "./types.js";
 import type { FastEdgeConfig } from "../fastedge-host/index.js";
 import { embeddedSource } from "../embedded.js";
 import { createBridge, serveBridge } from "./storesBridge.js";
-import { request, type StoresConnection } from "../stores/StoresManager.js";
-
-export type RunnerStores = {
-  connection: StoresConnection;
-  /** The cache bucket (edge location); `local` by default. */
-  dc: string;
-  /** Close the connection on cleanup() (true when the runner opened it). */
-  owned: boolean;
-};
+import { request, type RunnerStores } from "../stores/StoresManager.js";
 
 type Reply = { id: number; value?: unknown; error?: unknown };
 type Event = { event: keyof IStateManager; args: unknown[] };

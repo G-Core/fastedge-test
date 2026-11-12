@@ -1,5 +1,25 @@
 # Proxy-WASM Runner - Changelog
 
+## November 12, 2026 - HTTP apps join the storage service
+
+### Overview
+`HttpWasmRunner` points fastedge-run at the storage service (`FASTEDGE_STORES_SERVICE`), so an
+HTTP app and a CDN filter share the cache and Edge KV fixtures. Needs the unreleased fastedge-run
+from FastEdge-lib `feat/stores-forward`; the released binary ignores the variable.
+
+### 🎯 What Was Completed
+- `HttpWasmRunner(portManager, dotenv, stores)`; `cleanup()` releases an owned connection;
+  `load()` uses the new private `stopProcess()` so a reload keeps the connection
+- `createRunner` and the debugger server connect for HTTP apps too
+- Test app `test-applications/http-apps/rust/wasi/stores`
+- FastEdge-lib: fastedge-run attaches the service's seeded stores unless `--kv-stores`/dotenv name them
+
+### 🧪 Testing
+- `integration/http-apps/stores/` (4 tests, gated by `FASTEDGE_TEST_STORES_E2E=1` + `FASTEDGE_RUN_PATH`):
+  HTTP and CDN apps count on one cache (1, 2, 3) and see each other's `set`; HTTP KV reads from
+  fixtures; unlisted store → AccessDenied; `.env.kv_stores` redis entry wins; `dc` separation.
+  88/88 with the local build; 84 + 4 skipped with the released binary
+
 ## November 12, 2026 - CDN apps get the cache and Edge KV (on by default)
 
 ### Overview

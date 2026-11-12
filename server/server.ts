@@ -366,7 +366,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     }
 
     // Create appropriate runner based on detected type
-    const storesConnection = wasmType === "proxy-wasm" && stores !== false ? await getStores() : null;
+    const storesConnection = stores !== false ? await getStores() : null;
     currentRunner = runnerFactory.createRunner(
       wasmType,
       dotenv?.enabled ?? false,
