@@ -12,13 +12,16 @@ import { parentPort, workerData } from "node:worker_threads";
 import { ProxyWasmRunner } from "./ProxyWasmRunner.js";
 import type { IStateManager } from "./IStateManager.js";
 import type { FastEdgeConfig } from "../fastedge-host/index.js";
+import { SyncStoresClient, type BridgeEnds } from "./storesBridge.js";
 
 const port = parentPort!;
-const { fastEdgeConfig, dotenvEnabled } = workerData as {
+const { fastEdgeConfig, dotenvEnabled, stores } = workerData as {
   fastEdgeConfig?: FastEdgeConfig;
   dotenvEnabled: boolean;
+  stores: { ends: BridgeEnds; dc: string } | null;
 };
 const runner = new ProxyWasmRunner(fastEdgeConfig, dotenvEnabled);
+if (stores) runner.setStores(new SyncStoresClient(stores.ends, stores.dc));
 
 const forwardEvents = new Proxy({} as IStateManager, {
   get: (_target, event) => (...args: unknown[]) => port.postMessage({ event, args }),

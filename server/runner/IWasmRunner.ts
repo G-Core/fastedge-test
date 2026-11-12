@@ -31,6 +31,14 @@ export interface RunnerConfig {
    * for proxy-wasm runners.
    */
   httpPort?: number;
+  /**
+   * Local cache and Edge KV through the storage service shared by every runner in the
+   * stores root (the nearest git root; FASTEDGE_STORES_ROOT overrides). Default `true`.
+   * `false`: CDN apps' cache / KV calls return InternalFailure.
+   */
+  stores?: boolean;
+  /** Cache bucket (edge location). Runners with the same `dc` share cache entries. Default `"local"`. */
+  dc?: string;
 }
 
 /**

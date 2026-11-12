@@ -1,7 +1,7 @@
 # Stores: the local storage service (cache and Edge KV)
 
-**Status (November 2026):** the core, its HTTP API and the service manager are in place
-(`server/stores/`). Not yet wired in: the CDN host functions
+**Status (November 2026):** core, HTTP API, service manager and the CDN host functions are
+in place; CDN apps use the stores by default. Not yet wired in
 (`proxy_cache_*`, `proxy_kv_store_*`), and pointing fastedge-run at it. Until then nothing
 in the runner uses it.
 
@@ -18,7 +18,27 @@ cache is shared per account per POP by HTTP and CDN apps.
 | `server/stores/StoresServer.ts` | HTTP API on 127.0.0.1: token + `Host` check, `/v1/cache`, `/v1/kv`, `/v1/admin` |
 | `server/stores/fixtures.ts` | Loads `fixtures/stores/kv/*.json` and `fixtures/stores/cache/*.json` |
 | `server/stores/service.ts` | The service process (embedded, started with `node -`) |
-| `server/stores/StoresManager.ts` | `connectStores(root)`: find or start the service, hold a lease |
+| `server/stores/StoresManager.ts` | `connectStores(root)`: find or start the service, hold a lease; `resolveStoresRoot` |
+| `server/runner/StoresHost.ts` | CDN host functions `proxy_cache_*` (8) and `proxy_kv_store_*` (6) |
+| `server/runner/storesBridge.ts` | Synchronous calls from the CDN worker (Atomics.wait); the parent makes the HTTP call |
+
+## CDN apps (proxy-wasm)
+
+- **On by default.** `createRunner` / `createRunnerFromBuffer` connect (and own the
+  connection; `cleanup()` releases it). The debugger server connects once, on the first CDN
+  load, and keeps it; if the service cannot start it logs `Stores are off: ...` and goes on.
+  `RunnerConfig.stores: false` (or `stores: false` in the `/api/load` body) turns them off.
+- **`dc`** (`RunnerConfig.dc`, `/api/load` `dc`, default `local`): the cache bucket.
+- **Stores root:** `FASTEDGE_STORES_ROOT`, else the nearest ancestor with `.git`, else the app
+  folder (WORKSPACE_PATH / cwd). Sibling app folders in one repo share the service.
+- Host functions follow the engine's signatures, encodings and statuses
+  (`crates/proxywasm/src/host/cache.rs`, `key_value.rs`). The worker blocks on each call
+  (deadline 5 s; the parent's HTTP timeout is 4 s); a failure is `InternalFailure`, never retried.
+- **Stores off:** the functions still link; every call returns `InternalFailure` and the first
+  call in a hook logs `[host] stores are off: ...`.
+- Edge KV `open` succeeds only for a store with a fixture (an attached store on the edge);
+  otherwise `BadArgument` (the SDK's `AccessDenied`). A key of another type → `BadArgument`
+  (Redis WRONGTYPE).
 
 ## Service process
 
@@ -54,12 +74,14 @@ Binary values are base64; i64/u64 are decimal strings (numbers accepted).
 | cache | `expire` | `dc, key, ttlMs` | bool (false = missing) |
 | cache | `purge` | `dc` | count (string) |
 | cache | `purge-prefix` | `dc, prefix` | count (string) |
-| kv | `get` | `store, key` | base64 or `null` |
+| kv | `open` | `store` | `true`; `access-denied` without a fixture |
+| kv | `get` | `store, key` | base64 or `null`; `wrong-type` on a zset/bloom key |
 | kv | `zrange-by-score` | `store, key, min, max` (`"inf"`/`"-inf"` allowed) | `[[base64, score]]` |
 | kv | `scan` | `store, pattern` | `[key]` (sorted) |
 | kv | `zscan` | `store, key, pattern` | `[[base64, score]]` |
 | kv | `bf-exists` | `store, key, item` | bool |
 | admin | `info` | | `{ protocol: 1 }` |
+| admin | `kv-stores` | | seeded store names |
 | admin | `advance-clock` | `ms` | new offset |
 
 The fastedge-run client (FastEdge-lib `src/stores_service.rs`) implements the other side.
@@ -82,7 +104,7 @@ Measured on preprod (2026-11-05) and read from the FastEdge cache backend:
 - **Bloom filters are exact sets:** no false positives.
 - **Glob escaping** follows Redis docs; the edge's bracket-escape behaviour is not measured yet.
 - **Cache keys** are scoped by `dc` only, not by account (one service = one account).
-- A KV store with no fixture is an empty store.
+- A KV store is attached when it has a fixture; there is no app-level store configuration yet.
 
 ## Fixtures
 
@@ -99,5 +121,9 @@ name the file and field.
 ## Tests
 
 `server/__tests__/unit/stores/`: conformance cases from the preprod probes (P2–P6), Redis KV
-semantics, glob translation checked in SQLite, fixtures, and the HTTP checks (token, `Host`,
-bad requests).
+semantics, glob translation checked in SQLite, fixtures, the HTTP checks (token, `Host`,
+bad requests), and the manager (real service processes).
+`server/__tests__/integration/cdn-apps/stores/`: the Rust CDN app
+`test-applications/cdn-apps/rust/cdn-stores` against the service: shared bucket, `dc`
+separation, TTL rules, incr errors, purge, all four hooks, KV fixture reads, unattached store,
+wrong type, stores off.

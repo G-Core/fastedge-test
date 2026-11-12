@@ -9,8 +9,13 @@
  * The worker's `fetch` (origin fetch, proxy_http_call) runs here in the parent, so
  * the parent's undici dispatcher applies (mockOrigins() installs a MockAgent there).
  *
+ * Stores: given a connection to the storage service, the worker's cache and Edge KV
+ * host functions reach it over a synchronous bridge (storesBridge.ts); the HTTP calls
+ * are made here. Without one, those functions return InternalFailure ("stores are off").
+ *
  * The worker does not keep the process alive while idle, so a runner that is
- * never cleaned up does not stop Node from exiting. cleanup() terminates it.
+ * never cleaned up does not stop Node from exiting. cleanup() terminates it, and
+ * closes the stores connection if the runner owns it.
  */
 
 import { Worker } from "node:worker_threads";
@@ -25,6 +30,16 @@ import type { IStateManager } from "./IStateManager.js";
 import type { HookCall, HookResult, FullFlowResult } from "./types.js";
 import type { FastEdgeConfig } from "../fastedge-host/index.js";
 import { embeddedSource } from "../embedded.js";
+import { createBridge, serveBridge } from "./storesBridge.js";
+import { request, type StoresConnection } from "../stores/StoresManager.js";
+
+export type RunnerStores = {
+  connection: StoresConnection;
+  /** The cache bucket (edge location); `local` by default. */
+  dc: string;
+  /** Close the connection on cleanup() (true when the runner opened it). */
+  owned: boolean;
+};
 
 type Reply = { id: number; value?: unknown; error?: unknown };
 type Event = { event: keyof IStateManager; args: unknown[] };
@@ -37,12 +52,26 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
   private stateManager: IStateManager | null = null;
   private stopped: Error | null = null;
   private fetches = new Map<number, AbortController>();
+  private closeBridge: (() => void) | null = null;
 
-  constructor(fastEdgeConfig?: FastEdgeConfig, dotenvEnabled: boolean = true) {
+  constructor(
+    fastEdgeConfig?: FastEdgeConfig,
+    dotenvEnabled: boolean = true,
+    private stores: RunnerStores | null = null,
+  ) {
+    const bridge = stores ? createBridge() : null;
     this.worker = new Worker(embeddedSource("cdn-worker"), {
       eval: true,
-      workerData: { fastEdgeConfig, dotenvEnabled },
+      workerData: {
+        fastEdgeConfig,
+        dotenvEnabled,
+        stores: bridge ? { ends: bridge.worker, dc: stores!.dc } : null,
+      },
+      transferList: bridge ? [bridge.worker.request, bridge.worker.reply] : [],
     });
+    if (bridge) {
+      this.closeBridge = serveBridge(bridge.parent, (kind, body) => request(stores!.connection, kind, body));
+    }
     this.worker.unref();
     this.worker.on("message", (m: Reply | Event | FetchRequest) => this.onMessage(m));
     this.worker.on("error", (e) => this.stop(e));
@@ -169,6 +198,8 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
     if (this.stopped) return;
     this.stop(new Error("CDN runner was cleaned up"));
     await this.worker.terminate();
+    this.closeBridge?.();
+    if (this.stores?.owned) await this.stores.connection.close();
   }
 
   getType(): WasmType {

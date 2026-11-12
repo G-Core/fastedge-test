@@ -1,5 +1,32 @@
 # Proxy-WASM Runner - Changelog
 
+## November 12, 2026 - CDN apps get the cache and Edge KV (on by default)
+
+### Overview
+CDN (proxy-wasm) apps can now use `proxy_cache_*` and `proxy_kv_store_*`: the worker runner
+reaches the storage service over a synchronous bridge. `createRunner` and the debugger server
+connect by default. See `features/STORES.md` ("CDN apps").
+
+### 🎯 What Was Completed
+- `StoresHost.ts`: the 8 cache and 6 KV host functions, statuses and encodings as the engine
+- `storesBridge.ts`: Atomics.wait in the worker, HTTP call in the parent, request ids, 5 s deadline
+- `ProxyWasmRunner.setStores()`; the functions always link (stores off → InternalFailure + log)
+- `WorkerProxyWasmRunner(config, dotenv, stores)`; `WasmRunnerFactory.createRunner(..., stores)`
+- `RunnerConfig.stores` / `dc`; `/api/load` `stores` / `dc`; stores root = nearest git root
+  (`FASTEDGE_STORES_ROOT` overrides)
+- Core: `kv_store` table (seeded stores), kv `open`, admin `kv-stores`, `wrong-type` errors
+- `ProxyStatus.InternalFailure = 10`; `MemoryManager.writeI64` / `writeU64`
+- Test app `test-applications/cdn-apps/rust/cdn-stores` (fastedge SDK 0.4.2 → 0.4.5 in that workspace)
+
+### 🧪 Testing
+- 7 integration tests (`cdn-apps/stores/`), in both CDN integration passes
+- Built `dist/lib` ESM and CJS: two processes share one counter; each exits without `cleanup()`;
+  idle services exit about 30 s after the last lease
+
+### 📝 Notes
+- Decided (Gordon, 2026-11-12): stores root = git root; stores off = error status + log
+- The service client uses `agent: false`, so no keep-alive socket holds a process open
+
 ## November 12, 2026 - Storage service manager (one service per stores root)
 
 ### Overview

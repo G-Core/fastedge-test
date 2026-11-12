@@ -24,6 +24,13 @@
       "type": "integer",
       "minimum": 1024,
       "maximum": 65535
+    },
+    "stores": {
+      "type": "boolean"
+    },
+    "dc": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "additionalProperties": false

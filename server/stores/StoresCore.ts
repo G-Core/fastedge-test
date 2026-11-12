@@ -54,6 +54,7 @@ export class StoresCore {
         PRIMARY KEY (store, key, member)) WITHOUT ROWID;
       CREATE TABLE IF NOT EXISTS kv_bloom (store TEXT, key TEXT, item TEXT,
         PRIMARY KEY (store, key, item)) WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS kv_store (name TEXT PRIMARY KEY) WITHOUT ROWID;
     `);
     const version = db.prepare("SELECT v FROM meta WHERE k = 'schema'").get() as { v: string } | undefined;
     if (version && version.v !== SCHEMA_VERSION) {
@@ -81,6 +82,12 @@ export class StoresCore {
       zscan: p(`SELECT member, score FROM kv_zset WHERE store = ? AND key = ? AND CAST(member AS TEXT) GLOB ?
                 ORDER BY score, member`),
       bf: p("SELECT 1 FROM kv_bloom WHERE store = ? AND key = ? AND item = ?"),
+      // The Redis type of a key: 'string', 'zset', 'bloom' or none.
+      type: p(`SELECT 'string' AS t FROM kv_string WHERE store = ?1 AND key = ?2
+               UNION ALL SELECT 'zset' FROM kv_zset WHERE store = ?1 AND key = ?2
+               UNION ALL SELECT 'bloom' FROM kv_bloom WHERE store = ?1 AND key = ?2 LIMIT 1`),
+      store: p("SELECT 1 FROM kv_store WHERE name = ?"),
+      stores: p("SELECT name FROM kv_store ORDER BY name"),
     };
   }
 
@@ -149,35 +156,56 @@ export class StoresCore {
     }
   }
 
-  /** Edge KV is read-only to apps. A store with no seed is an empty store. */
+  /**
+   * Edge KV is read-only to apps. `open` succeeds only for a seeded store (one with a fixture),
+   * as the edge allows only the stores attached to the app; the other ops answer for any store.
+   * An op on a key of another type is `wrong-type` (Redis WRONGTYPE).
+   */
   kv(body: Body): Reply {
     const store = text(body, "store");
+    const wrongType = (key: string, want: string) => {
+      const row = this.q.type.get(store, key) as { t: string } | undefined;
+      return row !== undefined && row.t !== want;
+    };
     switch (body.op) {
+      case "open":
+        return this.q.store.get(store) ? ok(true) : fail("access-denied");
       case "get": {
+        if (wrongType(text(body, "key"), "string")) return fail("wrong-type");
         const row = this.q.kvGet.get(store, text(body, "key")) as { value: Uint8Array } | undefined;
         return ok(row ? Buffer.from(row.value).toString("base64") : null);
       }
       case "zrange-by-score":
+        if (wrongType(text(body, "key"), "zset")) return fail("wrong-type");
         return ok(scored(this.q.zrange.all(store, text(body, "key"), score(body, "min"), score(body, "max"))));
       case "scan":
         return ok((this.q.scan.all(store, redisGlob(text(body, "pattern"))) as { key: string }[]).map((r) => r.key));
       case "zscan":
+        if (wrongType(text(body, "key"), "zset")) return fail("wrong-type");
         return ok(scored(this.q.zscan.all(store, text(body, "key"), redisGlob(text(body, "pattern")))));
       case "bf-exists":
+        if (wrongType(text(body, "key"), "bloom")) return fail("wrong-type");
         return ok(this.q.bf.get(store, text(body, "key"), text(body, "item")) !== undefined);
       default:
         throw new BadRequest(`unknown kv op: ${String(body.op)}`);
     }
   }
 
+  /** The seeded (attached) Edge KV stores. */
+  kvStores(): string[] {
+    return (this.q.stores.all() as { name: string }[]).map((r) => r.name);
+  }
+
   /** Replace every Edge KV store with the given seeds (KV tables are a copy of the fixtures). */
   seedKv(stores: Record<string, KvSeed>): void {
     this.transaction(() => {
-      for (const table of ["kv_string", "kv_zset", "kv_bloom"]) this.db.exec(`DELETE FROM ${table}`);
+      for (const table of ["kv_string", "kv_zset", "kv_bloom", "kv_store"]) this.db.exec(`DELETE FROM ${table}`);
+      const putStore = this.db.prepare("INSERT INTO kv_store (name) VALUES (?)");
       const putString = this.db.prepare("INSERT INTO kv_string (store, key, value) VALUES (?, ?, ?)");
       const putMember = this.db.prepare("INSERT OR REPLACE INTO kv_zset (store, key, member, score) VALUES (?, ?, ?, ?)");
       const putItem = this.db.prepare("INSERT OR IGNORE INTO kv_bloom (store, key, item) VALUES (?, ?, ?)");
       for (const [store, seed] of Object.entries(stores)) {
+        putStore.run(store);
         for (const [key, value] of Object.entries(seed.strings)) putString.run(store, key, value);
         for (const [key, members] of Object.entries(seed.zsets)) {
           for (const [member, s] of members) putMember.run(store, key, member, s);

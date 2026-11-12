@@ -16,6 +16,7 @@ import { WorkerProxyWasmRunner } from "./WorkerProxyWasmRunner.js";
 import { HttpWasmRunner } from "./HttpWasmRunner.js";
 import { PortManager } from "./PortManager.js";
 import { detectWasmType } from "../utils/wasmTypeDetector.js";
+import { connectStores, resolveStoresRoot } from "../stores/StoresManager.js";
 
 /**
  * Create a headless runner from a file path.
@@ -43,7 +44,15 @@ export async function createRunnerFromBuffer(
   if (wasmType === "http-wasm") {
     runner = new HttpWasmRunner(new PortManager(), config?.dotenv?.enabled ?? false);
   } else {
-    runner = new WorkerProxyWasmRunner(undefined, config?.dotenv?.enabled ?? false);
+    const connection =
+      config?.stores === false
+        ? null
+        : await connectStores(resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd()));
+    runner = new WorkerProxyWasmRunner(
+      undefined,
+      config?.dotenv?.enabled ?? false,
+      connection && { connection, dc: config?.dc ?? "local", owned: true },
+    );
   }
 
   await runner.load(buffer, config);

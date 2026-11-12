@@ -134,6 +134,20 @@ describe('kv', () => {
     });
   });
 
+  it('open succeeds only for a seeded store; kvStores lists them', () => {
+    expect(kv('open')).toEqual({ ok: true, value: true });
+    expect(core.kv({ op: 'open', store: 'other' })).toEqual({ ok: false, error: 'access-denied' });
+    expect(core.kvStores()).toEqual(['s']);
+  });
+
+  it('an op on a key of another type is wrong-type (Redis WRONGTYPE)', () => {
+    expect(kv('get', { key: 'board' })).toEqual({ ok: false, error: 'wrong-type' });
+    expect(kv('zrange-by-score', { key: 'cfg', min: '-inf', max: 'inf' })).toEqual({ ok: false, error: 'wrong-type' });
+    expect(kv('zscan', { key: 'blocked', pattern: '*' })).toEqual({ ok: false, error: 'wrong-type' });
+    expect(kv('bf-exists', { key: 'cfg', item: 'x' })).toEqual({ ok: false, error: 'wrong-type' });
+    expect(kv('zrange-by-score', { key: 'missing', min: 0, max: 1 }).value).toEqual([]);
+  });
+
   it('get returns base64 or null; another store is empty', () => {
     expect(kv('get', { key: 'cfg' }).value).toBe('AAE=');
     expect(kv('get', { key: 'missing' }).value).toBeNull();

@@ -2,7 +2,8 @@
  * The storage service's HTTP API (`/v1`), on 127.0.0.1 only.
  *
  * - `POST /v1/cache`, `POST /v1/kv`: store operations (see StoresCore).
- * - `POST /v1/admin`: `{ op: "info" }` → protocol version; `{ op: "advance-clock", ms }`;
+ * - `POST /v1/admin`: `{ op: "info" }` → protocol version; `{ op: "kv-stores" }` → seeded
+ *   Edge KV store names; `{ op: "advance-clock", ms }`;
  *   `{ op: "lease", id, ttlMs }` / `{ op: "release", id }`: client leases (wall clock), so the
  *   service process can exit when the last client is gone.
  *
@@ -67,6 +68,7 @@ export function startStoresServer(core: StoresCore, token: string, port = 0): Pr
     "/v1/admin": (b) => {
       const body = object(b);
       if (body.op === "info") return { ok: true, value: { protocol: STORES_PROTOCOL } };
+      if (body.op === "kv-stores") return { ok: true, value: core.kvStores() };
       if (body.op === "advance-clock" && typeof body.ms === "number") {
         return { ok: true, value: core.advanceClock(body.ms) };
       }

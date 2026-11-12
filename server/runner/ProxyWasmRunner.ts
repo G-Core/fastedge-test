@@ -20,6 +20,8 @@ import {
   type FastEdgeConfig,
 } from "../fastedge-host/index.js";
 import { loadDotenvFiles } from "../utils/dotenv-loader.js";
+import { storesImports } from "./StoresHost.js";
+import type { SyncStores } from "./storesBridge.js";
 
 const textEncoder = new TextEncoder();
 
@@ -48,6 +50,7 @@ export class ProxyWasmRunner implements IWasmRunner {
   private dictionary: Dictionary;
   private dotenvEnabled: boolean = true; // Default to enabled
   private dotenvPath: string = ".";
+  private stores: SyncStores | null = null; // null = stores off
 
   constructor(
     fastEdgeConfig?: FastEdgeConfig,
@@ -76,6 +79,15 @@ export class ProxyWasmRunner implements IWasmRunner {
     this.memory.setLogCallback((level: number, message: string) => {
       this.logs.push({ level, message });
     });
+  }
+
+  /**
+   * Connect the cache and Edge KV host functions to the storage service
+   * (WorkerProxyWasmRunner does this inside its worker). Without it they
+   * return InternalFailure ("stores are off").
+   */
+  setStores(stores: SyncStores | null): void {
+    this.stores = stores;
   }
 
   /**
@@ -1211,7 +1223,10 @@ export class ProxyWasmRunner implements IWasmRunner {
     const wasiImport = wasi.wasiImport as Record<string, unknown>;
 
     return {
-      env: this.hostFunctions.createImports(),
+      env: {
+        ...this.hostFunctions.createImports(),
+        ...storesImports(this.memory, this.stores, (message) => this.logs.push({ level: 3, message })),
+      },
       wasi_snapshot_preview1: {
         ...wasiImport,
         initialize: wasi.initialize.bind(wasi),

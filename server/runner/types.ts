@@ -53,6 +53,7 @@ export enum ProxyStatus {
   Ok = 0,
   NotFound = 1,
   BadArgument = 2,
+  InternalFailure = 10,
   Unimplemented = 12,
 }
 

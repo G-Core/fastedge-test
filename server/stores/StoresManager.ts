@@ -14,12 +14,13 @@
 import http from "node:http";
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { openSync, closeSync, readFileSync, rmSync, statSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { openSync, closeSync, readFileSync, rmSync, statSync, mkdirSync, existsSync } from "node:fs";
+import { join, dirname, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { embeddedSource } from "../embedded.js";
 import { storesDir, type Descriptor } from "./layout.js";
 import { STORES_PROTOCOL } from "./StoresServer.js";
+import type { Reply } from "./StoresCore.js";
 
 export type StoresConnection = {
   /** `http://127.0.0.1:<port>`; may change only if the service had to move port. */
@@ -31,6 +32,20 @@ export type StoresConnection = {
 export type ConnectOptions = { leaseTtlMs?: number; startTimeoutMs?: number };
 
 const STALE_LOCK_MS = 20_000;
+
+/**
+ * The stores root for an app folder: FASTEDGE_STORES_ROOT if set, else the nearest
+ * ancestor with `.git` (so sibling app folders in one repo share cache and KV), else the
+ * folder itself. Fixtures load from `<root>/fixtures/stores/`.
+ */
+export function resolveStoresRoot(appRoot: string): string {
+  if (process.env.FASTEDGE_STORES_ROOT) return resolve(process.env.FASTEDGE_STORES_ROOT);
+  const start = resolve(appRoot);
+  for (let dir = start; ; dir = dirname(dir)) {
+    if (existsSync(join(dir, ".git"))) return dir;
+    if (dirname(dir) === dir) return start;
+  }
+}
 
 export async function connectStores(root: string, options: ConnectOptions = {}): Promise<StoresConnection> {
   const leaseTtlMs = options.leaseTtlMs ?? 30_000;
@@ -177,8 +192,19 @@ function logTail(dir: string): string {
   }
 }
 
+/** A store operation: the service's reply as is (`ok: false` included); rejects on transport failure. */
+export function request(conn: { url: string; token: string }, kind: "cache" | "kv" | "admin", body: unknown): Promise<Reply> {
+  return send({ port: Number(new URL(conn.url).port), token: conn.token }, `/v1/${kind}`, body, 4000);
+}
+
 /** One JSON call to the service; resolves the reply's value, rejects on anything else. */
-export function call(d: Pick<Descriptor, "port" | "token">, path: string, body: unknown, timeoutMs = 4000): Promise<unknown> {
+export async function call(d: Pick<Descriptor, "port" | "token">, path: string, body: unknown, timeoutMs = 4000): Promise<unknown> {
+  const reply = await send(d, path, body, timeoutMs);
+  if (!reply.ok) throw new Error(`stores service: ${reply.error}`);
+  return reply.value;
+}
+
+function send(d: Pick<Descriptor, "port" | "token">, path: string, body: unknown, timeoutMs: number): Promise<Reply> {
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -188,15 +214,16 @@ export function call(d: Pick<Descriptor, "port" | "token">, path: string, body: 
         path,
         headers: { authorization: `Bearer ${d.token}`, "content-type": "application/json" },
         timeout: timeoutMs,
+        agent: false, // no pooled keep-alive sockets holding the process open
       },
       (res) => {
         const chunks: Buffer[] = [];
         res.on("data", (c: Buffer) => chunks.push(c));
         res.on("end", () => {
           try {
-            const reply = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-            if (reply.ok) resolve(reply.value);
-            else reject(new Error(`stores service: ${reply.error}`));
+            const reply = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Reply;
+            if (typeof reply.ok !== "boolean") throw new Error();
+            resolve(reply);
           } catch {
             reject(new Error(`stores service: HTTP ${res.statusCode}`));
           }
