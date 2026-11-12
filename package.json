@@ -93,7 +93,7 @@
     "zustand-debounce": "^2.3.0"
   },
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.13"
   },
   "devDependencies": {
     "@assemblyscript/wasi-shim": "^0.1.0",

@@ -1,5 +1,37 @@
 # Proxy-WASM Runner - Changelog
 
+## November 12, 2026 - Storage service core (cache and Edge KV on SQLite)
+
+### Overview
+The core of the local storage service: the edge cache and Edge KV on `node:sqlite`, behind a
+token-protected HTTP API on 127.0.0.1. Matches the edge as measured on preprod. Not wired into
+the runners yet (next: service manager, CDN host functions, fastedge-run). See
+`features/STORES.md`.
+
+### 🎯 What Was Completed
+- `StoresCore`: cache `get/set/delete/exists/incr/expire/purge/purge-prefix` per `dc`, Edge KV
+  `get/zrange-by-score/scan/zscan/bf-exists`, one clock, WAL, schema version check
+- `StoresServer`: `/v1/cache`, `/v1/kv`, `/v1/admin` (`info`, `advance-clock`); Bearer token,
+  `Host` check against DNS rebinding
+- Fixtures: `fixtures/stores/kv/<store>.json`, `fixtures/stores/cache/<dc>.json`
+- `engines.node` raised to `>=22.13` (unflagged `node:sqlite`)
+
+**Files Created:**
+- server/stores/StoresCore.ts, server/stores/StoresServer.ts, server/stores/fixtures.ts
+- server/__tests__/unit/stores/StoresCore.test.ts, StoresServer.test.ts
+- context/features/STORES.md
+
+### 🧪 Testing
+- 23 unit tests (conformance P2–P6, KV, globs in SQLite, fixtures, HTTP)
+- End to end with fastedge-run built from FastEdge-lib `feat/stores-forward`: an HTTP app's
+  cache `incr` 1 → 2 across requests, binary round trip, `incr` on text → `InternalError`;
+  KV get/scan/zrange (`inf` bound)/zscan/bf-exists from a fixture; an unlisted store → `AccessDenied`
+
+### 📝 Notes
+- `incr` on a missing key models the intended edge behaviour (default TTL, purgeable), not the
+  current engine bug
+
+
 ## November 11, 2026 - CDN runner runs in a worker thread (no behaviour change)
 
 ### Overview

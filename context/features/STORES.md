@@ -1,0 +1,84 @@
+# Stores: the local storage service (cache and Edge KV)
+
+**Status (November 2026):** the core and its HTTP API are in place (`server/stores/`).
+Not yet wired in: starting the service per workspace, the CDN host functions
+(`proxy_cache_*`, `proxy_kv_store_*`), and pointing fastedge-run at it. Until then nothing
+in the runner uses it.
+
+## What it is
+
+One process per workspace holds the edge cache and Edge KV in SQLite (`node:sqlite`, so
+`engines` is `>=22.13`). CDN apps (via the worker runner) and HTTP apps (fastedge-run with
+`FASTEDGE_STORES_SERVICE=<url>,<token>[,<dc>]`) use the same data, as on the edge, where the
+cache is shared per account per POP by HTTP and CDN apps.
+
+| File | Role |
+|---|---|
+| `server/stores/StoresCore.ts` | All store semantics on SQLite: cache (8 ops), Edge KV reads (5 ops), the clock, seeding |
+| `server/stores/StoresServer.ts` | HTTP API on 127.0.0.1: token + `Host` check, `/v1/cache`, `/v1/kv`, `/v1/admin` |
+| `server/stores/fixtures.ts` | Loads `fixtures/stores/kv/*.json` and `fixtures/stores/cache/*.json` |
+
+## API (protocol 1)
+
+`POST /v1/<cache|kv|admin>`, `authorization: Bearer <token>`, JSON body `{ "op": ..., ... }`.
+Reply `{ "ok": true, "value": ... }` or `{ "ok": false, "error": "<code>" }` (200). Malformed
+request: 400 `bad-request`. Wrong token, foreign `Host`, unknown path: empty 401/403/404.
+Binary values are base64; i64/u64 are decimal strings (numbers accepted).
+
+| Kind | Op | Body | Value |
+|---|---|---|---|
+| cache | `get` | `dc, key` | base64 or `null` |
+| cache | `set` | `dc, key, value, ttlMs` (`null` = default) | `null`; negative TTL → `bad-argument` |
+| cache | `delete` | `dc, key` | `null` |
+| cache | `exists` | `dc, key` | bool |
+| cache | `incr` | `dc, key, delta` | new value (string); non-integer / overflow → `internal-error` |
+| cache | `expire` | `dc, key, ttlMs` | bool (false = missing) |
+| cache | `purge` | `dc` | count (string) |
+| cache | `purge-prefix` | `dc, prefix` | count (string) |
+| kv | `get` | `store, key` | base64 or `null` |
+| kv | `zrange-by-score` | `store, key, min, max` (`"inf"`/`"-inf"` allowed) | `[[base64, score]]` |
+| kv | `scan` | `store, pattern` | `[key]` (sorted) |
+| kv | `zscan` | `store, key, pattern` | `[[base64, score]]` |
+| kv | `bf-exists` | `store, key, item` | bool |
+| admin | `info` | | `{ protocol: 1 }` |
+| admin | `advance-clock` | `ms` | new offset |
+
+The fastedge-run client (FastEdge-lib `src/stores_service.rs`) implements the other side.
+
+## Edge semantics matched
+
+Measured on preprod (2026-11-05) and read from the FastEdge cache backend:
+- default TTL = max TTL = 4 days; a larger TTL is clamped; `expire` with a negative TTL gets
+  the default; `expire` on a missing key is `false`;
+- `incr` takes canonical decimal i64 only; an existing key keeps its TTL;
+- a stored empty value reads back empty, not missing;
+- `purge` clears the whole `dc` bucket; `purge-prefix` is a literal prefix (no glob);
+- KV `scan`/`zscan` use Redis globs (`*`, `?`, `[..]`, `[^..]`, `\` escapes), translated to SQLite `GLOB`;
+- one clock for every runner: `advance-clock` moves expiry for HTTP and CDN apps together.
+
+## Known differences from the edge
+
+- **`incr` on a missing key** gets the default TTL and is purgeable. On the edge it currently
+  gets no TTL and escapes `purge` until a server restart (engine bug, being reported).
+- **Bloom filters are exact sets:** no false positives.
+- **Glob escaping** follows Redis docs; the edge's bracket-escape behaviour is not measured yet.
+- **Cache keys** are scoped by `dc` only, not by account (one service = one account).
+- A KV store with no fixture is an empty store.
+
+## Fixtures
+
+```
+fixtures/stores/kv/<store>.json   { "strings": { key: value }, "zsets": { key: [[member, score]] }, "bloom": { key: [item] } }
+fixtures/stores/cache/<dc>.json   { key: { "value": "text" } | { "base64": "..." }, optional "ttl_ms" }
+```
+
+A value or zset member is a UTF-8 string or `{ "base64": "..." }`. KV fixtures replace all KV
+data when loaded (KV is read-only to apps, so the tables are a copy of the fixtures). Cache
+fixtures overwrite their keys with a fresh TTL and leave other cached entries alone. Errors
+name the file and field.
+
+## Tests
+
+`server/__tests__/unit/stores/`: conformance cases from the preprod probes (P2–P6), Redis KV
+semantics, glob translation checked in SQLite, fixtures, and the HTTP checks (token, `Host`,
+bad requests).
