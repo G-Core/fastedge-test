@@ -24,7 +24,7 @@ import type {
 import type { IStateManager } from "./IStateManager.js";
 import type { HookCall, HookResult, FullFlowResult } from "./types.js";
 import type { FastEdgeConfig } from "../fastedge-host/index.js";
-import { cdnWorkerSource } from "./cdnWorkerSource.js";
+import { embeddedSource } from "../embedded.js";
 
 type Reply = { id: number; value?: unknown; error?: unknown };
 type Event = { event: keyof IStateManager; args: unknown[] };
@@ -39,7 +39,7 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
   private fetches = new Map<number, AbortController>();
 
   constructor(fastEdgeConfig?: FastEdgeConfig, dotenvEnabled: boolean = true) {
-    this.worker = new Worker(cdnWorkerSource(), {
+    this.worker = new Worker(embeddedSource("cdn-worker"), {
       eval: true,
       workerData: { fastEdgeConfig, dotenvEnabled },
     });

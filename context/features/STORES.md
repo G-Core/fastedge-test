@@ -1,7 +1,7 @@
 # Stores: the local storage service (cache and Edge KV)
 
-**Status (November 2026):** the core and its HTTP API are in place (`server/stores/`).
-Not yet wired in: starting the service per workspace, the CDN host functions
+**Status (November 2026):** the core, its HTTP API and the service manager are in place
+(`server/stores/`). Not yet wired in: the CDN host functions
 (`proxy_cache_*`, `proxy_kv_store_*`), and pointing fastedge-run at it. Until then nothing
 in the runner uses it.
 
@@ -17,6 +17,25 @@ cache is shared per account per POP by HTTP and CDN apps.
 | `server/stores/StoresCore.ts` | All store semantics on SQLite: cache (8 ops), Edge KV reads (5 ops), the clock, seeding |
 | `server/stores/StoresServer.ts` | HTTP API on 127.0.0.1: token + `Host` check, `/v1/cache`, `/v1/kv`, `/v1/admin` |
 | `server/stores/fixtures.ts` | Loads `fixtures/stores/kv/*.json` and `fixtures/stores/cache/*.json` |
+| `server/stores/service.ts` | The service process (embedded, started with `node -`) |
+| `server/stores/StoresManager.ts` | `connectStores(root)`: find or start the service, hold a lease |
+
+## Service process
+
+- One service per **stores root**. Files in `<root>/.fastedge-debug/stores/`: `stores.db`,
+  `service.json` (pid, port, token, protocol; mode 0600), `service.lock`, `service.log`, and a
+  `.gitignore` of `*`. Not `.fastedge/`: that is the JS SDK's project folder.
+- `connectStores(root)`: reads `service.json` and checks the service answers with the same
+  protocol; otherwise takes `service.lock` (exclusive create; a lock older than 20 s is taken
+  over) and starts the service detached, with the code on stdin (`node -`, also works under
+  VS Code's Electron). Start errors (e.g. a bad fixture) come back from `service.log`.
+- Leases: each client renews every ttl/3 (default ttl 30 s). The service exits when no lease
+  is live, after a 15 s start grace (`FASTEDGE_STORES_GRACE_MS`).
+- Crash: the next renewal restarts it on the **same port and token** (from the stale
+  `service.json`), so fastedge-run processes pointed at it keep working. A call in flight
+  during the crash fails; nothing is retried.
+- Calls use node:http, not fetch: `mockOrigins()` replaces the global fetch dispatcher.
+- A different protocol version already running for the root is a clear error, not a restart.
 
 ## API (protocol 1)
 

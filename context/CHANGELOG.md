@@ -1,5 +1,30 @@
 # Proxy-WASM Runner - Changelog
 
+## November 12, 2026 - Storage service manager (one service per stores root)
+
+### Overview
+`connectStores(root)` finds or starts the storage service for a stores root and holds a
+lease on it. Not wired into the runners yet. See `features/STORES.md` ("Service process").
+
+### 🎯 What Was Completed
+- `server/stores/service.ts`: the service process (`node -`, code on stdin, detached). Files in
+  `<root>/.fastedge-debug/stores/` (`stores.db`, `service.json`, `service.log`, `.gitignore` = `*`)
+- `server/stores/StoresManager.ts`: exclusive lock file so simultaneous starters agree on one
+  service; leases (renewed every ttl/3); exit after the last lease; restart on the same port and
+  token after a crash; protocol check; start errors reported from the service log. Uses
+  node:http, not fetch (mockOrigins() replaces the global fetch dispatcher)
+- Admin ops `lease` / `release`
+- The embed plugin now builds two entries: `esbuild/embedded.js` + `server/embedded.ts`
+  (replace `cdn-worker.js` / `cdnWorkerSource.ts`)
+
+### 🧪 Testing
+- 5 tests spawning real services: sharing, separate roots, exit after the last client,
+  restart after SIGKILL with the same port/token and persisted data, fixture load and a bad fixture
+- Electron as Node (VS Code 1.143, Node 24.21) runs a stdin script with `node:sqlite`
+
+### 📝 Notes
+- `.fastedge/` is not used: it is the JS SDK's project folder (committed build config)
+
 ## November 12, 2026 - Storage service core (cache and Edge KV on SQLite)
 
 ### Overview
@@ -53,13 +78,13 @@ block a worker and not the debugger server's event loop. Nothing user-visible ch
   vitest builds it on first use. No new file in `dist/` or the npm package
 
 **Files Created:**
-- server/runner/WorkerProxyWasmRunner.ts, server/runner/cdn-worker.ts, server/runner/cdnWorkerSource.ts
-- esbuild/cdn-worker.js - worker build + `cdnWorkerPlugin`
+- server/runner/WorkerProxyWasmRunner.ts, server/runner/cdn-worker.ts, server/embedded.ts
+- esbuild/embedded.js - builds the embedded worker (and later the stores service) + `embeddedPlugin`
 - server/__tests__/unit/runner/WorkerProxyWasmRunner.test.ts
 
 **Files Modified:**
 - server/runner/WasmRunnerFactory.ts, server/runner/standalone.ts - create the worker runner
-- esbuild/bundle-lib.js, bundle-server.js, watch-server.js - add `cdnWorkerPlugin`
+- esbuild/bundle-lib.js, bundle-server.js, watch-server.js - add `embeddedPlugin`
 - server/__tests__/integration/utils/test-helpers.ts - `FASTEDGE_TEST_CDN_RUNNER=worker` selects the worker runner
 - package.json - `test:integration:cdn` runs the CDN suite in-process and through the worker
 

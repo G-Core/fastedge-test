@@ -25,7 +25,6 @@ server/
 │   ├── ProxyWasmRunner.ts    # Main WASM orchestration + event emission
 │   ├── WorkerProxyWasmRunner.ts # Runs ProxyWasmRunner in a worker thread (factory/createRunner use this)
 │   ├── cdn-worker.ts         # Worker side: hosts ProxyWasmRunner, forwards events, proxies fetch
-│   ├── cdnWorkerSource.ts    # Worker code as a string (replaced in bundles by esbuild/cdn-worker.js)
 │   ├── HostFunctions.ts      # WASM host function implementations
 │   ├── MemoryManager.ts      # WASM memory management
 │   ├── HeaderManager.ts      # HTTP header serialization
@@ -263,7 +262,8 @@ calls (the storage service) by blocking the worker only.
   the worker; later calls reject.
 - **Packaging:** the worker is started with `new Worker(code, { eval: true })`. The esbuild
   bundles (`dist/server.js`, `dist/lib/*`, watch mode) embed the code via the
-  `cdnWorkerPlugin` in `esbuild/cdn-worker.js`, so no extra file ships. Unbundled runs
+  `embeddedPlugin` in `esbuild/embedded.js` (which replaces `server/embedded.ts`; the
+  stores service process is embedded the same way), so no extra file ships. Unbundled runs
   (vitest) build it on first use with the esbuild dev dependency.
 - `ProxyWasmRunner` itself is unchanged and still usable in-process (integration tests).
 

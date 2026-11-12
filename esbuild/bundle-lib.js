@@ -15,7 +15,7 @@ const esbuild = require("esbuild");
 const path = require("path");
 const fs = require("fs");
 const { execSync } = require("child_process");
-const { cdnWorkerPlugin } = require("./cdn-worker");
+const { embeddedPlugin } = require("./embedded");
 
 const projectRoot = path.join(__dirname, "..");
 const distLibDir = path.join(projectRoot, "dist", "lib");
@@ -59,7 +59,7 @@ async function buildLib() {
     bundle: true,
     platform: "node",
     target: "node20",
-    plugins: [nodeBuiltinsPlugin, cdnWorkerPlugin],
+    plugins: [nodeBuiltinsPlugin, embeddedPlugin],
     external: [
       ...nodeBuiltins,
       // All npm dependencies are external — consumers install their own
