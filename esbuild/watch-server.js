@@ -10,6 +10,7 @@
  */
 
 const esbuild = require("esbuild");
+const { cdnWorkerPlugin } = require("./cdn-worker");
 const path = require("path");
 const fs = require("fs");
 
@@ -47,6 +48,7 @@ async function watch() {
       platform: "node",
       target: "node20",
       outfile: path.join(distDir, "server.js"),
+      plugins: [cdnWorkerPlugin],
       external: [
         "fsevents", // Optional native dependency (Mac only)
       ],

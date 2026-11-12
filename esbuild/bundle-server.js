@@ -10,6 +10,7 @@
  */
 
 const esbuild = require("esbuild");
+const { cdnWorkerPlugin } = require("./cdn-worker");
 const path = require("path");
 const fs = require("fs");
 
@@ -37,6 +38,7 @@ async function bundle() {
       banner: { js: "var __importMetaUrl = require('url').pathToFileURL(__filename).href;" },
       define: { "import.meta.url": "__importMetaUrl" },
       outfile: path.join(distDir, "server.js"),
+      plugins: [cdnWorkerPlugin],
       external: [
         "fsevents", // Optional native dependency (Mac only)
       ],

@@ -12,7 +12,7 @@
 
 import { readFile } from "fs/promises";
 import type { IWasmRunner, RunnerConfig } from "./IWasmRunner.js";
-import { ProxyWasmRunner } from "./ProxyWasmRunner.js";
+import { WorkerProxyWasmRunner } from "./WorkerProxyWasmRunner.js";
 import { HttpWasmRunner } from "./HttpWasmRunner.js";
 import { PortManager } from "./PortManager.js";
 import { detectWasmType } from "../utils/wasmTypeDetector.js";
@@ -43,7 +43,7 @@ export async function createRunnerFromBuffer(
   if (wasmType === "http-wasm") {
     runner = new HttpWasmRunner(new PortManager(), config?.dotenv?.enabled ?? false);
   } else {
-    runner = new ProxyWasmRunner(undefined, config?.dotenv?.enabled ?? false);
+    runner = new WorkerProxyWasmRunner(undefined, config?.dotenv?.enabled ?? false);
   }
 
   await runner.load(buffer, config);

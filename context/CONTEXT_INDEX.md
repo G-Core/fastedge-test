@@ -187,7 +187,7 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 4. Run tests:
    - `pnpm run test:integration` - All tests (CDN + HTTP in parallel)
    - `pnpm run test:integration:http` - Only HTTP WASM tests (sequential)
-   - `pnpm run test:integration:cdn` - Only CDN tests (parallel)
+   - `pnpm run test:integration:cdn` - Only CDN tests (parallel), run twice: in-process and through the worker (`FASTEDGE_TEST_CDN_RUNNER=worker`)
 
 ### WASM Type Detection / `runnerType` Override
 

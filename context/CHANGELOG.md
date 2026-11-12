@@ -1,5 +1,47 @@
 # Proxy-WASM Runner - Changelog
 
+## November 11, 2026 - CDN runner runs in a worker thread (no behaviour change)
+
+### Overview
+`WasmRunnerFactory` and `createRunner` now return a `WorkerProxyWasmRunner`, which runs the
+unchanged `ProxyWasmRunner` in a worker thread. This prepares the local storage service:
+the cache and KV host functions must answer synchronously, which is only possible if they
+block a worker and not the debugger server's event loop. Nothing user-visible changes.
+
+### 🎯 What Was Completed
+
+#### 1. Worker runner
+- Forwards the 8 `IWasmRunner` methods; `execute()` and `getType()` answer locally
+- State manager events are forwarded in order, before the call's reply
+- `fetch` (origin fetch and `proxy_http_call`) is done by the parent, so `mockOrigins()` keeps working
+- Idle worker is `unref`'d (no hang when `cleanup()` is never called); `cleanup()` terminates it
+
+#### 2. Packaging
+- The worker code is embedded as a string by an esbuild plugin in all bundles and watch mode;
+  vitest builds it on first use. No new file in `dist/` or the npm package
+
+**Files Created:**
+- server/runner/WorkerProxyWasmRunner.ts, server/runner/cdn-worker.ts, server/runner/cdnWorkerSource.ts
+- esbuild/cdn-worker.js - worker build + `cdnWorkerPlugin`
+- server/__tests__/unit/runner/WorkerProxyWasmRunner.test.ts
+
+**Files Modified:**
+- server/runner/WasmRunnerFactory.ts, server/runner/standalone.ts - create the worker runner
+- esbuild/bundle-lib.js, bundle-server.js, watch-server.js - add `cdnWorkerPlugin`
+- server/__tests__/integration/utils/test-helpers.ts - `FASTEDGE_TEST_CDN_RUNNER=worker` selects the worker runner
+- package.json - `test:integration:cdn` runs the CDN suite in-process and through the worker
+
+### 🧪 Testing
+- CDN integration suite: 137/137 in-process and 137/137 through the worker
+- Unit 501, server bundle 38, HTTP integration 84
+- Built `dist/lib` (ESM and CJS): `createRunner` runs a full flow through the worker and the process exits without `cleanup()`
+
+### 📝 Notes
+- `cleanup()` now ends the runner (calls after it reject); `ProxyWasmRunner.cleanup()` was a no-op
+- Library bundles grow by the embedded worker (`dist/lib/index.js` ≈ 246 KB)
+- Errors from `fetch` cross the thread as structured clones: message kept, `cause` dropped
+
+
 ## November 4, 2026 - Header maps and per-hook header writes match the FastEdge edge
 
 ### Overview

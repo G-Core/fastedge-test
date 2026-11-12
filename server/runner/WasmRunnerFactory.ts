@@ -5,7 +5,7 @@
  */
 
 import type { IWasmRunner, WasmType } from "./IWasmRunner.js";
-import { ProxyWasmRunner } from "./ProxyWasmRunner.js";
+import { WorkerProxyWasmRunner } from "./WorkerProxyWasmRunner.js";
 import { HttpWasmRunner } from "./HttpWasmRunner.js";
 import { PortManager } from "./PortManager.js";
 
@@ -26,7 +26,7 @@ export class WasmRunnerFactory {
     if (wasmType === "http-wasm") {
       return new HttpWasmRunner(this.portManager, dotenvEnabled);
     } else if (wasmType === "proxy-wasm") {
-      return new ProxyWasmRunner(undefined, dotenvEnabled);
+      return new WorkerProxyWasmRunner(undefined, dotenvEnabled);
     } else {
       throw new Error(`Unknown WASM type: ${wasmType}`);
     }
