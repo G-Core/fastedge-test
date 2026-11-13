@@ -1,3 +1,4 @@
+import { Tabs } from "../../components/common/Tabs";
 import { useRef, useState } from "react";
 import { CollapsiblePanel } from "../../components/common/CollapsiblePanel";
 import { DotenvPanel } from "../../components/common/DotenvPanel";
@@ -109,25 +110,15 @@ export function HttpWasmView() {
         <CollapsiblePanel title="Logging" defaultExpanded={httpLogs.length > 0}>
           <div className={styles.loggingContent}>
             <div className={styles.loggingHeader}>
-              <div className={styles.logTabs} role="tablist">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={logView === "logs"}
-                  className={`${styles.logTab} ${logView === "logs" ? styles.active : ""}`}
-                  onClick={() => setLogView("logs")}
-                >
-                  Logs
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={logView === "storage"}
-                  className={`${styles.logTab} ${logView === "storage" ? styles.active : ""}`}
-                  onClick={() => setLogView("storage")}
-                >
-                  Storage{storageCount ? ` (${storageCount})` : ""}
-                </button>
+              <div className={styles.logTabs}>
+                <Tabs
+                  tabs={[
+                    { id: "logs", label: "Logs" },
+                    { id: "storage", label: `Storage${storageCount ? ` (${storageCount})` : ""}` },
+                  ]}
+                  active={logView}
+                  onChange={setLogView}
+                />
                 {logView === "logs" && httpLogs.length > 0 && (
                   <button
                     className={styles.clearLogsButton}

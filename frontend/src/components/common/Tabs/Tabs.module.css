@@ -1,0 +1,48 @@
+.list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Global `button` styles (radius, weight, transition) still apply; colours are set here. */
+.tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.main {
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #b0b0b0;
+}
+
+.sub {
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: #888;
+}
+
+.tab:hover:not(:disabled) {
+  background: #ff5722;
+  color: #e0e0e0;
+}
+
+.main.active {
+  color: #ff6c37;
+  border-bottom-color: #ff6c37;
+}
+
+.main.active:hover:not(:disabled) {
+  background: rgba(255, 108, 55, 0.85);
+  color: #1a1a1a;
+}
+
+.sub.active {
+  color: #e0e0e0;
+  border-bottom-color: #e0e0e0;
+}

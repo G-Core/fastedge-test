@@ -29,11 +29,6 @@
   gap: 4px;
 }
 
-.tabButtons {
-  display: flex;
-  gap: 4px;
-}
-
 .previewToolbar {
   display: flex;
   align-items: center;
@@ -74,32 +69,6 @@
   color: #ff6c37;
   border-color: #ff6c37;
   background: rgba(255, 108, 55, 0.18);
-}
-
-.tab {
-  padding: 10px 16px;
-  background: transparent;
-  color: #b0b0b0;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-}
-
-.tab:hover {
-  color: #e0e0e0;
-  background: #333;
-}
-
-.tab.active {
-  color: #ff6c37;
-  border-bottom-color: #ff6c37;
-}
-
-.tab.active:hover {
-  color: #1a1a1a;
-  background: rgba(255, 108, 55, 0.85);
 }
 
 .responseContent {

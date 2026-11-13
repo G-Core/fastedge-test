@@ -1,3 +1,4 @@
+import { Tabs } from "../Tabs";
 import { useState, useEffect } from "react";
 import { CollapsiblePanel } from "../CollapsiblePanel";
 import { JsonDisplay } from "../JsonDisplay";
@@ -328,30 +329,15 @@ export function ResponsePanel({ response }: ResponsePanelProps) {
         }
       >
         <div className={styles.tabs}>
-          <div className={styles.tabButtons}>
-            {!isBinary && (
-              <button
-                className={`${styles.tab} ${activeTab === "body" ? styles.active : ""}`}
-                onClick={() => setActiveTab("body")}
-              >
-                Body
-              </button>
-            )}
-            {hasPreview && (
-              <button
-                className={`${styles.tab} ${activeTab === "preview" ? styles.active : ""}`}
-                onClick={() => setActiveTab("preview")}
-              >
-                Preview
-              </button>
-            )}
-            <button
-              className={`${styles.tab} ${activeTab === "headers" ? styles.active : ""}`}
-              onClick={() => setActiveTab("headers")}
-            >
-              Headers
-            </button>
-          </div>
+          <Tabs
+            tabs={[
+              ...(!isBinary ? [{ id: "body" as const, label: "Body" }] : []),
+              ...(hasPreview ? [{ id: "preview" as const, label: "Preview" }] : []),
+              { id: "headers" as const, label: "Headers" },
+            ]}
+            active={activeTab}
+            onChange={setActiveTab}
+          />
           {isHtml && (
             <div className={styles.previewToolbar}>
               <button

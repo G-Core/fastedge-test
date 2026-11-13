@@ -1,3 +1,4 @@
+import { Tabs } from "../../common/Tabs";
 import { useState } from "react";
 import { StoreCallsList } from "../../common/StoreCallsList";
 import { HookCall, HookResult, LogEntry } from "../../../types";
@@ -383,17 +384,12 @@ export function HookStagesPanel({
     <div className={styles.hookStagesPanel}>
       <CollapsiblePanel title="Logging" defaultExpanded={false}>
         <div className={styles.stagesHeader}>
-          <div className={styles.tabs}>
-            {HOOKS.map((hook) => (
-              <button
-                key={hook}
-                className={`${styles.tab} ${activeHook === hook ? styles.active : ""}`}
-                onClick={() => setActiveHook(hook)}
-              >
-                {hook}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            className={styles.tabs}
+            tabs={HOOKS.map((hook) => ({ id: hook, label: hook }))}
+            active={activeHook}
+            onChange={setActiveHook}
+          />
 
           <LogLevelSelector
             logLevel={logLevel}
@@ -401,32 +397,18 @@ export function HookStagesPanel({
           />
         </div>
 
-        <div className={styles.subViewTabs}>
-          <button
-            className={`${styles.subTab} ${activeSubView === "logs" ? styles.active : ""}`}
-            onClick={() => setActiveSubView("logs")}
-          >
-            Logs
-          </button>
-          <button
-            className={`${styles.subTab} ${activeSubView === "storage" ? styles.active : ""}`}
-            onClick={() => setActiveSubView("storage")}
-          >
-            Storage{storageCount ? ` (${storageCount})` : ""}
-          </button>
-          <button
-            className={`${styles.subTab} ${activeSubView === "inputs" ? styles.active : ""}`}
-            onClick={() => setActiveSubView("inputs")}
-          >
-            Inputs
-          </button>
-          <button
-            className={`${styles.subTab} ${activeSubView === "outputs" ? styles.active : ""}`}
-            onClick={() => setActiveSubView("outputs")}
-          >
-            Outputs
-          </button>
-        </div>
+        <Tabs
+          className={styles.subViewTabs}
+          variant="sub"
+          tabs={[
+            { id: "logs", label: "Logs" },
+            { id: "storage", label: `Storage${storageCount ? ` (${storageCount})` : ""}` },
+            { id: "inputs", label: "Inputs" },
+            { id: "outputs", label: "Outputs" },
+          ]}
+          active={activeSubView}
+          onChange={setActiveSubView}
+        />
 
         <div className={styles.stageContent}>
           {activeSubView === "logs" && renderLogs(activeHook)}

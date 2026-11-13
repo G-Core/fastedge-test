@@ -61,35 +61,6 @@
   gap: 0.5rem;
 }
 
-/* Same as the Request / Response panel tabs. */
-.logTab {
-  padding: 0.5rem 1rem;
-  background-color: transparent;
-  color: #b0b0b0;
-  border: none;
-  border-radius: 0;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: normal;
-  transition: all 0.2s;
-}
-
-.logTab:hover:not(:disabled) {
-  color: #e0e0e0;
-  background-color: #2d2d2d;
-}
-
-.logTab.active {
-  color: #ff6c37;
-  border-bottom-color: #ff6c37;
-}
-
-.logTab.active:hover:not(:disabled) {
-  color: #1a1a1a;
-  background: rgba(255, 108, 55, 0.85);
-}
-
 .loggingControls {
   display: flex;
   align-items: center;
