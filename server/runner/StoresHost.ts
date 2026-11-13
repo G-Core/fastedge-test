@@ -9,7 +9,8 @@
  *   `set` TTL 0 = default, negative = BadArgument; a missing key on `get` is Ok with the
  *   out-params untouched; an empty value is a real empty value;
  * - KV: `open` of a store not attached to the app → BadArgument (NotFound for no such
- *   store); a key of the wrong type → BadArgument; anything else → InternalFailure;
+ *   store); a key of the wrong type or a zrange min > max → BadArgument; anything else (an
+ *   invalid glob too) → InternalFailure;
  *   lists are `[i32 count][i32 size]...[bytes NUL]...`, a sorted-set entry is the member
  *   followed by its f64 score (little endian).
  *
@@ -42,7 +43,8 @@ export function storesImports(
   };
   const cacheStatus = (error: string) =>
     error === "bad-argument" || error === "access-denied" ? BadArgument : InternalFailure;
-  const kvStatus = (error: string) => (error === "wrong-type" ? BadArgument : InternalFailure);
+  // The edge's store `Other` errors (wrong type, min > max) → BadArgument; an invalid glob is internal.
+  const kvStatus = (error: string) => (error === "wrong-type" || error === "min-gt-max" ? BadArgument : InternalFailure);
 
   let warned = false;
   /** Wraps every function: stores off → InternalFailure, logged once per hook. */

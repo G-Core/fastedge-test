@@ -68,6 +68,12 @@ describe.skipIf(!process.env.FASTEDGE_TEST_STORES_E2E)('HTTP + CDN apps share th
     expect(await http(h, 'op=kv-zrange&store=users&key=lb&min=9.5')).toBe('alice=10');
     expect(await http(h, 'op=kv-bf&store=users&key=ips&item=1.2.3.4')).toBe('true');
     expect(await http(h, 'op=kv-get&store=nope&key=k')).toBe('err:Error::AccessDenied');
+    // The edge's messages (probe P7)
+    expect(await http(h, 'op=kv-get&store=users&key=lb')).toBe(
+      'err:Error::Other("ERR: Invalid argument: WRONGTYPE Operation against a key holding the wrong kind of value")',
+    );
+    expect(await http(h, 'op=kv-zrange&store=users&key=lb&min=5&max=1')).toBe('err:Error::Other("ERR: min > max")');
+    expect(await http(h, 'op=kv-scan&store=users&pattern=user%5D')).toBe('err:Error::InternalError');
   });
 
   it('a .env.kv_stores entry wins over the fixture store of the same name', async () => {

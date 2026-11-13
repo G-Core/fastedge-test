@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { StoresCore, redisGlob } from '../../../stores/StoresCore';
+import { StoresCore, edgeGlob } from '../../../stores/StoresCore';
 import { loadFixtures } from '../../../stores/fixtures';
 
 const MAX = 345_600_000;
@@ -170,26 +170,55 @@ describe('kv', () => {
     expect(kv('scan', { pattern: '[uc]*' }).value).toEqual(['cfg', 'user:1']);
   });
 
-  it('zscan matches members; bf-exists is an exact set', () => {
+  it('zscan matches the literal prefix only, sorted by member (as the edge); bf-exists is an exact set', () => {
     expect(kv('zscan', { key: 'board', pattern: 'c*' }).value).toEqual([[b64('carl'), 7.5]]);
+    expect(kv('zscan', { key: 'board', pattern: 'a*z' }).value).toEqual([[b64('alice'), 10]]);
+    expect(kv('zscan', { key: 'board', pattern: '*' }).value).toEqual([
+      [b64('alice'), 10],
+      [b64('bob'), 7.5],
+      [b64('carl'), 7.5],
+    ]);
+    expect(kv('zscan', { key: 'board', pattern: 'a[' })).toEqual({ ok: false, error: 'invalid-pattern' });
     expect(kv('bf-exists', { key: 'blocked', item: '1.2.3.4' }).value).toBe(true);
     expect(kv('bf-exists', { key: 'blocked', item: '1.2.3.5' }).value).toBe(false);
   });
 
-  it('sets with escaped ] and [ match as Redis does, in SQLite', () => {
-    const keys = ['k]', 'ka', 'kb', 'k[', 'k^'];
+  it('scan follows the edge glob rules (probe P7), in SQLite', () => {
+    const keys = ['g*1', 'gx1', 'g?2', 'gy2', 'g[3]', 'g3', 'g\\4', 'g^5', 'g]6', 'g-7'];
     core.seedKv({ g: { strings: Object.fromEntries(keys.map((k) => [k, Buffer.from('1')])), zsets: {}, bloom: {} } });
-    const scan = (pattern: string) => core.kv({ op: 'scan', store: 'g', pattern }).value;
-    expect(scan('k[^a\\]]')).toEqual(['k[', 'k^', 'kb']);
-    expect(scan('k[\\]a]')).toEqual(['k]', 'ka']);
-    expect(scan('k[\\[]')).toEqual(['k[']);
-    expect(scan('k[\\^b]')).toEqual(['k^', 'kb']);
+    const scan = (pattern: string) => {
+      const r = core.kv({ op: 'scan', store: 'g', pattern });
+      return r.ok ? (r.value as string[]).join(',') : r.error;
+    };
+    expect(scan('g*1')).toBe('g*1,gx1');
+    expect(scan('g\\*1')).toBe('g*1');
+    expect(scan('g[*]1')).toBe('g*1');
+    expect(scan('g\\?2')).toBe('g?2');
+    expect(scan('g\\[3\\]')).toBe('g[3]');
+    expect(scan('g\\\\4')).toBe('g\\4');
+    expect(scan('g[^x]1')).toBe('g*1');
+    expect(scan('g[!x]1')).toBe('gx1');
+    expect(scan('g[z-a]1')).toBe('gx1');
+    expect(scan('g[-x]1')).toBe('gx1');
+    expect(scan('g[\\^]5')).toBe('g^5');
+    expect(scan('g[\\]]6')).toBe('g]6');
+    expect(scan('g[\\-]7')).toBe('g-7');
+    expect(scan('g\\x1')).toBe('gx1');
+    expect(scan('g[]1')).toBe('');
+    expect(scan('')).toBe('');
+    for (const bad of ['g[[]3]', 'g[\\[]3]', 'g[]]6', 'g]6', 'g[3', 'g\\', 'g[x-]1']) {
+      expect(scan(bad), bad).toBe('invalid-pattern');
+    }
   });
 
-  it('redisGlob quotes escaped special characters', () => {
-    expect(redisGlob('a\\?b\\[c\\x')).toBe('a[?]b[[]cx');
-    expect(redisGlob('[^a\\]]')).toBe('[^]a]');
-    expect(redisGlob('x[ab]y')).toBe('x[ab]y');
+  it('edgeGlob gives the SQLite glob and the literal prefix', () => {
+    expect(edgeGlob('a\\?b\\[c\\x*')).toEqual({ glob: 'a[?]b[[]cx*', prefix: 'a?b[cx' });
+    expect(edgeGlob('[^a\\]\\-]')).toEqual({ glob: '[^]a-]', prefix: '' });
+    expect(edgeGlob('x[]y').glob).toBeNull();
+  });
+
+  it('zrange-by-score with min > max is an error, as on the edge', () => {
+    expect(kv('zrange-by-score', { key: 'board', min: 'inf', max: '-inf' })).toEqual({ ok: false, error: 'min-gt-max' });
   });
 });
 
@@ -225,6 +254,8 @@ describe('fixtures', () => {
     mkdirSync(join(root, 'fixtures/stores/kv'), { recursive: true });
     writeFileSync(join(root, 'fixtures/stores/kv/bad.json'), JSON.stringify({ zsets: { lb: [['a', 'x']] } }));
     expect(() => loadFixtures(core, root)).toThrow('fixtures/stores/kv/bad.json zsets.lb[0]');
+    writeFileSync(join(root, 'fixtures/stores/kv/bad.json'), JSON.stringify({ strings: { k: '' } }));
+    expect(() => loadFixtures(core, root)).toThrow('strings.k: Edge KV values cannot be empty');
   });
 
   it('a project without fixtures loads nothing', () => {

@@ -107,7 +107,14 @@ Measured on preprod (2026-11-05) and read from the FastEdge cache backend:
 - `incr` takes canonical decimal i64 only; an existing key keeps its TTL;
 - a stored empty value reads back empty, not missing;
 - `purge` clears the whole `dc` bucket; `purge-prefix` is a literal prefix (no glob);
-- KV `scan`/`zscan` use Redis globs (`*`, `?`, `[..]`, `[^..]`, `\` escapes), translated to SQLite `GLOB`;
+- KV `scan` uses the edge's glob (measured 2026-11-13, P7): `*`, `?`, `[..]`, `[^..]` (`!` is a
+  literal), ranges (reversed too), `\` escapes; translated to SQLite `GLOB`. The edge rejects
+  (error, not a match) a `]` outside a set, a `[` inside one (even escaped), an unclosed set,
+  `[x-]` and a trailing `\`; `[]` matches nothing;
+- KV `zscan` matches only the **literal prefix** before the first wildcard (`a*z` returns every
+  member starting with `a`), sorted by member, not score; the pattern is still validated;
+- `zrange_by_score` with min > max is an error (`Other("ERR: min > max")`, CDN `BadArgument`);
+- wrong type: `Other("ERR: Invalid argument: WRONGTYPE ...")`, CDN `BadArgument`;
 - one clock for every runner: `advance-clock` moves expiry for HTTP and CDN apps together.
 
 ## Known differences from the edge
@@ -115,7 +122,6 @@ Measured on preprod (2026-11-05) and read from the FastEdge cache backend:
 - **`incr` on a missing key** gets the default TTL and is purgeable. On the edge it currently
   gets no TTL and escapes `purge` until a server restart (engine bug, being reported).
 - **Bloom filters are exact sets:** no false positives.
-- **Glob escaping** follows Redis docs; the edge's bracket-escape behaviour is not measured yet.
 - **Cache keys** are scoped by `dc` only, not by account (one service = one account).
 - A KV store is attached when it has a fixture; there is no app-level store configuration yet.
 
@@ -125,6 +131,8 @@ Measured on preprod (2026-11-05) and read from the FastEdge cache backend:
 fixtures/stores/kv/<store>.json   { "strings": { key: value }, "zsets": { key: [[member, score]] }, "bloom": { key: [item] } }
 fixtures/stores/cache/<dc>.json   { key: { "value": "text" } | { "base64": "..." }, optional "ttl_ms" }
 ```
+
+Edge KV values cannot be empty (the edge API refuses them); cache values can.
 
 A value or zset member is a UTF-8 string or `{ "base64": "..." }`. KV fixtures replace all KV
 data when loaded (KV is read-only to apps, so the tables are a copy of the fixtures). Cache

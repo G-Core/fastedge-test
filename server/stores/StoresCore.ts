@@ -79,8 +79,8 @@ export class StoresCore {
       scan: p(`SELECT key FROM kv_string WHERE store = ?1 AND key GLOB ?2
                UNION SELECT key FROM kv_zset WHERE store = ?1 AND key GLOB ?2
                UNION SELECT key FROM kv_bloom WHERE store = ?1 AND key GLOB ?2 ORDER BY key`),
-      zscan: p(`SELECT member, score FROM kv_zset WHERE store = ? AND key = ? AND CAST(member AS TEXT) GLOB ?
-                ORDER BY score, member`),
+      zscan: p(`SELECT member, score FROM kv_zset WHERE store = ?1 AND key = ?2
+                AND substr(member, 1, length(?3)) = ?3 ORDER BY member`),
       bf: p("SELECT 1 FROM kv_bloom WHERE store = ? AND key = ? AND item = ?"),
       // The Redis type of a key: 'string', 'zset', 'bloom' or none.
       type: p(`SELECT 'string' AS t FROM kv_string WHERE store = ?1 AND key = ?2
@@ -159,7 +159,8 @@ export class StoresCore {
   /**
    * Edge KV is read-only to apps. `open` succeeds only for a seeded store (one with a fixture),
    * as the edge allows only the stores attached to the app; the other ops answer for any store.
-   * An op on a key of another type is `wrong-type` (Redis WRONGTYPE).
+   * An op on a key of another type is `wrong-type` (Redis WRONGTYPE); a pattern the edge rejects
+   * is `invalid-pattern`; a zrange with min > max is `min-gt-max` (probe P7).
    */
   kv(body: Body): Reply {
     const store = text(body, "store");
@@ -175,14 +176,25 @@ export class StoresCore {
         const row = this.q.kvGet.get(store, text(body, "key")) as { value: Uint8Array } | undefined;
         return ok(row ? Buffer.from(row.value).toString("base64") : null);
       }
-      case "zrange-by-score":
+      case "zrange-by-score": {
         if (wrongType(text(body, "key"), "zset")) return fail("wrong-type");
-        return ok(scored(this.q.zrange.all(store, text(body, "key"), score(body, "min"), score(body, "max"))));
-      case "scan":
-        return ok((this.q.scan.all(store, redisGlob(text(body, "pattern"))) as { key: string }[]).map((r) => r.key));
-      case "zscan":
+        const [min, max] = [score(body, "min"), score(body, "max")];
+        if (min > max) return fail("min-gt-max");
+        return ok(scored(this.q.zrange.all(store, text(body, "key"), min, max)));
+      }
+      case "scan": {
+        const pattern = parse(text(body, "pattern"));
+        if (!pattern) return fail("invalid-pattern");
+        if (pattern.glob === null) return ok([]);
+        return ok((this.q.scan.all(store, pattern.glob) as { key: string }[]).map((r) => r.key));
+      }
+      case "zscan": {
         if (wrongType(text(body, "key"), "zset")) return fail("wrong-type");
-        return ok(scored(this.q.zscan.all(store, text(body, "key"), redisGlob(text(body, "pattern")))));
+        const pattern = parse(text(body, "pattern"));
+        if (!pattern) return fail("invalid-pattern");
+        // The edge matches members on the literal prefix only, sorted by member (probe P7).
+        return ok(scored(this.q.zscan.all(store, text(body, "key"), Buffer.from(pattern.prefix))));
+      }
       case "bf-exists":
         if (wrongType(text(body, "key"), "bloom")) return fail("wrong-type");
         return ok(this.q.bf.get(store, text(body, "key"), text(body, "item")) !== undefined);
@@ -279,6 +291,15 @@ function score(body: Body, field: string): number {
   throw new BadRequest(`${field} must be a number`);
 }
 
+function parse(pattern: string): ReturnType<typeof edgeGlob> | null {
+  try {
+    return edgeGlob(pattern);
+  } catch (e) {
+    if (e instanceof InvalidPattern) return null;
+    throw e;
+  }
+}
+
 function scored(rows: unknown[]): [string, number][] {
   return (rows as { member: Uint8Array; score: number }[]).map((r) => [
     Buffer.from(r.member).toString("base64"),
@@ -286,34 +307,79 @@ function scored(rows: unknown[]): [string, number][] {
   ]);
 }
 
+/** A pattern the edge rejects (probe P7): the store answers with an error, not a match. */
+export class InvalidPattern extends Error {}
+
 /**
- * Redis glob (`*`, `?`, `[..]`, `[^..]`, `\` escapes) → SQLite GLOB (same syntax, no escape
- * character): a literal `*`, `?` or `[` becomes a one-character set, and a literal `]` goes
- * first in its set. Edge escaping is not measured yet (probe P7).
+ * An Edge KV glob, as measured on the edge (probe P7): `*`, `?`, `[..]`, `[^..]` (`!` is a
+ * literal), ranges (reversed ones too) and `\` escapes. The edge rejects a `]` outside a set, a
+ * `[` inside one (even escaped), an unclosed set, a range with no end (`[x-]`) and a trailing `\`.
+ *
+ * Returns the SQLite GLOB (same syntax, no escapes: a literal `*`, `?` or `[` becomes a
+ * one-character set), null when nothing can match (`[]`), and the literal prefix before the
+ * first wildcard (all the edge's `zscan` matches on).
  */
-export function redisGlob(pattern: string): string {
-  let out = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i];
-    if (c === "\\" && i + 1 < pattern.length) {
-      const next = pattern[++i];
-      out += "*?[".includes(next) ? `[${next}]` : next;
-    } else if (c === "[") {
-      const negate = pattern[i + 1] === "^";
-      if (negate) i++;
-      let body = "";
-      let bracket = false;
-      while (++i < pattern.length && pattern[i] !== "]") {
-        const ch = pattern[i] === "\\" && i + 1 < pattern.length ? pattern[++i] : pattern[i];
-        if (ch === "]") bracket = true;
-        else body += ch;
-      }
-      // ponytail: a literal `^` first in a set (from `[\^..]`) would read as negation; moved last.
-      if (body.length > 1 && body[0] === "^") body = body.slice(1) + "^";
-      out += `[${negate ? "^" : ""}${bracket ? "]" : ""}${body}]`;
-    } else {
-      out += c;
+export function edgeGlob(pattern: string): { glob: string | null; prefix: string } {
+  let glob = "";
+  let prefix = "";
+  let literal = true; // still in the literal prefix
+  let empty = false;
+  let i = 0;
+  const next = () => {
+    if (i >= pattern.length) throw new InvalidPattern(`unterminated pattern: ${pattern}`);
+    return pattern[i++];
+  };
+  /** One set member: `\x` is x; a `[` is an error. */
+  const member = () => {
+    let c = next();
+    if (c === "\\") c = next();
+    if (c === "[") throw new InvalidPattern(`[ inside a set: ${pattern}`);
+    return c;
+  };
+  while (i < pattern.length) {
+    let c = next();
+    if (c === "]") throw new InvalidPattern(`] outside a set: ${pattern}`);
+    if (c === "*" || c === "?") {
+      glob += c;
+      literal = false;
+      continue;
     }
+    if (c !== "[") {
+      if (c === "\\") c = next();
+      glob += "*?[".includes(c) ? `[${c}]` : c;
+      if (literal) prefix += c;
+      continue;
+    }
+    literal = false;
+    const negate = pattern[i] === "^" ? (i++, true) : false;
+    const chars = new Set<string>();
+    const ranges: string[] = [];
+    while (pattern[i] !== "]") {
+      const lo = member();
+      if (pattern[i] !== "-" || pattern[i + 1] === undefined) {
+        chars.add(lo);
+        continue;
+      }
+      i++;
+      if (pattern[i] === "]") throw new InvalidPattern(`range with no end: ${pattern}`);
+      const hi = member();
+      ranges.push(lo <= hi ? `${lo}-${hi}` : `${hi}-${lo}`);
+    }
+    i++;
+    if (!chars.size && !ranges.length) {
+      if (negate) glob += "?"; // ponytail: `[^]` not measured; read as any one character
+      else empty = true;
+      continue;
+    }
+    if (!negate && !ranges.length && chars.size === 1 && chars.has("^")) {
+      glob += "^"; // `[\^]`: a set of only `^` cannot be written in SQLite
+      continue;
+    }
+    // SQLite: `]` only first, `^` never first, `-` last. ponytail: a range ending in one of these is not handled.
+    const order = (ch: string) => (ch === "]" ? 0 : ch === "^" ? 2 : ch === "-" ? 3 : 1);
+    const members = [...chars].sort((a, b) => order(a) - order(b));
+    const first = members[0] === "]" ? members.shift()! : "";
+    glob += `[${negate ? "^" : ""}${first}${ranges.join("")}${members.join("")}]`;
   }
-  return out;
+  return { glob: empty ? null : glob, prefix };
 }

@@ -42,6 +42,8 @@ function kvSeed(data: unknown, store: string): KvSeed {
   const seed: KvSeed = { strings: {}, zsets: {}, bloom: {} };
   for (const [k, v] of Object.entries(record(o.strings ?? {}, `${where} strings`))) {
     seed.strings[k] = value(v, `${where} strings.${k}`);
+    // The edge API refuses an empty KV value (cache values may be empty).
+    if (!seed.strings[k].length) throw new Error(`${where} strings.${k}: Edge KV values cannot be empty`);
   }
   for (const [k, v] of Object.entries(record(o.zsets ?? {}, `${where} zsets`))) {
     if (!Array.isArray(v)) throw new Error(`${where} zsets.${k}: expected [[member, score], ...]`);

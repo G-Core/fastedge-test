@@ -103,15 +103,21 @@ describe('CDN stores: Edge KV', () => {
     expect(await kv({ 'x-op': 'kv-get', 'x-key': 'nope' })).toBe('none');
     expect(await kv({ 'x-op': 'kv-scan', 'x-pattern': 'user:*' })).toBe('user:1,user:2');
     expect(await kv({ 'x-op': 'kv-zrange', 'x-key': 'lb', 'x-min': '8' })).toBe('amy=9,alice=10');
-    expect(await kv({ 'x-op': 'kv-zscan', 'x-key': 'lb', 'x-pattern': 'a*' })).toBe('amy=9,alice=10');
+    expect(await kv({ 'x-op': 'kv-zscan', 'x-key': 'lb', 'x-pattern': 'a*' })).toBe('alice=10,amy=9'); // member order, as the edge
     expect(await kv({ 'x-op': 'kv-bf', 'x-key': 'ips', 'x-item': '1.2.3.4' })).toBe('true');
     expect(await kv({ 'x-op': 'kv-bf', 'x-key': 'ips', 'x-item': '9.9.9.9' })).toBe('false');
   });
 
-  it('a store without a fixture is not attached; a wrong-type key is a bad argument', async () => {
+  it('a store without a fixture is not attached; wrong type and min > max are bad arguments; a bad glob is internal', async () => {
     const r = await runner();
     expect(await op(r, { 'x-op': 'kv-open', 'x-store': 'missing' })).toBe('err:AccessDenied');
     expect(await op(r, { 'x-op': 'kv-get', 'x-store': 'users', 'x-key': 'lb' })).toBe('err:Other("unexpected status: 2")');
+    expect(await op(r, { 'x-op': 'kv-zrange', 'x-store': 'users', 'x-key': 'lb', 'x-min': '5', 'x-max': '1' })).toBe(
+      'err:Other("unexpected status: 2")',
+    );
+    expect(await op(r, { 'x-op': 'kv-scan', 'x-store': 'users', 'x-pattern': 'user]' })).toBe(
+      'err:Other("unexpected status: 10")',
+    );
   });
 });
 
