@@ -117,6 +117,18 @@ Measured on preprod (2026-11-05) and read from the FastEdge cache backend:
 - wrong type: `Other("ERR: Invalid argument: WRONGTYPE ...")`, CDN `BadArgument`;
 - one clock for every runner: `advance-clock` moves expiry for HTTP and CDN apps together.
 
+## Storage trace
+
+Every cache / KV call can carry `trace: { requestId, app, hook? }`; the service records it in a
+bounded log (5,000 calls, values not recorded, only sizes) and answers
+`POST /v1/admin { op: "traces", requestId, hook? }` (`server/stores/trace.ts`).
+
+- **CDN apps:** `ProxyWasmRunner` tags calls with one request id per `callFullFlow` (per hook for
+  a bare `callHook`) and the hook name, and after each hook puts the calls into
+  `HookResult.storeCalls`. The debugger shows them in the hook panel's **Storage** tab.
+  Stores off: no `storeCalls`.
+- **HTTP apps (follow-up):** fastedge-run needs a per-request id to tag its calls (FastEdge-lib).
+
 ## Known differences from the edge
 
 - **`incr` on a missing key** gets the default TTL and is purgeable. On the edge it currently

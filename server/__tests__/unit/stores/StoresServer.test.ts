@@ -57,4 +57,20 @@ describe('StoresServer', () => {
   it('accepts localhost as Host', async () => {
     expect((await post('/v1/admin', '{"op":"info"}', { host: `localhost:${server.port}` })).status).toBe(200);
   });
+
+  it('records traced calls per request and hook, without values', async () => {
+    const trace = (hook: string) => ({ requestId: 'r1', app: 'cdn', hook });
+    await post('/v1/cache', JSON.stringify({ op: 'set', dc: 'local', key: 'secret', value: 'c2VjcmV0', ttlMs: null, trace: trace('onRequestHeaders') }));
+    await post('/v1/cache', JSON.stringify({ op: 'get', dc: 'local', key: 'secret', trace: trace('onResponseHeaders') }));
+    await post('/v1/kv', JSON.stringify({ op: 'scan', store: 's', pattern: 'a]', trace: trace('onResponseHeaders') }));
+    await post('/v1/cache', JSON.stringify({ op: 'get', dc: 'local', key: 'untraced' }));
+    const find = async (body: object) => JSON.parse((await post('/v1/admin', JSON.stringify({ op: 'traces', ...body }))).body).value;
+    const calls = await find({ requestId: 'r1', hook: 'onResponseHeaders' });
+    expect(calls.map(({ at, ...c }: { at: number }) => c)).toEqual([
+      { app: 'cdn', hook: 'onResponseHeaders', kind: 'cache', op: 'get', dc: 'local', key: 'secret', result: 'ok', value: '6 bytes' },
+      { app: 'cdn', hook: 'onResponseHeaders', kind: 'kv', op: 'scan', store: 's', pattern: 'a]', result: 'invalid-pattern' },
+    ]);
+    expect(await find({ requestId: 'r1' })).toHaveLength(3);
+    expect(JSON.stringify(await find({ requestId: 'r1' }))).not.toContain('c2VjcmV0');
+  });
 });

@@ -11,7 +11,7 @@
 import { MessageChannel, receiveMessageOnPort, type MessagePort } from "node:worker_threads";
 import type { Reply } from "../stores/StoresCore.js";
 
-export type StoresKind = "cache" | "kv";
+export type StoresKind = "cache" | "kv" | "admin";
 
 /** Worker-side synchronous access to the storage service. */
 export type SyncStores = { call(kind: StoresKind, body: Record<string, unknown>): Reply };

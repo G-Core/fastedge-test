@@ -1,5 +1,22 @@
 # Proxy-WASM Runner - Changelog
 
+## November 13, 2026 - Storage trace for CDN apps
+
+### Overview
+Each CDN hook result lists the cache / Edge KV calls the hook made (`storeCalls`), shown in a new
+**Storage** tab of the hook panel. Recorded by the storage service, so HTTP apps can use the same
+path once fastedge-run tags its calls (FastEdge-lib follow-up).
+
+### 🎯 What Was Completed
+- `server/stores/trace.ts`: `StoreCall`, `TraceLog` (bounded, no values); service records bodies
+  with `trace` and answers admin `traces`
+- `ProxyWasmRunner`: request id per full flow, hook name per hook; `storeCalls` on `HookResult`
+- Bridge: `admin` kind; frontend `StoreCall` type and the Storage sub-tab; schemas regenerated
+
+### 🧪 Testing
+- Unit: traced calls per request/hook, untraced calls skipped, no values recorded
+- CDN integration: a full flow's four hooks each list their `incr`; stores off → no `storeCalls`
+
 ## November 13, 2026 - Edge KV globs as measured; `stores`/`dc` in config files
 
 ### Overview

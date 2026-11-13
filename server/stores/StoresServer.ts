@@ -5,7 +5,9 @@
  * - `POST /v1/admin`: `{ op: "info" }` → protocol version; `{ op: "kv-stores" }` → seeded
  *   Edge KV store names; `{ op: "advance-clock", ms }`;
  *   `{ op: "lease", id, ttlMs }` / `{ op: "release", id }`: client leases (wall clock), so the
- *   service process can exit when the last client is gone.
+ *   service process can exit when the last client is gone;
+ *   `{ op: "traces", requestId, hook? }` → the traced calls of one request (see trace.ts).
+ * - A cache / KV body may carry `trace: { requestId, app, hook? }` to be recorded.
  *
  * Every request needs `authorization: Bearer <token>` and a `Host` of
  * `127.0.0.1:<port>` or `localhost:<port>` (no DNS rebinding). Operation results are
@@ -18,6 +20,7 @@ import http from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { BadRequest, type Reply, type StoresCore } from "./StoresCore.js";
+import { TraceLog } from "./trace.js";
 
 export const STORES_PROTOCOL = 1;
 
@@ -27,6 +30,13 @@ export function startStoresServer(core: StoresCore, token: string, port = 0): Pr
   if (!token) throw new Error("stores service: a token is required");
   const expected = Buffer.from(`Bearer ${token}`);
   const leases = new Map<string, number>(); // id → expiry (wall clock)
+  const traces = new TraceLog();
+  const traced = (kind: "cache" | "kv", run: (b: Record<string, unknown>) => Reply) => (b: unknown) => {
+    const body = object(b);
+    const reply = run(body);
+    traces.record(kind, body, reply);
+    return reply;
+  };
   const authorized = (header: string | undefined) => {
     const got = Buffer.from(header ?? "");
     return got.length === expected.length && timingSafeEqual(got, expected);
@@ -63,8 +73,8 @@ export function startStoresServer(core: StoresCore, token: string, port = 0): Pr
   });
 
   const routes: Record<string, (body: Record<string, unknown>) => Reply> = {
-    "/v1/cache": (b) => core.cache(object(b)),
-    "/v1/kv": (b) => core.kv(object(b)),
+    "/v1/cache": traced("cache", (b) => core.cache(b)),
+    "/v1/kv": traced("kv", (b) => core.kv(b)),
     "/v1/admin": (b) => {
       const body = object(b);
       if (body.op === "info") return { ok: true, value: { protocol: STORES_PROTOCOL } };
@@ -75,6 +85,9 @@ export function startStoresServer(core: StoresCore, token: string, port = 0): Pr
       if (body.op === "lease" && typeof body.id === "string" && typeof body.ttlMs === "number") {
         leases.set(body.id, Date.now() + body.ttlMs);
         return { ok: true, value: null };
+      }
+      if (body.op === "traces" && typeof body.requestId === "string") {
+        return { ok: true, value: traces.find(body.requestId, typeof body.hook === "string" ? body.hook : undefined) };
       }
       if (body.op === "release" && typeof body.id === "string") {
         leases.delete(body.id);

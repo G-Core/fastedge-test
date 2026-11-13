@@ -88,10 +88,17 @@ describe('CDN stores: cache', () => {
     expect(await op(r, { 'x-op': 'exists', 'x-key': 'n' })).toBe('false');
   });
 
-  it('every hook of a full flow reaches the cache', async () => {
+  it('every hook of a full flow reaches the cache, and each hook result lists its calls', async () => {
     const r = await runner();
-    await r.callFullFlow('built-in', 'POST', { 'x-hooks': 'hooks:1' }, 'body', {}, true);
+    const flow = await r.callFullFlow('built-in', 'POST', { 'x-hooks': 'hooks:1' }, 'body', {}, true);
     expect(await op(r, { 'x-op': 'get', 'x-key': 'hooks:1' })).toBe('len:1:4');
+    const hooks = ['onRequestHeaders', 'onRequestBody', 'onResponseHeaders', 'onResponseBody'];
+    hooks.forEach((hook, i) => {
+      const calls = flow.hookResults[hook].storeCalls!;
+      expect(calls.map(({ at, ...c }) => c)).toEqual([
+        { app: 'cdn', hook, kind: 'cache', op: 'incr', dc: 'local', key: 'hooks:1', result: 'ok', value: String(i + 1) },
+      ]);
+    });
   });
 });
 
@@ -128,5 +135,6 @@ describe('CDN stores: off', () => {
     expect(result.finalResponse.body).toBe('err:InternalError');
     const logs = result.hookResults.onRequestHeaders.logs.map((l) => l.message);
     expect(logs.some((m) => m.includes('stores are off'))).toBe(true);
+    expect(result.hookResults.onRequestHeaders.storeCalls).toBeUndefined();
   });
 });

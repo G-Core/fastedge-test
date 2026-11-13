@@ -14,3 +14,4 @@ export { createRunner, createRunnerFromBuffer } from "./standalone.js";
 export type { IWasmRunner, WasmType, RunnerConfig, HttpRequest, HttpResponse } from "./IWasmRunner.js";
 export type { IStateManager } from "./IStateManager.js";
 export type { HookResult, FullFlowResult, HookCall } from "./types.js";
+export type { StoreCall } from "../stores/trace.js";

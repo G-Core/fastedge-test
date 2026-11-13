@@ -26,6 +26,7 @@ import type {
   HookResult,
   FullFlowResult,
   HookCall,
+  StoreCall,
 } from '@gcoredev/fastedge-test';
 ```
 
@@ -53,7 +54,7 @@ function createRunner(
 
 **Returns** `Promise<IWasmRunner>` — a loaded runner ready for execution.
 
-Unless `config.stores` is `false`, the runner connects to the local storage service (cache and Edge KV) and holds its own lease on it until `cleanup()` is called. See [RunnerConfig](#runnerconfig).
+Unless `config.stores` is `false`, the runner connects to the local storage service (cache and Edge KV) and holds its own lease on it until `cleanup()` is called. If `load()` fails, the factory calls `cleanup()` (releasing the lease) and rethrows the error. See [RunnerConfig](#runnerconfig).
 
 ```typescript
 import { createRunner } from '@gcoredev/fastedge-test';
@@ -286,7 +287,7 @@ Proxy-wasm runners handle proxy-wasm binaries — the standard format for FastEd
 
 **Not available**: `execute` (throws `Error`)
 
-The runner compiles the WASM module once on `load()` and creates a fresh `WebAssembly.Instance` for each hook call, providing isolation between hook executions. `RunnerConfig.httpPort` is ignored. With stores enabled, the module's cache and Edge KV host calls are served by the local storage service.
+The runner compiles the WASM module once on `load()` and creates a fresh `WebAssembly.Instance` for each hook call, providing isolation between hook executions. `RunnerConfig.httpPort` is ignored. With stores enabled, the module's cache and Edge KV host calls are served by the local storage service, and each `HookResult` lists the calls the hook made in `storeCalls`.
 
 ### HTTP-WASM
 
@@ -517,16 +518,47 @@ type HookResult = {
     properties?: Record<string, unknown>;
   };
   properties: Record<string, unknown>;
+  /** The cache / Edge KV calls this hook made, in order (stores on only). */
+  storeCalls?: StoreCall[];
 };
 ```
 
-| Field        | Description                                                  |
-| ------------ | ------------------------------------------------------------ |
-| `returnCode` | Value returned by the hook export, or `null` if not exported |
-| `logs`       | Log entries emitted during hook execution                    |
-| `input`      | State seen by the hook before execution                      |
-| `output`     | State after hook execution                                   |
-| `properties` | All shared properties after execution                        |
+| Field        | Description                                                         |
+| ------------ | ------------------------------------------------------------------- |
+| `returnCode` | Value returned by the hook export, or `null` if not exported        |
+| `logs`       | Log entries emitted during hook execution                           |
+| `input`      | State seen by the hook before execution                             |
+| `output`     | State after hook execution                                          |
+| `properties` | All shared properties after execution                               |
+| `storeCalls` | Cache and Edge KV calls made by the hook, in order (stores on only) |
+
+`storeCalls` is present only when the runner has stores enabled. See [StoreCall](#storecall) for the shape of each entry.
+
+### StoreCall
+
+```typescript
+type StoreCall = {
+  app: "cdn" | "http";
+  hook?: string;
+  kind: "cache" | "kv";
+  op: string;
+  /** Cache bucket (cache calls). */
+  dc?: string;
+  /** Edge KV store (KV calls). */
+  store?: string;
+  key?: string;
+  pattern?: string;
+  prefix?: string;
+  /** `ok`, or the service's error (`wrong-type`, `invalid-pattern`, ...). */
+  result: string;
+  /** The result value: a count, a flag, or the size of a value or list. */
+  value?: string;
+  /** Wall-clock time (ms since epoch). */
+  at: number;
+};
+```
+
+Values are not recorded, only their size.
 
 ### FullFlowResult
 
@@ -578,7 +610,7 @@ enum ProxyStatus {
 }
 ```
 
-Only `WasmType` is exported from the package root. `HeaderRecord` appears in the exported `HookCall`, `HookResult`, and `FullFlowResult` types; the other types above are not exported.
+Only `WasmType` is exported from this group of types at the package root. `HeaderRecord` appears in the exported `HookCall`, `HookResult`, and `FullFlowResult` types; the other types above are not exported.
 
 Log levels follow the proxy-wasm convention: `0` = Trace, `1` = Debug, `2` = Info, `3` = Warn, `4` = Error.
 
@@ -697,6 +729,7 @@ async function testCdnApp() {
     const requestHeaders: HookResult = result.hookResults['onRequestHeaders'];
     console.log('onRequestHeaders returnCode:', requestHeaders.returnCode);
     console.log('Logs:', requestHeaders.logs);
+    console.log('Store calls:', requestHeaders.storeCalls);
 
     // Inspect final response
     console.log('Final status:', result.finalResponse.status);

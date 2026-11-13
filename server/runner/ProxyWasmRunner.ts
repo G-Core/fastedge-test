@@ -22,6 +22,8 @@ import {
 import { loadDotenvFiles } from "../utils/dotenv-loader.js";
 import { storesImports } from "./StoresHost.js";
 import type { SyncStores } from "./storesBridge.js";
+import { randomUUID } from "node:crypto";
+import type { StoreCall } from "../stores/trace.js";
 
 const textEncoder = new TextEncoder();
 
@@ -88,6 +90,24 @@ export class ProxyWasmRunner implements IWasmRunner {
    */
   setStores(stores: SyncStores | null): void {
     this.stores = stores;
+  }
+
+  /** One request id per full flow (shared by its hooks), else per hook call. */
+  private flowRequestId: string | null = null;
+  private trace = { requestId: "", hook: "" };
+
+  /** The stores, with every call tagged for the service's storage trace. */
+  private tracedStores(): SyncStores | null {
+    const stores = this.stores;
+    if (!stores) return null;
+    return { call: (kind, body) => stores.call(kind, { ...body, trace: { ...this.trace, app: "cdn" } }) };
+  }
+
+  /** The storage calls this hook made (empty if the service cannot say). */
+  private storeCalls(): StoreCall[] | undefined {
+    if (!this.stores) return undefined;
+    const reply = this.stores.call("admin", { op: "traces", ...this.trace });
+    return reply.ok ? (reply.value as StoreCall[]) : [];
   }
 
   /**
@@ -824,6 +844,7 @@ export class ProxyWasmRunner implements IWasmRunner {
 
     // Set current hook context for property access control
     this.currentHook = this.getHookContext(call.hook);
+    this.trace = { requestId: this.flowRequestId ?? randomUUID(), hook: call.hook };
 
     // Clear stale local response from any previous hook execution
     this.hostFunctions.resetLocalResponse();
@@ -1061,12 +1082,14 @@ export class ProxyWasmRunner implements IWasmRunner {
       this.hostFunctions.shouldLog(log.level),
     );
 
+    const storeCalls = this.storeCalls();
     return {
       returnCode,
       logs: filteredLogs,
       input: inputState,
       output: outputState,
       properties: this.propertyResolver.getAllProperties(),
+      ...(storeCalls ? { storeCalls } : {}),
     };
   }
 
@@ -1225,7 +1248,7 @@ export class ProxyWasmRunner implements IWasmRunner {
     return {
       env: {
         ...this.hostFunctions.createImports(),
-        ...storesImports(this.memory, this.stores, (message) => this.logs.push({ level: 3, message })),
+        ...storesImports(this.memory, this.tracedStores(), (message) => this.logs.push({ level: 3, message })),
       },
       wasi_snapshot_preview1: {
         ...wasiImport,
@@ -1353,7 +1376,12 @@ export class ProxyWasmRunner implements IWasmRunner {
       enforceProductionPropertyRules,
     };
 
-    return this.callFullFlowLegacy(call, url);
+    this.flowRequestId = randomUUID();
+    try {
+      return await this.callFullFlowLegacy(call, url);
+    } finally {
+      this.flowRequestId = null;
+    }
   }
 
   /**
