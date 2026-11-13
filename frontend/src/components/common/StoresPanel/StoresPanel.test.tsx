@@ -6,6 +6,10 @@ import * as api from "../../../api";
 vi.mock("../../../api", () => ({
   getStoresSnapshot: vi.fn(),
   getStoredValue: vi.fn(),
+  getRequestContextPresets: vi.fn().mockResolvedValue({
+    client: {},
+    edge: { de: { dc: "fr5" }, nl: { dc: "am3" }, us: { dc: "sv5" } },
+  }),
   resetStores: vi.fn().mockResolvedValue(undefined),
   advanceStoresClock: vi.fn().mockResolvedValue(undefined),
 }));
@@ -38,6 +42,9 @@ describe("StoresPanel", () => {
     expect(screen.getByText("1m 30s")).toBeTruthy();
     expect(screen.getByText("alice")).toBeTruthy();
     expect(screen.getByText("3 members")).toBeTruthy();
+    // Preset POPs get their country's flag.
+    await waitFor(() => expect(screen.getByRole("combobox").textContent).toContain("🇩🇪 fr5 (this app)"));
+    expect(screen.getByRole("combobox").textContent).toContain("🇳🇱 am3");
   });
 
   it("switches dc, resets, advances the clock, and refreshes after a request", async () => {

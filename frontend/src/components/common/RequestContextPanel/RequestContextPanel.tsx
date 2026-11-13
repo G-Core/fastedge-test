@@ -8,7 +8,7 @@ type Presets = Awaited<ReturnType<typeof getRequestContextPresets>>;
 type Context = { preset?: Preset } & Record<string, string | undefined>;
 type Field = { key: string; label: string };
 
-const FLAGS: Record<Preset, string> = { de: "🇩🇪", nl: "🇳🇱", us: "🇺🇸" };
+export const FLAGS: Record<Preset, string> = { de: "🇩🇪", nl: "🇳🇱", us: "🇺🇸" };
 
 const CLIENT_FIELDS: Field[] = [
   { key: "ip", label: "IP" },

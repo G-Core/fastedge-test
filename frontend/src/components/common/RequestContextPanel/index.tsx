@@ -1,1 +1,1 @@
-export { RequestContextPanel } from "./RequestContextPanel";
+export { RequestContextPanel, FLAGS } from "./RequestContextPanel";

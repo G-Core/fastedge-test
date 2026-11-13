@@ -1,7 +1,10 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { CollapsiblePanel } from "../CollapsiblePanel";
+import { FLAGS } from "../RequestContextPanel";
+import type { Preset } from "../../../stores/types";
 import {
   advanceStoresClock,
+  getRequestContextPresets,
   getStoredValue,
   getStoresSnapshot,
   resetStores,
@@ -108,6 +111,19 @@ function ValueView({ where, entryKey, version }: { where: { dc: string } | { sto
   );
 }
 
+/** Flags for the edge presets' dcs (fr5 🇩🇪, am3 🇳🇱, sv5 🇺🇸); other dcs get none. */
+function useDcFlags(): Record<string, string> {
+  const [flags, setFlags] = useState<Record<string, string>>({});
+  useEffect(() => {
+    getRequestContextPresets()
+      .then((p) =>
+        setFlags(Object.fromEntries((Object.keys(p.edge) as Preset[]).map((k) => [p.edge[k].dc, FLAGS[k]]))),
+      )
+      .catch(() => {}); // plain dc names
+  }, []);
+  return flags;
+}
+
 /** Re-render every second while mounted (TTL countdown). */
 function useTick(): number {
   const [now, setNow] = useState(() => Date.now());
@@ -125,6 +141,7 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null); // the expanded row
   const tick = useTick();
+  const flags = useDcFlags();
   const toggle = (id: string) => setOpen((current) => (current === id ? null : id));
   const rowProps = (id: string) => ({
     tabIndex: 0,
@@ -179,6 +196,7 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
           <select value={snapshot.dc} onChange={(e) => setDc(e.target.value === snapshot.appDc ? null : e.target.value)}>
             {dcs.map((d) => (
               <option key={d} value={d}>
+                {flags[d] ? `${flags[d]} ` : ""}
                 {d}
                 {d === snapshot.appDc ? " (this app)" : ""}
               </option>
