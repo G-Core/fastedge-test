@@ -158,6 +158,8 @@ See [Error Handling](#error-handling) for `401` and `403` responses that apply t
 
 Loads a WASM binary into the runner. Accepts either a file path or a base64-encoded binary. Automatically detects whether the module is HTTP-WASM or Proxy-WASM. Any previously loaded module is cleaned up first.
 
+Loads and execution requests are processed one at a time, in the order they arrive.
+
 **Request Body**
 
 Exactly one of `wasmPath` or `wasmBase64` must be provided. Providing neither, or both, returns `400`.
@@ -385,6 +387,8 @@ curl -X PATCH http://localhost:5179/api/dotenv \
 
 `POST /api/execute`, `POST /api/call`, and `POST /api/send` accept optional `client` and `edge` fields (see [`ClientContext` and `EdgeContext`](#post-apiload)). If the body names either field, the runner's request context is replaced with the supplied values. Both fields are replaced together: a field that is left out is cleared. If the body names neither field, the context set at load time (or by a previous call) is unchanged. The store datacenter chosen at load time does not change.
 
+Execution requests are processed one at a time, in the order they arrive, so a request's context and its execution are not interleaved with another request.
+
 ---
 
 ### GET /api/request-context/presets
@@ -469,6 +473,7 @@ For Proxy-WASM, the upstream response is generated at runtime — either by a re
     contentType: string | null;
     isBase64?: boolean;
     logs: Array<{ level: number; message: string }>;
+    storeCalls?: unknown[]; // Store operations made during the request, when stores are enabled
   };
 }
 ```
@@ -857,6 +862,128 @@ curl -X POST http://localhost:5179/api/send \
 
 ---
 
+## Stores
+
+The storage service backs the cache and Edge KV APIs of the loaded module. These endpoints inspect and control it. When the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false` and the other two endpoints return `{ "ok": true }` without effect.
+
+### GET /api/stores
+
+Returns a snapshot of the cache for one datacenter and of Edge KV.
+
+**Query Parameters**
+
+| Parameter | Type     | Default                              | Description                      |
+| --------- | -------- | ------------------------------------ | -------------------------------- |
+| `dc`      | `string` | Datacenter of the currently loaded app | Cache datacenter to inspect.   |
+
+**Response**
+
+```typescript
+// Stores enabled
+{
+  ok: true;
+  enabled: true;
+  appDc: string; // Datacenter of the currently loaded app
+  [key: string]: unknown; // Snapshot contents: cache entries for `dc` and Edge KV
+}
+
+// Stores off
+{
+  ok: true;
+  enabled: false;
+}
+```
+
+**Example**
+
+```bash
+curl -H "x-fastedge-token: <token>" "http://localhost:5179/api/stores?dc=local"
+```
+
+**Error Responses**
+
+| Status | Condition                                  |
+| ------ | ------------------------------------------ |
+| `500`  | The storage service returned an error      |
+
+---
+
+### POST /api/stores/reset
+
+Returns the stores to their fixtures: the cache is emptied for every datacenter and Edge KV is re-seeded.
+
+**Response**
+
+```typescript
+{
+  ok: true;
+}
+```
+
+**Example**
+
+```bash
+curl -X POST -H "x-fastedge-token: <token>" http://localhost:5179/api/stores/reset
+```
+
+```json
+{
+  "ok": true
+}
+```
+
+**Error Responses**
+
+| Status | Condition                                  |
+| ------ | ------------------------------------------ |
+| `500`  | The storage service returned an error      |
+
+---
+
+### POST /api/stores/advance-clock
+
+Moves the storage service clock forward, so cache entries expire without waiting.
+
+**Request Body**
+
+```typescript
+{
+  ms: number; // Milliseconds to advance; a finite number greater than 0
+}
+```
+
+**Response**
+
+```typescript
+{
+  ok: true;
+}
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/stores/advance-clock \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "ms": 60000 }'
+```
+
+```json
+{
+  "ok": true
+}
+```
+
+**Error Responses**
+
+| Status | Condition                                          |
+| ------ | -------------------------------------------------- |
+| `400`  | `ms` is missing, not a number, or not greater than 0 |
+| `500`  | The storage service returned an error              |
+
+---
+
 ## Configuration
 
 ### GET /api/config
@@ -1171,7 +1298,7 @@ When a request body fails schema validation, `error` is the flattened validation
 | `401`  | Missing or invalid `x-fastedge-token` header on an `/api/*` request                                |
 | `403`  | `Host` header not allowed, or a save-as path not approved by the save dialog                       |
 | `404`  | Resource not found (config file, schema file)                                                      |
-| `500`  | Internal error during execution or I/O                                                             |
+| `500`  | Internal error during execution, I/O, or the storage service                                       |
 
 ---
 

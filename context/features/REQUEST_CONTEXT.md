@@ -23,6 +23,9 @@ from. Code: `server/runner/requestContext.ts`; UI: `frontend/src/components/comm
   starts with DE for both; a loaded config without the blocks shows "None".
 - **Per request:** a body naming `client` or `edge` calls `runner.setRequestContext()` (one left
   out is cleared). The UI always sends both (`{}` for none).
+- **One at a time:** the debugger server runs `/api/load`, `/api/send`, `/api/call` and
+  `/api/execute` in a queue, so a request's context switch and its run happen together, and
+  loads apply in arrival order (an older edge reload cannot win).
 - **CDN full flow:** the context is applied once at flow start; hooks inside the flow don't get it
   again (a hook may remove a header).
 

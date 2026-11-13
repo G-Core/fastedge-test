@@ -241,6 +241,42 @@ export class StoresCore {
     });
   }
 
+  /**
+   * What the stores hold, for the debugger's Stores panel (sizes, not values): the live cache
+   * entries of one `dc`, every `dc` that has entries, and each Edge KV store's keys by type.
+   */
+  snapshot(dc: string): StoresSnapshot {
+    const now = this.now();
+    const rows = <T>(sql: string, ...params: (string | number)[]) => this.db.prepare(sql).all(...params) as T[];
+    const byStore = <T extends { store: string }>(list: T[], store: string) =>
+      list.filter((r) => r.store === store).map(({ store: _s, ...r }) => r);
+    const strings = rows<{ store: string; key: string; size: number }>(
+      "SELECT store, key, length(value) AS size FROM kv_string ORDER BY store, key",
+    );
+    const zsets = rows<{ store: string; key: string; members: number }>(
+      "SELECT store, key, count(*) AS members FROM kv_zset GROUP BY store, key ORDER BY store, key",
+    );
+    const bloom = rows<{ store: string; key: string; items: number }>(
+      "SELECT store, key, count(*) AS items FROM kv_bloom GROUP BY store, key ORDER BY store, key",
+    );
+    return {
+      now,
+      dc,
+      dcs: rows<{ dc: string }>("SELECT DISTINCT dc FROM cache WHERE expires_at > ? ORDER BY dc", now).map((r) => r.dc),
+      cache: rows<{ key: string; size: number; expiresAt: number }>(
+        "SELECT key, length(value) AS size, expires_at AS expiresAt FROM cache WHERE dc = ? AND expires_at > ? ORDER BY key",
+        dc,
+        now,
+      ),
+      kv: this.kvStores().map((store) => ({
+        store,
+        strings: byStore(strings, store),
+        zsets: byStore(zsets, store),
+        bloom: byStore(bloom, store),
+      })),
+    };
+  }
+
   /** Drop every cache entry, in every `dc`. */
   clearCache(): void {
     this.db.exec("DELETE FROM cache");
@@ -271,6 +307,22 @@ export class StoresCore {
     }
   }
 }
+
+export type StoresSnapshot = {
+  /** The service clock (ms since epoch, moved by advance-clock). */
+  now: number;
+  dc: string;
+  /** Every `dc` with live cache entries. */
+  dcs: string[];
+  /** Live entries of `dc`; `expiresAt` is on the service clock. */
+  cache: { key: string; size: number; expiresAt: number }[];
+  kv: {
+    store: string;
+    strings: { key: string; size: number }[];
+    zsets: { key: string; members: number }[];
+    bloom: { key: string; items: number }[];
+  }[];
+};
 
 export type KvSeed = {
   strings: Record<string, Uint8Array>;

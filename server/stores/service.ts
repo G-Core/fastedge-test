@@ -32,7 +32,11 @@ async function main(): Promise<void> {
   try {
     const core = new StoresCore(new DatabaseSync(join(dir, "stores.db")));
     loadFixtures(core, root);
-    const server = await listen(core, token, Number(process.env.FASTEDGE_STORES_PORT ?? 0));
+    const reset = () => {
+      core.clearCache();
+      loadFixtures(core, root);
+    };
+    const server = await listen(core, token, Number(process.env.FASTEDGE_STORES_PORT ?? 0), reset);
 
     const descriptor: Descriptor = { pid: process.pid, port: server.port, token, protocol: STORES_PROTOCOL };
     const file = join(dir, "service.json");
@@ -62,12 +66,12 @@ async function main(): Promise<void> {
   }
 }
 
-async function listen(core: StoresCore, token: string, port: number): Promise<StoresServer> {
+async function listen(core: StoresCore, token: string, port: number, reset: () => void): Promise<StoresServer> {
   try {
-    return await startStoresServer(core, token, port);
+    return await startStoresServer(core, token, port, reset);
   } catch (error) {
     if (port === 0 || (error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
-    return startStoresServer(core, token, 0);
+    return startStoresServer(core, token, 0, reset);
   }
 }
 

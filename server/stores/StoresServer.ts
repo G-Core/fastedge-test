@@ -6,7 +6,9 @@
  *   Edge KV store names; `{ op: "advance-clock", ms }`;
  *   `{ op: "lease", id, ttlMs }` / `{ op: "release", id }`: client leases (wall clock), so the
  *   service process can exit when the last client is gone;
- *   `{ op: "traces", requestId, hook? }` → the traced calls of one request (see trace.ts).
+ *   `{ op: "traces", requestId, hook? }` → the traced calls of one request (see trace.ts);
+ *   `{ op: "snapshot", dc? }` → what the stores hold (StoresCore.snapshot);
+ *   `{ op: "reset" }`: back to the fixtures.
  * - A cache / KV body may carry `trace: { requestId, app, hook? }` to be recorded.
  *
  * Every request needs `authorization: Bearer <token>` and a `Host` of
@@ -22,11 +24,17 @@ import type { AddressInfo } from "node:net";
 import { BadRequest, type Reply, type StoresCore } from "./StoresCore.js";
 import { TraceLog } from "./trace.js";
 
-export const STORES_PROTOCOL = 1;
+export const STORES_PROTOCOL = 2; // 2: snapshot, reset
 
 export type StoresServer = { port: number; liveLeases(): number; close(): Promise<void> };
 
-export function startStoresServer(core: StoresCore, token: string, port = 0): Promise<StoresServer> {
+/** `reset`: back to the fixtures (cache emptied, KV re-seeded); without it the op is refused. */
+export function startStoresServer(
+  core: StoresCore,
+  token: string,
+  port = 0,
+  reset?: () => void,
+): Promise<StoresServer> {
   if (!token) throw new Error("stores service: a token is required");
   const expected = Buffer.from(`Bearer ${token}`);
   const leases = new Map<string, number>(); // id → expiry (wall clock)
@@ -88,6 +96,11 @@ export function startStoresServer(core: StoresCore, token: string, port = 0): Pr
       }
       if (body.op === "traces" && typeof body.requestId === "string") {
         return { ok: true, value: traces.find(body.requestId, typeof body.hook === "string" ? body.hook : undefined) };
+      }
+      if (body.op === "snapshot") return { ok: true, value: core.snapshot(typeof body.dc === "string" ? body.dc : "local") };
+      if (body.op === "reset" && reset) {
+        reset();
+        return { ok: true, value: null };
       }
       if (body.op === "release" && typeof body.id === "string") {
         leases.delete(body.id);

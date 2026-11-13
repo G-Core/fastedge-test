@@ -543,3 +543,48 @@ export async function applyDotenv(enabled: boolean, dotenvPath?: string | null):
     throw new Error(result.error || "Failed to apply dotenv setting");
   }
 }
+
+/** What the cache (one `dc`) and Edge KV hold: sizes, not values (Stores panel). */
+export type StoresSnapshot =
+  | { enabled: false }
+  | {
+      enabled: true;
+      /** The loaded app's cache bucket. */
+      appDc: string;
+      /** The service clock (ms since epoch). */
+      now: number;
+      dc: string;
+      dcs: string[];
+      cache: { key: string; size: number; expiresAt: number }[];
+      kv: {
+        store: string;
+        strings: { key: string; size: number }[];
+        zsets: { key: string; members: number }[];
+        bloom: { key: string; items: number }[];
+      }[];
+    };
+
+async function storesCall(path: string, init?: RequestInit): Promise<any> {
+  const response = await apiFetch(`${API_BASE}/stores${path}`, init);
+  const result = await response.json();
+  if (!response.ok || !result.ok) throw new Error(result.error || `Stores request failed (${response.status})`);
+  return result;
+}
+
+export async function getStoresSnapshot(dc?: string): Promise<StoresSnapshot> {
+  return storesCall(dc ? `?dc=${encodeURIComponent(dc)}` : "");
+}
+
+/** Back to the fixtures: cache emptied (every dc), Edge KV re-seeded. */
+export async function resetStores(): Promise<void> {
+  await storesCall("/reset", { method: "POST" });
+}
+
+/** Move the service clock (cache expiry) forward. */
+export async function advanceStoresClock(ms: number): Promise<void> {
+  await storesCall("/advance-clock", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ms }),
+  });
+}

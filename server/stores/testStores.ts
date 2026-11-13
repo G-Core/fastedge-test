@@ -50,11 +50,15 @@ export async function createStores(options: CreateStoresOptions = {}): Promise<T
     if (root) loadFixtures(core, root);
     else core.seedKv({});
   };
+  const reset = () => {
+    core.clearCache();
+    fixtures();
+  };
   const token = randomBytes(24).toString("hex");
   let server: StoresServer;
   try {
     fixtures();
-    server = await startStoresServer(core, token);
+    server = await startStoresServer(core, token, 0, reset);
   } catch (error) {
     db.close(); // a bad fixture must not leave the database open
     throw error;
@@ -88,10 +92,7 @@ export async function createStores(options: CreateStoresOptions = {}): Promise<T
     },
     seed: (data) => applySeed(core, data),
     advanceClock: (ms) => void core.advanceClock(ms),
-    reset: () => {
-      core.clearCache();
-      fixtures();
-    },
+    reset,
     close: async () => {
       await server.close();
       db.close();

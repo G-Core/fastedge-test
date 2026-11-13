@@ -42,7 +42,7 @@ describe('StoresServer', () => {
   });
 
   it('reports the protocol and moves the clock', async () => {
-    expect(JSON.parse((await post('/v1/admin', '{"op":"info"}')).body).value).toEqual({ protocol: 1 });
+    expect(JSON.parse((await post('/v1/admin', '{"op":"info"}')).body).value).toEqual({ protocol: 2 });
     expect(JSON.parse((await post('/v1/admin', '{"op":"advance-clock","ms":5}')).body).value).toBe(5);
   });
 

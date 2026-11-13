@@ -1,5 +1,21 @@
 # Proxy-WASM Runner - Changelog
 
+## November 13, 2026 - Stores panel
+
+### Overview
+A read-only **Stores** panel in both views: cache entries of one `dc` (TTL countdown, `dc`
+switcher) and Edge KV keys by type, with Reset and Advance clock. See `features/STORES.md`.
+
+### 🎯 What Was Completed
+- Storage service protocol 2: admin `snapshot` and `reset` (`StoresCore.snapshot`)
+- Debugger: `GET /api/stores`, `POST /api/stores/reset`, `POST /api/stores/advance-clock`
+- `components/common/StoresPanel`; refreshes after each request
+- Request context review fixes: `/api/load` and the request endpoints run one at a time
+- `pnpm dev`: the watch build gets the `import.meta.url` shim the production bundle has
+
+### 🧪 Testing
+- Unit: `stores/snapshot.test.ts`; frontend `StoresPanel.test.tsx`
+
 ## November 13, 2026 - Request context panel (client / edge / origin)
 
 ### Overview

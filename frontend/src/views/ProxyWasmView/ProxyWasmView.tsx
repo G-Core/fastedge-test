@@ -6,6 +6,7 @@ import { DictionaryInput } from "../../components/common/DictionaryInput";
 import contextStyles from "../../components/common/RequestContextPanel/RequestContextPanel.module.css";
 import { HookStagesPanel } from "../../components/proxy-wasm/HookStagesPanel";
 import { ResponsePanel } from "../../components/common/ResponsePanel";
+import { StoresPanel } from "../../components/common/StoresPanel";
 import { useAppStore } from "../../stores";
 import { applyDefaultContentType } from "../../utils/contentType";
 import styles from "./ProxyWasmView.module.css";
@@ -209,6 +210,8 @@ export function ProxyWasmView() {
         logLevel={logLevel}
         onLogLevelChange={setLogLevel}
       />
+
+      <StoresPanel refreshKey={hookResults} />
 
       <ResponsePanel response={finalResponse} />
     </div>

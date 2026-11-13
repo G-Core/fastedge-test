@@ -4,6 +4,7 @@ import { DotenvPanel } from "../../components/common/DotenvPanel";
 import { RequestContextPanel } from "../../components/common/RequestContextPanel";
 import { RequestPanel } from "../../components/common/RequestPanel";
 import { ResponsePanel } from "../../components/common/ResponsePanel";
+import { StoresPanel } from "../../components/common/StoresPanel";
 import { LogsViewer } from "../../components/common/LogsViewer";
 import { StoreCallsList } from "../../components/common/StoreCallsList";
 import { LogLevelSelector } from "../../components/common/LogLevelSelector";
@@ -132,6 +133,8 @@ export function HttpWasmView() {
         <CollapsiblePanel title="Storage" defaultExpanded={false}>
           <StoreCallsList calls={httpResponse?.storeCalls} source="request" />
         </CollapsiblePanel>
+
+        <StoresPanel refreshKey={httpResponse} />
 
         {/* Response Panel */}
         <ResponsePanel response={httpResponse} />

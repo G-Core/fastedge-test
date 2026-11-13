@@ -68,7 +68,7 @@ cache is shared per account per POP by HTTP and CDN apps.
 - Calls use node:http, not fetch: `mockOrigins()` replaces the global fetch dispatcher.
 - A different protocol version already running for the root is a clear error, not a restart.
 
-## API (protocol 1)
+## API (protocol 2)
 
 `POST /v1/<cache|kv|admin>`, `authorization: Bearer <token>`, JSON body `{ "op": ..., ... }`.
 Reply `{ "ok": true, "value": ... }` or `{ "ok": false, "error": "<code>" }` (200). Malformed
@@ -91,9 +91,22 @@ Binary values are base64; i64/u64 are decimal strings (numbers accepted).
 | kv | `scan` | `store, pattern` | `[key]` (sorted) |
 | kv | `zscan` | `store, key, pattern` | `[[base64, score]]` |
 | kv | `bf-exists` | `store, key, item` | bool |
-| admin | `info` | | `{ protocol: 1 }` |
+| admin | `info` | | `{ protocol: 2 }` |
 | admin | `kv-stores` | | seeded store names |
 | admin | `advance-clock` | `ms` | new offset |
+| admin | `snapshot` | `dc?` (default `local`) | `{ now, dc, dcs, cache: [{key, size, expiresAt}], kv: [{store, strings, zsets, bloom}] }`: sizes, no values |
+| admin | `reset` | | cache emptied (every `dc`), KV re-seeded from the fixtures |
+
+Protocol 2 added `snapshot` and `reset`. FastEdge-lib only uses `/v1/cache`, `/v1/kv` and
+`kv-stores`, so it works with both.
+
+## Stores panel (debugger)
+
+`GET /api/stores?dc=` (default: the loaded app's `dc`, returned as `appDc`; `{ enabled: false }`
+when stores are off), `POST /api/stores/reset`, `POST /api/stores/advance-clock { ms }`. UI:
+`frontend/src/components/common/StoresPanel/` in both views: cache entries of one `dc` with a TTL
+countdown and a `dc` switcher, Edge KV keys by type, Reset, Advance clock (+1 min / h / day).
+Read-only. Refreshes when opened, on a `dc` switch, and after each request.
 
 The fastedge-run client (FastEdge-lib `src/stores_service.rs`) implements the other side.
 

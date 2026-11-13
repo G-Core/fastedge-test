@@ -17,7 +17,7 @@ import { createServer } from "node:http";
 import { randomBytes, createHash } from "node:crypto";
 import { safeTokenEqual, hostAllowed } from "./utils/token.js";
 import { WasmRunnerFactory } from "./runner/WasmRunnerFactory.js";
-import { connectStores, resolveStoresRoot, type StoresConnection } from "./stores/StoresManager.js";
+import { connectStores, resolveStoresRoot, request as storesRequest, type StoresConnection } from "./stores/StoresManager.js";
 import type { IWasmRunner } from "./runner/IWasmRunner.js";
 import { HttpWasmRunner } from "./runner/HttpWasmRunner.js";
 import { CLIENT_PRESETS, EDGE_PRESETS, edgeDc, type RequestContext } from "./runner/requestContext.js";
@@ -249,7 +249,21 @@ app.post("/api/reload-workspace-wasm", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/load", async (req: Request, res: Response) => {
+/**
+ * Loads and requests run one at a time: a request's client / edge (setRequestContext) and its
+ * execution happen together, and loads apply in the order they arrive.
+ * ponytail: one queue for the debugger's single runner; per-call context if parallel requests matter.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+function serialized(handler: (req: Request, res: Response) => Promise<void>) {
+  return (req: Request, res: Response): Promise<void> => {
+    const run = queue.then(() => handler(req, res));
+    queue = run.catch(() => {});
+    return run;
+  };
+}
+
+app.post("/api/load", serialized(async (req: Request, res: Response) => {
   const parsed = ApiLoadBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
@@ -369,10 +383,11 @@ app.post("/api/load", async (req: Request, res: Response) => {
 
     // Create appropriate runner based on detected type
     const storesConnection = stores !== false ? await getStores() : null;
+    currentDc = dc ?? edgeDc(edge) ?? "local";
     currentRunner = runnerFactory.createRunner(
       wasmType,
       dotenv?.enabled ?? false,
-      storesConnection && { connection: storesConnection, dc: dc ?? edgeDc(edge) ?? "local", owned: false },
+      storesConnection && { connection: storesConnection, dc: currentDc, owned: false },
     );
     currentRunner.setStateManager(stateManager);
 
@@ -413,7 +428,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     }
     res.status(500).json({ ok: false, error: String(error) });
   }
-});
+}));
 
 /**
  * The storage service connection, shared by every runner this server creates and held for
@@ -430,6 +445,54 @@ async function getStores(): Promise<StoresConnection | null> {
     return null;
   }
 }
+
+/** The cache bucket of the loaded app (the Stores panel's default `dc`). */
+let currentDc = "local";
+
+/** One admin call to the storage service; null when stores are off. */
+async function storesAdmin(body: Record<string, unknown>): Promise<unknown> {
+  const connection = await getStores();
+  if (!connection) return null;
+  const reply = await storesRequest(connection, "admin", body);
+  if (!reply.ok) throw new Error(`stores service: ${reply.error}`);
+  return reply.value;
+}
+
+/** Stores panel: what the cache (one `dc`, default the loaded app's) and Edge KV hold. */
+app.get("/api/stores", async (req: Request, res: Response) => {
+  const dc = typeof req.query.dc === "string" && req.query.dc ? req.query.dc : currentDc;
+  try {
+    const snapshot = await storesAdmin({ op: "snapshot", dc });
+    res.json(snapshot ? { ok: true, enabled: true, appDc: currentDc, ...snapshot } : { ok: true, enabled: false });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+/** Back to the fixtures: cache emptied (every `dc`), Edge KV re-seeded. */
+app.post("/api/stores/reset", async (_req: Request, res: Response) => {
+  try {
+    await storesAdmin({ op: "reset" });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+/** Move the service clock (cache expiry) forward by `ms`. */
+app.post("/api/stores/advance-clock", async (req: Request, res: Response) => {
+  const ms = req.body?.ms;
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) {
+    res.status(400).json({ ok: false, error: "ms must be a positive number" });
+    return;
+  }
+  try {
+    await storesAdmin({ op: "advance-clock", ms });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
 
 /** Release the shared lease on shutdown, so an unused service exits without waiting for the TTL. */
 async function releaseStores(): Promise<void> {
@@ -502,7 +565,7 @@ app.get("/api/request-context/presets", (_req: Request, res: Response) => {
   res.json({ ok: true, client: CLIENT_PRESETS, edge: EDGE_PRESETS });
 });
 
-app.post("/api/execute", async (req: Request, res: Response) => {
+app.post("/api/execute", serialized(async (req: Request, res: Response) => {
   const { url, path: reqPath, method, headers, body } = req.body ?? {};
   const context = ApiExecuteContextSchema.safeParse(req.body ?? {});
   if (!context.success) {
@@ -608,9 +671,9 @@ app.post("/api/execute", async (req: Request, res: Response) => {
 
     res.status(500).json({ ok: false, error: String(error) });
   }
-});
+}));
 
-app.post("/api/call", async (req: Request, res: Response) => {
+app.post("/api/call", serialized(async (req: Request, res: Response) => {
   const parsed = ApiCallBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
@@ -639,9 +702,9 @@ app.post("/api/call", async (req: Request, res: Response) => {
   } catch (error) {
     res.status(500).json({ ok: false, error: String(error) });
   }
-});
+}));
 
-app.post("/api/send", async (req: Request, res: Response) => {
+app.post("/api/send", serialized(async (req: Request, res: Response) => {
   const parsed = ApiSendBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
@@ -690,7 +753,7 @@ app.post("/api/send", async (req: Request, res: Response) => {
 
     res.status(500).json({ ok: false, error: String(error) });
   }
-});
+}));
 
 /** Resolve the .fastedge-debug config directory.
  *  Prefers WORKSPACE_PATH (VSCode integration) so the config lives next to
