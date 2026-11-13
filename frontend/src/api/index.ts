@@ -304,6 +304,7 @@ export async function callHook(
     logs: logs, // Keep as array for client-side filtering
     returnValue: result.result?.returnCode,
     error: result.error,
+    storeCalls: result.result?.storeCalls,
   };
 }
 
@@ -361,6 +362,7 @@ export async function sendFullFlow(
       input: hr?.input,
       output: hr?.output,
       properties: hr?.properties,
+      storeCalls: hr?.storeCalls,
     };
   }
 

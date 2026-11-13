@@ -23,6 +23,7 @@ import { loadDotenvFiles } from "../utils/dotenv-loader.js";
 import { storesImports } from "./StoresHost.js";
 import type { SyncStores } from "./storesBridge.js";
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { StoreCall } from "../stores/trace.js";
 
 const textEncoder = new TextEncoder();
@@ -92,21 +93,26 @@ export class ProxyWasmRunner implements IWasmRunner {
     this.stores = stores;
   }
 
-  /** One request id per full flow (shared by its hooks), else per hook call. */
-  private flowRequestId: string | null = null;
-  private trace = { requestId: "", hook: "" };
+  /**
+   * Trace context per call, not per runner: one request id per full flow (shared by its
+   * hooks), else per hook call. AsyncLocalStorage keeps overlapping calls apart (a hook can
+   * await a proxy_http_call fetch).
+   */
+  private flowRequestId = new AsyncLocalStorage<string>();
+  private trace = new AsyncLocalStorage<{ requestId: string; hook: string }>();
 
   /** The stores, with every call tagged for the service's storage trace. */
   private tracedStores(): SyncStores | null {
     const stores = this.stores;
     if (!stores) return null;
-    return { call: (kind, body) => stores.call(kind, { ...body, trace: { ...this.trace, app: "cdn" } }) };
+    return { call: (kind, body) => stores.call(kind, { ...body, trace: { ...this.trace.getStore(), app: "cdn" } }) };
   }
 
   /** The storage calls this hook made (empty if the service cannot say). */
   private storeCalls(): StoreCall[] | undefined {
-    if (!this.stores) return undefined;
-    const reply = this.stores.call("admin", { op: "traces", ...this.trace });
+    const context = this.trace.getStore();
+    if (!this.stores || !context) return undefined;
+    const reply = this.stores.call("admin", { op: "traces", ...context });
     return reply.ok ? (reply.value as StoreCall[]) : [];
   }
 
@@ -838,13 +844,17 @@ export class ProxyWasmRunner implements IWasmRunner {
   }
 
   async callHook(call: HookCall): Promise<HookResult> {
+    const context = { requestId: this.flowRequestId.getStore() ?? randomUUID(), hook: call.hook };
+    return this.trace.run(context, () => this.runHook(call));
+  }
+
+  private async runHook(call: HookCall): Promise<HookResult> {
     if (!this.module) {
       throw new Error("WASM module not loaded");
     }
 
     // Set current hook context for property access control
     this.currentHook = this.getHookContext(call.hook);
-    this.trace = { requestId: this.flowRequestId ?? randomUUID(), hook: call.hook };
 
     // Clear stale local response from any previous hook execution
     this.hostFunctions.resetLocalResponse();
@@ -1376,12 +1386,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       enforceProductionPropertyRules,
     };
 
-    this.flowRequestId = randomUUID();
-    try {
-      return await this.callFullFlowLegacy(call, url);
-    } finally {
-      this.flowRequestId = null;
-    }
+    return this.flowRequestId.run(randomUUID(), () => this.callFullFlowLegacy(call, url));
   }
 
   /**

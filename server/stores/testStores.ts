@@ -42,16 +42,23 @@ export interface TestStores {
 }
 
 export async function createStores(options: CreateStoresOptions = {}): Promise<TestStores> {
-  const core = new StoresCore(new DatabaseSync(":memory:"));
+  const db = new DatabaseSync(":memory:");
+  const core = new StoresCore(db);
   const root =
     options.fixtures === false ? null : (options.fixtures ?? resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd()));
   const fixtures = () => {
     if (root) loadFixtures(core, root);
     else core.seedKv({});
   };
-  fixtures();
   const token = randomBytes(24).toString("hex");
-  const server: StoresServer = await startStoresServer(core, token);
+  let server: StoresServer;
+  try {
+    fixtures();
+    server = await startStoresServer(core, token);
+  } catch (error) {
+    db.close(); // a bad fixture must not leave the database open
+    throw error;
+  }
   const dc = options.dc ?? "local";
 
   const cacheOp = (body: Record<string, unknown>) => {
@@ -85,6 +92,9 @@ export async function createStores(options: CreateStoresOptions = {}): Promise<T
       core.clearCache();
       fixtures();
     },
-    close: () => server.close(),
+    close: async () => {
+      await server.close();
+      db.close();
+    },
   };
 }
