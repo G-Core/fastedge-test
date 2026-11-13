@@ -154,11 +154,11 @@ bounded log (5,000 calls, values not recorded, only sizes) and answers
 
 - **CDN apps:** `ProxyWasmRunner` tags calls with one request id per `callFullFlow` (per hook for
   a bare `callHook`) and the hook name, and after each hook puts the calls into
-  `HookResult.storeCalls`. The debugger shows them in the hook panel's **Storage logs** tab.
+  `HookResult.storeCalls`. The debugger shows them in the hook panel's **Storage** tab.
   Stores off: no `storeCalls`.
 - **HTTP apps:** `HttpWasmRunner.execute` sends a W3C `traceparent` (or keeps the caller's) and
   fetches that request's calls into `HttpResponse.storeCalls`; the debugger's HTTP view has a
-  **Storage logs** panel. fastedge-run reads the traceparent from the engine's per-request `http`
+  **Storage** tab of the Logging panel. fastedge-run reads the traceparent from the engine's per-request `http`
   span (a tracing layer, FastEdge-lib `src/request_trace.rs`) and adds `trace` to each service
   call. Needs that fastedge-run; with the released one, `storeCalls` is empty.
 

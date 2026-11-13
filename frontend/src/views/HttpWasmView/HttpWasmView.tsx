@@ -15,6 +15,7 @@ import styles from "./HttpWasmView.module.css";
 export function HttpWasmView() {
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [logLevel, setLogLevel] = useState<number>(0);
+  const [logView, setLogView] = useState<"logs" | "storage">("logs");
 
   // Get state from store
   const {
@@ -47,6 +48,8 @@ export function HttpWasmView() {
     // Construct full URL with fixed host + new path
     setHttpUrl(HTTP_WASM_HOST + newPath);
   };
+
+  const storageCount = httpResponse?.storeCalls?.length ?? 0;
 
   const handleSend = () => {
     executeHttpRequest();
@@ -102,36 +105,62 @@ export function HttpWasmView() {
           onEdgeChange={setEdge}
         />
 
-        {/* Logging Panel */}
+        {/* Logging Panel: app logs, and the cache / Edge KV calls of the last request */}
         <CollapsiblePanel title="Logging" defaultExpanded={httpLogs.length > 0}>
           <div className={styles.loggingContent}>
             <div className={styles.loggingHeader}>
-              <div className={styles.logTab}>
-                <span className={styles.tabLabel}>Logs</span>
-                {httpLogs.length > 0 && (
-                  <button
-                    className={styles.clearLogsButton}
-                    onClick={() => setHttpLogs([])}
-                    title="Clear logs"
-                  >
-                    🧹
-                  </button>
-                )}
+              <div className={styles.logTabs} role="tablist">
+                <div
+                  role="tab"
+                  aria-selected={logView === "logs"}
+                  tabIndex={0}
+                  className={`${styles.logTab} ${logView === "logs" ? styles.active : ""}`}
+                  onClick={() => setLogView("logs")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") setLogView("logs");
+                  }}
+                >
+                  <span className={styles.tabLabel}>Logs</span>
+                  {httpLogs.length > 0 && (
+                    <button
+                      className={styles.clearLogsButton}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setHttpLogs([]);
+                      }}
+                      title="Clear logs"
+                    >
+                      🧹
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={logView === "storage"}
+                  className={`${styles.logTab} ${logView === "storage" ? styles.active : ""}`}
+                  onClick={() => setLogView("storage")}
+                >
+                  <span className={styles.tabLabel}>
+                    Storage{storageCount ? ` (${storageCount})` : ""}
+                  </span>
+                </button>
               </div>
-              <div className={styles.loggingControls}>
-                <LogLevelSelector
-                  logLevel={logLevel}
-                  onLogLevelChange={setLogLevel}
-                />
-              </div>
+              {logView === "logs" && (
+                <div className={styles.loggingControls}>
+                  <LogLevelSelector
+                    logLevel={logLevel}
+                    onLogLevelChange={setLogLevel}
+                  />
+                </div>
+              )}
             </div>
-            <LogsViewer logs={httpLogs} logLevel={logLevel} />
+            {logView === "logs" ? (
+              <LogsViewer logs={httpLogs} logLevel={logLevel} />
+            ) : (
+              <StoreCallsList calls={httpResponse?.storeCalls} source="request" />
+            )}
           </div>
-        </CollapsiblePanel>
-
-        {/* Storage logs: the cache / Edge KV calls of the last request (contents: Stores panel) */}
-        <CollapsiblePanel title="Storage logs" defaultExpanded={false}>
-          <StoreCallsList calls={httpResponse?.storeCalls} source="request" />
         </CollapsiblePanel>
 
         <StoresPanel refreshKey={httpResponse} />
