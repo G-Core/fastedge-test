@@ -117,6 +117,21 @@ Measured on preprod (2026-11-05) and read from the FastEdge cache backend:
 - wrong type: `Other("ERR: Invalid argument: WRONGTYPE ...")`, CDN `BadArgument`;
 - one clock for every runner: `advance-clock` moves expiry for HTTP and CDN apps together.
 
+## Tests: isolated stores
+
+Tests get their own stores, never the shared service (`server/stores/testStores.ts`):
+- `createStores({ fixtures?, dc? })`: an in-memory service inside the test process (no
+  detached process, lock or lease), seeded from `fixtures/stores/`. Helpers run in-process:
+  `cache.get/set/delete`, `seed({ kv, cache })` (fixture formats; named stores replaced),
+  `advanceClock`, `reset` (back to the fixtures), `close`.
+- `RunnerConfig.stores` takes an instance: the runner uses it and does not own it. CDN and HTTP
+  runners given the same instance share it. The worker runner strips it before `postMessage`.
+- `runTestSuite`: a fresh instance per test, passed as `run(runner, { stores })`; a suite-wide
+  instance in `runnerConfig.stores` is shared on purpose; `stores: false` turns them off.
+- `@gcoredev/fastedge-test/vitest` (ESM, `vitest` optional peer): `test` with `stores` and
+  `runner(wasm, config?)` fixtures, per test; runners are cleaned up and stores closed after.
+  Wider sharing is explicit: `createStores()` in `beforeAll`.
+
 ## Storage trace
 
 Every cache / KV call can carry `trace: { requestId, app, hook? }`; the service records it in a

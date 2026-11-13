@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createRunnerFromBuffer } from '../../../../runner/standalone';
 import type { IWasmRunner } from '../../../../runner/IWasmRunner';
+import { createStores } from '../../../../stores/testStores';
 
 const WASM = resolve(__dirname, '../../../../../wasm');
 const runners: IWasmRunner[] = [];
@@ -87,5 +88,19 @@ describe.skipIf(!process.env.FASTEDGE_TEST_STORES_E2E)('HTTP + CDN apps share th
   it('dc separates HTTP buckets too', async () => {
     const h = await runner('http-apps/rust/wasi/stores.wasm', { runnerType: 'http-wasm', dc: 'ams' });
     expect(await http(h, 'op=incr&key=shared')).toBe('1');
+  });
+
+  it('an HTTP app and a CDN filter share one createStores() instance, and only that', async () => {
+    const stores = await createStores();
+    try {
+      const h = await runner('http-apps/rust/wasi/stores.wasm', { runnerType: 'http-wasm', stores });
+      const c = await runner('cdn-apps/rust/stores/stores.wasm', { stores });
+      expect(await http(h, 'op=incr&key=isolated')).toBe('1');
+      expect(await cdn(c, { 'x-op': 'incr', 'x-key': 'isolated' })).toBe('2');
+      expect(stores.cache.get('isolated')).toBe('2');
+      expect(await http(h, 'op=kv-get&store=users&key=user:1')).toBe('alice');
+    } finally {
+      await stores.close();
+    }
   });
 });

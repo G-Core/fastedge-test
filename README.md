@@ -142,7 +142,7 @@ interface RunnerConfig {
     path?: string;                          // Directory to load them from (default: process cwd)
   };
   enforceProductionPropertyRules?: boolean; // CDN property access control (default: true)
-  stores?: boolean;                         // Local cache and Edge KV (default: true)
+  stores?: boolean | TestStores;            // Local cache and Edge KV (default: true; isolated per test in runTestSuite)
   dc?: string;                              // Cache bucket shared by runners (default: "local")
 }
 ```
@@ -351,6 +351,24 @@ fixtures/stores/cache/<dc>.json   { "key": { "value": "text", "ttl_ms": 60000 } 
 ```
 
 A value can be `{ "base64": "..." }` for binary data. Only stores with a fixture are attached.
+
+**In tests, every test gets its own stores** (in memory, seeded from the fixtures, gone after the
+test), so tests never see each other's data:
+
+```typescript
+import { test } from '@gcoredev/fastedge-test/vitest';
+import { expect } from 'vitest';
+
+test('counts hits', async ({ runner, stores }) => {
+  const app = await runner('./build/app.wasm');   // CDN or HTTP; cleaned up after the test
+  await app.callFullFlow('built-in', 'GET', {}, '', {}, true);
+  expect(stores.cache.get('hits')).toBe('1');
+  stores.advanceClock(60_000);                    // cache expiry for every runner on these stores
+});
+```
+
+`runTestSuite` does the same per test (`run: async (runner, { stores }) => ...`). Elsewhere, use
+`createStores()` and pass it as `RunnerConfig.stores`; runners given one instance share it.
 
 ---
 

@@ -1,4 +1,5 @@
 import type { IWasmRunner, RunnerConfig } from "../runner/IWasmRunner.js";
+import type { TestStores } from "../stores/testStores.js";
 
 export type { RunnerConfig };
 
@@ -6,10 +7,13 @@ export type { RunnerConfig };
  * A single test case in a TestSuite.
  * Receives a fully loaded runner; call any runner methods inside `run`.
  * Throw (or use assertion helpers) to fail the test.
+ *
+ * `context.stores`: this test's own cache and Edge KV (fresh per test, seeded from
+ * `fixtures/stores/`), or the instance given in `runnerConfig.stores`; null with `stores: false`.
  */
 export interface TestCase {
   name: string;
-  run: (runner: IWasmRunner) => Promise<void>;
+  run: (runner: IWasmRunner, context: { stores: TestStores | null }) => Promise<void>;
 }
 
 type TestSuiteBase = {

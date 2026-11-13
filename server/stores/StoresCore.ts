@@ -208,11 +208,18 @@ export class StoresCore {
     return (this.q.stores.all() as { name: string }[]).map((r) => r.name);
   }
 
-  /** Replace every Edge KV store with the given seeds (KV tables are a copy of the fixtures). */
-  seedKv(stores: Record<string, KvSeed>): void {
+  /**
+   * Replace every Edge KV store with the given seeds (KV tables are a copy of the fixtures), or
+   * with `only`, replace just the named stores and keep the others.
+   */
+  seedKv(stores: Record<string, KvSeed>, only = false): void {
     this.transaction(() => {
-      for (const table of ["kv_string", "kv_zset", "kv_bloom", "kv_store"]) this.db.exec(`DELETE FROM ${table}`);
-      const putStore = this.db.prepare("INSERT INTO kv_store (name) VALUES (?)");
+      for (const table of ["kv_string", "kv_zset", "kv_bloom"]) {
+        if (!only) this.db.exec(`DELETE FROM ${table}`);
+        else for (const store of Object.keys(stores)) this.db.prepare(`DELETE FROM ${table} WHERE store = ?`).run(store);
+      }
+      if (!only) this.db.exec("DELETE FROM kv_store");
+      const putStore = this.db.prepare("INSERT OR IGNORE INTO kv_store (name) VALUES (?)");
       const putString = this.db.prepare("INSERT INTO kv_string (store, key, value) VALUES (?, ?, ?)");
       const putMember = this.db.prepare("INSERT OR REPLACE INTO kv_zset (store, key, member, score) VALUES (?, ?, ?, ?)");
       const putItem = this.db.prepare("INSERT OR IGNORE INTO kv_bloom (store, key, item) VALUES (?, ?, ?)");
@@ -227,6 +234,11 @@ export class StoresCore {
         }
       }
     });
+  }
+
+  /** Drop every cache entry, in every `dc`. */
+  clearCache(): void {
+    this.db.exec("DELETE FROM cache");
   }
 
   /** Write cache entries (fixtures); `ttlMs` null = the default TTL. */

@@ -145,7 +145,9 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
   }
 
   load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void> {
-    return this.call("load", bufferOrPath, config);
+    // The worker reaches the stores over the bridge; a createStores() instance cannot be cloned.
+    const { stores: _stores, ...rest } = config ?? {};
+    return this.call("load", bufferOrPath, config && rest);
   }
 
   callHook(call: HookCall): Promise<HookResult> {

@@ -8,6 +8,7 @@ Low-level programmatic API for executing WASM binaries. Use this when you need d
 import {
   createRunner,
   createRunnerFromBuffer,
+  createStores,
   ProxyWasmRunner,
   HttpWasmRunner,
   WasmRunnerFactory,
@@ -27,10 +28,15 @@ import type {
   FullFlowResult,
   HookCall,
   StoreCall,
+  TestStores,
+  CreateStoresOptions,
+  StoresSeed,
 } from '@gcoredev/fastedge-test';
 ```
 
 `HeaderMap`, `HeaderRecord`, `LogEntry`, `ProxyStatus`, and `EventSource` are described under [Supporting Types](#supporting-types) and [IStateManager](#istatemanager). They are not exported from the package root.
+
+`createStores()` builds an isolated in-memory store instance (`TestStores`) that can be passed as `RunnerConfig.stores`. Its options and seed types are `CreateStoresOptions` and `StoresSeed`. See [stores](#runnerconfig) under `RunnerConfig` for how a runner uses the instance.
 
 ## Creating a Runner
 
@@ -54,7 +60,7 @@ function createRunner(
 
 **Returns** `Promise<IWasmRunner>` — a loaded runner ready for execution.
 
-Unless `config.stores` is `false`, the runner connects to the local storage service (cache and Edge KV) and holds its own lease on it until `cleanup()` is called. If `load()` fails, the factory calls `cleanup()` (releasing the lease) and rethrows the error. See [RunnerConfig](#runnerconfig).
+Unless `config.stores` is `false`, the runner connects to the local storage service (cache and Edge KV). When `config.stores` is `true` or omitted, the runner holds its own lease on the service until `cleanup()` is called. When `config.stores` is a `TestStores` instance, the runner uses that instance and does not own it, so `cleanup()` does not release it. If `load()` fails, the factory calls `cleanup()` (releasing any lease it owns) and rethrows the error. See [RunnerConfig](#runnerconfig).
 
 ```typescript
 import { createRunner } from '@gcoredev/fastedge-test';
@@ -257,7 +263,7 @@ cleanup(): Promise<void>
 
 - **Proxy-WASM**: No long-running subprocess is held. State is reset on the next `load()` call.
 - **HttpWasmRunner**: Kills the `fastedge-run` process, releases the allocated port (a pinned `httpPort` is simply freed), and deletes any temporary WASM file written to disk.
-- **Stores lease**: A runner created by `createRunner` or `createRunnerFromBuffer` with stores enabled releases its lease on the storage service during cleanup.
+- **Stores lease**: A runner created by `createRunner` or `createRunnerFromBuffer` with stores enabled (`stores` omitted or `true`) releases its lease on the storage service during cleanup. A runner given a `TestStores` instance does not own it and does not release it.
 
 Always call `cleanup()` when done with a runner, especially in test teardown.
 
@@ -287,7 +293,7 @@ Proxy-wasm runners handle proxy-wasm binaries — the standard format for FastEd
 
 **Not available**: `execute` (throws `Error`)
 
-The runner compiles the WASM module once on `load()` and creates a fresh `WebAssembly.Instance` for each hook call, providing isolation between hook executions. `RunnerConfig.httpPort` is ignored. With stores enabled, the module's cache and Edge KV host calls are served by the local storage service, and each `HookResult` lists the calls the hook made in `storeCalls`.
+The runner compiles the WASM module once on `load()` and creates a fresh `WebAssembly.Instance` for each hook call, providing isolation between hook executions. `RunnerConfig.httpPort` is ignored. With stores enabled, the module's cache and Edge KV host calls are served by the local storage service (or by the supplied `TestStores` instance), and each `HookResult` lists the calls the hook made in `storeCalls`.
 
 ### HTTP-WASM
 
@@ -297,7 +303,7 @@ The runner compiles the WASM module once on `load()` and creates a fresh `WebAss
 
 **Not available**: `callHook`, `callFullFlow` (both throw `Error`)
 
-The runner spawns a `fastedge-run` process on `load()` and forwards HTTP requests to it via localhost. The process is kept alive between requests. With stores enabled, the spawned process uses the same local storage service as proxy-wasm runners, so cache and Edge KV data are shared across runners. `HttpWasmRunner` also exposes `getPort(): number | null`, which returns the port the `fastedge-run` server listens on (the pinned `httpPort` when set, otherwise the dynamically allocated port). This method is not part of `IWasmRunner`.
+The runner spawns a `fastedge-run` process on `load()` and forwards HTTP requests to it via localhost. The process is kept alive between requests. With stores enabled, the spawned process uses the same storage service as proxy-wasm runners, so cache and Edge KV data are shared across runners. `HttpWasmRunner` also exposes `getPort(): number | null`, which returns the port the `fastedge-run` server listens on (the pinned `httpPort` when set, otherwise the dynamically allocated port). This method is not part of `IWasmRunner`.
 
 ### Auto-Detection
 
@@ -378,30 +384,34 @@ interface RunnerConfig {
   /**
    * Local cache and Edge KV through the storage service shared by every runner in the
    * stores root (the nearest git root; FASTEDGE_STORES_ROOT overrides). Default `true`.
-   * `false`: CDN apps' cache / KV calls return InternalFailure.
+   * `false`: CDN apps' cache / KV calls return InternalFailure. A `createStores()` instance:
+   * isolated in-memory stores for tests (runners given the same instance share them).
    */
-  stores?: boolean;
-  /** Cache bucket (edge location). Runners with the same `dc` share cache entries. Default `"local"`. */
+  stores?: boolean | TestStores;
+  /**
+   * Cache bucket (edge location). Runners with the same `dc` share cache entries.
+   * Default `"local"`, or the `dc` of a `createStores()` instance.
+   */
   dc?: string;
 }
 ```
 
-| Field                            | Type       | Default         | Description                                         |
-| -------------------------------- | ---------- | --------------- | --------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`  | `false`         | Load dotenv files                                   |
-| `dotenv.path`                    | `string`   | `undefined`     | Directory to load dotenv files from                 |
-| `enforceProductionPropertyRules` | `boolean`  | `undefined`     | Declared on the type; not read by `load()`          |
-| `runnerType`                     | `WasmType` | *auto-detected* | Overrides WASM type detection                       |
-| `httpPort`                       | `number`   | `undefined`     | HTTP-WASM only: pins the `fastedge-run` port        |
-| `stores`                         | `boolean`  | `true`          | Local cache and Edge KV through the storage service |
-| `dc`                             | `string`   | `"local"`       | Cache bucket shared by runners with the same `dc`   |
+| Field                            | Type                    | Default         | Description                                                    |
+| -------------------------------- | ----------------------- | --------------- | -------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`               | `false`         | Load dotenv files                                              |
+| `dotenv.path`                    | `string`                | `undefined`     | Directory to load dotenv files from                            |
+| `enforceProductionPropertyRules` | `boolean`               | `undefined`     | Declared on the type; not read by `load()`                     |
+| `runnerType`                     | `WasmType`              | *auto-detected* | Overrides WASM type detection                                  |
+| `httpPort`                       | `number`                | `undefined`     | HTTP-WASM only: pins the `fastedge-run` port                   |
+| `stores`                         | `boolean | TestStores`  | `true`          | Storage service for cache and Edge KV, or isolated test stores |
+| `dc`                             | `string`                | `"local"`       | Cache bucket shared by runners with the same `dc`              |
 
 - `dotenv.enabled` defaults to `false` when the runner is created through `createRunner` or `createRunnerFromBuffer`.
 - `dotenv.path`: when omitted, `fastedge-run` (HTTP-WASM) uses the process CWD, which is correct for npm package users whose `.env` files live at the project root. Set it only when dotenv files are in a non-standard location, such as a test fixture directory.
 - `enforceProductionPropertyRules`: the runner's `load()` does not consume this field. Pass the rule explicitly to `callFullFlow()` or `callHook()`.
 - `httpPort`: see [load](#load) for the failure behavior when the port is busy.
-- `stores`: the factory functions connect each runner to a storage service shared by every runner in the same stores root. The stores root is the nearest git root, resolved from `WORKSPACE_PATH` or the current working directory; the `FASTEDGE_STORES_ROOT` environment variable overrides it. Set `stores: false` to disable it; cache and Edge KV calls from CDN apps then return `InternalFailure`.
-- `dc`: runners that use the same `dc` value share cache entries. The factory functions pass this value to the storage service.
+- `stores`: the factory functions connect each runner to a storage service shared by every runner in the same stores root. The stores root is the nearest git root, resolved from `WORKSPACE_PATH` or the current working directory; the `FASTEDGE_STORES_ROOT` environment variable overrides it. Set `stores: false` to disable it; cache and Edge KV calls from CDN apps then return `InternalFailure`. Pass a `TestStores` instance (from `createStores()`) to use isolated in-memory stores instead; runners given the same instance share them, and the runner does not own or release the instance.
+- `dc`: runners that use the same `dc` value share cache entries. When omitted, the value is the `dc` of the supplied `TestStores` instance, or `"local"`.
 
 ### HttpRequest & HttpResponse
 

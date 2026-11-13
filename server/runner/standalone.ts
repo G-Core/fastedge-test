@@ -40,12 +40,13 @@ export async function createRunnerFromBuffer(
 ): Promise<IWasmRunner> {
   const wasmType = config?.runnerType ?? await detectWasmType(buffer);
 
-  // Stores on by default: this runner opens (and on cleanup releases) its own lease.
+  // Stores on by default: this runner opens (and on cleanup releases) its own lease on the
+  // shared service, unless given isolated test stores (createStores), which it does not own.
+  const given = typeof config?.stores === "object" ? config.stores : null;
   const connection =
-    config?.stores === false
-      ? null
-      : await connectStores(resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd()));
-  const stores = connection && { connection, dc: config?.dc ?? "local", owned: true };
+    given ??
+    (config?.stores === false ? null : await connectStores(resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd())));
+  const stores = connection && { connection, dc: config?.dc ?? given?.dc ?? "local", owned: !given };
 
   let runner: IWasmRunner;
   if (wasmType === "http-wasm") {

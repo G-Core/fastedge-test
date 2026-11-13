@@ -1,5 +1,26 @@
 # Proxy-WASM Runner - Changelog
 
+## November 13, 2026 - Isolated stores for tests (phase 2)
+
+### Overview
+Tests no longer share the persistent workspace service: each test gets in-memory stores seeded
+from `fixtures/stores/`. New `createStores()`, a `./vitest` entry with `stores` and `runner`
+fixtures, and per-test stores in `runTestSuite`.
+
+### 🎯 What Was Completed
+- `server/stores/testStores.ts`: `createStores` (in-process `StoresServer` on `:memory:`; cache
+  helpers, `seed`, `advanceClock`, `reset`, `close`)
+- `RunnerConfig.stores: boolean | TestStores`; `createRunner` uses a given instance without owning it
+- `runTestSuite`: fresh stores per test, `TestCase.run(runner, { stores })`
+- `server/test-framework/vitest.ts` → `@gcoredev/fastedge-test/vitest` (ESM; `vitest` optional peer)
+- `StoresCore.seedKv(stores, only)`, `clearCache()`; `fixtures.applySeed`
+- `WorkerProxyWasmRunner.load` no longer posts `config.stores` to the worker
+
+### 🧪 Testing
+- Unit: `createStores` fixtures, isolation, seed, reset, clock
+- Integration: shared/separate instances with CDN runners, `runTestSuite` per-test and suite-wide
+  stores, the vitest fixtures, the built `./vitest` bundle; HTTP + CDN on one instance (E2E gate)
+
 ## November 13, 2026 - Storage trace for CDN apps
 
 ### Overview

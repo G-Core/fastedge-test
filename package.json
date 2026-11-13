@@ -21,6 +21,10 @@
       "import": "./dist/lib/test-framework/index.js",
       "require": "./dist/lib/test-framework/index.cjs"
     },
+    "./vitest": {
+      "types": "./dist/lib/test-framework/vitest.d.ts",
+      "import": "./dist/lib/test-framework/vitest.js"
+    },
     "./schemas": "./schemas/"
   },
   "bin": {
@@ -91,6 +95,14 @@
     "zod-to-json-schema": "^3.25.1",
     "zustand": "^5.0.11",
     "zustand-debounce": "^2.3.0"
+  },
+  "peerDependencies": {
+    "vitest": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22.13"
