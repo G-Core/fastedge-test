@@ -69,6 +69,7 @@ export class ProxyWasmRunner implements IWasmRunner {
     // Initialize FastEdge stores
     this.secretStore = new SecretStore(fastEdgeConfig?.secrets);
     this.dictionary = new Dictionary(fastEdgeConfig?.dictionary);
+    this.dictionary.setDefaults(this.edgeDictionary);
 
     this.hostFunctions = new HostFunctions(
       this.memory,
@@ -195,7 +196,7 @@ export class ProxyWasmRunner implements IWasmRunner {
     // Reset stores to empty
     this.secretStore = new SecretStore();
     this.dictionary = new Dictionary();
-    this.dictionary.setDefaults(this.context.dictionary);
+    this.dictionary.setDefaults(this.edgeDictionary);
 
     // Re-load dotenv files with new settings (no-op when disabled)
     await this.loadDotenvIfEnabled();
@@ -217,20 +218,26 @@ export class ProxyWasmRunner implements IWasmRunner {
 
   /**
    * Where the client is and which POP runs the app: request properties and headers under the
-   * explicit ones, dictionary keys under the dotenv ones. Applies from the next call.
+   * explicit ones, dictionary keys under the dotenv ones. Applies from the next call; a call
+   * that names its own context (`HookCall.context`, `callFullFlow`'s `context`) uses that.
    */
   async setRequestContext(context: RequestContext): Promise<void> {
     this.context = cdnContext(context);
-    this.dictionary.setDefaults(this.context.dictionary);
   }
 
-  /** The call with the request context under its explicit properties and headers. */
-  private withContext(call: HookCall): HookCall {
-    return {
+  /** The context of the call being run (AsyncLocalStorage: overlapping calls stay apart). */
+  private callContext = new AsyncLocalStorage<ReturnType<typeof cdnContext>>();
+  private edgeDictionary = () => (this.callContext.getStore() ?? this.context).dictionary;
+
+  /** Run `work` with `context` (or the runner's), applied under the call's explicit values. */
+  private withContext<T>(call: HookCall, context: RequestContext | undefined, work: (call: HookCall) => Promise<T>): Promise<T> {
+    const c = context ? cdnContext(context) : this.context;
+    const applied: HookCall = {
       ...call,
-      properties: { ...this.context.properties, ...(call.properties ?? {}) },
-      request: { ...call.request, headers: withHeaders(this.context.headers, call.request.headers ?? {}) },
+      properties: { ...c.properties, ...(call.properties ?? {}) },
+      request: { ...call.request, headers: withHeaders(c.headers, call.request.headers ?? {}) },
     };
+    return this.callContext.run(c, () => work(applied));
   }
 
   async load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void> {
@@ -866,10 +873,12 @@ export class ProxyWasmRunner implements IWasmRunner {
   }
 
   async callHook(call: HookCall): Promise<HookResult> {
+    const run = (c: HookCall) => {
+      const context = { requestId: this.flowRequestId.getStore() ?? randomUUID(), hook: c.hook };
+      return this.trace.run(context, () => this.runHook(c));
+    };
     // Inside a full flow the context is already applied (and a hook may have removed a header).
-    if (!this.flowRequestId.getStore()) call = this.withContext(call);
-    const context = { requestId: this.flowRequestId.getStore() ?? randomUUID(), hook: call.hook };
-    return this.trace.run(context, () => this.runHook(call));
+    return this.flowRequestId.getStore() ? run(call) : this.withContext(call, call.context, run);
   }
 
   private async runHook(call: HookCall): Promise<HookResult> {
@@ -1397,7 +1406,8 @@ export class ProxyWasmRunner implements IWasmRunner {
     headers: Record<string, string>,
     body: string,
     properties: Record<string, unknown>,
-    enforceProductionPropertyRules: boolean
+    enforceProductionPropertyRules: boolean,
+    context?: RequestContext,
   ): Promise<FullFlowResult> {
     const call: HookCall = {
       hook: "", // Not used in fullFlow
@@ -1410,7 +1420,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       enforceProductionPropertyRules,
     };
 
-    return this.flowRequestId.run(randomUUID(), () => this.callFullFlowLegacy(this.withContext(call), url));
+    return this.withContext(call, context, (c) => this.flowRequestId.run(randomUUID(), () => this.callFullFlowLegacy(c, url)));
   }
 
   /**

@@ -32,7 +32,7 @@ The fragment after `#token=` is the session token. Use it for API calls and WebS
 x-fastedge-token: <token>
 ```
 
-A missing or incorrect token returns `401`.
+A missing or incorrect token returns `401`. The `?token=` query parameter is not accepted on HTTP requests.
 
 **WebSocket** — two mechanisms exist, tried in preference order:
 
@@ -385,7 +385,7 @@ curl -X PATCH http://localhost:5179/api/dotenv \
 
 ### Request context on execution endpoints
 
-`POST /api/execute`, `POST /api/call`, and `POST /api/send` accept optional `client` and `edge` fields (see [`ClientContext` and `EdgeContext`](#post-apiload)). If the body names either field, the runner's request context is replaced with the supplied values. Both fields are replaced together: a field that is left out is cleared. If the body names neither field, the context set at load time (or by a previous call) is unchanged. The store datacenter chosen at load time does not change.
+`POST /api/execute`, `POST /api/call`, and `POST /api/send` accept optional `client` and `edge` fields (see [`ClientContext` and `EdgeContext`](#post-apiload)). If the body names either field, they apply to that request only; a field that is left out means none for that request. If the body names neither field, the context set at load time applies. Requests never change the loaded context, and the store datacenter chosen at load time does not change.
 
 Execution requests are processed one at a time, in the order they arrive, so a request's context and its execution are not interleaved with another request.
 
@@ -864,7 +864,7 @@ curl -X POST http://localhost:5179/api/send \
 
 ## Stores
 
-The storage service backs the cache and Edge KV APIs of the loaded module. These endpoints inspect and control it. When the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false` and the other two endpoints return `{ "ok": true }` without effect.
+The storage service backs the cache and Edge KV APIs of the loaded module. These endpoints inspect and control it. When no module is loaded, the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false`. `POST /api/stores/reset` and `POST /api/stores/advance-clock` return `409` in those cases.
 
 ### GET /api/stores
 
@@ -872,9 +872,9 @@ Returns a snapshot of the cache for one datacenter and of Edge KV.
 
 **Query Parameters**
 
-| Parameter | Type     | Default                              | Description                      |
-| --------- | -------- | ------------------------------------ | -------------------------------- |
-| `dc`      | `string` | Datacenter of the currently loaded app | Cache datacenter to inspect.   |
+| Parameter | Type     | Default                 | Description                  |
+| --------- | -------- | ----------------------- | ---------------------------- |
+| `dc`      | `string` | Loaded app's datacenter | Cache datacenter to inspect. |
 
 **Response**
 
@@ -902,9 +902,9 @@ curl -H "x-fastedge-token: <token>" "http://localhost:5179/api/stores?dc=local"
 
 **Error Responses**
 
-| Status | Condition                                  |
-| ------ | ------------------------------------------ |
-| `500`  | The storage service returned an error      |
+| Status | Condition                             |
+| ------ | ------------------------------------- |
+| `500`  | The storage service returned an error |
 
 ---
 
@@ -934,9 +934,10 @@ curl -X POST -H "x-fastedge-token: <token>" http://localhost:5179/api/stores/res
 
 **Error Responses**
 
-| Status | Condition                                  |
-| ------ | ------------------------------------------ |
-| `500`  | The storage service returned an error      |
+| Status | Condition                             |
+| ------ | ------------------------------------- |
+| `409`  | No app with stores is loaded          |
+| `500`  | The storage service returned an error |
 
 ---
 
@@ -977,10 +978,11 @@ curl -X POST http://localhost:5179/api/stores/advance-clock \
 
 **Error Responses**
 
-| Status | Condition                                          |
-| ------ | -------------------------------------------------- |
+| Status | Condition                                            |
+| ------ | ---------------------------------------------------- |
 | `400`  | `ms` is missing, not a number, or not greater than 0 |
-| `500`  | The storage service returned an error              |
+| `409`  | No app with stores is loaded                         |
+| `500`  | The storage service returned an error                |
 
 ---
 
@@ -1298,6 +1300,7 @@ When a request body fails schema validation, `error` is the flattened validation
 | `401`  | Missing or invalid `x-fastedge-token` header on an `/api/*` request                                |
 | `403`  | `Host` header not allowed, or a save-as path not approved by the save dialog                       |
 | `404`  | Resource not found (config file, schema file)                                                      |
+| `409`  | Request conflicts with server state (no app with stores is loaded)                                 |
 | `500`  | Internal error during execution, I/O, or the storage service                                       |
 
 ---

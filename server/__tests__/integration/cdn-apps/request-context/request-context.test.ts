@@ -36,6 +36,13 @@ describe("CDN request context", () => {
     expect(again.output.request.headers["geoip-city"]).toBe("Paris");
     expect(again.output.request.headers["x-id"]).toBeUndefined();
     expect(dictionary.get("dc")).toBeNull();
+
+    // A call's own context is for that call only; the runner's stays.
+    const own = await runner.callHook({ ...createHookCall("onRequestHeaders"), context: { client: { preset: "us" }, edge: { preset: "nl" } } });
+    expect(logsContain(own, "Request City: Chicago")).toBe(true);
+    expect(own.output.request.headers["x-id"]).toBe("am3-hw-edge-gpig-gc96");
+    const after = await runner.callHook(createHookCall("onRequestHeaders"));
+    expect(logsContain(after, "Request City: Frankfurt am Main")).toBe(true);
   });
 
   it("reaches the worker runner and selects the cache bucket", async () => {
@@ -48,6 +55,13 @@ describe("CDN request context", () => {
       const result = await runner.callFullFlow("built-in", "GET", {}, "", {}, true);
       expect(logsContain(result.hookResults.onRequestHeaders, "Request City: Chicago")).toBe(true);
       expect(result.hookResults.onRequestHeaders.output.request.headers["x-id"]).toBe("am3-hw-edge-gpig-gc96");
+
+      // A flow's own context is for that flow only.
+      const nl = await runner.callFullFlow("built-in", "GET", {}, "", {}, true, { client: { preset: "nl" } });
+      expect(logsContain(nl.hookResults.onRequestHeaders, "Request City: Amsterdam")).toBe(true);
+      expect(nl.hookResults.onRequestHeaders.output.request.headers["x-id"]).toBeUndefined();
+      const back = await runner.callFullFlow("built-in", "GET", {}, "", {}, true);
+      expect(logsContain(back.hookResults.onRequestHeaders, "Request City: Chicago")).toBe(true);
     } finally {
       await runner.cleanup();
     }

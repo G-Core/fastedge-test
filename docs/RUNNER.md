@@ -122,7 +122,8 @@ interface IWasmRunner {
     headers: Record<string, string>,
     body: string,
     properties: Record<string, unknown>,
-    enforceProductionPropertyRules: boolean
+    enforceProductionPropertyRules: boolean,
+    context?: RequestContext
   ): Promise<FullFlowResult>;
   applyDotenv(enabled: boolean, path?: string): Promise<void>;
   setRequestContext(context: RequestContext): Promise<void>;
@@ -160,7 +161,7 @@ execute(request: HttpRequest): Promise<HttpResponse>
 
 `request.path` is a path on the locally spawned `fastedge-run` server, not a full URL. The runner forwards the request to that local process and returns the response including logs captured from the process stdout/stderr. Requests time out after 30 seconds. Network or timeout failures reject with `HTTP request failed: <reason>`. Calling `execute()` before `load()` rejects with `HttpWasmRunner not loaded. Call load() first.`
 
-If a request context is set (see [Request Context](#request-context)), its headers are added to the request; headers in `request.headers` take precedence.
+If a request context is set (see [Request Context](#request-context)), its headers are added to the request; headers in `request.headers` take precedence. A `request.context` applies to that request only and is used instead of the runner's context.
 
 **Redirects are not followed.** The underlying fetch uses `redirect: "manual"`, so 3xx responses reach the caller intact — status code and `Location` header — rather than being transparently followed. This matches FastEdge edge behavior, where redirects are returned to the client rather than followed server-side, and lets tests assert on redirect status and `Location`.
 
@@ -196,7 +197,7 @@ Executes a single proxy-wasm hook in isolation. Only available on proxy-wasm run
 callHook(hookCall: HookCall): Promise<HookResult>
 ```
 
-Each call creates a fresh WASM instance with the request/response state from `hookCall`, invokes the appropriate hook export, and returns the resulting state and logs.
+Each call creates a fresh WASM instance with the request/response state from `hookCall`, invokes the appropriate hook export, and returns the resulting state and logs. `hookCall.context` applies a client and edge to that call only; when omitted, the runner's context is used.
 
 Valid hook names: `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`. Any other value throws.
 
@@ -226,7 +227,8 @@ callFullFlow(
   headers: Record<string, string>,
   body: string,
   properties: Record<string, unknown>,
-  enforceProductionPropertyRules: boolean
+  enforceProductionPropertyRules: boolean,
+  context?: RequestContext
 ): Promise<FullFlowResult>
 ```
 
@@ -240,12 +242,13 @@ callFullFlow(
 | `body`                           | `string`                  | Request body                                            |
 | `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                   |
 | `enforceProductionPropertyRules` | `boolean`                 | Enforce production property access rules                |
+| `context?`                       | `RequestContext`          | Client and edge for this flow only                      |
 
 The upstream response is generated at runtime — either by a real HTTP fetch against `url`, or by the built-in responder when `url === "built-in"` (`BUILTIN_SHORTHAND`). There is no caller-provided mock response. The origin fetch does not follow redirects; a 3xx origin response is passed to the response hooks as-is.
 
 Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fetch or built-in responder)* → `onResponseHeaders` → `onResponseBody`.
 
-If a request context is set (see [Request Context](#request-context)), its properties and headers are added to the call; the `properties` and `headers` arguments take precedence.
+If a request context is set (see [Request Context](#request-context)), its properties and headers are added to the call; the `properties` and `headers` arguments take precedence. When `context` is passed, it is used for this flow instead of the runner's context.
 
 **Local response short-circuit.** If a WASM module calls `proxy_send_local_response` in any hook and returns `StopIteration` (return code `1`), the runner short-circuits immediately. For request-phase hooks (`onRequestHeaders`, `onRequestBody`), this skips the remaining request hooks, the origin fetch, and all response hooks. For response-phase hooks (`onResponseHeaders`, `onResponseBody`), this skips any remaining response hooks. In all cases, `finalResponse` is built from the locally-sent status, headers, and body — matching CDN production behavior. This is how redirect modules (for example geo-redirect) and early error responses work.
 
@@ -268,7 +271,7 @@ applyDotenv(enabled: boolean, path?: string): Promise<void>
 
 ### setRequestContext
 
-Changes the simulated client and edge POP of a loaded runner. The new context applies from the next request. The cache bucket (`dc`) stays as it was when the runner was loaded.
+Changes the simulated client and edge POP of a loaded runner. The new context applies from the next request. A request that names its own context uses that instead. The cache bucket (`dc`) stays as it was when the runner was loaded.
 
 ```typescript
 setRequestContext(context: RequestContext): Promise<void>
@@ -380,7 +383,7 @@ When `x-debugger-content` is omitted, the built-in responder returns a JSON echo
 
 ## Request Context
 
-A request context describes where the client is and which edge POP runs the app. It is set through `RunnerConfig.client` and `RunnerConfig.edge` at load time, or through [setRequestContext](#setrequestcontext) afterwards.
+A request context describes where the client is and which edge POP runs the app. It is set through `RunnerConfig.client` and `RunnerConfig.edge` at load time, or through [setRequestContext](#setrequestcontext) afterwards. A single request can name its own context with `HttpRequest.context`, `HookCall.context`, or the `context` argument of `callFullFlow()`; that context is used for the request instead of the runner's.
 
 - **`client`** (`ClientContext`): where the client is. Built from a preset (`de`, `nl`, or `us`) plus overrides.
 - **`edge`** (`EdgeContext`): which edge POP runs the app. Built from a preset (`de` = `fr5`, `nl` = `am3`, `us` = `sv5`) plus overrides. The POP's `dc` is the cache bucket unless `RunnerConfig.dc` is set.
@@ -477,6 +480,8 @@ interface HttpRequest {
   method: string;
   headers: Record<string, string>;
   body?: string;
+  /** Client and edge for this request only; default: the runner's (`setRequestContext`). */
+  context?: RequestContext;
 }
 
 interface HttpResponse {
@@ -498,6 +503,8 @@ interface HttpResponse {
 `HttpResponse.headers` uses Node's `IncomingHttpHeaders` shape: common single-valued headers (`content-type`, `location`, `etag`, …) are typed as `string`; `set-cookie` is `string[]`; unknown keys are `string | string[] | undefined`. This preserves RFC 6265 Set-Cookie semantics (each cookie kept separate).
 
 `HttpRequest` and `HttpResponse` are used exclusively with `execute()` on `HttpWasmRunner`.
+
+`HttpRequest.context` applies a client and edge to that request only. When omitted, the runner's context is used. See [Request Context](#request-context).
 
 `isBase64` is `true` when the response body is binary content (images, audio, video, PDF, ZIP, gzip, `application/octet-stream`) encoded as base64.
 
@@ -531,6 +538,8 @@ const contentType = response.headers['content-type']; // string | undefined
 ```typescript
 type HookCall = {
   hook: string;
+  /** Client and edge for this call only (see `RunnerConfig.client` / `.edge`); default: the runner's. */
+  context?: RequestContext;
   request: {
     headers: HeaderRecord;
     body: string;
@@ -560,12 +569,14 @@ type HookCall = {
 | Field                            | Description                                    |
 | -------------------------------- | ---------------------------------------------- |
 | `hook`                           | Hook name (see below)                          |
+| `context`                        | Client and edge for this call only             |
 | `request`                        | Request state passed to the hook               |
 | `response`                       | Seed state for response hooks via `callHook()` |
 | `properties`                     | Shared properties                              |
 | `enforceProductionPropertyRules` | Defaults to `true`                             |
 
 - `hook`: one of `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`.
+- `context`: when omitted, the runner's context is used. See [Request Context](#request-context).
 - `response`: not consumed by `callFullFlow()` or by request hooks. The full-flow path generates the upstream response at runtime.
 - `properties`: for example `request.path`, `vm_config`, `plugin_config`.
 - `enforceProductionPropertyRules`: set to `false` to allow property access that the production CDN blocks.

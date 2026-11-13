@@ -24,7 +24,8 @@ import type { AddressInfo } from "node:net";
 import { BadRequest, type Reply, type StoresCore } from "./StoresCore.js";
 import { TraceLog } from "./trace.js";
 
-export const STORES_PROTOCOL = 2; // 2: snapshot, reset
+// Additive ops (snapshot, reset) keep the protocol: clients of either version can share a service.
+export const STORES_PROTOCOL = 1;
 
 export type StoresServer = { port: number; liveLeases(): number; close(): Promise<void> };
 

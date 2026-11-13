@@ -28,5 +28,11 @@ const variant = HTTP_APP_VARIANTS.find((v) => wasmExists(v, "headers"));
     const again = await runner.execute({ path: "/", method: "GET", headers: {} });
     expect(again.headers.dc).toBe("sv5");
     expect(again.headers["geoip-city"]).toBeUndefined();
+
+    // A request's own context is for that request only.
+    const own = await runner.execute({ path: "/", method: "GET", headers: {}, context: { client: { preset: "nl" } } });
+    expect(own.headers["geoip-city"]).toBe("Amsterdam");
+    expect(own.headers.dc).toBeUndefined();
+    expect((await runner.execute({ path: "/", method: "GET", headers: {} })).headers.dc).toBe("sv5");
   }, 30000);
 });

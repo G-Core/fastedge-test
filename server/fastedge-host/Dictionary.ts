@@ -9,7 +9,7 @@ import { IDictionary } from "./types";
  */
 export class Dictionary implements IDictionary {
   private data: Map<string, string>;
-  private defaults = new Map<string, string>();
+  private defaults: () => Record<string, string> = () => ({});
 
   constructor(initialData?: Record<string, string>) {
     this.data = new Map();
@@ -24,12 +24,15 @@ export class Dictionary implements IDictionary {
    * Get a configuration value by key
    */
   get(key: string): string | null {
-    return this.data.get(key) ?? this.defaults.get(key) ?? null;
+    return this.data.get(key) ?? this.defaults()[key] ?? null;
   }
 
-  /** Values used for keys that were never set (the edge's node description). */
-  setDefaults(defaults: Record<string, string>): void {
-    this.defaults = new Map(Object.entries(defaults));
+  /**
+   * Values used for keys that were never set (the edge's node description). A function, so a
+   * runner can answer per call (each request may name its own edge).
+   */
+  setDefaults(defaults: Record<string, string> | (() => Record<string, string>)): void {
+    this.defaults = typeof defaults === "function" ? defaults : () => defaults;
   }
 
   /**
@@ -43,7 +46,7 @@ export class Dictionary implements IDictionary {
    * Check if a key exists
    */
   has(key: string): boolean {
-    return this.data.has(key) || this.defaults.has(key);
+    return this.data.has(key) || key in this.defaults();
   }
 
   /**

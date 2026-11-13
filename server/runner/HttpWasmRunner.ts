@@ -225,7 +225,8 @@ export class HttpWasmRunner implements IWasmRunner {
       // With stores on, a W3C traceparent names this request: fastedge-run tags its storage
       // calls with it. A valid caller trace id is kept, but the parent id is always new, so
       // every execution has its own value; duplicates and invalid values are replaced.
-      const headers = withHeaders(this.contextHeaders, request.headers);
+      const contextHeaders = request.context ? httpContextHeaders(request.context) : this.contextHeaders;
+      const headers = withHeaders(contextHeaders, request.headers);
       let traceparent: string | undefined;
       if (this.stores) {
         traceparent = newTraceparent(headers);

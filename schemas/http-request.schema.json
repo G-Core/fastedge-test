@@ -19,6 +19,10 @@
         },
         "body": {
           "type": "string"
+        },
+        "context": {
+          "$ref": "#/definitions/RequestContext",
+          "description": "Client and edge for this request only; default: the runner's (`setRequestContext`)."
         }
       },
       "required": [
@@ -27,6 +31,112 @@
         "headers"
       ],
       "description": "HTTP Request type for HTTP WASM runner"
+    },
+    "RequestContext": {
+      "type": "object",
+      "properties": {
+        "client": {
+          "$ref": "#/definitions/ClientContext"
+        },
+        "edge": {
+          "$ref": "#/definitions/EdgeContext"
+        }
+      }
+    },
+    "ClientContext": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "$ref": "#/definitions/Preset"
+        },
+        "ip": {
+          "type": "string"
+        },
+        "asn": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string",
+          "description": "ISO country code (`DE`)."
+        },
+        "countryName": {
+          "type": "string"
+        },
+        "city": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string",
+          "description": "Region / state code (`HE`)."
+        },
+        "continent": {
+          "type": "string",
+          "description": "Continent code (`EU`)."
+        },
+        "lat": {
+          "type": "string"
+        },
+        "long": {
+          "type": "string"
+        }
+      }
+    },
+    "Preset": {
+      "type": "string",
+      "enum": [
+        "de",
+        "nl",
+        "us"
+      ]
+    },
+    "EdgeContext": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "$ref": "#/definitions/Preset"
+        },
+        "dc": {
+          "type": "string",
+          "description": "POP code (`fr5`); also the cache bucket."
+        },
+        "region": {
+          "type": "string",
+          "description": "Dictionary region (`eu`)."
+        },
+        "country": {
+          "type": "string",
+          "description": "Dictionary country name (`Germany`)."
+        },
+        "city": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string",
+          "description": "Edge node name (`fr5-hw-edge-gpig-gc23`); CDN apps also get it as `X-ID`."
+        },
+        "popLat": {
+          "type": "string",
+          "description": "`pop-*` headers (HTTP apps)."
+        },
+        "popLong": {
+          "type": "string"
+        },
+        "popReg": {
+          "type": "string"
+        },
+        "popCity": {
+          "type": "string"
+        },
+        "popContinent": {
+          "type": "string"
+        },
+        "popCountryCode": {
+          "type": "string"
+        },
+        "popCountryName": {
+          "type": "string"
+        }
+      }
     }
   }
 }

@@ -1,3 +1,4 @@
+import type { RequestContext } from "./requestContext.js";
 import type { StoreCall } from "../stores/trace.js";
 export type HeaderMap = Record<string, string>;
 export type HeaderTuples = [string, string][];
@@ -9,6 +10,8 @@ export type HeaderRecord = Record<string, string | string[]>;
 
 export type HookCall = {
   hook: string;
+  /** Client and edge for this call only (see `RunnerConfig.client` / `.edge`); default: the runner's. */
+  context?: RequestContext;
   request: {
     headers: HeaderRecord;
     body: string;

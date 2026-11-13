@@ -68,6 +68,8 @@ export interface HttpRequest {
   method: string;
   headers: Record<string, string>;
   body?: string;
+  /** Client and edge for this request only; default: the runner's (`setRequestContext`). */
+  context?: RequestContext;
 }
 
 /**
@@ -147,6 +149,7 @@ export interface IWasmRunner {
    * @param body Request body
    * @param properties Shared properties
    * @param enforceProductionPropertyRules Whether to enforce property access rules
+   * @param context Client and edge for this flow only; default: the runner's
    * @returns Full flow execution result
    */
   callFullFlow(
@@ -155,7 +158,8 @@ export interface IWasmRunner {
     headers: Record<string, string>,
     body: string,
     properties: Record<string, unknown>,
-    enforceProductionPropertyRules: boolean
+    enforceProductionPropertyRules: boolean,
+    context?: RequestContext,
   ): Promise<FullFlowResult>;
 
   /**
@@ -168,8 +172,9 @@ export interface IWasmRunner {
   applyDotenv(enabled: boolean, path?: string): Promise<void>;
 
   /**
-   * Change the client and edge (see `RunnerConfig.client` / `.edge`) from the next request.
-   * The cache bucket stays as loaded.
+   * Change the runner's client and edge (see `RunnerConfig.client` / `.edge`) from the next
+   * request; a request that names its own context uses that instead. The cache bucket stays
+   * as loaded.
    */
   setRequestContext(context: RequestContext): Promise<void>;
 

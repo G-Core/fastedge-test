@@ -162,6 +162,7 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
     body: string,
     properties: Record<string, unknown>,
     enforceProductionPropertyRules: boolean,
+    context?: RequestContext,
   ): Promise<FullFlowResult> {
     return this.call(
       "callFullFlow",
@@ -171,6 +172,7 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
       body,
       properties,
       enforceProductionPropertyRules,
+      context,
     );
   }
 

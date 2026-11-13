@@ -250,9 +250,8 @@ app.post("/api/reload-workspace-wasm", async (req: Request, res: Response) => {
 });
 
 /**
- * Loads and requests run one at a time: a request's client / edge (setRequestContext) and its
- * execution happen together, and loads apply in the order they arrive.
- * ponytail: one queue for the debugger's single runner; per-call context if parallel requests matter.
+ * Loads run one at a time, in arrival order, so an older load (e.g. an edge reload) cannot
+ * finish last and win. Requests are not queued: each carries its own client / edge.
  */
 let queue: Promise<unknown> = Promise.resolve();
 function serialized(handler: (req: Request, res: Response) => Promise<void>) {
@@ -382,12 +381,13 @@ app.post("/api/load", serialized(async (req: Request, res: Response) => {
     }
 
     // Create appropriate runner based on detected type
+    loadedStores = null; // until this load succeeds
     const storesConnection = stores !== false ? await getStores() : null;
-    currentDc = dc ?? edgeDc(edge) ?? "local";
+    const appDc = dc ?? edgeDc(edge) ?? "local";
     currentRunner = runnerFactory.createRunner(
       wasmType,
       dotenv?.enabled ?? false,
-      storesConnection && { connection: storesConnection, dc: currentDc, owned: false },
+      storesConnection && { connection: storesConnection, dc: appDc, owned: false },
     );
     currentRunner.setStateManager(stateManager);
 
@@ -401,6 +401,7 @@ app.post("/api/load", serialized(async (req: Request, res: Response) => {
       client,
       edge,
     });
+    loadedStores = storesConnection && { dc: appDc };
 
     // Emit WASM loaded event — include runner port for HTTP WASM so the
     // frontend can build the live preview URL without a separate API call
@@ -446,24 +447,32 @@ async function getStores(): Promise<StoresConnection | null> {
   }
 }
 
-/** The cache bucket of the loaded app (the Stores panel's default `dc`). */
-let currentDc = "local";
+/** The loaded app's stores: its cache bucket, or null (no app loaded, or stores off). */
+let loadedStores: { dc: string } | null = null;
 
-/** One admin call to the storage service; null when stores are off. */
+/** One admin call to the storage service; null when the loaded app has no stores. */
 async function storesAdmin(body: Record<string, unknown>): Promise<unknown> {
-  const connection = await getStores();
+  const connection = loadedStores && (await getStores());
   if (!connection) return null;
   const reply = await storesRequest(connection, "admin", body);
-  if (!reply.ok) throw new Error(`stores service: ${reply.error}`);
+  if (!reply.ok) {
+    // snapshot / reset are newer than the first service protocol: an older service refuses them.
+    throw new Error(
+      reply.error === "bad-request"
+        ? "the running storage service is older than this debugger: close other fastedge-test instances, then restart this debugger"
+        : `stores service: ${reply.error}`,
+    );
+  }
   return reply.value;
 }
 
 /** Stores panel: what the cache (one `dc`, default the loaded app's) and Edge KV hold. */
 app.get("/api/stores", async (req: Request, res: Response) => {
-  const dc = typeof req.query.dc === "string" && req.query.dc ? req.query.dc : currentDc;
+  const appDc = loadedStores?.dc ?? "local";
+  const dc = typeof req.query.dc === "string" && req.query.dc ? req.query.dc : appDc;
   try {
     const snapshot = await storesAdmin({ op: "snapshot", dc });
-    res.json(snapshot ? { ok: true, enabled: true, appDc: currentDc, ...snapshot } : { ok: true, enabled: false });
+    res.json(snapshot ? { ok: true, enabled: true, appDc, ...snapshot } : { ok: true, enabled: false });
   } catch (error) {
     res.status(500).json({ ok: false, error: String(error) });
   }
@@ -472,6 +481,10 @@ app.get("/api/stores", async (req: Request, res: Response) => {
 /** Back to the fixtures: cache emptied (every `dc`), Edge KV re-seeded. */
 app.post("/api/stores/reset", async (_req: Request, res: Response) => {
   try {
+    if (!loadedStores) {
+      res.status(409).json({ ok: false, error: "no app with stores is loaded" });
+      return;
+    }
     await storesAdmin({ op: "reset" });
     res.json({ ok: true });
   } catch (error) {
@@ -487,6 +500,10 @@ app.post("/api/stores/advance-clock", async (req: Request, res: Response) => {
     return;
   }
   try {
+    if (!loadedStores) {
+      res.status(409).json({ ok: false, error: "no app with stores is loaded" });
+      return;
+    }
     await storesAdmin({ op: "advance-clock", ms });
     res.json({ ok: true });
   } catch (error) {
@@ -553,11 +570,12 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
 });
 
 /**
- * A request body that names `client` or `edge` replaces the runner's request context (both
- * fields: one left out is cleared). The cache bucket stays as loaded.
+ * The client / edge a request body names, for that request only (one left out is none).
+ * Neither named: undefined, so the runner's own (from load) applies. The cache bucket stays
+ * as loaded.
  */
-async function applyRequestContext(runner: IWasmRunner, body: object, context: RequestContext): Promise<void> {
-  if ("client" in body || "edge" in body) await runner.setRequestContext(context);
+function requestContextOf(body: object, context: RequestContext): RequestContext | undefined {
+  return "client" in body || "edge" in body ? context : undefined;
 }
 
 /** Client and edge presets, for the request context panel. */
@@ -565,7 +583,7 @@ app.get("/api/request-context/presets", (_req: Request, res: Response) => {
   res.json({ ok: true, client: CLIENT_PRESETS, edge: EDGE_PRESETS });
 });
 
-app.post("/api/execute", serialized(async (req: Request, res: Response) => {
+app.post("/api/execute", async (req: Request, res: Response) => {
   const { url, path: reqPath, method, headers, body } = req.body ?? {};
   const context = ApiExecuteContextSchema.safeParse(req.body ?? {});
   if (!context.success) {
@@ -582,7 +600,7 @@ app.post("/api/execute", serialized(async (req: Request, res: Response) => {
   }
 
   try {
-    await applyRequestContext(currentRunner, req.body ?? {}, context.data);
+    const requestContext = requestContextOf(req.body ?? {}, context.data);
     if (currentRunner.getType() === "http-wasm") {
       // HTTP WASM: Accept either `path` (preferred) or `url` (legacy).
       // When `path` is provided, use it directly (e.g. "/api/hello?q=1").
@@ -613,6 +631,7 @@ app.post("/api/execute", serialized(async (req: Request, res: Response) => {
         method: method || "GET",
         headers: headers || {},
         body: body || "",
+        context: requestContext,
       });
 
       // Emit HTTP WASM request completed event
@@ -647,6 +666,7 @@ app.post("/api/execute", serialized(async (req: Request, res: Response) => {
         request?.body || "",
         properties || {},
         true, // enforceProductionPropertyRules
+        requestContext,
       );
 
       // Emit request completed event
@@ -671,9 +691,9 @@ app.post("/api/execute", serialized(async (req: Request, res: Response) => {
 
     res.status(500).json({ ok: false, error: String(error) });
   }
-}));
+});
 
-app.post("/api/call", serialized(async (req: Request, res: Response) => {
+app.post("/api/call", async (req: Request, res: Response) => {
   const parsed = ApiCallBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
@@ -690,9 +710,9 @@ app.post("/api/call", serialized(async (req: Request, res: Response) => {
   }
 
   try {
-    await applyRequestContext(currentRunner, req.body, parsed.data);
     const result = await currentRunner.callHook({
       hook,
+      context: requestContextOf(req.body, parsed.data),
       request: request ?? { headers: {}, body: "" },
       response: response ?? { headers: {}, body: "" },
       properties: properties ?? {},
@@ -702,9 +722,9 @@ app.post("/api/call", serialized(async (req: Request, res: Response) => {
   } catch (error) {
     res.status(500).json({ ok: false, error: String(error) });
   }
-}));
+});
 
-app.post("/api/send", serialized(async (req: Request, res: Response) => {
+app.post("/api/send", async (req: Request, res: Response) => {
   const parsed = ApiSendBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
@@ -721,7 +741,6 @@ app.post("/api/send", serialized(async (req: Request, res: Response) => {
   }
 
   try {
-    await applyRequestContext(currentRunner, req.body, parsed.data);
     // Always capture all logs (trace level) - filtering happens client-side
     const fullFlowResult = await currentRunner.callFullFlow(
       url,
@@ -730,6 +749,7 @@ app.post("/api/send", serialized(async (req: Request, res: Response) => {
       request?.body || "",
       properties || {},
       true, // enforceProductionPropertyRules
+      requestContextOf(req.body, parsed.data),
     );
 
     // Emit request completed event
@@ -753,7 +773,7 @@ app.post("/api/send", serialized(async (req: Request, res: Response) => {
 
     res.status(500).json({ ok: false, error: String(error) });
   }
-}));
+});
 
 /** Resolve the .fastedge-debug config directory.
  *  Prefers WORKSPACE_PATH (VSCode integration) so the config lives next to

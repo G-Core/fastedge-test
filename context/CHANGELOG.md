@@ -7,10 +7,11 @@ A read-only **Stores** panel in both views: cache entries of one `dc` (TTL count
 switcher) and Edge KV keys by type, with Reset and Advance clock. See `features/STORES.md`.
 
 ### 🎯 What Was Completed
-- Storage service protocol 2: admin `snapshot` and `reset` (`StoresCore.snapshot`)
+- Storage service: admin `snapshot` and `reset` (`StoresCore.snapshot`), no protocol bump
 - Debugger: `GET /api/stores`, `POST /api/stores/reset`, `POST /api/stores/advance-clock`
 - `components/common/StoresPanel`; refreshes after each request
-- Request context review fixes: `/api/load` and the request endpoints run one at a time
+- Request context review fixes: a request's `client` / `edge` apply to that request only
+  (`HookCall.context`, `callFullFlow` `context`, `HttpRequest.context`); loads run one at a time
 - `pnpm dev`: the watch build gets the `import.meta.url` shim the production bundle has
 
 ### 🧪 Testing
