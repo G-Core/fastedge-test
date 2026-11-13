@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +12,7 @@ const open = async (...args: Parameters<typeof createStores>) => {
   return s;
 };
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(opened.splice(0).map((s) => s.close()));
 });
 
@@ -55,6 +56,7 @@ describe('createStores', () => {
   it('advanceClock expires entries; dc and fixtures: false', async () => {
     const s = await open({ fixtures: false, dc: 'ams' });
     expect(s.dc).toBe('ams');
+    vi.useFakeTimers({ toFake: ['Date'] }); // only the service clock moves
     s.cache.set('t', 'v', { ttlMs: 1000 });
     s.advanceClock(999);
     expect(s.cache.get('t')).toBe('v');

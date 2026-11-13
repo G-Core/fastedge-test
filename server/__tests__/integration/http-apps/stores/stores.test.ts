@@ -115,4 +115,14 @@ describe.skipIf(!process.env.FASTEDGE_TEST_STORES_E2E)('HTTP + CDN apps share th
       { app: 'http', kind: 'kv', op: 'scan', store: 'users', pattern: 'user]', result: 'invalid-pattern' },
     ]);
   });
+
+  it('requests reusing one caller traceparent (in any case, duplicated) still get their own trace', async () => {
+    const h = await runner('http-apps/rust/wasi/stores.wasm', { runnerType: 'http-wasm' });
+    const tp = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01';
+    const headers = { traceparent: tp, TraceParent: tp };
+    const a = await h.execute({ path: '/?op=incr&key=reused', method: 'GET', headers });
+    const b = await h.execute({ path: '/?op=incr&key=reused', method: 'GET', headers });
+    expect(a.storeCalls!.map((c) => c.value)).toEqual(['1']);
+    expect(b.storeCalls!.map((c) => c.value)).toEqual(['2']);
+  });
 });

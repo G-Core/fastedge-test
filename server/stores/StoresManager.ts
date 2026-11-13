@@ -207,8 +207,13 @@ function logTail(dir: string): string {
 }
 
 /** A store operation: the service's reply as is (`ok: false` included); rejects on transport failure. */
-export function request(conn: { url: string; token: string }, kind: "cache" | "kv" | "admin", body: unknown): Promise<Reply> {
-  return send({ port: Number(new URL(conn.url).port), token: conn.token }, `/v1/${kind}`, body, 4000);
+export function request(
+  conn: { url: string; token: string },
+  kind: "cache" | "kv" | "admin",
+  body: unknown,
+  timeoutMs = 4000,
+): Promise<Reply> {
+  return send({ port: Number(new URL(conn.url).port), token: conn.token }, `/v1/${kind}`, body, timeoutMs);
 }
 
 /** One JSON call to the service; resolves the reply's value, rejects on anything else. */

@@ -213,13 +213,14 @@ export class HttpWasmRunner implements IWasmRunner {
 
     try {
       // With stores on, a W3C traceparent names this request: fastedge-run tags its storage
-      // calls with it (the caller's own traceparent is kept and used).
+      // calls with it. A valid caller trace id is kept, but the parent id is always new, so
+      // every execution has its own value; duplicates and invalid values are replaced.
       const headers = { ...request.headers };
       let traceparent: string | undefined;
       if (this.stores) {
-        const key = Object.keys(headers).find((h) => h.toLowerCase() === "traceparent");
-        traceparent = key ? headers[key] : `00-${randomBytes(16).toString("hex")}-${randomBytes(8).toString("hex")}-01`;
-        if (!key) headers.traceparent = traceparent;
+        traceparent = newTraceparent(headers);
+        for (const key of Object.keys(headers)) if (key.toLowerCase() === "traceparent") delete headers[key];
+        headers.traceparent = traceparent;
       }
 
       // Forward request to local fastedge-run server
@@ -271,7 +272,8 @@ export class HttpWasmRunner implements IWasmRunner {
   /** The storage calls fastedge-run made for this request (empty if the service cannot say). */
   private async storeCalls(requestId: string): Promise<StoreCall[]> {
     try {
-      const reply = await storesRequest(this.stores!.connection, "admin", { op: "traces", requestId });
+      // Short: the response is ready; an unhealthy service must not hold it up.
+      const reply = await storesRequest(this.stores!.connection, "admin", { op: "traces", requestId }, 500);
       return reply.ok ? (reply.value as StoreCall[]) : [];
     } catch {
       return [];
@@ -642,4 +644,12 @@ export function parseFetchHeaders(headers: Headers): IncomingHttpHeaders {
     result["set-cookie"] = setCookies;
   }
   return result;
+}
+
+/** A W3C traceparent with a fresh parent id, keeping the caller's trace id if one is valid. */
+export function newTraceparent(headers: Record<string, string>): string {
+  const caller = Object.entries(headers).find(([k]) => k.toLowerCase() === "traceparent")?.[1];
+  const match = /^00-([0-9a-f]{32})-[0-9a-f]{16}-([0-9a-f]{2})$/.exec(caller?.trim() ?? "");
+  const traceId = match && !/^0+$/.test(match[1]) ? match[1] : randomBytes(16).toString("hex");
+  return `00-${traceId}-${randomBytes(8).toString("hex")}-${match?.[2] ?? "01"}`;
 }
