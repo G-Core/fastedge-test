@@ -178,13 +178,13 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
 }
 
 /**
- * Stores panel: the cache entries of one dc (default: this app's) with their TTLs, and every
+ * Storage panel: the cache entries of one dc (default: this app's) with their TTLs, and every
  * Edge KV store's keys by type. Read-only; Reset goes back to the fixtures, Advance clock moves
  * cache expiry. Refreshes after each request (`refreshKey` changes).
  */
 export function StoresPanel({ refreshKey }: { refreshKey: unknown }) {
   return (
-    <CollapsiblePanel title="Stores" defaultExpanded={false}>
+    <CollapsiblePanel title="Storage" defaultExpanded={false}>
       <StoresContent refreshKey={refreshKey} />
     </CollapsiblePanel>
   );

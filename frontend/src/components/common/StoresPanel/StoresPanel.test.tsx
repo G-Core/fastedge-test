@@ -21,7 +21,7 @@ const snapshot = (dc = "fr5") => ({
 
 function open(refreshKey: unknown = 1) {
   const view = render(<StoresPanel refreshKey={refreshKey} />);
-  fireEvent.click(screen.getByText("Stores"));
+  fireEvent.click(screen.getByText("Storage"));
   return view;
 }
 

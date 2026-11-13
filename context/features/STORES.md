@@ -102,7 +102,7 @@ service refuses them with `bad-request`, which the debugger reports as "close ot
 instances, then restart this debugger" (its own lease keeps the old service alive); runners keep
 working with it.
 
-## Stores panel (debugger)
+## Storage panel (debugger)
 
 `GET /api/stores?dc=` (default: the loaded app's `dc`, returned as `appDc`; `{ enabled: false }`
 when no app is loaded or it has stores off, without connecting to the service; Reset and Advance
