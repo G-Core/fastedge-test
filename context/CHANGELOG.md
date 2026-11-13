@@ -1,5 +1,28 @@
 # Proxy-WASM Runner - Changelog
 
+## November 13, 2026 - Edge KV globs as measured; `stores`/`dc` in config files
+
+### Overview
+The edge's Edge KV pattern rules were measured on preprod (KV store with glob-character keys) and
+the storage service now matches them. `stores` and `dc` can be set in `fastedge-config.test.json`
+and reach `/api/load` from the debugger UI.
+
+### 🎯 What Was Completed
+- `StoresCore`: `redisGlob` replaced by `edgeGlob` (validating parser): reversed ranges, `[\^]`,
+  errors for `]` outside a set, `[` inside one, unclosed sets, `[x-]`, trailing `\`
+  (`invalid-pattern`); `[]` matches nothing. `zscan` matches the literal prefix only, ordered by
+  member. `zrange-by-score` with min > max → `min-gt-max`
+- `StoresHost`: `min-gt-max` → BadArgument (the engine's store `Other`), `invalid-pattern` →
+  InternalFailure
+- KV fixtures refuse empty values (the edge API does)
+- Config schema: `stores`, `dc` (all app types); frontend config state, export and the
+  `/api/load` body (`LoadOptions` replaces the `httpPort` argument)
+- Test app `http-apps/rust/wasi/stores`: percent-decoded query, `kv-zscan`
+- FastEdge-lib: the edge's error texts (`ERR: Invalid argument: WRONGTYPE ...`, `ERR: min > max`)
+
+### 🧪 Testing
+- Unit 532 (edge pattern table), frontend 343, CDN integration 144 × 2, HTTP stores E2E 4/4
+
 ## November 12, 2026 - HTTP apps join the storage service
 
 ### Overview

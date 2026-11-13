@@ -61,17 +61,18 @@ export const createWasmSlice: StateCreator<
       let file: File | null = null;
 
       const resolvedDotenvPath = (dotenvPath !== undefined ? dotenvPath : get().dotenv.path) ?? undefined;
-      // httpPort always flows from config state — it has no UI toggle and can
-      // only be changed by loading a different config file.
-      const resolvedHttpPort = get().httpPort;
+      // httpPort, stores and dc flow from config state — they have no UI controls and
+      // change only by loading a different config file.
+      const { httpPort, stores, dc } = get();
+      const options = { httpPort, stores, dc };
 
       // Handle string path (direct path loading)
       if (typeof fileOrPath === 'string') {
-        result = await uploadWasmFromPath(fileOrPath, dotenvEnabled, resolvedDotenvPath, resolvedHttpPort);
+        result = await uploadWasmFromPath(fileOrPath, dotenvEnabled, resolvedDotenvPath, options);
       } else {
         // Handle File object (hybrid loading)
         file = fileOrPath;
-        result = await uploadWasm(file, dotenvEnabled, resolvedDotenvPath, resolvedHttpPort);
+        result = await uploadWasm(file, dotenvEnabled, resolvedDotenvPath, options);
       }
 
       const { path, wasmType, loadingMode, loadTime, fileSize } = result;

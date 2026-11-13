@@ -142,6 +142,8 @@ interface RunnerConfig {
     path?: string;                          // Directory to load them from (default: process cwd)
   };
   enforceProductionPropertyRules?: boolean; // CDN property access control (default: true)
+  stores?: boolean;                         // Local cache and Edge KV (default: true)
+  dc?: string;                              // Cache bucket shared by runners (default: "local")
 }
 ```
 
@@ -332,6 +334,23 @@ const response = await runner.execute({
 // Always clean up when done
 await runner.cleanup();
 ```
+
+---
+
+## Cache and Edge KV
+
+CDN and HTTP apps get a local cache and Edge KV, on by default (`stores: false` in
+`RunnerConfig` or `fastedge-config.test.json` turns them off). Every runner, test process and
+debugger in one git repository shares them; runners with the same `dc` share cache entries.
+Data lives in `.fastedge-debug/stores/` (git-ignored). Edge KV is read-only to apps, as on the
+edge; seed it from fixtures:
+
+```
+fixtures/stores/kv/<store>.json   { "strings": { "key": "value" }, "zsets": { "key": [["member", 1.5]] }, "bloom": { "key": ["item"] } }
+fixtures/stores/cache/<dc>.json   { "key": { "value": "text", "ttl_ms": 60000 } }
+```
+
+A value can be `{ "base64": "..." }` for binary data. Only stores with a fixture are attached.
 
 ---
 

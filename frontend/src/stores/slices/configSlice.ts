@@ -11,6 +11,8 @@ const DEFAULT_CONFIG_STATE: ConfigState = {
   },
   logLevel: 2,
   httpPort: null,
+  stores: null,
+  dc: null,
 };
 
 export const createConfigSlice: StateCreator<
@@ -89,6 +91,8 @@ export const createConfigSlice: StateCreator<
       // so a previously-loaded HTTP pin doesn't leak across loads.
       state.httpPort =
         config.appType === 'http-wasm' ? config.httpPort ?? null : null;
+      state.stores = config.stores ?? null;
+      state.dc = config.dc ?? null;
 
       // Restore request fields into the correct slice based on app type.
       // HTTP configs use `path`, CDN configs use `url`.
@@ -155,6 +159,9 @@ export const createConfigSlice: StateCreator<
     if (isHttp && state.httpPort !== null) {
       config.httpPort = state.httpPort;
     }
+
+    if (state.stores !== null) config.stores = state.stores;
+    if (state.dc !== null) config.dc = state.dc;
 
     if (state.wasmPath) {
       config.wasm = {

@@ -48,6 +48,13 @@
               },
               "additionalProperties": false
             },
+            "stores": {
+              "type": "boolean"
+            },
+            "dc": {
+              "type": "string",
+              "minLength": 1
+            },
             "appType": {
               "type": "string",
               "const": "http-wasm"
@@ -141,6 +148,13 @@
                 }
               },
               "additionalProperties": false
+            },
+            "stores": {
+              "type": "boolean"
+            },
+            "dc": {
+              "type": "string",
+              "minLength": 1
             },
             "appType": {
               "default": "proxy-wasm",

@@ -32,6 +32,13 @@ const BaseConfigSchema = z.object({
   wasm: WasmConfigSchema.optional(),
   properties: z.record(z.string(), z.unknown()).optional().default({}),
   dotenv: DotenvSchema.optional(),
+  /**
+   * The local cache and Edge KV (the storage service). On by default; `false` turns
+   * them off, and every cache / KV call then fails with an error status.
+   */
+  stores: z.boolean().optional(),
+  /** Cache bucket: runners with the same `dc` share cache entries. Default `local`. */
+  dc: z.string().min(1).optional(),
 });
 
 // CDN config: full URL. The upstream response is generated at runtime —

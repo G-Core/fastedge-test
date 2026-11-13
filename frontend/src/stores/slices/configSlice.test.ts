@@ -359,6 +359,22 @@ describe('ConfigSlice', () => {
   });
 
   describe('exportConfig', () => {
+    it('round-trips stores and dc, and omits them when the config did not set them', () => {
+      const { result } = renderHook(() => useAppStore());
+      const request = { method: 'GET', url: 'https://example.com', headers: {}, body: '' };
+
+      act(() => {
+        result.current.loadFromConfig({ request, properties: {}, logLevel: 2, stores: false, dc: 'ams' });
+      });
+      expect(result.current.exportConfig()).toMatchObject({ stores: false, dc: 'ams' });
+
+      act(() => {
+        result.current.loadFromConfig({ request, properties: {}, logLevel: 2 });
+      });
+      const config = result.current.exportConfig();
+      expect('stores' in config || 'dc' in config).toBe(false);
+    });
+
     it('should export complete TestConfig object', () => {
       const { result } = renderHook(() => useAppStore());
 

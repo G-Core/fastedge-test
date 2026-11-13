@@ -92,6 +92,10 @@ export interface ConfigState {
    * config file the user loaded (default or via picker).
    */
   httpPort: number | null;
+  /** Cache and Edge KV on/off (`stores` in the config file); null = the default (on). */
+  stores: boolean | null;
+  /** Cache bucket (`dc` in the config file); null = the default (`local`). */
+  dc: string | null;
 }
 
 export interface ConfigActions {
@@ -222,6 +226,8 @@ export interface TestConfig {
     path?: string;
   };
   httpPort?: number;
+  stores?: boolean;
+  dc?: string;
 }
 
 export interface PersistConfig {
