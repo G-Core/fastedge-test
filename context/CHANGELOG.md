@@ -1,5 +1,21 @@
 # Proxy-WASM Runner - Changelog
 
+## November 13, 2026 - Storage trace for HTTP apps
+
+### Overview
+HTTP responses list the cache / Edge KV calls of their request (`HttpResponse.storeCalls`), shown
+in a **Storage** panel of the HTTP view. Same service-side trace as CDN apps.
+
+### 🎯 What Was Completed
+- `HttpWasmRunner.execute`: sends a `traceparent` (keeps the caller's), then asks the service for
+  that request's calls
+- `storeCalls` carried through `/api/execute`, the `http_wasm_request_completed` event and UI state
+- `components/common/StoreCallsList`: shared by the CDN hook panel and the HTTP view
+- FastEdge-lib: a tracing layer keeps the request's traceparent; service calls carry it
+
+### 🧪 Testing
+- HTTP E2E (gated): two requests each list only their own call (an `incr`, a rejected glob)
+
 ## November 13, 2026 - Isolated stores for tests (phase 2)
 
 ### Overview

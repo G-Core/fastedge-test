@@ -1,3 +1,4 @@
+import type { StoreCall } from "../stores/trace.js";
 /**
  * WebSocket Event Types
  *
@@ -113,6 +114,7 @@ export interface HttpWasmRequestCompletedEvent extends BaseEvent {
       // Mirrors Node's IncomingHttpHeaders — undefined values are dropped by JSON serialization.
       headers: Record<string, string | string[] | undefined>;
       body: string;
+      storeCalls?: StoreCall[];
       contentType: string | null;
       isBase64?: boolean;
     };

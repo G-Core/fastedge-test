@@ -1,4 +1,4 @@
-import type { HookResult, FinalResponse, WebSocketStatus } from "../types";
+import type { HookResult, FinalResponse, WebSocketStatus, StoreCall } from "../types";
 
 // ============================================================================
 // STORE SLICE STATE INTERFACES
@@ -152,6 +152,8 @@ export interface HttpWasmState {
     body: string;
     contentType: string;
     isBase64?: boolean;
+    /** The request's cache / Edge KV calls (stores on, a forwarding fastedge-run). */
+    storeCalls?: StoreCall[];
   } | null;
 
   // Logs

@@ -1,3 +1,4 @@
+import type { StoreCall } from "../stores/trace.js";
 /**
  * State Manager
  *
@@ -188,6 +189,7 @@ export class StateManager {
       body: string;
       contentType: string | null;
       isBase64?: boolean;
+      storeCalls?: StoreCall[];
     },
     source: EventSource = "system",
   ): void {

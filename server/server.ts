@@ -539,6 +539,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
           body: result.body,
           contentType: result.contentType,
           isBase64: result.isBase64,
+          storeCalls: result.storeCalls,
         },
         source,
       );

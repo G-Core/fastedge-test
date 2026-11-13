@@ -1,4 +1,4 @@
-import { HookCall, HookResult } from "../types";
+import { HookCall, HookResult, StoreCall } from "../types";
 import type { TestConfig } from "../stores/types";
 export type { TestConfig } from "../stores/types";
 import { hasFilesystemAccess } from "../utils/environment";
@@ -455,6 +455,7 @@ export async function executeHttpWasm(
   contentType: string;
   isBase64?: boolean;
   logs: Array<{ level: number; message: string }>;
+  storeCalls?: StoreCall[];
 }> {
   // Extract the path from the full internal URL and send `path` to the server.
   // The server accepts both `path` and `url`, but `path` is the canonical form

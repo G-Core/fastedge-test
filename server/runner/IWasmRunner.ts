@@ -1,4 +1,5 @@
 import type { TestStores } from "../stores/testStores.js";
+import type { StoreCall } from "../stores/trace.js";
 /**
  * Base interface for WASM runners
  *
@@ -73,6 +74,11 @@ export interface HttpResponse {
   contentType: string | null;
   isBase64?: boolean;
   logs: Array<{ level: number; message: string }>;
+  /**
+   * The cache / Edge KV calls the app made for this request, in order (stores on only).
+   * Needs a fastedge-run that forwards to the storage service.
+   */
+  storeCalls?: StoreCall[];
 }
 
 /**

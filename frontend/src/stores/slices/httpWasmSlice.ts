@@ -186,6 +186,7 @@ export const createHttpWasmSlice: StateCreator<
             body: result.body,
             contentType: result.contentType,
             isBase64: result.isBase64,
+            storeCalls: result.storeCalls,
           };
           state.httpLogs = result.logs;
           state.httpIsExecuting = false;

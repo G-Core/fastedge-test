@@ -303,7 +303,7 @@ The runner compiles the WASM module once on `load()` and creates a fresh `WebAss
 
 **Not available**: `callHook`, `callFullFlow` (both throw `Error`)
 
-The runner spawns a `fastedge-run` process on `load()` and forwards HTTP requests to it via localhost. The process is kept alive between requests. With stores enabled, the spawned process uses the same storage service as proxy-wasm runners, so cache and Edge KV data are shared across runners. `HttpWasmRunner` also exposes `getPort(): number | null`, which returns the port the `fastedge-run` server listens on (the pinned `httpPort` when set, otherwise the dynamically allocated port). This method is not part of `IWasmRunner`.
+The runner spawns a `fastedge-run` process on `load()` and forwards HTTP requests to it via localhost. The process is kept alive between requests. With stores enabled, the spawned process uses the same storage service as proxy-wasm runners, so cache and Edge KV data are shared across runners, and each `HttpResponse` lists the calls the request made in `storeCalls`. `HttpWasmRunner` also exposes `getPort(): number | null`, which returns the port the `fastedge-run` server listens on (the pinned `httpPort` when set, otherwise the dynamically allocated port). This method is not part of `IWasmRunner`.
 
 ### Auto-Detection
 
@@ -403,7 +403,7 @@ interface RunnerConfig {
 | `enforceProductionPropertyRules` | `boolean`               | `undefined`     | Declared on the type; not read by `load()`                     |
 | `runnerType`                     | `WasmType`              | *auto-detected* | Overrides WASM type detection                                  |
 | `httpPort`                       | `number`                | `undefined`     | HTTP-WASM only: pins the `fastedge-run` port                   |
-| `stores`                         | `boolean | TestStores`  | `true`          | Storage service for cache and Edge KV, or isolated test stores |
+| `stores`                         | `boolean \| TestStores` | `true`          | Storage service for cache and Edge KV, or isolated test stores |
 | `dc`                             | `string`                | `"local"`       | Cache bucket shared by runners with the same `dc`              |
 
 - `dotenv.enabled` defaults to `false` when the runner is created through `createRunner` or `createRunnerFromBuffer`.
@@ -433,6 +433,11 @@ interface HttpResponse {
   contentType: string | null;
   isBase64?: boolean;
   logs: Array<{ level: number; message: string }>;
+  /**
+   * The cache / Edge KV calls the app made for this request, in order (stores on only).
+   * Needs a fastedge-run that forwards to the storage service.
+   */
+  storeCalls?: StoreCall[];
 }
 ```
 
@@ -443,6 +448,8 @@ interface HttpResponse {
 `isBase64` is `true` when the response body is binary content (images, audio, video, PDF, ZIP, gzip, `application/octet-stream`) encoded as base64.
 
 `HttpResponse.logs` contains log entries captured from the `fastedge-run` process stdout/stderr during the request.
+
+`HttpResponse.storeCalls` is present only when the runner has stores enabled and the installed `fastedge-run` forwards storage calls to the storage service. See [StoreCall](#storecall) for the shape of each entry.
 
 **Multi-valued headers.** `Set-Cookie` is preserved as a `string[]` — each `Set-Cookie` header emitted by the WASM app (or an upstream origin) becomes a separate array entry. Example:
 
@@ -833,6 +840,7 @@ async function testHttpApp() {
     console.log('Content-Type:', response.contentType);
     console.log('Body:', response.body);
     console.log('Process logs:', response.logs);
+    console.log('Store calls:', response.storeCalls);
 
     // POST request with body
     const postResponse = await runner.execute({

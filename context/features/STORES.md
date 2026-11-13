@@ -142,7 +142,11 @@ bounded log (5,000 calls, values not recorded, only sizes) and answers
   a bare `callHook`) and the hook name, and after each hook puts the calls into
   `HookResult.storeCalls`. The debugger shows them in the hook panel's **Storage** tab.
   Stores off: no `storeCalls`.
-- **HTTP apps (follow-up):** fastedge-run needs a per-request id to tag its calls (FastEdge-lib).
+- **HTTP apps:** `HttpWasmRunner.execute` sends a W3C `traceparent` (or keeps the caller's) and
+  fetches that request's calls into `HttpResponse.storeCalls`; the debugger's HTTP view has a
+  **Storage** panel. fastedge-run reads the traceparent from the engine's per-request `http`
+  span (a tracing layer, FastEdge-lib `src/request_trace.rs`) and adds `trace` to each service
+  call. Needs that fastedge-run; with the released one, `storeCalls` is empty.
 
 ## Known differences from the edge
 

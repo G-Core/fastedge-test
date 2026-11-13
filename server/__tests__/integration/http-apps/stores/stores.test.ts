@@ -103,4 +103,16 @@ describe.skipIf(!process.env.FASTEDGE_TEST_STORES_E2E)('HTTP + CDN apps share th
       await stores.close();
     }
   });
+
+  it('each HTTP response lists the storage calls of its own request', async () => {
+    const h = await runner('http-apps/rust/wasi/stores.wasm', { runnerType: 'http-wasm' });
+    const one = await h.execute({ path: '/?op=incr&key=traced', method: 'GET', headers: {} });
+    const two = await h.execute({ path: '/?op=kv-scan&store=users&pattern=user]', method: 'GET', headers: {} });
+    expect(one.storeCalls!.map(({ at, ...c }) => c)).toEqual([
+      { app: 'http', kind: 'cache', op: 'incr', dc: 'local', key: 'traced', result: 'ok', value: '1' },
+    ]);
+    expect(two.storeCalls!.map(({ at, ...c }) => c)).toEqual([
+      { app: 'http', kind: 'kv', op: 'scan', store: 'users', pattern: 'user]', result: 'invalid-pattern' },
+    ]);
+  });
 });

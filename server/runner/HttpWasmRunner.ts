@@ -24,7 +24,9 @@ import {
 } from "../utils/temp-file-manager.js";
 import { isLegacySyncWasm } from "../utils/legacy-wasm-detect.js";
 import { validateDotenvLeafs } from "../utils/dotenv-loader.js";
-import type { RunnerStores } from "../stores/StoresManager.js";
+import { request as storesRequest, type RunnerStores } from "../stores/StoresManager.js";
+import type { StoreCall } from "../stores/trace.js";
+import { randomBytes } from "node:crypto";
 
 /**
  * HttpWasmRunner implementation
@@ -210,11 +212,21 @@ export class HttpWasmRunner implements IWasmRunner {
     this.logs = [];
 
     try {
+      // With stores on, a W3C traceparent names this request: fastedge-run tags its storage
+      // calls with it (the caller's own traceparent is kept and used).
+      const headers = { ...request.headers };
+      let traceparent: string | undefined;
+      if (this.stores) {
+        const key = Object.keys(headers).find((h) => h.toLowerCase() === "traceparent");
+        traceparent = key ? headers[key] : `00-${randomBytes(16).toString("hex")}-${randomBytes(8).toString("hex")}-01`;
+        if (!key) headers.traceparent = traceparent;
+      }
+
       // Forward request to local fastedge-run server
       const url = `http://localhost:${this.port}${request.path}`;
       const response = await fetch(url, {
         method: request.method,
-        headers: request.headers,
+        headers,
         body: request.body || undefined,
         signal: AbortSignal.timeout(30000), // 30 second timeout
         // Surface 3xx responses verbatim so tests can assert on status/Location.
@@ -236,6 +248,7 @@ export class HttpWasmRunner implements IWasmRunner {
         ? bodyBuffer.toString("base64")
         : bodyBuffer.toString("utf8");
 
+      const storeCalls = traceparent ? await this.storeCalls(traceparent) : undefined;
       return {
         status: response.status,
         statusText: response.statusText,
@@ -244,6 +257,7 @@ export class HttpWasmRunner implements IWasmRunner {
         contentType,
         isBase64: isBinary,
         logs: [...this.logs], // Copy logs
+        ...(storeCalls ? { storeCalls } : {}),
       };
     } catch (error) {
       const errorMessage =
@@ -251,6 +265,16 @@ export class HttpWasmRunner implements IWasmRunner {
       this.logs.push({ level: 4, message: `Request failed: ${errorMessage}` });
 
       throw new Error(`HTTP request failed: ${errorMessage}`);
+    }
+  }
+
+  /** The storage calls fastedge-run made for this request (empty if the service cannot say). */
+  private async storeCalls(requestId: string): Promise<StoreCall[]> {
+    try {
+      const reply = await storesRequest(this.stores!.connection, "admin", { op: "traces", requestId });
+      return reply.ok ? (reply.value as StoreCall[]) : [];
+    } catch {
+      return [];
     }
   }
 

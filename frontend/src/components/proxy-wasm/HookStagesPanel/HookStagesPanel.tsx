@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { StoreCallsList } from "../../common/StoreCallsList";
 import { HookCall, HookResult, LogEntry } from "../../../types";
 import { CollapsiblePanel } from "../../common/CollapsiblePanel";
 import { LogLevelSelector } from "../../common/LogLevelSelector";
@@ -376,32 +377,6 @@ export function HookStagesPanel({
     );
   };
 
-  const renderStorage = (hook: string) => {
-    const calls = results[hook]?.storeCalls;
-    if (!calls) {
-      return <div className={styles.noData}>No storage calls yet (or stores are off).</div>;
-    }
-    if (calls.length === 0) {
-      return <div className={styles.noLogs}>This hook made no cache or Edge KV calls.</div>;
-    }
-    return (
-      <pre className={styles.logsContainer}>
-        {calls.map((call, idx) => {
-          const where = call.kind === "cache" ? `cache[${call.dc}]` : `kv[${call.store}]`;
-          const arg = call.key ?? call.pattern ?? call.prefix ?? "";
-          const failed = call.result !== "ok";
-          return (
-            <div key={idx} className={failed ? `${styles.logEntry} ${styles.accessViolation}` : styles.logEntry}>
-              <span className={styles.logLevel}>{where}</span> {call.op} {arg}
-              {" → "}
-              {failed ? call.result : call.value ?? "ok"}
-            </div>
-          );
-        })}
-      </pre>
-    );
-  };
-
   const storageCount = results[activeHook]?.storeCalls?.length;
 
   return (
@@ -455,7 +430,7 @@ export function HookStagesPanel({
 
         <div className={styles.stageContent}>
           {activeSubView === "logs" && renderLogs(activeHook)}
-          {activeSubView === "storage" && renderStorage(activeHook)}
+          {activeSubView === "storage" && <StoreCallsList calls={results[activeHook]?.storeCalls} source="hook" />}
           {activeSubView === "inputs" && renderInputs(activeHook)}
           {activeSubView === "outputs" && renderOutputs(activeHook)}
         </div>
