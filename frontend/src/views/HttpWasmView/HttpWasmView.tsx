@@ -134,17 +134,20 @@ export function HttpWasmView() {
                     </button>
                   )}
                 </div>
-                <button
-                  type="button"
+                <div
                   role="tab"
                   aria-selected={logView === "storage"}
+                  tabIndex={0}
                   className={`${styles.logTab} ${logView === "storage" ? styles.active : ""}`}
                   onClick={() => setLogView("storage")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") setLogView("storage");
+                  }}
                 >
                   <span className={styles.tabLabel}>
                     Storage{storageCount ? ` (${storageCount})` : ""}
                   </span>
-                </button>
+                </div>
               </div>
               {logView === "logs" && (
                 <div className={styles.loggingControls}>

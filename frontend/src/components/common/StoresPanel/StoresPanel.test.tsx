@@ -101,4 +101,13 @@ describe("StoresPanel", () => {
     fireEvent.click(screen.getByText("scores"));
     expect(await screen.findByText("Gone (deleted or expired).")).toBeTruthy();
   });
+
+  it("refreshes when the next cache entry expires", async () => {
+    vi.mocked(api.getStoresSnapshot)
+      .mockResolvedValueOnce({ ...snapshot(), cache: [{ key: "soon", size: 1, expiresAt: 1_000_000 + 50 }] })
+      .mockResolvedValue({ ...snapshot(), cache: [] });
+    open();
+    expect(await screen.findByText("soon")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("soon")).toBeNull(), { timeout: 2000 });
+  });
 });

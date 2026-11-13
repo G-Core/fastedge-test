@@ -171,6 +171,14 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
     void refresh();
   }, [refresh, refreshKey]);
 
+  // And when the next cache entry expires, so expired entries drop out.
+  useEffect(() => {
+    if (!snapshot?.enabled || snapshot.cache.length === 0) return;
+    const next = Math.min(...snapshot.cache.map((e) => e.expiresAt - snapshot.now));
+    const timer = setTimeout(() => void refresh(), Math.max(0, next - (Date.now() - fetchedAt)) + 250);
+    return () => clearTimeout(timer);
+  }, [snapshot, fetchedAt, refresh]);
+
   const act = async (action: () => Promise<void>) => {
     try {
       await action();
