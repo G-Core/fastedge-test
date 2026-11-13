@@ -290,6 +290,7 @@ export class PropertyAccessControl {
    * Check if get_property is allowed
    */
   canGetProperty(path: string, currentHook: HookContext): AccessCheckResult {
+    path = normalizePath(path);
     const builtIn = this.builtInProperties.get(path);
 
     if (builtIn) {
@@ -305,6 +306,7 @@ export class PropertyAccessControl {
    * Check if set_property is allowed
    */
   canSetProperty(path: string, currentHook: HookContext): AccessCheckResult {
+    path = normalizePath(path);
     const builtIn = this.builtInProperties.get(path);
 
     if (builtIn) {
@@ -320,6 +322,7 @@ export class PropertyAccessControl {
    * Register custom property creation/modification
    */
   registerCustomProperty(path: string, value: Uint8Array, hook: HookContext): void {
+    path = normalizePath(path);
     if (!this.customProperties.has(path)) {
       // New custom property
       this.customProperties.set(path, {
@@ -466,4 +469,12 @@ export class PropertyAccessControl {
 
     return 'Property does not exist';
   }
+}
+
+/**
+ * proxy-wasm property paths come NUL-separated (`request\0query`, as the Rust SDK sends them)
+ * or dotted (`request.query`); rules and custom properties are keyed by the dotted form.
+ */
+function normalizePath(path: string): string {
+  return path.includes("\0") ? path.split("\0").filter((segment) => segment.length > 0).join(".") : path;
 }
