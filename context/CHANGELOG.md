@@ -1,5 +1,232 @@
 # Proxy-WASM Runner - Changelog
 
+## November 13, 2026 - Storage trace for HTTP apps
+
+### Overview
+HTTP responses list the cache / Edge KV calls of their request (`HttpResponse.storeCalls`), shown
+in a **Storage** panel of the HTTP view. Same service-side trace as CDN apps.
+
+### 🎯 What Was Completed
+- `HttpWasmRunner.execute`: sends a `traceparent` (keeps the caller's), then asks the service for
+  that request's calls
+- `storeCalls` carried through `/api/execute`, the `http_wasm_request_completed` event and UI state
+- `components/common/StoreCallsList`: shared by the CDN hook panel and the HTTP view
+- FastEdge-lib: a tracing layer keeps the request's traceparent; service calls carry it
+
+### 🧪 Testing
+- HTTP E2E (gated): two requests each list only their own call (an `incr`, a rejected glob)
+
+## November 13, 2026 - Isolated stores for tests (phase 2)
+
+### Overview
+Tests no longer share the persistent workspace service: each test gets in-memory stores seeded
+from `fixtures/stores/`. New `createStores()`, a `./vitest` entry with `stores` and `runner`
+fixtures, and per-test stores in `runTestSuite`.
+
+### 🎯 What Was Completed
+- `server/stores/testStores.ts`: `createStores` (in-process `StoresServer` on `:memory:`; cache
+  helpers, `seed`, `advanceClock`, `reset`, `close`)
+- `RunnerConfig.stores: boolean | TestStores`; `createRunner` uses a given instance without owning it
+- `runTestSuite`: fresh stores per test, `TestCase.run(runner, { stores })`
+- `server/test-framework/vitest.ts` → `@gcoredev/fastedge-test/vitest` (ESM; `vitest` optional peer)
+- `StoresCore.seedKv(stores, only)`, `clearCache()`; `fixtures.applySeed`
+- `WorkerProxyWasmRunner.load` no longer posts `config.stores` to the worker
+
+### 🧪 Testing
+- Unit: `createStores` fixtures, isolation, seed, reset, clock
+- Integration: shared/separate instances with CDN runners, `runTestSuite` per-test and suite-wide
+  stores, the vitest fixtures, the built `./vitest` bundle; HTTP + CDN on one instance (E2E gate)
+
+## November 13, 2026 - Storage trace for CDN apps
+
+### Overview
+Each CDN hook result lists the cache / Edge KV calls the hook made (`storeCalls`), shown in a new
+**Storage** tab of the hook panel. Recorded by the storage service, so HTTP apps can use the same
+path once fastedge-run tags its calls (FastEdge-lib follow-up).
+
+### 🎯 What Was Completed
+- `server/stores/trace.ts`: `StoreCall`, `TraceLog` (bounded, no values); service records bodies
+  with `trace` and answers admin `traces`
+- `ProxyWasmRunner`: request id per full flow, hook name per hook; `storeCalls` on `HookResult`
+- Bridge: `admin` kind; frontend `StoreCall` type and the Storage sub-tab; schemas regenerated
+
+### 🧪 Testing
+- Unit: traced calls per request/hook, untraced calls skipped, no values recorded
+- CDN integration: a full flow's four hooks each list their `incr`; stores off → no `storeCalls`
+
+## November 13, 2026 - Edge KV globs as measured; `stores`/`dc` in config files
+
+### Overview
+The edge's Edge KV pattern rules were measured on preprod (KV store with glob-character keys) and
+the storage service now matches them. `stores` and `dc` can be set in `fastedge-config.test.json`
+and reach `/api/load` from the debugger UI.
+
+### 🎯 What Was Completed
+- `StoresCore`: `redisGlob` replaced by `edgeGlob` (validating parser): reversed ranges, `[\^]`,
+  errors for `]` outside a set, `[` inside one, unclosed sets, `[x-]`, trailing `\`
+  (`invalid-pattern`); `[]` matches nothing. `zscan` matches the literal prefix only, ordered by
+  member. `zrange-by-score` with min > max → `min-gt-max`
+- `StoresHost`: `min-gt-max` → BadArgument (the engine's store `Other`), `invalid-pattern` →
+  InternalFailure
+- KV fixtures refuse empty values (the edge API does)
+- Config schema: `stores`, `dc` (all app types); frontend config state, export and the
+  `/api/load` body (`LoadOptions` replaces the `httpPort` argument)
+- Test app `http-apps/rust/wasi/stores`: percent-decoded query, `kv-zscan`
+- FastEdge-lib: the edge's error texts (`ERR: Invalid argument: WRONGTYPE ...`, `ERR: min > max`)
+- Review fixes (service lifecycle): an old `start failed` in `service.log` no longer aborts a new
+  start; a service that starts too slowly is killed; `close()` waits for a renewal in flight;
+  `createRunner` releases the lease when `load()` fails; a crashed CDN worker still releases its
+  bridge and lease on `cleanup()`; the debugger releases its lease on SIGINT/SIGTERM
+
+### 🧪 Testing
+- Unit 532 (edge pattern table), frontend 343, CDN integration 144 × 2, HTTP stores E2E 4/4
+
+## November 12, 2026 - HTTP apps join the storage service
+
+### Overview
+`HttpWasmRunner` points fastedge-run at the storage service (`FASTEDGE_STORES_SERVICE`), so an
+HTTP app and a CDN filter share the cache and Edge KV fixtures. Needs the unreleased fastedge-run
+from FastEdge-lib `feat/stores-forward`; the released binary ignores the variable.
+
+### 🎯 What Was Completed
+- `HttpWasmRunner(portManager, dotenv, stores)`; `cleanup()` releases an owned connection;
+  `load()` uses the new private `stopProcess()` so a reload keeps the connection
+- `createRunner` and the debugger server connect for HTTP apps too
+- Test app `test-applications/http-apps/rust/wasi/stores`
+- FastEdge-lib: fastedge-run attaches the service's seeded stores unless `--kv-stores`/dotenv name them
+
+### 🧪 Testing
+- `integration/http-apps/stores/` (4 tests, gated by `FASTEDGE_TEST_STORES_E2E=1` + `FASTEDGE_RUN_PATH`):
+  HTTP and CDN apps count on one cache (1, 2, 3) and see each other's `set`; HTTP KV reads from
+  fixtures; unlisted store → AccessDenied; `.env.kv_stores` redis entry wins; `dc` separation.
+  88/88 with the local build; 84 + 4 skipped with the released binary
+
+## November 12, 2026 - CDN apps get the cache and Edge KV (on by default)
+
+### Overview
+CDN (proxy-wasm) apps can now use `proxy_cache_*` and `proxy_kv_store_*`: the worker runner
+reaches the storage service over a synchronous bridge. `createRunner` and the debugger server
+connect by default. See `features/STORES.md` ("CDN apps").
+
+### 🎯 What Was Completed
+- `StoresHost.ts`: the 8 cache and 6 KV host functions, statuses and encodings as the engine
+- `storesBridge.ts`: Atomics.wait in the worker, HTTP call in the parent, request ids, 5 s deadline
+- `ProxyWasmRunner.setStores()`; the functions always link (stores off → InternalFailure + log)
+- `WorkerProxyWasmRunner(config, dotenv, stores)`; `WasmRunnerFactory.createRunner(..., stores)`
+- `RunnerConfig.stores` / `dc`; `/api/load` `stores` / `dc`; stores root = nearest git root
+  (`FASTEDGE_STORES_ROOT` overrides)
+- Core: `kv_store` table (seeded stores), kv `open`, admin `kv-stores`, `wrong-type` errors
+- `ProxyStatus.InternalFailure = 10`; `MemoryManager.writeI64` / `writeU64`
+- Test app `test-applications/cdn-apps/rust/cdn-stores` (fastedge SDK 0.4.2 → 0.4.5 in that workspace)
+
+### 🧪 Testing
+- 7 integration tests (`cdn-apps/stores/`), in both CDN integration passes
+- Built `dist/lib` ESM and CJS: two processes share one counter; each exits without `cleanup()`;
+  idle services exit about 30 s after the last lease
+
+### 📝 Notes
+- Decided (Gordon, 2026-11-12): stores root = git root; stores off = error status + log
+- The service client uses `agent: false`, so no keep-alive socket holds a process open
+
+## November 12, 2026 - Storage service manager (one service per stores root)
+
+### Overview
+`connectStores(root)` finds or starts the storage service for a stores root and holds a
+lease on it. Not wired into the runners yet. See `features/STORES.md` ("Service process").
+
+### 🎯 What Was Completed
+- `server/stores/service.ts`: the service process (`node -`, code on stdin, detached). Files in
+  `<root>/.fastedge-debug/stores/` (`stores.db`, `service.json`, `service.log`, `.gitignore` = `*`)
+- `server/stores/StoresManager.ts`: exclusive lock file so simultaneous starters agree on one
+  service; leases (renewed every ttl/3); exit after the last lease; restart on the same port and
+  token after a crash; protocol check; start errors reported from the service log. Uses
+  node:http, not fetch (mockOrigins() replaces the global fetch dispatcher)
+- Admin ops `lease` / `release`
+- The embed plugin now builds two entries: `esbuild/embedded.js` + `server/embedded.ts`
+  (replace `cdn-worker.js` / `cdnWorkerSource.ts`)
+
+### 🧪 Testing
+- 5 tests spawning real services: sharing, separate roots, exit after the last client,
+  restart after SIGKILL with the same port/token and persisted data, fixture load and a bad fixture
+- Electron as Node (VS Code 1.143, Node 24.21) runs a stdin script with `node:sqlite`
+
+### 📝 Notes
+- `.fastedge/` is not used: it is the JS SDK's project folder (committed build config)
+
+## November 12, 2026 - Storage service core (cache and Edge KV on SQLite)
+
+### Overview
+The core of the local storage service: the edge cache and Edge KV on `node:sqlite`, behind a
+token-protected HTTP API on 127.0.0.1. Matches the edge as measured on preprod. Not wired into
+the runners yet (next: service manager, CDN host functions, fastedge-run). See
+`features/STORES.md`.
+
+### 🎯 What Was Completed
+- `StoresCore`: cache `get/set/delete/exists/incr/expire/purge/purge-prefix` per `dc`, Edge KV
+  `get/zrange-by-score/scan/zscan/bf-exists`, one clock, WAL, schema version check
+- `StoresServer`: `/v1/cache`, `/v1/kv`, `/v1/admin` (`info`, `advance-clock`); Bearer token,
+  `Host` check against DNS rebinding
+- Fixtures: `fixtures/stores/kv/<store>.json`, `fixtures/stores/cache/<dc>.json`
+- `engines.node` raised to `>=22.13` (unflagged `node:sqlite`)
+
+**Files Created:**
+- server/stores/StoresCore.ts, server/stores/StoresServer.ts, server/stores/fixtures.ts
+- server/__tests__/unit/stores/StoresCore.test.ts, StoresServer.test.ts
+- context/features/STORES.md
+
+### 🧪 Testing
+- 23 unit tests (conformance P2–P6, KV, globs in SQLite, fixtures, HTTP)
+- End to end with fastedge-run built from FastEdge-lib `feat/stores-forward`: an HTTP app's
+  cache `incr` 1 → 2 across requests, binary round trip, `incr` on text → `InternalError`;
+  KV get/scan/zrange (`inf` bound)/zscan/bf-exists from a fixture; an unlisted store → `AccessDenied`
+
+### 📝 Notes
+- `incr` on a missing key models the intended edge behaviour (default TTL, purgeable), not the
+  current engine bug
+
+
+## November 11, 2026 - CDN runner runs in a worker thread (no behaviour change)
+
+### Overview
+`WasmRunnerFactory` and `createRunner` now return a `WorkerProxyWasmRunner`, which runs the
+unchanged `ProxyWasmRunner` in a worker thread. This prepares the local storage service:
+the cache and KV host functions must answer synchronously, which is only possible if they
+block a worker and not the debugger server's event loop. Nothing user-visible changes.
+
+### 🎯 What Was Completed
+
+#### 1. Worker runner
+- Forwards the 8 `IWasmRunner` methods; `execute()` and `getType()` answer locally
+- State manager events are forwarded in order, before the call's reply
+- `fetch` (origin fetch and `proxy_http_call`) is done by the parent, so `mockOrigins()` keeps working
+- Idle worker is `unref`'d (no hang when `cleanup()` is never called); `cleanup()` terminates it
+
+#### 2. Packaging
+- The worker code is embedded as a string by an esbuild plugin in all bundles and watch mode;
+  vitest builds it on first use. No new file in `dist/` or the npm package
+
+**Files Created:**
+- server/runner/WorkerProxyWasmRunner.ts, server/runner/cdn-worker.ts, server/embedded.ts
+- esbuild/embedded.js - builds the embedded worker (and later the stores service) + `embeddedPlugin`
+- server/__tests__/unit/runner/WorkerProxyWasmRunner.test.ts
+
+**Files Modified:**
+- server/runner/WasmRunnerFactory.ts, server/runner/standalone.ts - create the worker runner
+- esbuild/bundle-lib.js, bundle-server.js, watch-server.js - add `embeddedPlugin`
+- server/__tests__/integration/utils/test-helpers.ts - `FASTEDGE_TEST_CDN_RUNNER=worker` selects the worker runner
+- package.json - `test:integration:cdn` runs the CDN suite in-process and through the worker
+
+### 🧪 Testing
+- CDN integration suite: 137/137 in-process and 137/137 through the worker
+- Unit 501, server bundle 38, HTTP integration 84
+- Built `dist/lib` (ESM and CJS): `createRunner` runs a full flow through the worker and the process exits without `cleanup()`
+
+### 📝 Notes
+- `cleanup()` now ends the runner (calls after it reject); `ProxyWasmRunner.cleanup()` was a no-op
+- Library bundles grow by the embedded worker (`dist/lib/index.js` ≈ 246 KB)
+- Errors from `fetch` cross the thread as structured clones: message kept, `cause` dropped
+
+
 ## November 4, 2026 - Header maps and per-hook header writes match the FastEdge edge
 
 ### Overview

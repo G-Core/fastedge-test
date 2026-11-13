@@ -14,6 +14,10 @@ export const ApiLoadBodySchema = z.object({
    * config (any *.test.json filename). Load fails fast if the port is busy.
    */
   httpPort: z.number().int().min(1024).max(65535).optional(),
+  /** Local cache and Edge KV (the storage service). Default on. */
+  stores: z.boolean().optional(),
+  /** Cache bucket (edge location) for this app. Default `local`. */
+  dc: z.string().min(1).optional(),
 }).refine(d => d.wasmBase64 || d.wasmPath, {
   message: 'Either wasmBase64 or wasmPath must be provided',
 }).refine(d => !(d.wasmBase64 && d.wasmPath), {

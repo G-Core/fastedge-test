@@ -17,6 +17,7 @@ import { createServer } from "node:http";
 import { randomBytes, createHash } from "node:crypto";
 import { safeTokenEqual, hostAllowed } from "./utils/token.js";
 import { WasmRunnerFactory } from "./runner/WasmRunnerFactory.js";
+import { connectStores, resolveStoresRoot, type StoresConnection } from "./stores/StoresManager.js";
 import type { IWasmRunner } from "./runner/IWasmRunner.js";
 import { HttpWasmRunner } from "./runner/HttpWasmRunner.js";
 import { WebSocketManager, StateManager } from "./websocket/index.js";
@@ -252,7 +253,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
-  const { wasmBase64, wasmPath, dotenv, httpPort } = parsed.data;
+  const { wasmBase64, wasmPath, dotenv, httpPort, stores, dc } = parsed.data;
 
   // Resolve and validate the dotenv path before touching runner state so a
   // containment violation returns 400 rather than triggering the 500 catch block.
@@ -365,9 +366,11 @@ app.post("/api/load", async (req: Request, res: Response) => {
     }
 
     // Create appropriate runner based on detected type
+    const storesConnection = stores !== false ? await getStores() : null;
     currentRunner = runnerFactory.createRunner(
       wasmType,
       dotenv?.enabled ?? false,
+      storesConnection && { connection: storesConnection, dc: dc ?? "local", owned: false },
     );
     currentRunner.setStateManager(stateManager);
 
@@ -407,6 +410,28 @@ app.post("/api/load", async (req: Request, res: Response) => {
     res.status(500).json({ ok: false, error: String(error) });
   }
 });
+
+/**
+ * The storage service connection, shared by every runner this server creates and held for
+ * the server's lifetime. If the service cannot start, runners go on with stores off.
+ */
+let storesConnection: Promise<StoresConnection> | null = null;
+async function getStores(): Promise<StoresConnection | null> {
+  storesConnection ??= connectStores(resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd()));
+  try {
+    return await storesConnection;
+  } catch (error) {
+    storesConnection = null;
+    console.error(`Stores are off: ${(error as Error).message}`);
+    return null;
+  }
+}
+
+/** Release the shared lease on shutdown, so an unused service exits without waiting for the TTL. */
+async function releaseStores(): Promise<void> {
+  const connection = await storesConnection?.catch(() => null);
+  await connection?.close();
+}
 
 app.patch("/api/dotenv", async (req: Request, res: Response) => {
   const parsed = ApiDotenvBodySchema.safeParse(req.body);
@@ -514,6 +539,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
           body: result.body,
           contentType: result.contentType,
           isBase64: result.isBase64,
+          storeCalls: result.storeCalls,
         },
         source,
       );
@@ -979,6 +1005,7 @@ process.on("SIGTERM", async () => {
   if (currentRunner) {
     await currentRunner.cleanup();
   }
+  await releaseStores();
   wsManager.close();
   deletePortFile();
   httpServer.close(() => {
@@ -992,6 +1019,7 @@ process.on("SIGINT", async () => {
   if (currentRunner) {
     await currentRunner.cleanup();
   }
+  await releaseStores();
   wsManager.close();
   deletePortFile();
   httpServer.close(() => {

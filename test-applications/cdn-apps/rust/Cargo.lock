@@ -41,6 +41,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdn-stores"
+version = "0.1.0"
+dependencies = [
+ "fastedge",
+ "proxy-wasm",
+]
+
+[[package]]
 name = "cdn-variables-and-secrets"
 version = "0.1.0"
 dependencies = [
@@ -56,9 +64,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "fastedge"
-version = "0.4.2"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d665bf3e9be79d0be271c1fd4233c752d0c52f0e48c8e4e8cdb6da6ea6915a6a"
+checksum = "d1da4e06c32d7150cc07f3d7ee843ba5076a68b76a06c9cc6bc5f634bc5e768e"
 dependencies = [
  "bytes",
  "fastedge-derive",

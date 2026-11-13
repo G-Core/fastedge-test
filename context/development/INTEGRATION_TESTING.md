@@ -294,7 +294,8 @@ Creates a `HookCall` for testing a specific proxy-wasm hook.
 # Run all HTTP WASM integration tests
 pnpm run test:integration:http
 
-# Run all CDN integration tests
+# Run all CDN integration tests (twice: in-process ProxyWasmRunner, then
+# WorkerProxyWasmRunner via FASTEDGE_TEST_CDN_RUNNER=worker; :in-process / :worker run one)
 pnpm run test:integration:cdn
 
 # Run all integration tests (CDN + HTTP)

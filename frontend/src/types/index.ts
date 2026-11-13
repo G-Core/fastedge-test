@@ -16,8 +16,26 @@ export interface LogEntry {
   message: string;
 }
 
+/** One cache / Edge KV call a hook made (server/stores/trace.ts). Values are not recorded. */
+export interface StoreCall {
+  app: "cdn" | "http";
+  hook?: string;
+  kind: "cache" | "kv";
+  op: string;
+  dc?: string;
+  store?: string;
+  key?: string;
+  pattern?: string;
+  prefix?: string;
+  result: string;
+  value?: string;
+  at: number;
+}
+
 export interface HookResult {
   logs: LogEntry[];
+  /** Present when stores are on. */
+  storeCalls?: StoreCall[];
   returnValue?: number;
   error?: string;
   input?: {

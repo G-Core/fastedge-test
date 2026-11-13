@@ -20,6 +20,11 @@ import {
   type FastEdgeConfig,
 } from "../fastedge-host/index.js";
 import { loadDotenvFiles } from "../utils/dotenv-loader.js";
+import { storesImports } from "./StoresHost.js";
+import type { SyncStores } from "./storesBridge.js";
+import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { StoreCall } from "../stores/trace.js";
 
 const textEncoder = new TextEncoder();
 
@@ -48,6 +53,7 @@ export class ProxyWasmRunner implements IWasmRunner {
   private dictionary: Dictionary;
   private dotenvEnabled: boolean = true; // Default to enabled
   private dotenvPath: string = ".";
+  private stores: SyncStores | null = null; // null = stores off
 
   constructor(
     fastEdgeConfig?: FastEdgeConfig,
@@ -76,6 +82,38 @@ export class ProxyWasmRunner implements IWasmRunner {
     this.memory.setLogCallback((level: number, message: string) => {
       this.logs.push({ level, message });
     });
+  }
+
+  /**
+   * Connect the cache and Edge KV host functions to the storage service
+   * (WorkerProxyWasmRunner does this inside its worker). Without it they
+   * return InternalFailure ("stores are off").
+   */
+  setStores(stores: SyncStores | null): void {
+    this.stores = stores;
+  }
+
+  /**
+   * Trace context per call, not per runner: one request id per full flow (shared by its
+   * hooks), else per hook call. AsyncLocalStorage keeps overlapping calls apart (a hook can
+   * await a proxy_http_call fetch).
+   */
+  private flowRequestId = new AsyncLocalStorage<string>();
+  private trace = new AsyncLocalStorage<{ requestId: string; hook: string }>();
+
+  /** The stores, with every call tagged for the service's storage trace. */
+  private tracedStores(): SyncStores | null {
+    const stores = this.stores;
+    if (!stores) return null;
+    return { call: (kind, body) => stores.call(kind, { ...body, trace: { ...this.trace.getStore(), app: "cdn" } }) };
+  }
+
+  /** The storage calls this hook made (empty if the service cannot say). */
+  private storeCalls(): StoreCall[] | undefined {
+    const context = this.trace.getStore();
+    if (!this.stores || !context) return undefined;
+    const reply = this.stores.call("admin", { op: "traces", ...context });
+    return reply.ok ? (reply.value as StoreCall[]) : [];
   }
 
   /**
@@ -806,6 +844,11 @@ export class ProxyWasmRunner implements IWasmRunner {
   }
 
   async callHook(call: HookCall): Promise<HookResult> {
+    const context = { requestId: this.flowRequestId.getStore() ?? randomUUID(), hook: call.hook };
+    return this.trace.run(context, () => this.runHook(call));
+  }
+
+  private async runHook(call: HookCall): Promise<HookResult> {
     if (!this.module) {
       throw new Error("WASM module not loaded");
     }
@@ -1049,12 +1092,14 @@ export class ProxyWasmRunner implements IWasmRunner {
       this.hostFunctions.shouldLog(log.level),
     );
 
+    const storeCalls = this.storeCalls();
     return {
       returnCode,
       logs: filteredLogs,
       input: inputState,
       output: outputState,
       properties: this.propertyResolver.getAllProperties(),
+      ...(storeCalls ? { storeCalls } : {}),
     };
   }
 
@@ -1211,7 +1256,10 @@ export class ProxyWasmRunner implements IWasmRunner {
     const wasiImport = wasi.wasiImport as Record<string, unknown>;
 
     return {
-      env: this.hostFunctions.createImports(),
+      env: {
+        ...this.hostFunctions.createImports(),
+        ...storesImports(this.memory, this.tracedStores(), (message) => this.logs.push({ level: 3, message })),
+      },
       wasi_snapshot_preview1: {
         ...wasiImport,
         initialize: wasi.initialize.bind(wasi),
@@ -1338,7 +1386,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       enforceProductionPropertyRules,
     };
 
-    return this.callFullFlowLegacy(call, url);
+    return this.flowRequestId.run(randomUUID(), () => this.callFullFlowLegacy(call, url));
   }
 
   /**

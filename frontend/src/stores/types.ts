@@ -1,4 +1,4 @@
-import type { HookResult, FinalResponse, WebSocketStatus } from "../types";
+import type { HookResult, FinalResponse, WebSocketStatus, StoreCall } from "../types";
 
 // ============================================================================
 // STORE SLICE STATE INTERFACES
@@ -92,6 +92,10 @@ export interface ConfigState {
    * config file the user loaded (default or via picker).
    */
   httpPort: number | null;
+  /** Cache and Edge KV on/off (`stores` in the config file); null = the default (on). */
+  stores: boolean | null;
+  /** Cache bucket (`dc` in the config file); null = the default (`local`). */
+  dc: string | null;
 }
 
 export interface ConfigActions {
@@ -148,6 +152,8 @@ export interface HttpWasmState {
     body: string;
     contentType: string;
     isBase64?: boolean;
+    /** The request's cache / Edge KV calls (stores on, a forwarding fastedge-run). */
+    storeCalls?: StoreCall[];
   } | null;
 
   // Logs
@@ -222,6 +228,8 @@ export interface TestConfig {
     path?: string;
   };
   httpPort?: number;
+  stores?: boolean;
+  dc?: string;
 }
 
 export interface PersistConfig {

@@ -21,6 +21,10 @@
       "import": "./dist/lib/test-framework/index.js",
       "require": "./dist/lib/test-framework/index.cjs"
     },
+    "./vitest": {
+      "types": "./dist/lib/test-framework/vitest.d.ts",
+      "import": "./dist/lib/test-framework/vitest.js"
+    },
     "./schemas": "./schemas/"
   },
   "bin": {
@@ -67,7 +71,9 @@
     "test:backend": "vitest run",
     "test:frontend": "cd frontend && vitest run",
     "test:integration": "run-s test:integration:cdn test:integration:http",
-    "test:integration:cdn": "NODE_OPTIONS='--no-warnings' vitest run --config vitest.integration.cdn.config.ts",
+    "test:integration:cdn": "run-s test:integration:cdn:in-process test:integration:cdn:worker",
+    "test:integration:cdn:in-process": "NODE_OPTIONS='--no-warnings' vitest run --config vitest.integration.cdn.config.ts",
+    "test:integration:cdn:worker": "FASTEDGE_TEST_CDN_RUNNER=worker NODE_OPTIONS='--no-warnings' vitest run --config vitest.integration.cdn.config.ts",
     "test:integration:http": "NODE_OPTIONS='--no-warnings' vitest run --config vitest.integration.http.config.ts",
     "test:watch": "vitest",
     "test:watch:backend": "vitest",
@@ -90,8 +96,16 @@
     "zustand": "^5.0.11",
     "zustand-debounce": "^2.3.0"
   },
+  "peerDependencies": {
+    "vitest": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  },
   "engines": {
-    "node": ">=22.12"
+    "node": ">=22.13"
   },
   "devDependencies": {
     "@assemblyscript/wasi-shim": "^0.1.0",

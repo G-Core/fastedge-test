@@ -4,6 +4,7 @@ import { DotenvPanel } from "../../components/common/DotenvPanel";
 import { RequestPanel } from "../../components/common/RequestPanel";
 import { ResponsePanel } from "../../components/common/ResponsePanel";
 import { LogsViewer } from "../../components/common/LogsViewer";
+import { StoreCallsList } from "../../components/common/StoreCallsList";
 import { LogLevelSelector } from "../../components/common/LogLevelSelector";
 import { useAppStore } from "../../stores";
 import { HTTP_WASM_HOST } from "../../stores/slices/httpWasmSlice";
@@ -112,6 +113,11 @@ export function HttpWasmView() {
             </div>
             <LogsViewer logs={httpLogs} logLevel={logLevel} />
           </div>
+        </CollapsiblePanel>
+
+        {/* Storage trace: the cache / Edge KV calls of the last request */}
+        <CollapsiblePanel title="Storage" defaultExpanded={false}>
+          <StoreCallsList calls={httpResponse?.storeCalls} source="request" />
         </CollapsiblePanel>
 
         {/* Response Panel */}

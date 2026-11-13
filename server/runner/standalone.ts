@@ -12,10 +12,11 @@
 
 import { readFile } from "fs/promises";
 import type { IWasmRunner, RunnerConfig } from "./IWasmRunner.js";
-import { ProxyWasmRunner } from "./ProxyWasmRunner.js";
+import { WorkerProxyWasmRunner } from "./WorkerProxyWasmRunner.js";
 import { HttpWasmRunner } from "./HttpWasmRunner.js";
 import { PortManager } from "./PortManager.js";
 import { detectWasmType } from "../utils/wasmTypeDetector.js";
+import { connectStores, resolveStoresRoot } from "../stores/StoresManager.js";
 
 /**
  * Create a headless runner from a file path.
@@ -39,13 +40,26 @@ export async function createRunnerFromBuffer(
 ): Promise<IWasmRunner> {
   const wasmType = config?.runnerType ?? await detectWasmType(buffer);
 
+  // Stores on by default: this runner opens (and on cleanup releases) its own lease on the
+  // shared service, unless given isolated test stores (createStores), which it does not own.
+  const given = typeof config?.stores === "object" ? config.stores : null;
+  const connection =
+    given ??
+    (config?.stores === false ? null : await connectStores(resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd())));
+  const stores = connection && { connection, dc: config?.dc ?? given?.dc ?? "local", owned: !given };
+
   let runner: IWasmRunner;
   if (wasmType === "http-wasm") {
-    runner = new HttpWasmRunner(new PortManager(), config?.dotenv?.enabled ?? false);
+    runner = new HttpWasmRunner(new PortManager(), config?.dotenv?.enabled ?? false, stores);
   } else {
-    runner = new ProxyWasmRunner(undefined, config?.dotenv?.enabled ?? false);
+    runner = new WorkerProxyWasmRunner(undefined, config?.dotenv?.enabled ?? false, stores);
   }
 
-  await runner.load(buffer, config);
+  try {
+    await runner.load(buffer, config);
+  } catch (error) {
+    await runner.cleanup(); // releases the stores lease too
+    throw error;
+  }
   return runner;
 }

@@ -1,0 +1,30 @@
+.list {
+  background: #1e1e1e;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  max-height: 400px;
+  overflow: auto;
+  margin: 0;
+}
+
+.entry {
+  margin-bottom: 4px;
+}
+
+.where {
+  color: #666;
+  margin-right: 8px;
+}
+
+.failed {
+  background: #3d1f1f;
+  border-left: 3px solid #ff6b6b;
+  padding-left: 6px;
+}
+
+.empty {
+  color: #888;
+  font-style: italic;
+  padding: 12px 0;
+}

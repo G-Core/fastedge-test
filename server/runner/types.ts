@@ -1,3 +1,4 @@
+import type { StoreCall } from "../stores/trace.js";
 export type HeaderMap = Record<string, string>;
 export type HeaderTuples = [string, string][];
 
@@ -47,12 +48,15 @@ export type HookResult = {
     properties?: Record<string, unknown>;
   };
   properties: Record<string, unknown>;
+  /** The cache / Edge KV calls this hook made, in order (stores on only). */
+  storeCalls?: StoreCall[];
 };
 
 export enum ProxyStatus {
   Ok = 0,
   NotFound = 1,
   BadArgument = 2,
+  InternalFailure = 10,
   Unimplemented = 12,
 }
 

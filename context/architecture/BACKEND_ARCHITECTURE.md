@@ -23,6 +23,8 @@ server/
 ├── tsconfig.json         # TypeScript configuration
 ├── runner/
 │   ├── ProxyWasmRunner.ts    # Main WASM orchestration + event emission
+│   ├── WorkerProxyWasmRunner.ts # Runs ProxyWasmRunner in a worker thread (factory/createRunner use this)
+│   ├── cdn-worker.ts         # Worker side: hosts ProxyWasmRunner, forwards events, proxies fetch
 │   ├── HostFunctions.ts      # WASM host function implementations
 │   ├── MemoryManager.ts      # WASM memory management
 │   ├── HeaderManager.ts      # HTTP header serialization
@@ -237,6 +239,33 @@ app.post("/api/config", async (req, res) => {
   res.json({ ok: true });
 });
 ```
+
+### WorkerProxyWasmRunner.ts (CDN runner in a worker thread, November 2026)
+
+`WasmRunnerFactory` (debugger server) and `createRunner` / `createRunnerFromBuffer`
+(npm package, test framework) create a `WorkerProxyWasmRunner`, not a `ProxyWasmRunner`.
+It implements `IWasmRunner` by forwarding each call to a `ProxyWasmRunner` hosted in a
+worker thread (`cdn-worker.ts`). Behaviour is unchanged; the point is that the parent's
+event loop stays free while a hook runs, so host functions can later make synchronous
+calls (the storage service) by blocking the worker only.
+
+- **Messages:** call `{ id, method, args }` → reply `{ id, value }` or `{ id, error }`.
+  State manager events come back as `{ event, args }` as they happen, so they arrive
+  before the reply of the call that caused them.
+- **fetch runs in the parent:** the worker's `globalThis.fetch` posts the request to the
+  parent, which calls its own `fetch` and returns status, headers and body. The parent's
+  undici dispatcher therefore applies (`mockOrigins()` installs a MockAgent there).
+  The egress check still runs in the worker before the fetch. Aborts (http_call timeouts)
+  are forwarded.
+- **Lifecycle:** the worker is `unref`'d while idle and `ref`'d while a call is in flight,
+  so a runner that is never cleaned up does not keep Node alive. `cleanup()` terminates
+  the worker; later calls reject.
+- **Packaging:** the worker is started with `new Worker(code, { eval: true })`. The esbuild
+  bundles (`dist/server.js`, `dist/lib/*`, watch mode) embed the code via the
+  `embeddedPlugin` in `esbuild/embedded.js` (which replaces `server/embedded.ts`; the
+  stores service process is embedded the same way), so no extra file ships. Unbundled runs
+  (vitest) build it on first use with the esbuild dev dependency.
+- `ProxyWasmRunner` itself is unchanged and still usable in-process (integration tests).
 
 ### ProxyWasmRunner.ts (Core Logic)
 

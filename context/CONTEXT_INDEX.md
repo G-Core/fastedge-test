@@ -36,6 +36,7 @@ This index helps you discover relevant documentation without reading thousands o
 
 - `features/CROSS_PLATFORM.md` (~100 lines) - ⚠️ **READ BEFORE writing any process, path, signal, or shell code** — platform rules for linux-x64 / darwin-arm64 / win32, what's already handled, known limitations
 - `features/HTTP_CALL_IMPLEMENTATION.md` (~200 lines) - ✅ proxy_http_call PAUSE/resume loop, binary header format, Rust SDK init order (NEW)
+- `features/STORES.md` (~100 lines) - 🚧 Local storage service (cache + Edge KV on node:sqlite): API, edge semantics, known differences, fixtures. Core done, not wired into the runners yet (Nov 2026)
 - `features/NPM_PACKAGE_PLAN.md` (~250 lines) - ✅ Full 5-phase plan for @gcoredev/fastedge-test npm package (Phases 1-4 complete)
 - `features/HTTP_WASM_IMPLEMENTATION.md` (~400 lines) - ✅ HTTP WASM runner support, FastEdge-run CLI integration, process management; detection + `runnerType` override + legacy sync detection sections are current (Mar 2026); API section is outdated
 - `features/HTTP_WASM_UI.md` (~1,200 lines) - ✅ Postman-like UI for HTTP WASM, adaptive UI architecture, component organization (NEW - Feb 10, 2026)
@@ -187,7 +188,7 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 4. Run tests:
    - `pnpm run test:integration` - All tests (CDN + HTTP in parallel)
    - `pnpm run test:integration:http` - Only HTTP WASM tests (sequential)
-   - `pnpm run test:integration:cdn` - Only CDN tests (parallel)
+   - `pnpm run test:integration:cdn` - Only CDN tests (parallel), run twice: in-process and through the worker (`FASTEDGE_TEST_CDN_RUNNER=worker`)
 
 ### WASM Type Detection / `runnerType` Override
 

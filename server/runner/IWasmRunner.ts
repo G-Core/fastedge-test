@@ -1,3 +1,5 @@
+import type { TestStores } from "../stores/testStores.js";
+import type { StoreCall } from "../stores/trace.js";
 /**
  * Base interface for WASM runners
  *
@@ -31,6 +33,18 @@ export interface RunnerConfig {
    * for proxy-wasm runners.
    */
   httpPort?: number;
+  /**
+   * Local cache and Edge KV through the storage service shared by every runner in the
+   * stores root (the nearest git root; FASTEDGE_STORES_ROOT overrides). Default `true`.
+   * `false`: CDN apps' cache / KV calls return InternalFailure. A `createStores()` instance:
+   * isolated in-memory stores for tests (runners given the same instance share them).
+   */
+  stores?: boolean | TestStores;
+  /**
+   * Cache bucket (edge location). Runners with the same `dc` share cache entries.
+   * Default `"local"`, or the `dc` of a `createStores()` instance.
+   */
+  dc?: string;
 }
 
 /**
@@ -60,6 +74,11 @@ export interface HttpResponse {
   contentType: string | null;
   isBase64?: boolean;
   logs: Array<{ level: number; message: string }>;
+  /**
+   * The cache / Edge KV calls the app made for this request, in order (stores on only).
+   * Needs a fastedge-run that forwards to the storage service.
+   */
+  storeCalls?: StoreCall[];
 }
 
 /**

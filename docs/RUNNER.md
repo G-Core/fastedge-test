@@ -8,6 +8,7 @@ Low-level programmatic API for executing WASM binaries. Use this when you need d
 import {
   createRunner,
   createRunnerFromBuffer,
+  createStores,
   ProxyWasmRunner,
   HttpWasmRunner,
   WasmRunnerFactory,
@@ -26,10 +27,16 @@ import type {
   HookResult,
   FullFlowResult,
   HookCall,
+  StoreCall,
+  TestStores,
+  CreateStoresOptions,
+  StoresSeed,
 } from '@gcoredev/fastedge-test';
 ```
 
 `HeaderMap`, `HeaderRecord`, `LogEntry`, `ProxyStatus`, and `EventSource` are described under [Supporting Types](#supporting-types) and [IStateManager](#istatemanager). They are not exported from the package root.
+
+`createStores()` builds an isolated in-memory store instance (`TestStores`) that can be passed as `RunnerConfig.stores`. Its options and seed types are `CreateStoresOptions` and `StoresSeed`. See [stores](#runnerconfig) under `RunnerConfig` for how a runner uses the instance.
 
 ## Creating a Runner
 
@@ -52,6 +59,8 @@ function createRunner(
 | `config`   | `RunnerConfig` | Optional configuration   |
 
 **Returns** `Promise<IWasmRunner>` — a loaded runner ready for execution.
+
+Unless `config.stores` is `false`, the runner connects to the local storage service (cache and Edge KV). When `config.stores` is `true` or omitted, the runner holds its own lease on the service until `cleanup()` is called. When `config.stores` is a `TestStores` instance, the runner uses that instance and does not own it, so `cleanup()` does not release it. If `load()` fails, the factory calls `cleanup()` (releasing any lease it owns) and rethrows the error. See [RunnerConfig](#runnerconfig).
 
 ```typescript
 import { createRunner } from '@gcoredev/fastedge-test';
@@ -116,7 +125,7 @@ interface IWasmRunner {
 
 ### load
 
-Loads a WASM binary into the runner. For `ProxyWasmRunner`, compiles the module and loads dotenv files. For `HttpWasmRunner`, spawns a `fastedge-run` process: a `Buffer` is written to a temporary file first, while a path string is passed to `fastedge-run` directly.
+Loads a WASM binary into the runner. For proxy-wasm runners, compiles the module and loads dotenv files. For `HttpWasmRunner`, spawns a `fastedge-run` process: a `Buffer` is written to a temporary file first, while a path string is passed to `fastedge-run` directly.
 
 ```typescript
 load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void>
@@ -134,7 +143,7 @@ There is no fallback to dynamic allocation — pinning is only useful if the add
 
 ### execute (HTTP-WASM)
 
-Executes an HTTP request through the WASM module. Only available on `HttpWasmRunner` (http-wasm). Calling this on a `ProxyWasmRunner` throws.
+Executes an HTTP request through the WASM module. Only available on `HttpWasmRunner` (http-wasm). Calling this on a proxy-wasm runner throws.
 
 ```typescript
 execute(request: HttpRequest): Promise<HttpResponse>
@@ -170,7 +179,7 @@ await runner.cleanup();
 
 ### callHook (Proxy-WASM)
 
-Executes a single proxy-wasm hook in isolation. Only available on `ProxyWasmRunner` (proxy-wasm). Calling this on an `HttpWasmRunner` throws.
+Executes a single proxy-wasm hook in isolation. Only available on proxy-wasm runners. Calling this on an `HttpWasmRunner` throws.
 
 ```typescript
 callHook(hookCall: HookCall): Promise<HookResult>
@@ -229,7 +238,7 @@ Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fet
 
 **Origin fetch failure.** If the origin fetch throws (DNS failure, connection refused, and similar), `callFullFlow` does not reject. It returns a `FullFlowResult` whose `finalResponse` has `status: 0`, `statusText: "Fetch Failed"`, and an error message in `body`.
 
-Only available on `ProxyWasmRunner`. Calling on `HttpWasmRunner` throws.
+Only available on proxy-wasm runners. Calling on `HttpWasmRunner` throws.
 
 ### applyDotenv
 
@@ -241,7 +250,7 @@ applyDotenv(enabled: boolean, path?: string): Promise<void>
 
 **Behavior by runner type:**
 
-- **ProxyWasmRunner**: Resets the secret and dictionary stores to empty, then re-reads dotenv files from `path` (or the previously set path if omitted) when `enabled` is `true`. The compiled WASM module is not recompiled.
+- **Proxy-WASM**: Resets the secret and dictionary stores to empty, then re-reads dotenv files from `path` (or the previously set path if omitted) when `enabled` is `true`. The compiled WASM module is not recompiled.
 - **HttpWasmRunner**: Kills the current `fastedge-run` process and restarts it with the updated `--dotenv` flag. The returned promise resolves once the restarted process is listening. If no process is running, the settings apply on the next `load()`.
 
 ### cleanup
@@ -252,8 +261,9 @@ Releases all resources held by the runner.
 cleanup(): Promise<void>
 ```
 
-- **ProxyWasmRunner**: No-op (no long-running processes). State is reset on the next `load()` call.
+- **Proxy-WASM**: No long-running subprocess is held. State is reset on the next `load()` call.
 - **HttpWasmRunner**: Kills the `fastedge-run` process, releases the allocated port (a pinned `httpPort` is simply freed), and deletes any temporary WASM file written to disk.
+- **Stores lease**: A runner created by `createRunner` or `createRunnerFromBuffer` with stores enabled (`stores` omitted or `true`) releases its lease on the storage service during cleanup. A runner given a `TestStores` instance does not own it and does not release it.
 
 Always call `cleanup()` when done with a runner, especially in test teardown.
 
@@ -277,13 +287,13 @@ setStateManager(stateManager: IStateManager): void
 
 ### Proxy-WASM (CDN)
 
-`ProxyWasmRunner` handles proxy-wasm binaries — the standard format for FastEdge CDN applications. These modules implement the proxy-wasm ABI and hook into the request/response lifecycle.
+Proxy-wasm runners handle proxy-wasm binaries — the standard format for FastEdge CDN applications. These modules implement the proxy-wasm ABI and hook into the request/response lifecycle.
 
 **Available methods**: `load`, `callHook`, `callFullFlow`, `applyDotenv`, `cleanup`, `getType`, `setStateManager`
 
 **Not available**: `execute` (throws `Error`)
 
-The runner compiles the WASM module once on `load()` and creates a fresh `WebAssembly.Instance` for each hook call, providing isolation between hook executions. `RunnerConfig.httpPort` is ignored.
+The runner compiles the WASM module once on `load()` and creates a fresh `WebAssembly.Instance` for each hook call, providing isolation between hook executions. `RunnerConfig.httpPort` is ignored. With stores enabled, the module's cache and Edge KV host calls are served by the local storage service (or by the supplied `TestStores` instance), and each `HookResult` lists the calls the hook made in `storeCalls`.
 
 ### HTTP-WASM
 
@@ -293,15 +303,15 @@ The runner compiles the WASM module once on `load()` and creates a fresh `WebAss
 
 **Not available**: `callHook`, `callFullFlow` (both throw `Error`)
 
-The runner spawns a `fastedge-run` process on `load()` and forwards HTTP requests to it via localhost. The process is kept alive between requests. `HttpWasmRunner` also exposes `getPort(): number | null`, which returns the port the `fastedge-run` server listens on (the pinned `httpPort` when set, otherwise the dynamically allocated port). This method is not part of `IWasmRunner`.
+The runner spawns a `fastedge-run` process on `load()` and forwards HTTP requests to it via localhost. The process is kept alive between requests. With stores enabled, the spawned process uses the same storage service as proxy-wasm runners, so cache and Edge KV data are shared across runners, and each `HttpResponse` lists the calls the request made in `storeCalls`. `HttpWasmRunner` also exposes `getPort(): number | null`, which returns the port the `fastedge-run` server listens on (the pinned `httpPort` when set, otherwise the dynamically allocated port). This method is not part of `IWasmRunner`.
 
 ### Auto-Detection
 
-Both factory functions (`createRunner`, `createRunnerFromBuffer`) automatically detect the WASM type by inspecting the binary. Detection determines whether the binary implements the proxy-wasm ABI or the wasi-http interface, and selects `ProxyWasmRunner` or `HttpWasmRunner` accordingly.
+Both factory functions (`createRunner`, `createRunnerFromBuffer`) automatically detect the WASM type by inspecting the binary. Detection determines whether the binary implements the proxy-wasm ABI or the wasi-http interface, and selects a proxy-wasm runner or `HttpWasmRunner` accordingly.
 
 ### runnerType Override
 
-If auto-detection produces incorrect results, use `RunnerConfig.runnerType` to skip detection and force a specific type. Any value other than `"http-wasm"` selects `ProxyWasmRunner`.
+If auto-detection produces incorrect results, use `RunnerConfig.runnerType` to skip detection and force a specific type. Any value other than `"http-wasm"` selects a proxy-wasm runner.
 
 ```typescript
 import { createRunner } from '@gcoredev/fastedge-test';
@@ -371,21 +381,37 @@ interface RunnerConfig {
    * for proxy-wasm runners.
    */
   httpPort?: number;
+  /**
+   * Local cache and Edge KV through the storage service shared by every runner in the
+   * stores root (the nearest git root; FASTEDGE_STORES_ROOT overrides). Default `true`.
+   * `false`: CDN apps' cache / KV calls return InternalFailure. A `createStores()` instance:
+   * isolated in-memory stores for tests (runners given the same instance share them).
+   */
+  stores?: boolean | TestStores;
+  /**
+   * Cache bucket (edge location). Runners with the same `dc` share cache entries.
+   * Default `"local"`, or the `dc` of a `createStores()` instance.
+   */
+  dc?: string;
 }
 ```
 
-| Field                            | Type       | Default         | Description                                  |
-| -------------------------------- | ---------- | --------------- | -------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`  | `false`         | Load dotenv files                            |
-| `dotenv.path`                    | `string`   | `undefined`     | Directory to load dotenv files from          |
-| `enforceProductionPropertyRules` | `boolean`  | `undefined`     | Declared on the type; not read by `load()`   |
-| `runnerType`                     | `WasmType` | *auto-detected* | Overrides WASM type detection                |
-| `httpPort`                       | `number`   | `undefined`     | HTTP-WASM only: pins the `fastedge-run` port |
+| Field                            | Type                    | Default         | Description                                                    |
+| -------------------------------- | ----------------------- | --------------- | -------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`               | `false`         | Load dotenv files                                              |
+| `dotenv.path`                    | `string`                | `undefined`     | Directory to load dotenv files from                            |
+| `enforceProductionPropertyRules` | `boolean`               | `undefined`     | Declared on the type; not read by `load()`                     |
+| `runnerType`                     | `WasmType`              | *auto-detected* | Overrides WASM type detection                                  |
+| `httpPort`                       | `number`                | `undefined`     | HTTP-WASM only: pins the `fastedge-run` port                   |
+| `stores`                         | `boolean \| TestStores` | `true`          | Storage service for cache and Edge KV, or isolated test stores |
+| `dc`                             | `string`                | `"local"`       | Cache bucket shared by runners with the same `dc`              |
 
 - `dotenv.enabled` defaults to `false` when the runner is created through `createRunner` or `createRunnerFromBuffer`.
 - `dotenv.path`: when omitted, `fastedge-run` (HTTP-WASM) uses the process CWD, which is correct for npm package users whose `.env` files live at the project root. Set it only when dotenv files are in a non-standard location, such as a test fixture directory.
 - `enforceProductionPropertyRules`: the runner's `load()` does not consume this field. Pass the rule explicitly to `callFullFlow()` or `callHook()`.
 - `httpPort`: see [load](#load) for the failure behavior when the port is busy.
+- `stores`: the factory functions connect each runner to a storage service shared by every runner in the same stores root. The stores root is the nearest git root, resolved from `WORKSPACE_PATH` or the current working directory; the `FASTEDGE_STORES_ROOT` environment variable overrides it. Set `stores: false` to disable it; cache and Edge KV calls from CDN apps then return `InternalFailure`. Pass a `TestStores` instance (from `createStores()`) to use isolated in-memory stores instead; runners given the same instance share them, and the runner does not own or release the instance.
+- `dc`: runners that use the same `dc` value share cache entries. When omitted, the value is the `dc` of the supplied `TestStores` instance, or `"local"`.
 
 ### HttpRequest & HttpResponse
 
@@ -407,6 +433,11 @@ interface HttpResponse {
   contentType: string | null;
   isBase64?: boolean;
   logs: Array<{ level: number; message: string }>;
+  /**
+   * The cache / Edge KV calls the app made for this request, in order (stores on only).
+   * Needs a fastedge-run that forwards to the storage service.
+   */
+  storeCalls?: StoreCall[];
 }
 ```
 
@@ -417,6 +448,8 @@ interface HttpResponse {
 `isBase64` is `true` when the response body is binary content (images, audio, video, PDF, ZIP, gzip, `application/octet-stream`) encoded as base64.
 
 `HttpResponse.logs` contains log entries captured from the `fastedge-run` process stdout/stderr during the request.
+
+`HttpResponse.storeCalls` is present only when the runner has stores enabled and the installed `fastedge-run` forwards storage calls to the storage service. See [StoreCall](#storecall) for the shape of each entry.
 
 **Multi-valued headers.** `Set-Cookie` is preserved as a `string[]` — each `Set-Cookie` header emitted by the WASM app (or an upstream origin) becomes a separate array entry. Example:
 
@@ -502,16 +535,47 @@ type HookResult = {
     properties?: Record<string, unknown>;
   };
   properties: Record<string, unknown>;
+  /** The cache / Edge KV calls this hook made, in order (stores on only). */
+  storeCalls?: StoreCall[];
 };
 ```
 
-| Field        | Description                                                  |
-| ------------ | ------------------------------------------------------------ |
-| `returnCode` | Value returned by the hook export, or `null` if not exported |
-| `logs`       | Log entries emitted during hook execution                    |
-| `input`      | State seen by the hook before execution                      |
-| `output`     | State after hook execution                                   |
-| `properties` | All shared properties after execution                        |
+| Field        | Description                                                         |
+| ------------ | ------------------------------------------------------------------- |
+| `returnCode` | Value returned by the hook export, or `null` if not exported        |
+| `logs`       | Log entries emitted during hook execution                           |
+| `input`      | State seen by the hook before execution                             |
+| `output`     | State after hook execution                                          |
+| `properties` | All shared properties after execution                               |
+| `storeCalls` | Cache and Edge KV calls made by the hook, in order (stores on only) |
+
+`storeCalls` is present only when the runner has stores enabled. See [StoreCall](#storecall) for the shape of each entry.
+
+### StoreCall
+
+```typescript
+type StoreCall = {
+  app: "cdn" | "http";
+  hook?: string;
+  kind: "cache" | "kv";
+  op: string;
+  /** Cache bucket (cache calls). */
+  dc?: string;
+  /** Edge KV store (KV calls). */
+  store?: string;
+  key?: string;
+  pattern?: string;
+  prefix?: string;
+  /** `ok`, or the service's error (`wrong-type`, `invalid-pattern`, ...). */
+  result: string;
+  /** The result value: a count, a flag, or the size of a value or list. */
+  value?: string;
+  /** Wall-clock time (ms since epoch). */
+  at: number;
+};
+```
+
+Values are not recorded, only their size.
 
 ### FullFlowResult
 
@@ -558,11 +622,12 @@ enum ProxyStatus {
   Ok = 0,
   NotFound = 1,
   BadArgument = 2,
+  InternalFailure = 10,
   Unimplemented = 12,
 }
 ```
 
-Only `WasmType` is exported from the package root. `HeaderRecord` appears in the exported `HookCall`, `HookResult`, and `FullFlowResult` types; the other types above are not exported.
+Only `WasmType` is exported from this group of types at the package root. `HeaderRecord` appears in the exported `HookCall`, `HookResult`, and `FullFlowResult` types; the other types above are not exported.
 
 Log levels follow the proxy-wasm convention: `0` = Trace, `1` = Debug, `2` = Info, `3` = Warn, `4` = Error.
 
@@ -681,6 +746,7 @@ async function testCdnApp() {
     const requestHeaders: HookResult = result.hookResults['onRequestHeaders'];
     console.log('onRequestHeaders returnCode:', requestHeaders.returnCode);
     console.log('Logs:', requestHeaders.logs);
+    console.log('Store calls:', requestHeaders.storeCalls);
 
     // Inspect final response
     console.log('Final status:', result.finalResponse.status);
@@ -774,6 +840,7 @@ async function testHttpApp() {
     console.log('Content-Type:', response.contentType);
     console.log('Body:', response.body);
     console.log('Process logs:', response.logs);
+    console.log('Store calls:', response.storeCalls);
 
     // POST request with body
     const postResponse = await runner.execute({

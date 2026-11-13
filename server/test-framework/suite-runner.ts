@@ -1,6 +1,7 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import { createRunner, createRunnerFromBuffer } from "../runner/standalone.js";
+import { createStores, type TestStores } from "../stores/testStores.js";
 import { BUILTIN_SHORTHAND, BUILTIN_URL } from "../runner/ProxyWasmRunner.js";
 import { TestConfigSchema } from "../schemas/config.js";
 import type { TestConfig } from "../schemas/config.js";
@@ -55,7 +56,8 @@ export async function loadConfigFile(configPath: string): Promise<TestConfig> {
 /**
  * Execute all test cases in a TestSuite.
  *
- * Each test gets a **fresh runner instance** so tests are fully isolated.
+ * Each test gets a **fresh runner instance** and its own stores (cache and Edge KV, seeded
+ * from `fixtures/stores/`), so tests are fully isolated.
  * Tests run sequentially. A thrown error (or failed assertion) marks the test as failed.
  */
 export async function runTestSuite(suite: TestSuite): Promise<SuiteResult> {
@@ -64,13 +66,19 @@ export async function runTestSuite(suite: TestSuite): Promise<SuiteResult> {
 
   for (const test of suite.tests) {
     const testStart = Date.now();
+    // Each test gets its own isolated stores, unless the suite gives an instance or turns them off.
+    const configured = suite.runnerConfig?.stores;
+    let own: TestStores | null = null;
     try {
+      if (configured !== false && typeof configured !== "object") own = await createStores();
+      const stores = own ?? (typeof configured === "object" ? configured : null);
+      const runnerConfig = { ...suite.runnerConfig, stores: stores ?? false };
       const runner = suite.wasmBuffer
-        ? await createRunnerFromBuffer(suite.wasmBuffer, suite.runnerConfig)
-        : await createRunner(suite.wasmPath!, suite.runnerConfig);
+        ? await createRunnerFromBuffer(suite.wasmBuffer, runnerConfig)
+        : await createRunner(suite.wasmPath!, runnerConfig);
 
       try {
-        await test.run(runner);
+        await test.run(runner, { stores });
         results.push({
           name: test.name,
           passed: true,
@@ -86,6 +94,8 @@ export async function runTestSuite(suite: TestSuite): Promise<SuiteResult> {
         error: err instanceof Error ? err.message : String(err),
         durationMs: Date.now() - testStart,
       });
+    } finally {
+      await own?.close();
     }
   }
 

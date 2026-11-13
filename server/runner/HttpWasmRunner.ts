@@ -24,6 +24,9 @@ import {
 } from "../utils/temp-file-manager.js";
 import { isLegacySyncWasm } from "../utils/legacy-wasm-detect.js";
 import { validateDotenvLeafs } from "../utils/dotenv-loader.js";
+import { request as storesRequest, type RunnerStores } from "../stores/StoresManager.js";
+import type { StoreCall } from "../stores/trace.js";
+import { randomBytes } from "node:crypto";
 
 /**
  * HttpWasmRunner implementation
@@ -53,9 +56,28 @@ export class HttpWasmRunner implements IWasmRunner {
   /** @deprecated Legacy sync support — remove when #[fastedge::http] is retired */
   private isLegacySync: boolean = false;
 
-  constructor(portManager: PortManager, dotenvEnabled: boolean = true) {
+  constructor(
+    portManager: PortManager,
+    dotenvEnabled: boolean = true,
+    private stores: RunnerStores | null = null,
+  ) {
     this.portManager = portManager;
     this.dotenvEnabled = dotenvEnabled;
+  }
+
+  /**
+   * fastedge-run's environment. With stores on, FASTEDGE_STORES_SERVICE points it at the
+   * storage service: the cache and the seeded Edge KV stores are shared with every other
+   * runner (a store named in .env.kv_stores, e.g. redis://, still wins). Read at each spawn,
+   * since the service may have restarted.
+   */
+  private spawnEnv(): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { RUST_LOG: "info", ...process.env };
+    if (this.stores) {
+      const { url, token } = this.stores.connection;
+      env.FASTEDGE_STORES_SERVICE = `${url},${token},${this.stores.dc}`;
+    }
+    return env;
   }
 
   /**
@@ -73,8 +95,8 @@ export class HttpWasmRunner implements IWasmRunner {
       this.dotenvPath = config.dotenv.path;
     }
 
-    // Cleanup previous process if any
-    await this.cleanup();
+    // Stop the previous process if any
+    await this.stopProcess();
 
     // Find fastedge-run CLI
     this.cliPath = await findFastEdgeRunCli();
@@ -153,10 +175,7 @@ export class HttpWasmRunner implements IWasmRunner {
     // Spawn process
     this.process = spawn(this.cliPath, args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        RUST_LOG: "info",
-        ...process.env,
-      },
+      env: this.spawnEnv(),
     });
 
     // Setup log capture
@@ -193,11 +212,22 @@ export class HttpWasmRunner implements IWasmRunner {
     this.logs = [];
 
     try {
+      // With stores on, a W3C traceparent names this request: fastedge-run tags its storage
+      // calls with it. A valid caller trace id is kept, but the parent id is always new, so
+      // every execution has its own value; duplicates and invalid values are replaced.
+      const headers = { ...request.headers };
+      let traceparent: string | undefined;
+      if (this.stores) {
+        traceparent = newTraceparent(headers);
+        for (const key of Object.keys(headers)) if (key.toLowerCase() === "traceparent") delete headers[key];
+        headers.traceparent = traceparent;
+      }
+
       // Forward request to local fastedge-run server
       const url = `http://localhost:${this.port}${request.path}`;
       const response = await fetch(url, {
         method: request.method,
-        headers: request.headers,
+        headers,
         body: request.body || undefined,
         signal: AbortSignal.timeout(30000), // 30 second timeout
         // Surface 3xx responses verbatim so tests can assert on status/Location.
@@ -219,6 +249,7 @@ export class HttpWasmRunner implements IWasmRunner {
         ? bodyBuffer.toString("base64")
         : bodyBuffer.toString("utf8");
 
+      const storeCalls = traceparent ? await this.storeCalls(traceparent) : undefined;
       return {
         status: response.status,
         statusText: response.statusText,
@@ -227,6 +258,7 @@ export class HttpWasmRunner implements IWasmRunner {
         contentType,
         isBase64: isBinary,
         logs: [...this.logs], // Copy logs
+        ...(storeCalls ? { storeCalls } : {}),
       };
     } catch (error) {
       const errorMessage =
@@ -234,6 +266,17 @@ export class HttpWasmRunner implements IWasmRunner {
       this.logs.push({ level: 4, message: `Request failed: ${errorMessage}` });
 
       throw new Error(`HTTP request failed: ${errorMessage}`);
+    }
+  }
+
+  /** The storage calls fastedge-run made for this request (empty if the service cannot say). */
+  private async storeCalls(requestId: string): Promise<StoreCall[]> {
+    try {
+      // Short: the response is ready; an unhealthy service must not hold it up.
+      const reply = await storesRequest(this.stores!.connection, "admin", { op: "traces", requestId }, 500);
+      return reply.ok ? (reply.value as StoreCall[]) : [];
+    } catch {
+      return [];
     }
   }
 
@@ -311,10 +354,7 @@ export class HttpWasmRunner implements IWasmRunner {
 
     this.process = spawn(this.cliPath, args, {
       stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        RUST_LOG: "info",
-        ...process.env,
-      },
+      env: this.spawnEnv(),
     });
 
     this.setupLogCapture();
@@ -329,6 +369,12 @@ export class HttpWasmRunner implements IWasmRunner {
    * Clean up resources
    */
   async cleanup(): Promise<void> {
+    await this.stopProcess();
+    if (this.stores?.owned) await this.stores.connection.close();
+  }
+
+  /** Stop fastedge-run and release its port and temp file (load() reuses this). */
+  private async stopProcess(): Promise<void> {
     // Kill process
     if (this.process) {
       await this.killProcess();
@@ -598,4 +644,12 @@ export function parseFetchHeaders(headers: Headers): IncomingHttpHeaders {
     result["set-cookie"] = setCookies;
   }
   return result;
+}
+
+/** A W3C traceparent with a fresh parent id, keeping the caller's trace id if one is valid. */
+export function newTraceparent(headers: Record<string, string>): string {
+  const caller = Object.entries(headers).find(([k]) => k.toLowerCase() === "traceparent")?.[1];
+  const match = /^00-([0-9a-f]{32})-[0-9a-f]{16}-([0-9a-f]{2})$/.exec(caller?.trim() ?? "");
+  const traceId = match && !/^0+$/.test(match[1]) ? match[1] : randomBytes(16).toString("hex");
+  return `00-${traceId}-${randomBytes(8).toString("hex")}-${match?.[2] ?? "01"}`;
 }

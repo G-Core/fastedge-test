@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { StoreCallsList } from "../../common/StoreCallsList";
 import { HookCall, HookResult, LogEntry } from "../../../types";
 import { CollapsiblePanel } from "../../common/CollapsiblePanel";
 import { LogLevelSelector } from "../../common/LogLevelSelector";
@@ -19,7 +20,7 @@ const HOOKS = [
   "onResponseBody",
 ];
 
-type SubView = "logs" | "inputs" | "outputs";
+type SubView = "logs" | "storage" | "inputs" | "outputs";
 
 export function HookStagesPanel({
   results,
@@ -376,6 +377,8 @@ export function HookStagesPanel({
     );
   };
 
+  const storageCount = results[activeHook]?.storeCalls?.length;
+
   return (
     <div className={styles.hookStagesPanel}>
       <CollapsiblePanel title="Logging" defaultExpanded={false}>
@@ -406,6 +409,12 @@ export function HookStagesPanel({
             Logs
           </button>
           <button
+            className={`${styles.subTab} ${activeSubView === "storage" ? styles.active : ""}`}
+            onClick={() => setActiveSubView("storage")}
+          >
+            Storage{storageCount ? ` (${storageCount})` : ""}
+          </button>
+          <button
             className={`${styles.subTab} ${activeSubView === "inputs" ? styles.active : ""}`}
             onClick={() => setActiveSubView("inputs")}
           >
@@ -421,6 +430,7 @@ export function HookStagesPanel({
 
         <div className={styles.stageContent}>
           {activeSubView === "logs" && renderLogs(activeHook)}
+          {activeSubView === "storage" && <StoreCallsList calls={results[activeHook]?.storeCalls} source="hook" />}
           {activeSubView === "inputs" && renderInputs(activeHook)}
           {activeSubView === "outputs" && renderOutputs(activeHook)}
         </div>

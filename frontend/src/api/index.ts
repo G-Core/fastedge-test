@@ -1,4 +1,4 @@
-import { HookCall, HookResult } from "../types";
+import { HookCall, HookResult, StoreCall } from "../types";
 import type { TestConfig } from "../stores/types";
 export type { TestConfig } from "../stores/types";
 import { hasFilesystemAccess } from "../utils/environment";
@@ -89,6 +89,13 @@ export interface UploadWasmResult {
   fileSize: number;
 }
 
+/** Per-load settings from the config file (no UI controls); null = the server default. */
+export type LoadOptions = { httpPort?: number | null; stores?: boolean | null; dc?: string | null };
+
+function loadOptions({ httpPort, stores, dc }: LoadOptions) {
+  return { ...(httpPort ? { httpPort } : {}), ...(stores != null ? { stores } : {}), ...(dc ? { dc } : {}) };
+}
+
 /**
  * Uploads a WASM file to the server using the optimal loading strategy.
  *
@@ -111,7 +118,7 @@ export async function uploadWasm(
   file: File,
   dotenvEnabled: boolean = true,
   dotenvPath?: string | null,
-  httpPort?: number | null,
+  options: LoadOptions = {},
 ): Promise<UploadWasmResult> {
   const startTime = performance.now();
   const fileSize = file.size;
@@ -131,7 +138,7 @@ export async function uploadWasm(
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ wasmPath: filePath, dotenv: { enabled: dotenvEnabled, ...(dotenvPath ? { path: dotenvPath } : {}) }, ...(httpPort ? { httpPort } : {}) }),
+          body: JSON.stringify({ wasmPath: filePath, dotenv: { enabled: dotenvEnabled, ...(dotenvPath ? { path: dotenvPath } : {}) }, ...loadOptions(options) }),
         });
 
         if (!response.ok) {
@@ -184,7 +191,7 @@ export async function uploadWasm(
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ wasmBase64: base64, dotenv: { enabled: dotenvEnabled, ...(dotenvPath ? { path: dotenvPath } : {}) }, ...(httpPort ? { httpPort } : {}) }),
+    body: JSON.stringify({ wasmBase64: base64, dotenv: { enabled: dotenvEnabled, ...(dotenvPath ? { path: dotenvPath } : {}) }, ...loadOptions(options) }),
   });
 
   if (!response.ok) {
@@ -225,7 +232,7 @@ export async function uploadWasmFromPath(
   wasmPath: string,
   dotenvEnabled: boolean = true,
   dotenvPath?: string | null,
-  httpPort?: number | null,
+  options: LoadOptions = {},
 ): Promise<UploadWasmResult> {
   const startTime = performance.now();
 
@@ -236,7 +243,7 @@ export async function uploadWasmFromPath(
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ wasmPath, dotenv: { enabled: dotenvEnabled, ...(dotenvPath ? { path: dotenvPath } : {}) }, ...(httpPort ? { httpPort } : {}) }),
+    body: JSON.stringify({ wasmPath, dotenv: { enabled: dotenvEnabled, ...(dotenvPath ? { path: dotenvPath } : {}) }, ...loadOptions(options) }),
   });
 
   if (!response.ok) {
@@ -297,6 +304,7 @@ export async function callHook(
     logs: logs, // Keep as array for client-side filtering
     returnValue: result.result?.returnCode,
     error: result.error,
+    storeCalls: result.result?.storeCalls,
   };
 }
 
@@ -354,6 +362,7 @@ export async function sendFullFlow(
       input: hr?.input,
       output: hr?.output,
       properties: hr?.properties,
+      storeCalls: hr?.storeCalls,
     };
   }
 
@@ -446,6 +455,7 @@ export async function executeHttpWasm(
   contentType: string;
   isBase64?: boolean;
   logs: Array<{ level: number; message: string }>;
+  storeCalls?: StoreCall[];
 }> {
   // Extract the path from the full internal URL and send `path` to the server.
   // The server accepts both `path` and `url`, but `path` is the canonical form

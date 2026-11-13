@@ -6,6 +6,7 @@
  *   dist/lib/index.cjs                 — CJS bundle  (. entry)
  *   dist/lib/test-framework/index.js   — ESM bundle  (./test entry)
  *   dist/lib/test-framework/index.cjs  — CJS bundle  (./test entry)
+ *   dist/lib/test-framework/vitest.js  — ESM bundle  (./vitest entry; vitest is ESM-only)
  *   dist/lib/**\/*.d.ts                 — TypeScript declarations (via tsc -p tsconfig.lib.json)
  *
  * Location: esbuild/bundle-lib.js
@@ -15,12 +16,14 @@ const esbuild = require("esbuild");
 const path = require("path");
 const fs = require("fs");
 const { execSync } = require("child_process");
+const { embeddedPlugin } = require("./embedded");
 
 const projectRoot = path.join(__dirname, "..");
 const distLibDir = path.join(projectRoot, "dist", "lib");
 const entryPoint = path.join(projectRoot, "server", "runner", "index.ts");
 const testFrameworkEntry = path.join(projectRoot, "server", "test-framework", "index.ts");
 const distTestFrameworkDir = path.join(distLibDir, "test-framework");
+const vitestEntry = path.join(projectRoot, "server", "test-framework", "vitest.ts");
 
 // Bare-name Node.js built-ins (the "node:" prefixed forms are handled by the
 // nodeBuiltinsPlugin below — externalizing every "node:*" specifier without
@@ -58,7 +61,7 @@ async function buildLib() {
     bundle: true,
     platform: "node",
     target: "node20",
-    plugins: [nodeBuiltinsPlugin],
+    plugins: [nodeBuiltinsPlugin, embeddedPlugin],
     external: [
       ...nodeBuiltins,
       // All npm dependencies are external — consumers install their own
@@ -125,6 +128,17 @@ async function buildLib() {
       outfile: path.join(distTestFrameworkDir, "index.cjs"),
     });
     console.log("✅ CJS build: dist/lib/test-framework/index.cjs");
+
+    // ── vitest fixtures entry (./vitest), ESM only ───────────────────────────
+    await esbuild.build({
+      ...sharedConfig,
+      ...esmRequireShim,
+      external: [...sharedConfig.external, "vitest"],
+      entryPoints: [vitestEntry],
+      format: "esm",
+      outfile: path.join(distTestFrameworkDir, "vitest.js"),
+    });
+    console.log("✅ ESM build: dist/lib/test-framework/vitest.js");
 
     // ── TypeScript declarations ───────────────────────────────────────────────
     console.log("📝 Generating TypeScript declarations...");
