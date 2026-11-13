@@ -110,44 +110,33 @@ export function HttpWasmView() {
           <div className={styles.loggingContent}>
             <div className={styles.loggingHeader}>
               <div className={styles.logTabs} role="tablist">
-                <div
+                <button
+                  type="button"
                   role="tab"
                   aria-selected={logView === "logs"}
-                  tabIndex={0}
                   className={`${styles.logTab} ${logView === "logs" ? styles.active : ""}`}
                   onClick={() => setLogView("logs")}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") setLogView("logs");
-                  }}
                 >
-                  <span className={styles.tabLabel}>Logs</span>
-                  {httpLogs.length > 0 && (
-                    <button
-                      className={styles.clearLogsButton}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setHttpLogs([]);
-                      }}
-                      title="Clear logs"
-                    >
-                      🧹
-                    </button>
-                  )}
-                </div>
-                <div
+                  Logs
+                </button>
+                <button
+                  type="button"
                   role="tab"
                   aria-selected={logView === "storage"}
-                  tabIndex={0}
                   className={`${styles.logTab} ${logView === "storage" ? styles.active : ""}`}
                   onClick={() => setLogView("storage")}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") setLogView("storage");
-                  }}
                 >
-                  <span className={styles.tabLabel}>
-                    Storage{storageCount ? ` (${storageCount})` : ""}
-                  </span>
-                </div>
+                  Storage{storageCount ? ` (${storageCount})` : ""}
+                </button>
+                {logView === "logs" && httpLogs.length > 0 && (
+                  <button
+                    className={styles.clearLogsButton}
+                    onClick={() => setHttpLogs([])}
+                    title="Clear logs"
+                  >
+                    🧹
+                  </button>
+                )}
               </div>
               {logView === "logs" && (
                 <div className={styles.loggingControls}>

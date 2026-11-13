@@ -58,31 +58,36 @@
 .logTabs {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
 }
 
+/* Same as the Request / Response panel tabs. */
 .logTab {
-  display: flex;
-  align-items: center;
   padding: 0.5rem 1rem;
-  background: transparent;
+  background-color: transparent;
+  color: #b0b0b0;
   border: none;
+  border-radius: 0;
   border-bottom: 2px solid transparent;
-  color: #888;
   cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: normal;
+  transition: all 0.2s;
 }
 
-.logTab:hover {
-  color: #b0b0b0;
+.logTab:hover:not(:disabled) {
+  color: #e0e0e0;
+  background-color: #2d2d2d;
 }
 
 .logTab.active {
-  border-bottom-color: #ff6c37;
   color: #ff6c37;
+  border-bottom-color: #ff6c37;
 }
 
-.tabLabel {
-  font-size: 0.9rem;
-  font-weight: 500;
+.logTab.active:hover:not(:disabled) {
+  color: #1a1a1a;
+  background: rgba(255, 108, 55, 0.85);
 }
 
 .loggingControls {
@@ -105,6 +110,7 @@
   transition: color 0.15s;
 }
 
-.clearLogsButton:hover {
+.clearLogsButton:hover:not(:disabled) {
+  background: transparent;
   color: #b0b0b0;
 }
