@@ -19,6 +19,10 @@ and reach `/api/load` from the debugger UI.
   `/api/load` body (`LoadOptions` replaces the `httpPort` argument)
 - Test app `http-apps/rust/wasi/stores`: percent-decoded query, `kv-zscan`
 - FastEdge-lib: the edge's error texts (`ERR: Invalid argument: WRONGTYPE ...`, `ERR: min > max`)
+- Review fixes (service lifecycle): an old `start failed` in `service.log` no longer aborts a new
+  start; a service that starts too slowly is killed; `close()` waits for a renewal in flight;
+  `createRunner` releases the lease when `load()` fails; a crashed CDN worker still releases its
+  bridge and lease on `cleanup()`; the debugger releases its lease on SIGINT/SIGTERM
 
 ### 🧪 Testing
 - Unit 532 (edge pattern table), frontend 343, CDN integration 144 × 2, HTTP stores E2E 4/4

@@ -54,6 +54,11 @@ export async function createRunnerFromBuffer(
     runner = new WorkerProxyWasmRunner(undefined, config?.dotenv?.enabled ?? false, stores);
   }
 
-  await runner.load(buffer, config);
+  try {
+    await runner.load(buffer, config);
+  } catch (error) {
+    await runner.cleanup(); // releases the stores lease too
+    throw error;
+  }
   return runner;
 }

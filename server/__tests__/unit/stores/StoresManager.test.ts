@@ -45,6 +45,13 @@ describe('StoresManager', () => {
     expect(readFileSync(join(storesDir(root), '.gitignore'), 'utf8')).toBe('*\n');
   });
 
+  it('a failure left in the log by an earlier start does not stop a new one', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'stores-mgr-'));
+    mkdirSync(storesDir(root), { recursive: true });
+    writeFileSync(join(storesDir(root), 'service.log'), 'x start failed: old fixture error\n');
+    expect(await incr(await connect(root))).toBe('1');
+  });
+
   it('another root gets its own service', async () => {
     const a = await connect(mkdtempSync(join(tmpdir(), 'stores-mgr-')));
     const b = await connect(mkdtempSync(join(tmpdir(), 'stores-mgr-')));

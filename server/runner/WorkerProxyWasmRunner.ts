@@ -136,6 +136,8 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
     }
   }
 
+  private cleanedUp = false;
+
   private stop(error: Error): void {
     this.stopped ??= error;
     for (const id of [...this.pending.keys()]) this.settle(id)?.reject(this.stopped);
@@ -187,7 +189,8 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
   }
 
   async cleanup(): Promise<void> {
-    if (this.stopped) return;
+    if (this.cleanedUp) return;
+    this.cleanedUp = true; // not `stopped`: a crashed worker still holds the bridge and lease
     this.stop(new Error("CDN runner was cleaned up"));
     await this.worker.terminate();
     this.closeBridge?.();

@@ -427,6 +427,12 @@ async function getStores(): Promise<StoresConnection | null> {
   }
 }
 
+/** Release the shared lease on shutdown, so an unused service exits without waiting for the TTL. */
+async function releaseStores(): Promise<void> {
+  const connection = await storesConnection?.catch(() => null);
+  await connection?.close();
+}
+
 app.patch("/api/dotenv", async (req: Request, res: Response) => {
   const parsed = ApiDotenvBodySchema.safeParse(req.body);
   if (!parsed.success) {
@@ -998,6 +1004,7 @@ process.on("SIGTERM", async () => {
   if (currentRunner) {
     await currentRunner.cleanup();
   }
+  await releaseStores();
   wsManager.close();
   deletePortFile();
   httpServer.close(() => {
@@ -1011,6 +1018,7 @@ process.on("SIGINT", async () => {
   if (currentRunner) {
     await currentRunner.cleanup();
   }
+  await releaseStores();
   wsManager.close();
   deletePortFile();
   httpServer.close(() => {

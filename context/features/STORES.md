@@ -122,6 +122,9 @@ Measured on preprod (2026-11-05) and read from the FastEdge cache backend:
 - **`incr` on a missing key** gets the default TTL and is purgeable. On the edge it currently
   gets no TTL and escapes `purge` until a server restart (engine bug, being reported).
 - **Bloom filters are exact sets:** no false positives.
+- **Restart on another port:** a crashed service restarts on its old port; if another process
+  took that port meanwhile, it listens on a new one. CDN runners follow; a running fastedge-run
+  keeps the old address until its runner reloads.
 - **Cache keys** are scoped by `dc` only, not by account (one service = one account).
 - A KV store is attached when it has a fixture; there is no app-level store configuration yet.
 

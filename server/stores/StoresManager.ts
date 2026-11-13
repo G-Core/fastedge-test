@@ -12,9 +12,9 @@
  */
 
 import http from "node:http";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { openSync, closeSync, readFileSync, rmSync, statSync, mkdirSync, existsSync } from "node:fs";
+import { openSync, closeSync, readFileSync, rmSync, statSync, mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { embeddedSource } from "../embedded.js";
@@ -63,10 +63,8 @@ export async function connectStores(root: string, options: ConnectOptions = {}):
   let service = await ensureService(root, startTimeoutMs);
   await call(service, "/v1/admin", { op: "lease", id, ttlMs: leaseTtlMs });
 
-  let renewing = false;
-  const timer = setInterval(async () => {
-    if (renewing) return;
-    renewing = true;
+  let renewing: Promise<void> | null = null;
+  const renew = async () => {
     try {
       await call(service, "/v1/admin", { op: "lease", id, ttlMs: leaseTtlMs });
     } catch {
@@ -76,9 +74,10 @@ export async function connectStores(root: string, options: ConnectOptions = {}):
       } catch (error) {
         console.error(`stores service: ${(error as Error).message}`);
       }
-    } finally {
-      renewing = false;
     }
+  };
+  const timer = setInterval(() => {
+    renewing ??= renew().finally(() => (renewing = null));
   }, Math.max(100, Math.floor(leaseTtlMs / 3)));
   timer.unref();
 
@@ -91,6 +90,7 @@ export async function connectStores(root: string, options: ConnectOptions = {}):
     },
     async close() {
       clearInterval(timer);
+      await renewing; // a renewal in flight could otherwise re-lease after the release
       await call(service, "/v1/admin", { op: "release", id }).catch(() => {});
     },
   };
@@ -126,13 +126,17 @@ async function ensureService(root: string, timeoutMs: number): Promise<Descripto
       if (again && (await alive(again))) return again;
       // Reuse a dead service's port and token, so clients started against it reconnect.
       const token = again?.token ?? randomBytes(24).toString("hex");
-      start(root, token, again?.port ?? 0);
+      // A "start failed" left by an earlier attempt must not end this one.
+      writeFileSync(join(dir, "service.log"), "");
+      const child = start(root, token, again?.port ?? 0);
       while (Date.now() < deadline) {
         const started = readDescriptor(dir);
         if (started && started.token === token && (await alive(started))) return started;
         if (startFailed(dir)) break;
         await sleep(50);
       }
+      // Too slow or failed: stop it, so it cannot publish a descriptor next to a later start.
+      child.kill();
       throw new Error(`could not start the stores service${logTail(dir)}`);
     } finally {
       closeSync(fd);
@@ -142,7 +146,7 @@ async function ensureService(root: string, timeoutMs: number): Promise<Descripto
   throw new Error(`timed out waiting for the stores service${logTail(dir)}`);
 }
 
-function start(root: string, token: string, port: number): void {
+function start(root: string, token: string, port: number): ChildProcess {
   const child = spawn(process.execPath, ["-"], {
     detached: true,
     windowsHide: true,
@@ -156,6 +160,7 @@ function start(root: string, token: string, port: number): void {
   });
   child.stdin!.end(embeddedSource("stores-service"));
   child.unref();
+  return child;
 }
 
 function readDescriptor(dir: string): Descriptor | undefined {
