@@ -412,7 +412,7 @@ export function HookStagesPanel({
             className={`${styles.subTab} ${activeSubView === "storage" ? styles.active : ""}`}
             onClick={() => setActiveSubView("storage")}
           >
-            Storage{storageCount ? ` (${storageCount})` : ""}
+            Storage logs{storageCount ? ` (${storageCount})` : ""}
           </button>
           <button
             className={`${styles.subTab} ${activeSubView === "inputs" ? styles.active : ""}`}

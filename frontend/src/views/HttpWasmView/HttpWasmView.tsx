@@ -129,8 +129,8 @@ export function HttpWasmView() {
           </div>
         </CollapsiblePanel>
 
-        {/* Storage trace: the cache / Edge KV calls of the last request */}
-        <CollapsiblePanel title="Storage" defaultExpanded={false}>
+        {/* Storage logs: the cache / Edge KV calls of the last request (contents: Stores panel) */}
+        <CollapsiblePanel title="Storage logs" defaultExpanded={false}>
           <StoreCallsList calls={httpResponse?.storeCalls} source="request" />
         </CollapsiblePanel>
 
