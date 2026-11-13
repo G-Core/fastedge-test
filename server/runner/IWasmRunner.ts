@@ -1,5 +1,6 @@
 import type { TestStores } from "../stores/testStores.js";
 import type { StoreCall } from "../stores/trace.js";
+import type { ClientContext, EdgeContext, RequestContext } from "./requestContext.js";
 /**
  * Base interface for WASM runners
  *
@@ -45,6 +46,18 @@ export interface RunnerConfig {
    * Default `"local"`, or the `dc` of a `createStores()` instance.
    */
   dc?: string;
+  /**
+   * Where the client is (preset `de` / `nl` / `us` plus overrides). CDN apps get `request.*`
+   * properties and `GeoIP-*` / `X-Real-IP` headers, HTTP apps `geoip-*` / `x-real-ip` headers.
+   * Explicit properties and headers win.
+   */
+  client?: ClientContext;
+  /**
+   * Which edge POP runs the app (preset `de` = fr5, `nl` = am3, `us` = sv5, plus overrides).
+   * CDN apps get the dictionary keys and `X-ID`, HTTP apps the `dc` / `pop-*` headers. Its
+   * `dc` is the cache bucket unless `dc` is set. Explicit dotenv dictionary keys and headers win.
+   */
+  edge?: EdgeContext;
 }
 
 /**
@@ -153,6 +166,12 @@ export interface IWasmRunner {
    * @param path Optional directory to load dotenv files from
    */
   applyDotenv(enabled: boolean, path?: string): Promise<void>;
+
+  /**
+   * Change the client and edge (see `RunnerConfig.client` / `.edge`) from the next request.
+   * The cache bucket stays as loaded.
+   */
+  setRequestContext(context: RequestContext): Promise<void>;
 
   /**
    * Clean up resources (processes, temp files, etc.)

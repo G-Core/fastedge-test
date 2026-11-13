@@ -25,6 +25,7 @@ import type { SyncStores } from "./storesBridge.js";
 import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { StoreCall } from "../stores/trace.js";
+import { cdnContext, withHeaders, type RequestContext } from "./requestContext.js";
 
 const textEncoder = new TextEncoder();
 
@@ -54,6 +55,7 @@ export class ProxyWasmRunner implements IWasmRunner {
   private dotenvEnabled: boolean = true; // Default to enabled
   private dotenvPath: string = ".";
   private stores: SyncStores | null = null; // null = stores off
+  private context: ReturnType<typeof cdnContext> = cdnContext({});
 
   constructor(
     fastEdgeConfig?: FastEdgeConfig,
@@ -193,6 +195,7 @@ export class ProxyWasmRunner implements IWasmRunner {
     // Reset stores to empty
     this.secretStore = new SecretStore();
     this.dictionary = new Dictionary();
+    this.dictionary.setDefaults(this.context.dictionary);
 
     // Re-load dotenv files with new settings (no-op when disabled)
     await this.loadDotenvIfEnabled();
@@ -212,7 +215,26 @@ export class ProxyWasmRunner implements IWasmRunner {
     }
   }
 
+  /**
+   * Where the client is and which POP runs the app: request properties and headers under the
+   * explicit ones, dictionary keys under the dotenv ones. Applies from the next call.
+   */
+  async setRequestContext(context: RequestContext): Promise<void> {
+    this.context = cdnContext(context);
+    this.dictionary.setDefaults(this.context.dictionary);
+  }
+
+  /** The call with the request context under its explicit properties and headers. */
+  private withContext(call: HookCall): HookCall {
+    return {
+      ...call,
+      properties: { ...this.context.properties, ...(call.properties ?? {}) },
+      request: { ...call.request, headers: withHeaders(this.context.headers, call.request.headers ?? {}) },
+    };
+  }
+
   async load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void> {
+    if (config?.client || config?.edge) await this.setRequestContext({ client: config.client, edge: config.edge });
     // Update config if provided
     if (config?.dotenv?.enabled !== undefined) {
       this.dotenvEnabled = config.dotenv.enabled;
@@ -844,6 +866,8 @@ export class ProxyWasmRunner implements IWasmRunner {
   }
 
   async callHook(call: HookCall): Promise<HookResult> {
+    // Inside a full flow the context is already applied (and a hook may have removed a header).
+    if (!this.flowRequestId.getStore()) call = this.withContext(call);
     const context = { requestId: this.flowRequestId.getStore() ?? randomUUID(), hook: call.hook };
     return this.trace.run(context, () => this.runHook(call));
   }
@@ -1386,7 +1410,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       enforceProductionPropertyRules,
     };
 
-    return this.flowRequestId.run(randomUUID(), () => this.callFullFlowLegacy(call, url));
+    return this.flowRequestId.run(randomUUID(), () => this.callFullFlowLegacy(this.withContext(call), url));
   }
 
   /**

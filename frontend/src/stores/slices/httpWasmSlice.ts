@@ -173,7 +173,8 @@ export const createHttpWasmSlice: StateCreator<
         state.httpUrl,
         state.httpMethod,
         state.httpRequestHeaders,
-        state.httpRequestBody
+        state.httpRequestBody,
+        { client: state.client, edge: state.edge },
       );
 
       // Update response and logs

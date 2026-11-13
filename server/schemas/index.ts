@@ -2,6 +2,8 @@ export {
   WasmConfigSchema,
   RequestConfigSchema,
   TestConfigSchema,
+  ClientContextSchema,
+  EdgeContextSchema,
 } from './config';
 
 export type {
@@ -17,6 +19,7 @@ export {
   ApiConfigBodySchema,
   SaveAsBodySchema,
   ApiDotenvBodySchema,
+  ApiExecuteContextSchema,
 } from './api';
 
 export type {

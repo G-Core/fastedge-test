@@ -26,6 +26,24 @@ const DotenvSchema = z.object({
   path: z.string().optional(),
 });
 
+const preset = z.enum(['de', 'nl', 'us']);
+const field = z.string().optional();
+
+/** Where the client is: a preset plus overrides (see server/runner/requestContext.ts). */
+export const ClientContextSchema = z.object({
+  preset: preset.optional(),
+  ip: field, asn: field, country: field, countryName: field, city: field,
+  region: field, continent: field, lat: field, long: field,
+}).strict();
+
+/** Which edge POP runs the app: a preset plus overrides. Its `dc` is the cache bucket. */
+export const EdgeContextSchema = z.object({
+  preset: preset.optional(),
+  dc: field, region: field, country: field, city: field, hostname: field,
+  popLat: field, popLong: field, popReg: field, popCity: field, popContinent: field,
+  popCountryCode: field, popCountryName: field,
+}).strict();
+
 const BaseConfigSchema = z.object({
   $schema: z.string().optional(),
   description: z.string().optional(),
@@ -40,6 +58,10 @@ const BaseConfigSchema = z.object({
   stores: z.boolean().optional(),
   /** Cache bucket: runners with the same `dc` share cache entries. Default `local`. */
   dc: z.string().min(1).optional(),
+  /** Where the client is. Explicit `properties` and request headers win. */
+  client: ClientContextSchema.optional(),
+  /** Which edge POP runs the app; its `dc` is the cache bucket unless `dc` is set. */
+  edge: EdgeContextSchema.optional(),
 });
 
 // CDN config: full URL. The upstream response is generated at runtime —

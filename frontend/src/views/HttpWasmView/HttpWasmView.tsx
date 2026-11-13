@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { CollapsiblePanel } from "../../components/common/CollapsiblePanel";
 import { DotenvPanel } from "../../components/common/DotenvPanel";
+import { RequestContextPanel } from "../../components/common/RequestContextPanel";
 import { RequestPanel } from "../../components/common/RequestPanel";
 import { ResponsePanel } from "../../components/common/ResponsePanel";
 import { LogsViewer } from "../../components/common/LogsViewer";
@@ -25,6 +26,10 @@ export function HttpWasmView() {
     httpLogs,
     wasmPath,
     dotenv,
+    client,
+    edge,
+    setClient,
+    setEdge,
     setHttpMethod,
     setHttpUrl,
     setHttpRequestHeaders,
@@ -86,6 +91,14 @@ export function HttpWasmView() {
           onPathChange={setDotenvPath}
           isExpanded={expandedPanels['dotenv'] ?? false}
           onExpandedChange={(expanded) => setPanelExpanded('dotenv', expanded)}
+        />
+
+        <RequestContextPanel
+          appType="http-wasm"
+          client={client}
+          edge={edge}
+          onClientChange={setClient}
+          onEdgeChange={setEdge}
         />
 
         {/* Logging Panel */}

@@ -20,6 +20,7 @@ import { WasmRunnerFactory } from "./runner/WasmRunnerFactory.js";
 import { connectStores, resolveStoresRoot, type StoresConnection } from "./stores/StoresManager.js";
 import type { IWasmRunner } from "./runner/IWasmRunner.js";
 import { HttpWasmRunner } from "./runner/HttpWasmRunner.js";
+import { CLIENT_PRESETS, EDGE_PRESETS, edgeDc, type RequestContext } from "./runner/requestContext.js";
 import { WebSocketManager, StateManager } from "./websocket/index.js";
 import { detectWasmType } from "./utils/wasmTypeDetector.js";
 import { validatePath } from "./utils/pathValidator.js";
@@ -30,6 +31,7 @@ import {
   ApiCallBodySchema,
   ApiConfigBodySchema,
   ApiDotenvBodySchema,
+  ApiExecuteContextSchema,
   SaveAsBodySchema,
   TestConfigSchema,
 } from "./schemas/index.js";
@@ -253,7 +255,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
-  const { wasmBase64, wasmPath, dotenv, httpPort, stores, dc } = parsed.data;
+  const { wasmBase64, wasmPath, dotenv, httpPort, stores, dc, client, edge } = parsed.data;
 
   // Resolve and validate the dotenv path before touching runner state so a
   // containment violation returns 400 rather than triggering the 500 catch block.
@@ -370,7 +372,7 @@ app.post("/api/load", async (req: Request, res: Response) => {
     currentRunner = runnerFactory.createRunner(
       wasmType,
       dotenv?.enabled ?? false,
-      storesConnection && { connection: storesConnection, dc: dc ?? "local", owned: false },
+      storesConnection && { connection: storesConnection, dc: dc ?? edgeDc(edge) ?? "local", owned: false },
     );
     currentRunner.setStateManager(stateManager);
 
@@ -381,6 +383,8 @@ app.post("/api/load", async (req: Request, res: Response) => {
     await currentRunner.load(bufferOrPath, {
       dotenv: { enabled: dotenv?.enabled ?? false, path: dotenvBasePath },
       httpPort,
+      client,
+      edge,
     });
 
     // Emit WASM loaded event — include runner port for HTTP WASM so the
@@ -485,8 +489,26 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * A request body that names `client` or `edge` replaces the runner's request context (both
+ * fields: one left out is cleared). The cache bucket stays as loaded.
+ */
+async function applyRequestContext(runner: IWasmRunner, body: object, context: RequestContext): Promise<void> {
+  if ("client" in body || "edge" in body) await runner.setRequestContext(context);
+}
+
+/** Client and edge presets, for the request context panel. */
+app.get("/api/request-context/presets", (_req: Request, res: Response) => {
+  res.json({ ok: true, client: CLIENT_PRESETS, edge: EDGE_PRESETS });
+});
+
 app.post("/api/execute", async (req: Request, res: Response) => {
   const { url, path: reqPath, method, headers, body } = req.body ?? {};
+  const context = ApiExecuteContextSchema.safeParse(req.body ?? {});
+  if (!context.success) {
+    res.status(400).json({ ok: false, error: context.error.flatten() });
+    return;
+  }
 
   if (!currentRunner) {
     res.status(400).json({
@@ -497,6 +519,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
   }
 
   try {
+    await applyRequestContext(currentRunner, req.body ?? {}, context.data);
     if (currentRunner.getType() === "http-wasm") {
       // HTTP WASM: Accept either `path` (preferred) or `url` (legacy).
       // When `path` is provided, use it directly (e.g. "/api/hello?q=1").
@@ -604,6 +627,7 @@ app.post("/api/call", async (req: Request, res: Response) => {
   }
 
   try {
+    await applyRequestContext(currentRunner, req.body, parsed.data);
     const result = await currentRunner.callHook({
       hook,
       request: request ?? { headers: {}, body: "" },
@@ -634,6 +658,7 @@ app.post("/api/send", async (req: Request, res: Response) => {
   }
 
   try {
+    await applyRequestContext(currentRunner, req.body, parsed.data);
     // Always capture all logs (trace level) - filtering happens client-side
     const fullFlowResult = await currentRunner.callFullFlow(
       url,

@@ -1,5 +1,26 @@
 # Proxy-WASM Runner - Changelog
 
+## November 13, 2026 - Request context panel (client / edge / origin)
+
+### Overview
+`client` and `edge` settings (preset DE / NL / US plus overrides) for both app types, in config
+files, `RunnerConfig`, the API and a new **Request Context** panel that replaces "Server
+Properties". See `features/REQUEST_CONTEXT.md`.
+
+### 🎯 What Was Completed
+- `server/runner/requestContext.ts`: presets (prod captures) and the expansion into properties,
+  headers and dictionary keys; explicit values win
+- Runners: `RunnerConfig.client` / `.edge`, `IWasmRunner.setRequestContext()`; the edge `dc` selects
+  the cache bucket; `Dictionary.setDefaults()`
+- API: `client` / `edge` on `/api/load`, `/api/send`, `/api/call`, `/api/execute`;
+  `GET /api/request-context/presets`
+- Frontend: `RequestContextPanel` (both views), CDN `OriginSection` (built-in responder controls),
+  raw Properties editor; removed `ServerPropertiesPanel` / `PropertiesEditor`
+
+### 🧪 Testing
+- Unit: `requestContext.test.ts`; frontend panel and config slice tests
+- Integration: CDN (in-process and worker) and HTTP `request-context` tests
+
 ## November 13, 2026 - Storage trace for HTTP apps
 
 ### Overview

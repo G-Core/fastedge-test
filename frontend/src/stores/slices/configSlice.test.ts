@@ -401,7 +401,36 @@ describe('ConfigSlice', () => {
         properties: { prop1: 'value1' },
         logLevel: 5,
         dotenv: { enabled: false },
+        client: { preset: 'de' },
+        edge: { preset: 'de' },
       });
+    });
+
+    it('should load old configs without client / edge as none, and round-trip new ones', () => {
+      const { result } = renderHook(() => useAppStore());
+      const request = { method: 'GET', url: 'built-in', headers: {}, body: '' };
+
+      act(() => {
+        result.current.loadFromConfig({ request, properties: { 'request.country': 'LU' }, logLevel: 2 });
+      });
+      expect(result.current.client).toBeNull();
+      expect(result.current.edge).toBeNull();
+      const old = result.current.exportConfig();
+      expect('client' in old || 'edge' in old).toBe(false);
+      expect(old.properties).toEqual({ 'request.country': 'LU' });
+
+      act(() => {
+        result.current.loadFromConfig({
+          request,
+          properties: {},
+          logLevel: 2,
+          client: { preset: 'nl', city: 'Utrecht' },
+          edge: { preset: 'us' },
+        });
+      });
+      const config = result.current.exportConfig();
+      expect(config.client).toEqual({ preset: 'nl', city: 'Utrecht' });
+      expect(config.edge).toEqual({ preset: 'us' });
     });
 
     it('should export copies of objects, not references', () => {

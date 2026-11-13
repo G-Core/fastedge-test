@@ -175,8 +175,51 @@ Exactly one of `wasmPath` or `wasmBase64` must be provided. Providing neither, o
   httpPort?: number;    // HTTP-WASM only. Pin the runner subprocess to this port (1024–65535).
                         // Load fails immediately if the port is already in use.
                         // Ignored for proxy-wasm modules.
+  stores?: boolean;     // Set to false to run without the storage service (default: enabled).
+                        // If the service cannot start, the module loads with stores off.
+  dc?: string;          // Datacenter name used for store operations (non-empty).
+                        // Falls back to the datacenter from `edge`, then "local".
+  client?: ClientContext; // Simulated client attributes
+  edge?: EdgeContext;     // Simulated edge point-of-presence attributes
 }
 ```
+
+`client` and `edge` define the request context for the loaded module. Both types are defined here and are shared by `POST /api/execute`, `POST /api/call`, `POST /api/send`, and the test configuration file.
+
+```typescript
+type ContextPreset = "de" | "nl" | "us";
+
+type ClientContext = {
+  preset?: ContextPreset; // Predefined set of client values
+  ip?: string;
+  asn?: string;
+  country?: string;
+  countryName?: string;
+  city?: string;
+  region?: string;
+  continent?: string;
+  lat?: string;
+  long?: string;
+};
+
+type EdgeContext = {
+  preset?: ContextPreset; // Predefined set of edge values
+  dc?: string;
+  region?: string;
+  country?: string;
+  city?: string;
+  hostname?: string;
+  popLat?: string;
+  popLong?: string;
+  popReg?: string;
+  popCity?: string;
+  popContinent?: string;
+  popCountryCode?: string;
+  popCountryName?: string;
+};
+```
+
+Unknown fields in `client` or `edge` are rejected with `400`.
 
 **Response**
 
@@ -247,11 +290,33 @@ curl -X POST http://localhost:5179/api/load \
 }
 ```
 
+**Example — set the client and edge context**
+
+```bash
+curl -X POST http://localhost:5179/api/load \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "wasmPath": "/home/user/project/build/module.wasm",
+    "client": { "preset": "de" },
+    "edge": { "preset": "nl" }
+  }'
+```
+
+```json
+{
+  "ok": true,
+  "wasmType": "proxy-wasm",
+  "resolvedPath": "/home/user/project/build/module.wasm"
+}
+```
+
 **Error Responses**
 
 | Status | Condition                                                                                           |
 | ------ | --------------------------------------------------------------------------------------------------- |
 | `400`  | Body failed validation (neither or both of `wasmPath` and `wasmBase64`, or `httpPort` out of range) |
+| `400`  | Body failed validation (`dc` empty, or `client` or `edge` has an unknown field or `preset`)         |
 | `400`  | `wasmPath` is invalid, does not exist, is outside the workspace root, or does not end in `.wasm`    |
 | `400`  | `dotenv.path` resolves outside the workspace root or contains a symlink that escapes it             |
 | `500`  | WASM load or runner initialization failed, including `httpPort` already in use                      |
@@ -316,9 +381,33 @@ curl -X PATCH http://localhost:5179/api/dotenv \
 
 ## Test Execution
 
+### Request context on execution endpoints
+
+`POST /api/execute`, `POST /api/call`, and `POST /api/send` accept optional `client` and `edge` fields (see [`ClientContext` and `EdgeContext`](#post-apiload)). If the body names either field, the runner's request context is replaced with the supplied values. Both fields are replaced together: a field that is left out is cleared. If the body names neither field, the context set at load time (or by a previous call) is unchanged. The store datacenter chosen at load time does not change.
+
+---
+
+### GET /api/request-context/presets
+
+Returns the `client` and `edge` preset values (`de`, `nl`, `us`), as the Request Context panel shows them.
+
+```bash
+curl -H "x-fastedge-token: <token>" http://localhost:5179/api/request-context/presets
+```
+
+**Response `200`**
+
+```json
+{
+  "ok": true,
+  "client": { "de": { "ip": "192.0.2.10", "asn": "62240", "country": "DE", "countryName": "Germany", "city": "Frankfurt am Main", "region": "HE", "continent": "EU", "lat": "50.09710", "long": "8.59520" }, "nl": { }, "us": { } },
+  "edge": { "de": { "dc": "fr5", "region": "eu", "country": "Germany", "city": "Frankfurt am Main", "hostname": "fr5-hw-edge-gpig-gc23", "popLat": "50.1049", "popLong": "8.6295", "popReg": "HE", "popCity": "Frankfurt am Main", "popContinent": "EU", "popCountryCode": "DE", "popCountryName": "Germany" }, "nl": { }, "us": { } }
+}
+```
+
 ### POST /api/execute
 
-Executes a request through the loaded WASM module. Behavior differs based on the detected runner type. This endpoint does not use schema validation — fields are read directly from the request body.
+Executes a request through the loaded WASM module. Behavior differs based on the detected runner type. The request fields are read directly from the request body; only `client` and `edge` are schema-validated.
 
 Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`X-Source`](#x-source-header) request header.
 
@@ -338,6 +427,8 @@ The server destructures `{ url, path, method, headers, body }` from the top leve
   url?: string;                      // HTTP-WASM: absolute URL, pathname and query are extracted
                                      //   (legacy fallback when `path` is absent).
                                      // Proxy-WASM: request URL, or "built-in" (required).
+  client?: ClientContext;            // See "Request context on execution endpoints"
+  edge?: EdgeContext;                // See "Request context on execution endpoints"
 
   // Proxy-WASM
   request?: {
@@ -358,6 +449,8 @@ The server destructures `{ url, path, method, headers, body }` from the top leve
 | `body`       | Used                        | Ignored (use `request.body`)    |
 | `request`    | Ignored                     | Used                            |
 | `properties` | Ignored                     | Used                            |
+| `client`     | Used                        | Used                            |
+| `edge`       | Used                        | Used                            |
 
 For HTTP-WASM, when `path` is given it is used directly as the request path (e.g. `/api/hello?q=1`). When only `url` is given, the path and query string are extracted from it.
 
@@ -511,6 +604,7 @@ curl -X POST http://localhost:5179/api/execute \
 
 | Status | Condition                                                        |
 | ------ | ---------------------------------------------------------------- |
+| `400`  | `client` or `edge` failed validation (unknown field or `preset`) |
 | `400`  | No WASM module is loaded                                         |
 | `400`  | HTTP-WASM: `path`/`url` missing, or `url` is not an absolute URL |
 | `400`  | Proxy-WASM: `url` missing or not a string                        |
@@ -538,6 +632,8 @@ Requires a WASM module to be loaded via `POST /api/load`.
     body: string;
   };
   properties?: Record<string, unknown>; // Defaults to {} when omitted
+  client?: ClientContext;               // See "Request context on execution endpoints"
+  edge?: EdgeContext;                   // See "Request context on execution endpoints"
 }
 ```
 
@@ -627,6 +723,7 @@ curl -X POST http://localhost:5179/api/call \
 | Status | Condition                                                                  |
 | ------ | -------------------------------------------------------------------------- |
 | `400`  | Body failed validation (invalid `hook`, malformed `request` or `response`) |
+| `400`  | Body failed validation (invalid `client` or `edge`)                        |
 | `400`  | No WASM module is loaded                                                   |
 | `500`  | Hook execution failed, including calling a hook on an HTTP-WASM module     |
 
@@ -650,6 +747,8 @@ Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`
     body?: string;                     // Request body (default: "")
   };
   properties?: Record<string, unknown>; // CDN properties; defaults to {} when omitted
+  client?: ClientContext;               // See "Request context on execution endpoints"
+  edge?: EdgeContext;                   // See "Request context on execution endpoints"
 }
 ```
 
@@ -752,6 +851,7 @@ curl -X POST http://localhost:5179/api/send \
 | Status | Condition                                                                    |
 | ------ | ---------------------------------------------------------------------------- |
 | `400`  | Body failed validation (`url` missing or neither `built-in` nor a valid URL) |
+| `400`  | Body failed validation (invalid `client` or `edge`)                          |
 | `400`  | No WASM module is loaded                                                     |
 | `500`  | Execution failed, including use against an HTTP-WASM module                  |
 
@@ -777,7 +877,7 @@ Reads `fastedge-config.test.json` from the `.fastedge-debug/` directory (relativ
 }
 ```
 
-`config` is returned as stored, even when `valid` is `false`. `TestConfig` is a discriminated union on `appType`:
+`config` is returned as stored, even when `valid` is `false`. `TestConfig` is a discriminated union on `appType`. `ClientContext` and `EdgeContext` are defined under [`POST /api/load`](#post-apiload).
 
 ```typescript
 // Proxy-WASM config (appType defaults to "proxy-wasm")
@@ -794,6 +894,10 @@ type ProxyWasmConfig = {
   };
   properties: Record<string, unknown>;
   dotenv?: { enabled?: boolean; path?: string };
+  stores?: boolean;
+  dc?: string;
+  client?: ClientContext;
+  edge?: EdgeContext;
 };
 
 // HTTP-WASM config
@@ -811,6 +915,10 @@ type HttpWasmConfig = {
   };
   properties: Record<string, unknown>;
   dotenv?: { enabled?: boolean; path?: string };
+  stores?: boolean;
+  dc?: string;
+  client?: ClientContext;
+  edge?: EdgeContext;
 };
 
 type TestConfig = ProxyWasmConfig | HttpWasmConfig;
@@ -891,7 +999,8 @@ curl -X POST http://localhost:5179/api/config \
       },
       "properties": {
         "client.geo.country": "US"
-      }
+      },
+      "client": { "preset": "us" }
     }
   }'
 ```
@@ -967,7 +1076,7 @@ curl -X POST http://localhost:5179/api/config/save-as \
 
 | Status | Condition                                                                  |
 | ------ | -------------------------------------------------------------------------- |
-| `400`  | Body failed validation (`config` invalid or `filePath` missing)           |
+| `400`  | Body failed validation (`config` invalid or `filePath` missing)            |
 | `403`  | `filePath` was not approved by the host's save dialog, or was already used |
 | `500`  | File write or directory creation failed                                    |
 

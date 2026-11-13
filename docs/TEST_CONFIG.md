@@ -1,6 +1,6 @@
 # Test Configuration
 
-Configuration file reference for `fastedge-config.test.json` — the per-test JSON file that defines the WASM binary, request, CDN properties, and dotenv loading for a single test scenario.
+Configuration file reference for `fastedge-config.test.json` — the per-test JSON file that defines the WASM binary, request, CDN properties, client and edge context, and dotenv loading for a single test scenario.
 
 ## Overview
 
@@ -24,35 +24,91 @@ The config schema is a union of two variants selected by `appType`:
 
 ### Fields
 
-| JSON Path          | Type      | Required          | Default        | Description                                                                           |
-| ------------------ | --------- | ----------------- | -------------- | ------------------------------------------------------------------------------------- |
-| `$schema`          | `string`  | No                | —              | URI of the JSON Schema file, used for IDE autocompletion and validation.              |
-| `description`      | `string`  | No                | —              | Human-readable label for this test scenario.                                          |
-| `wasm`             | `object`  | No                | —              | WASM binary configuration.                                                            |
-| `wasm.path`        | `string`  | If `wasm` present | —              | Path to the compiled `.wasm` binary.                                                  |
-| `wasm.description` | `string`  | No                | —              | Human-readable label for the WASM binary.                                             |
-| `appType`          | `string`  | Yes               | `"proxy-wasm"` | `"proxy-wasm"` (CDN) or `"http-wasm"`. Default applies to CDN only.                   |
-| `httpPort`         | `integer` | No                | —              | HTTP-WASM only. Pins the `fastedge-run` port (1024–65535) instead of pool allocation. |
-| `request`          | `object`  | Yes               | —              | Incoming HTTP request to simulate.                                                    |
-| `request.method`   | `string`  | Yes               | `"GET"`        | HTTP method (e.g. `"GET"`, `"POST"`).                                                 |
-| `request.url`      | `string`  | Yes (CDN)         | —              | Full upstream URL (CDN only). Use `"built-in"` for the local responder.               |
-| `request.path`     | `string`  | Yes (HTTP-WASM)   | —              | Request path, e.g. `"/api/submit"` (HTTP-WASM only).                                  |
-| `request.headers`  | `object`  | Yes               | `{}`           | Request headers. Keys and values must be strings.                                     |
-| `request.body`     | `string`  | Yes               | `""`           | Request body as a plain string.                                                       |
-| `properties`       | `object`  | Yes               | `{}`           | CDN properties passed to the WASM context. Values may be any JSON type.               |
-| `dotenv`           | `object`  | No                | —              | Dotenv file loading configuration.                                                    |
-| `dotenv.enabled`   | `boolean` | No                | `false`        | Whether to load dotenv files.                                                         |
-| `dotenv.path`      | `string`  | No                | —              | Directory containing the dotenv files (not a file).                                   |
-| `stores`           | `boolean` | No                | `true`         | Enables the local cache and Edge KV. `false`: CDN cache / KV calls fail; HTTP apps use fastedge-run's own per-process cache. |
-| `dc`               | `string`  | No                | `"local"`      | Cache bucket name. Runners with the same `dc` share cache entries.                    |
+| JSON Path             | Type      | Required          | Default        | Description                                                                           |
+| --------------------- | --------- | ----------------- | -------------- | ------------------------------------------------------------------------------------- |
+| `$schema`             | `string`  | No                | —              | URI of the JSON Schema file, used for IDE autocompletion and validation.              |
+| `description`         | `string`  | No                | —              | Human-readable label for this test scenario.                                          |
+| `wasm`                | `object`  | No                | —              | WASM binary configuration.                                                            |
+| `wasm.path`           | `string`  | If `wasm` present | —              | Path to the compiled `.wasm` binary.                                                  |
+| `wasm.description`    | `string`  | No                | —              | Human-readable label for the WASM binary.                                             |
+| `appType`             | `string`  | Yes               | `"proxy-wasm"` | `"proxy-wasm"` (CDN) or `"http-wasm"`. Default applies to CDN only.                   |
+| `httpPort`            | `integer` | No                | —              | HTTP-WASM only. Pins the `fastedge-run` port (1024–65535) instead of pool allocation. |
+| `request`             | `object`  | Yes               | —              | Incoming HTTP request to simulate.                                                    |
+| `request.method`      | `string`  | Yes               | `"GET"`        | HTTP method (e.g. `"GET"`, `"POST"`).                                                 |
+| `request.url`         | `string`  | Yes (CDN)         | —              | Full upstream URL (CDN only). Use `"built-in"` for the local responder.               |
+| `request.path`        | `string`  | Yes (HTTP-WASM)   | —              | Request path, e.g. `"/api/submit"` (HTTP-WASM only).                                  |
+| `request.headers`     | `object`  | Yes               | `{}`           | Request headers. Keys and values must be strings.                                     |
+| `request.body`        | `string`  | Yes               | `""`           | Request body as a plain string.                                                       |
+| `properties`          | `object`  | Yes               | `{}`           | CDN properties passed to the WASM context. Values may be any JSON type.               |
+| `dotenv`              | `object`  | No                | —              | Dotenv file loading configuration.                                                    |
+| `dotenv.enabled`      | `boolean` | No                | `false`        | Whether to load dotenv files.                                                         |
+| `dotenv.path`         | `string`  | No                | —              | Directory containing the dotenv files (not a file).                                   |
+| `stores`              | `boolean` | No                | `true`         | Enables the local cache and Edge KV. `false`: CDN cache / KV calls fail; HTTP apps use fastedge-run's own per-process cache. |
+| `dc`                  | `string`  | No                | `"local"`      | Cache bucket name. Runners with the same `dc` share cache entries.                    |
+| `client`              | `object`  | No                | —              | Where the client is: a preset plus overrides.                                         |
+| `client.preset`       | `string`  | No                | —              | Preset: `"de"`, `"nl"` or `"us"`.                                                     |
+| `client.ip`           | `string`  | No                | —              | Client IP address.                                                                    |
+| `client.asn`          | `string`  | No                | —              | Client ASN.                                                                           |
+| `client.country`      | `string`  | No                | —              | Client country code.                                                                  |
+| `client.countryName`  | `string`  | No                | —              | Client country name.                                                                  |
+| `client.city`         | `string`  | No                | —              | Client city.                                                                          |
+| `client.region`       | `string`  | No                | —              | Client region.                                                                        |
+| `client.continent`    | `string`  | No                | —              | Client continent.                                                                     |
+| `client.lat`          | `string`  | No                | —              | Client latitude.                                                                      |
+| `client.long`         | `string`  | No                | —              | Client longitude.                                                                     |
+| `edge`                | `object`  | No                | —              | Which edge POP runs the app: a preset plus overrides.                                 |
+| `edge.preset`         | `string`  | No                | —              | Preset: `"de"`, `"nl"` or `"us"`.                                                     |
+| `edge.dc`             | `string`  | No                | —              | POP data center; the cache bucket unless top-level `dc` is set.                       |
+| `edge.region`         | `string`  | No                | —              | Edge POP region.                                                                      |
+| `edge.country`        | `string`  | No                | —              | Edge POP country.                                                                     |
+| `edge.city`           | `string`  | No                | —              | Edge POP city.                                                                        |
+| `edge.hostname`       | `string`  | No                | —              | Edge POP hostname.                                                                    |
+| `edge.popLat`         | `string`  | No                | —              | POP latitude.                                                                         |
+| `edge.popLong`        | `string`  | No                | —              | POP longitude.                                                                        |
+| `edge.popReg`         | `string`  | No                | —              | POP region.                                                                           |
+| `edge.popCity`        | `string`  | No                | —              | POP city.                                                                             |
+| `edge.popContinent`   | `string`  | No                | —              | POP continent.                                                                        |
+| `edge.popCountryCode` | `string`  | No                | —              | POP country code.                                                                     |
+| `edge.popCountryName` | `string`  | No                | —              | POP country name.                                                                     |
 
-`additionalProperties` is `false` at the top level and in `wasm`, `dotenv`, and `request`; unrecognised fields fail validation. `dc` must be a non-empty string.
+`additionalProperties` is `false` at the top level and in `wasm`, `dotenv`, `request`, `client`, and `edge`; unrecognised fields fail validation. `dc` must be a non-empty string. `client` and `edge` values are all strings, including `lat`, `long`, `popLat`, and `popLong`.
 
 ### Required vs. Default Distinction
 
 The JSON Schema `required` arrays drive editor validation. `appType`, `request.method`, `request.headers`, `request.body`, and `properties` appear in those arrays, so a strict JSON Schema validator flags them when missing. At runtime, the Zod schema fills in their defaults (`"proxy-wasm"`, `"GET"`, `{}`, `""`, and `{}` respectively), so `loadConfigFile` accepts configs that omit them. The exception is `appType: "http-wasm"`, which has no default and must always be specified for HTTP-WASM configs.
 
 `request.url` (CDN) and `request.path` (HTTP-WASM) are required and have no default.
+
+### Client and Edge Context
+
+`client` describes where the request comes from, and `edge` describes which edge POP runs the app. Each takes a `preset` (`"de"`, `"nl"` or `"us"`) plus per-field overrides. Explicit `properties` and request headers take precedence over values derived from `client` and `edge`.
+
+`edge.dc` is the cache bucket unless the top-level `dc` is set. Runners that resolve to the same bucket share cache entries.
+
+```json
+{
+  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
+  "appType": "proxy-wasm",
+  "wasm": {
+    "path": "./dist/handler.wasm"
+  },
+  "request": {
+    "method": "GET",
+    "url": "built-in",
+    "headers": {},
+    "body": ""
+  },
+  "properties": {},
+  "client": {
+    "preset": "de",
+    "ip": "203.0.113.7"
+  },
+  "edge": {
+    "preset": "nl",
+    "city": "Amsterdam"
+  }
+}
+```
 
 ## Dotenv Configuration
 
@@ -274,7 +330,7 @@ The schema file is included in the published package at `schemas/fastedge-config
 - Field name autocompletion
 - Type validation (e.g. strings vs. objects)
 - Inline documentation on hover
-- Errors for unrecognised fields (`additionalProperties: false` is set at the top level and in `wasm`, `dotenv`, and `request`)
+- Errors for unrecognised fields (`additionalProperties: false` is set at the top level and in `wasm`, `dotenv`, `request`, `client`, and `edge`)
 
 **Other editors**: Any editor using the JSON Language Server (Neovim via `nvim-lspconfig`, IntelliJ IDEA, etc.) also picks up the schema from the `$schema` field without additional configuration.
 
@@ -300,6 +356,37 @@ The returned `TestConfig` type is a union discriminated by `appType`:
 ```typescript
 type TestConfig = CdnConfig | HttpConfig;
 
+type ContextPreset = "de" | "nl" | "us";
+
+type ClientContext = {
+  preset?:      ContextPreset;
+  ip?:          string;
+  asn?:         string;
+  country?:     string;
+  countryName?: string;
+  city?:        string;
+  region?:      string;
+  continent?:   string;
+  lat?:         string;
+  long?:        string;
+};
+
+type EdgeContext = {
+  preset?:         ContextPreset;
+  dc?:             string;
+  region?:         string;
+  country?:        string;
+  city?:           string;
+  hostname?:       string;
+  popLat?:         string;
+  popLong?:        string;
+  popReg?:         string;
+  popCity?:        string;
+  popContinent?:   string;
+  popCountryCode?: string;
+  popCountryName?: string;
+};
+
 type CdnConfig = {
   $schema?:     string;
   description?: string;
@@ -321,6 +408,8 @@ type CdnConfig = {
   };
   stores?: boolean;                        // local cache and Edge KV; on by default
   dc?:     string;                         // cache bucket; default "local"
+  client?: ClientContext;
+  edge?:   EdgeContext;
 };
 
 type HttpConfig = {
@@ -345,6 +434,8 @@ type HttpConfig = {
   };
   stores?: boolean;                        // local cache and Edge KV; on by default
   dc?:     string;                         // cache bucket; default "local"
+  client?: ClientContext;
+  edge?:   EdgeContext;
 };
 ```
 

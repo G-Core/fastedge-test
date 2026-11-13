@@ -27,6 +27,7 @@ import type {
   HttpResponse,
 } from "./IWasmRunner.js";
 import type { IStateManager } from "./IStateManager.js";
+import type { RequestContext } from "./requestContext.js";
 import type { HookCall, HookResult, FullFlowResult } from "./types.js";
 import type { FastEdgeConfig } from "../fastedge-host/index.js";
 import { embeddedSource } from "../embedded.js";
@@ -171,6 +172,10 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
       properties,
       enforceProductionPropertyRules,
     );
+  }
+
+  setRequestContext(context: RequestContext): Promise<void> {
+    return this.call("setRequestContext", context);
   }
 
   applyDotenv(enabled: boolean, path?: string): Promise<void> {

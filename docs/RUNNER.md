@@ -15,6 +15,8 @@ import {
   NullStateManager,
   BUILTIN_URL,
   BUILTIN_SHORTHAND,
+  CLIENT_PRESETS,
+  EDGE_PRESETS,
 } from '@gcoredev/fastedge-test';
 
 import type {
@@ -31,12 +33,18 @@ import type {
   TestStores,
   CreateStoresOptions,
   StoresSeed,
+  ClientContext,
+  EdgeContext,
+  RequestContext,
+  Preset,
 } from '@gcoredev/fastedge-test';
 ```
 
 `HeaderMap`, `HeaderRecord`, `LogEntry`, `ProxyStatus`, and `EventSource` are described under [Supporting Types](#supporting-types) and [IStateManager](#istatemanager). They are not exported from the package root.
 
 `createStores()` builds an isolated in-memory store instance (`TestStores`) that can be passed as `RunnerConfig.stores`. Its options and seed types are `CreateStoresOptions` and `StoresSeed`. See [stores](#runnerconfig) under `RunnerConfig` for how a runner uses the instance.
+
+`CLIENT_PRESETS`, `EDGE_PRESETS`, `ClientContext`, `EdgeContext`, `RequestContext`, and `Preset` describe the simulated client location and edge POP. See [Request Context](#request-context).
 
 ## Creating a Runner
 
@@ -117,6 +125,7 @@ interface IWasmRunner {
     enforceProductionPropertyRules: boolean
   ): Promise<FullFlowResult>;
   applyDotenv(enabled: boolean, path?: string): Promise<void>;
+  setRequestContext(context: RequestContext): Promise<void>;
   cleanup(): Promise<void>;
   getType(): WasmType;
   setStateManager(stateManager: IStateManager): void;
@@ -131,7 +140,7 @@ Loads a WASM binary into the runner. For proxy-wasm runners, compiles the module
 load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void>
 ```
 
-Calling `load()` again on the same runner replaces the current module and restarts any underlying process.
+Calling `load()` again on the same runner replaces the current module and restarts any underlying process. When `config.client` or `config.edge` is set, `load()` applies them as the runner's request context (see [setRequestContext](#setrequestcontext)).
 
 **`httpPort` pinning (HTTP-WASM only).** When `config.httpPort` is set, the spawned `fastedge-run` process is bound to that specific port instead of allocating from the dynamic pool (8100–8199). If the port is already in use, `load()` throws:
 
@@ -150,6 +159,8 @@ execute(request: HttpRequest): Promise<HttpResponse>
 ```
 
 `request.path` is a path on the locally spawned `fastedge-run` server, not a full URL. The runner forwards the request to that local process and returns the response including logs captured from the process stdout/stderr. Requests time out after 30 seconds. Network or timeout failures reject with `HTTP request failed: <reason>`. Calling `execute()` before `load()` rejects with `HttpWasmRunner not loaded. Call load() first.`
+
+If a request context is set (see [Request Context](#request-context)), its headers are added to the request; headers in `request.headers` take precedence.
 
 **Redirects are not followed.** The underlying fetch uses `redirect: "manual"`, so 3xx responses reach the caller intact — status code and `Location` header — rather than being transparently followed. This matches FastEdge edge behavior, where redirects are returned to the client rather than followed server-side, and lets tests assert on redirect status and `Location`.
 
@@ -234,6 +245,8 @@ The upstream response is generated at runtime — either by a real HTTP fetch ag
 
 Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fetch or built-in responder)* → `onResponseHeaders` → `onResponseBody`.
 
+If a request context is set (see [Request Context](#request-context)), its properties and headers are added to the call; the `properties` and `headers` arguments take precedence.
+
 **Local response short-circuit.** If a WASM module calls `proxy_send_local_response` in any hook and returns `StopIteration` (return code `1`), the runner short-circuits immediately. For request-phase hooks (`onRequestHeaders`, `onRequestBody`), this skips the remaining request hooks, the origin fetch, and all response hooks. For response-phase hooks (`onResponseHeaders`, `onResponseBody`), this skips any remaining response hooks. In all cases, `finalResponse` is built from the locally-sent status, headers, and body — matching CDN production behavior. This is how redirect modules (for example geo-redirect) and early error responses work.
 
 **Origin fetch failure.** If the origin fetch throws (DNS failure, connection refused, and similar), `callFullFlow` does not reject. It returns a `FullFlowResult` whose `finalResponse` has `status: 0`, `statusText: "Fetch Failed"`, and an error message in `body`.
@@ -250,8 +263,18 @@ applyDotenv(enabled: boolean, path?: string): Promise<void>
 
 **Behavior by runner type:**
 
-- **Proxy-WASM**: Resets the secret and dictionary stores to empty, then re-reads dotenv files from `path` (or the previously set path if omitted) when `enabled` is `true`. The compiled WASM module is not recompiled.
+- **Proxy-WASM**: Resets the secret and dictionary stores to empty, then re-reads dotenv files from `path` (or the previously set path if omitted) when `enabled` is `true`. The compiled WASM module is not recompiled. Dictionary keys supplied by the edge request context are kept as defaults beneath the dotenv values.
 - **HttpWasmRunner**: Kills the current `fastedge-run` process and restarts it with the updated `--dotenv` flag. The returned promise resolves once the restarted process is listening. If no process is running, the settings apply on the next `load()`.
+
+### setRequestContext
+
+Changes the simulated client and edge POP of a loaded runner. The new context applies from the next request. The cache bucket (`dc`) stays as it was when the runner was loaded.
+
+```typescript
+setRequestContext(context: RequestContext): Promise<void>
+```
+
+Available on both runner types. See [Request Context](#request-context) for what each app type receives.
 
 ### cleanup
 
@@ -289,7 +312,7 @@ setStateManager(stateManager: IStateManager): void
 
 Proxy-wasm runners handle proxy-wasm binaries — the standard format for FastEdge CDN applications. These modules implement the proxy-wasm ABI and hook into the request/response lifecycle.
 
-**Available methods**: `load`, `callHook`, `callFullFlow`, `applyDotenv`, `cleanup`, `getType`, `setStateManager`
+**Available methods**: `load`, `callHook`, `callFullFlow`, `applyDotenv`, `setRequestContext`, `cleanup`, `getType`, `setStateManager`
 
 **Not available**: `execute` (throws `Error`)
 
@@ -299,7 +322,7 @@ The runner compiles the WASM module once on `load()` and creates a fresh `WebAss
 
 `HttpWasmRunner` handles http-wasm (WASI component model) binaries. These modules implement the `wasi-http` interface and run as a standard HTTP server.
 
-**Available methods**: `load`, `execute`, `applyDotenv`, `cleanup`, `getType`, `setStateManager`
+**Available methods**: `load`, `execute`, `applyDotenv`, `setRequestContext`, `cleanup`, `getType`, `setStateManager`
 
 **Not available**: `callHook`, `callFullFlow` (both throw `Error`)
 
@@ -355,6 +378,22 @@ When `x-debugger-content` is omitted, the built-in responder returns a JSON echo
 
 `BUILTIN_URL` (`"http://fastedge-builtin.debug"`) is the canonical URL the runner substitutes internally when `BUILTIN_SHORTHAND` is passed. It is also accepted directly as the `url` argument, including with a query string or path.
 
+## Request Context
+
+A request context describes where the client is and which edge POP runs the app. It is set through `RunnerConfig.client` and `RunnerConfig.edge` at load time, or through [setRequestContext](#setrequestcontext) afterwards.
+
+- **`client`** (`ClientContext`): where the client is. Built from a preset (`de`, `nl`, or `us`) plus overrides.
+- **`edge`** (`EdgeContext`): which edge POP runs the app. Built from a preset (`de` = `fr5`, `nl` = `am3`, `us` = `sv5`) plus overrides. The POP's `dc` is the cache bucket unless `RunnerConfig.dc` is set.
+
+| App type         | Client context supplies                           | Edge context supplies          |
+| ---------------- | ------------------------------------------------- | ------------------------------ |
+| CDN (proxy-wasm) | `request.*` properties; `GeoIP-*` and `X-Real-IP` | Dictionary keys; `X-ID` header |
+| HTTP (http-wasm) | `geoip-*` and `x-real-ip` headers                 | `dc` and `pop-*` headers       |
+
+Values you set explicitly always win over the context: properties passed to `callFullFlow()` / `callHook()`, headers on the request, and dictionary keys from dotenv files.
+
+`CLIENT_PRESETS` and `EDGE_PRESETS` are the preset definitions behind the preset names. `ClientContext`, `EdgeContext`, `RequestContext`, and `Preset` are the exported types for the values accepted by `RunnerConfig.client`, `RunnerConfig.edge`, and `setRequestContext()`; their full declarations ship in the package's type definitions.
+
 ## Type Definitions
 
 ### RunnerConfig
@@ -393,6 +432,18 @@ interface RunnerConfig {
    * Default `"local"`, or the `dc` of a `createStores()` instance.
    */
   dc?: string;
+  /**
+   * Where the client is (preset `de` / `nl` / `us` plus overrides). CDN apps get `request.*`
+   * properties and `GeoIP-*` / `X-Real-IP` headers, HTTP apps `geoip-*` / `x-real-ip` headers.
+   * Explicit properties and headers win.
+   */
+  client?: ClientContext;
+  /**
+   * Which edge POP runs the app (preset `de` = fr5, `nl` = am3, `us` = sv5, plus overrides).
+   * CDN apps get the dictionary keys and `X-ID`, HTTP apps the `dc` / `pop-*` headers. Its
+   * `dc` is the cache bucket unless `dc` is set. Explicit dotenv dictionary keys and headers win.
+   */
+  edge?: EdgeContext;
 }
 ```
 
@@ -405,13 +456,16 @@ interface RunnerConfig {
 | `httpPort`                       | `number`                | `undefined`     | HTTP-WASM only: pins the `fastedge-run` port                   |
 | `stores`                         | `boolean \| TestStores` | `true`          | Storage service for cache and Edge KV, or isolated test stores |
 | `dc`                             | `string`                | `"local"`       | Cache bucket shared by runners with the same `dc`              |
+| `client`                         | `ClientContext`         | `undefined`     | Client location: preset plus overrides                         |
+| `edge`                           | `EdgeContext`           | `undefined`     | Edge POP: preset plus overrides; sets default dc               |
 
 - `dotenv.enabled` defaults to `false` when the runner is created through `createRunner` or `createRunnerFromBuffer`.
 - `dotenv.path`: when omitted, `fastedge-run` (HTTP-WASM) uses the process CWD, which is correct for npm package users whose `.env` files live at the project root. Set it only when dotenv files are in a non-standard location, such as a test fixture directory.
 - `enforceProductionPropertyRules`: the runner's `load()` does not consume this field. Pass the rule explicitly to `callFullFlow()` or `callHook()`.
 - `httpPort`: see [load](#load) for the failure behavior when the port is busy.
 - `stores`: the factory functions connect each runner to a storage service shared by every runner in the same stores root. The stores root is the nearest git root, resolved from `WORKSPACE_PATH` or the current working directory; the `FASTEDGE_STORES_ROOT` environment variable overrides it. Set `stores: false` to disable it; cache and Edge KV calls from CDN apps then return `InternalFailure`. Pass a `TestStores` instance (from `createStores()`) to use isolated in-memory stores instead; runners given the same instance share them, and the runner does not own or release the instance.
-- `dc`: runners that use the same `dc` value share cache entries. When omitted, the value is the `dc` of the supplied `TestStores` instance, or `"local"`.
+- `dc`: runners that use the same `dc` value share cache entries. When omitted, the value is the `dc` of `edge` if set, otherwise the `dc` of the supplied `TestStores` instance, otherwise `"local"`.
+- `client`, `edge`: see [Request Context](#request-context). Explicit properties, headers, and dotenv dictionary keys take precedence over values from these fields.
 
 ### HttpRequest & HttpResponse
 

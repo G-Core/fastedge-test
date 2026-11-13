@@ -48,6 +48,97 @@
         "type": "string"
       },
       "additionalProperties": {}
+    },
+    "client": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "type": "string",
+          "enum": [
+            "de",
+            "nl",
+            "us"
+          ]
+        },
+        "ip": {
+          "type": "string"
+        },
+        "asn": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        },
+        "countryName": {
+          "type": "string"
+        },
+        "city": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "continent": {
+          "type": "string"
+        },
+        "lat": {
+          "type": "string"
+        },
+        "long": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "type": "string",
+          "enum": [
+            "de",
+            "nl",
+            "us"
+          ]
+        },
+        "dc": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        },
+        "city": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "popLat": {
+          "type": "string"
+        },
+        "popLong": {
+          "type": "string"
+        },
+        "popReg": {
+          "type": "string"
+        },
+        "popCity": {
+          "type": "string"
+        },
+        "popContinent": {
+          "type": "string"
+        },
+        "popCountryCode": {
+          "type": "string"
+        },
+        "popCountryName": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": [

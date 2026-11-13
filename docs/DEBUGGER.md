@@ -159,10 +159,11 @@ The server handles `SIGTERM` and `SIGINT`:
 
 1. Logs the received signal.
 2. Cleans up the active WASM runner (frees memory, closes child processes).
-3. Closes all WebSocket connections.
-4. Deletes the `.fastedge-debug/.debug-port` file.
-5. Closes the HTTP server.
-6. Exits with code `0`.
+3. Releases the shared storage service connection, so an unused storage service can exit without waiting for its lease to expire.
+4. Closes all WebSocket connections.
+5. Deletes the `.fastedge-debug/.debug-port` file.
+6. Closes the HTTP server.
+7. Exits with code `0`.
 
 The `.fastedge-debug/.debug-port` file is also deleted on the Node.js `exit` event, which covers Windows environments where `SIGTERM` is not delivered.
 

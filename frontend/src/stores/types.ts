@@ -96,7 +96,42 @@ export interface ConfigState {
   stores: boolean | null;
   /** Cache bucket (`dc` in the config file); null = the default (`local`). */
   dc: string | null;
+  /** Where the client is (`client` in the config file); null = none (properties and headers only). */
+  client: ClientContext | null;
+  /** Which edge POP runs the app (`edge` in the config file); null = none. */
+  edge: EdgeContext | null;
 }
+
+export type Preset = "de" | "nl" | "us";
+
+export type ClientContext = {
+  preset?: Preset;
+  ip?: string;
+  asn?: string;
+  country?: string;
+  countryName?: string;
+  city?: string;
+  region?: string;
+  continent?: string;
+  lat?: string;
+  long?: string;
+};
+
+export type EdgeContext = {
+  preset?: Preset;
+  dc?: string;
+  region?: string;
+  country?: string;
+  city?: string;
+  hostname?: string;
+  popLat?: string;
+  popLong?: string;
+  popReg?: string;
+  popCity?: string;
+  popContinent?: string;
+  popCountryCode?: string;
+  popCountryName?: string;
+};
 
 export interface ConfigActions {
   setProperties: (properties: Record<string, string>) => void;
@@ -107,6 +142,8 @@ export interface ConfigActions {
   setDotenvPath: (path: string | null) => Promise<void>;
   setLogLevel: (level: number) => void;
   setCalculatedProperties: (properties: Record<string, string>) => void;
+  setClient: (client: ClientContext | null) => void;
+  setEdge: (edge: EdgeContext | null) => void;
   loadFromConfig: (config: TestConfig) => void;
   exportConfig: () => TestConfig;
   resetConfig: () => void;
@@ -230,6 +267,8 @@ export interface TestConfig {
   httpPort?: number;
   stores?: boolean;
   dc?: string;
+  client?: ClientContext;
+  edge?: EdgeContext;
 }
 
 export interface PersistConfig {

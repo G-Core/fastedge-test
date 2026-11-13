@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { RequestConfigSchema, TestConfigSchema } from './config';
+import { RequestConfigSchema, TestConfigSchema, ClientContextSchema, EdgeContextSchema } from './config';
+
+/** Request context fields: when given, they replace the runner's client / edge from then on. */
+const context = { client: ClientContextSchema.optional(), edge: EdgeContextSchema.optional() };
 
 export const ApiLoadBodySchema = z.object({
   wasmBase64: z.string().optional(),
@@ -18,6 +21,7 @@ export const ApiLoadBodySchema = z.object({
   stores: z.boolean().optional(),
   /** Cache bucket (edge location) for this app. Default `local`. */
   dc: z.string().min(1).optional(),
+  ...context,
 }).refine(d => d.wasmBase64 || d.wasmPath, {
   message: 'Either wasmBase64 or wasmPath must be provided',
 }).refine(d => !(d.wasmBase64 && d.wasmPath), {
@@ -28,6 +32,7 @@ export const ApiSendBodySchema = z.object({
   url: z.union([z.literal("built-in"), z.string().url()]),
   request: RequestConfigSchema.partial().optional(),
   properties: z.record(z.string(), z.unknown()).optional().default({}),
+  ...context,
 });
 
 export const ApiCallBodySchema = z.object({
@@ -41,7 +46,11 @@ export const ApiCallBodySchema = z.object({
     body: z.string(),
   }).optional(),
   properties: z.record(z.string(), z.unknown()).optional().default({}),
+  ...context,
 });
+
+/** /api/execute: only the request context is validated here (the rest is checked inline). */
+export const ApiExecuteContextSchema = z.object(context);
 
 export const ApiConfigBodySchema = z.object({
   config: TestConfigSchema,

@@ -63,8 +63,8 @@ export const createWasmSlice: StateCreator<
       const resolvedDotenvPath = (dotenvPath !== undefined ? dotenvPath : get().dotenv.path) ?? undefined;
       // httpPort, stores and dc flow from config state — they have no UI controls and
       // change only by loading a different config file.
-      const { httpPort, stores, dc } = get();
-      const options = { httpPort, stores, dc };
+      const { httpPort, stores, dc, client, edge } = get();
+      const options = { httpPort, stores, dc, client, edge };
 
       // Handle string path (direct path loading)
       if (typeof fileOrPath === 'string') {

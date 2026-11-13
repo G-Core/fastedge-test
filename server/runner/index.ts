@@ -18,3 +18,5 @@ export type { StoreCall } from "../stores/trace.js";
 export { createStores } from "../stores/testStores.js";
 export type { TestStores, CreateStoresOptions } from "../stores/testStores.js";
 export type { StoresSeed } from "../stores/fixtures.js";
+export { CLIENT_PRESETS, EDGE_PRESETS } from "./requestContext.js";
+export type { ClientContext, EdgeContext, RequestContext, Preset } from "./requestContext.js";

@@ -1,5 +1,5 @@
 import { HookCall, HookResult, StoreCall } from "../types";
-import type { TestConfig } from "../stores/types";
+import type { TestConfig, ClientContext, EdgeContext, Preset } from "../stores/types";
 export type { TestConfig } from "../stores/types";
 import { hasFilesystemAccess } from "../utils/environment";
 import { getFilePath, hasFilePath, formatFileSize } from "../utils/filePath";
@@ -90,10 +90,37 @@ export interface UploadWasmResult {
 }
 
 /** Per-load settings from the config file (no UI controls); null = the server default. */
-export type LoadOptions = { httpPort?: number | null; stores?: boolean | null; dc?: string | null };
+export type LoadOptions = {
+  httpPort?: number | null;
+  stores?: boolean | null;
+  dc?: string | null;
+  client?: ClientContext | null;
+  edge?: EdgeContext | null;
+};
 
-function loadOptions({ httpPort, stores, dc }: LoadOptions) {
-  return { ...(httpPort ? { httpPort } : {}), ...(stores != null ? { stores } : {}), ...(dc ? { dc } : {}) };
+function loadOptions({ httpPort, stores, dc, client, edge }: LoadOptions) {
+  return {
+    ...(httpPort ? { httpPort } : {}),
+    ...(stores != null ? { stores } : {}),
+    ...(dc ? { dc } : {}),
+    ...requestContext({ client, edge }),
+  };
+}
+
+/** Client and edge for a request body: always both, so "none" clears the runner's. */
+export type RequestContext = { client?: ClientContext | null; edge?: EdgeContext | null };
+function requestContext({ client, edge }: RequestContext = {}) {
+  return { client: client ?? {}, edge: edge ?? {} };
+}
+
+/** Client and edge presets (prod captures), from the server. */
+export async function getRequestContextPresets(): Promise<{
+  client: Record<Preset, Required<Omit<ClientContext, "preset">>>;
+  edge: Record<Preset, Required<Omit<EdgeContext, "preset">>>;
+}> {
+  const response = await apiFetch(`${API_BASE}/request-context/presets`);
+  if (!response.ok) throw new Error("Failed to load request context presets");
+  return response.json();
 }
 
 /**
@@ -268,6 +295,7 @@ export async function uploadWasmFromPath(
 export async function callHook(
   hook: string,
   params: HookCall,
+  context?: RequestContext,
 ): Promise<HookResult> {
   const payload = {
     hook,
@@ -282,6 +310,7 @@ export async function callHook(
       trailers: params.response_trailers || {},
     },
     properties: params.properties || {},
+    ...requestContext(context),
     // logLevel not sent - server always returns all logs for client-side filtering
   };
 
@@ -312,6 +341,7 @@ export async function sendFullFlow(
   url: string,
   method: string,
   params: HookCall,
+  context?: RequestContext,
 ): Promise<{
   hookResults: Record<string, HookResult>;
   finalResponse: {
@@ -332,6 +362,7 @@ export async function sendFullFlow(
       method: method || "GET",
     },
     properties: params.properties || {},
+    ...requestContext(context),
     // logLevel not sent - server always returns all logs for client-side filtering
   };
 
@@ -446,7 +477,8 @@ export async function executeHttpWasm(
   url: string,
   method: string = 'GET',
   headers: Record<string, string> = {},
-  body: string = ''
+  body: string = '',
+  context?: RequestContext,
 ): Promise<{
   status: number;
   statusText: string;
@@ -474,6 +506,7 @@ export async function executeHttpWasm(
     method,
     headers,
     body,
+    ...requestContext(context),
   };
 
   const response = await apiFetch(`${API_BASE}/execute`, {

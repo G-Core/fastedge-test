@@ -49,6 +49,7 @@ function App() {
 
     // Config state
     dotenv,
+    edge,
     loadFromConfig,
 
     // UI state
@@ -109,6 +110,20 @@ function App() {
       reloadWasm(dotenv.enabled);
     }
   }, [dotenv.enabled, wasmFile, wasmPath, reloadWasm]);
+
+  // The edge's dc is the cache bucket, fixed when the app loads: reload when it changes
+  // (debounced, so typing a dc reloads once). Everything else in the context goes with each request.
+  const edgeKey = edge ? `${edge.dc ?? ""}|${edge.preset ?? ""}` : "";
+  const loadedEdgeKey = useRef(edgeKey);
+  useEffect(() => {
+    loadedEdgeKey.current = edgeKey; // the edge this load used
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadTime]);
+  useEffect(() => {
+    if (edgeKey === loadedEdgeKey.current || !(wasmFile || wasmPath)) return;
+    const timer = setTimeout(() => reloadWasm(dotenv.enabled), 600);
+    return () => clearTimeout(timer);
+  }, [edgeKey, wasmFile, wasmPath, dotenv.enabled, reloadWasm]);
 
   /**
    * Handle WebSocket events from server

@@ -13,6 +13,9 @@ const DEFAULT_CONFIG_STATE: ConfigState = {
   httpPort: null,
   stores: null,
   dc: null,
+  // A fresh session runs in Frankfurt for a German client; configs without these blocks load as none.
+  client: { preset: 'de' },
+  edge: { preset: 'de' },
 };
 
 export const createConfigSlice: StateCreator<
@@ -78,6 +81,16 @@ export const createConfigSlice: StateCreator<
       state.calculatedProperties = properties;
     }),
 
+  setClient: (client) =>
+    set((state) => {
+      state.client = client;
+    }),
+
+  setEdge: (edge) =>
+    set((state) => {
+      state.edge = edge;
+    }),
+
   loadFromConfig: (config) =>
     set((state) => {
       state.properties = { ...config.properties };
@@ -93,6 +106,8 @@ export const createConfigSlice: StateCreator<
         config.appType === 'http-wasm' ? config.httpPort ?? null : null;
       state.stores = config.stores ?? null;
       state.dc = config.dc ?? null;
+      state.client = config.client ?? null;
+      state.edge = config.edge ?? null;
 
       // Restore request fields into the correct slice based on app type.
       // HTTP configs use `path`, CDN configs use `url`.
@@ -162,6 +177,8 @@ export const createConfigSlice: StateCreator<
 
     if (state.stores !== null) config.stores = state.stores;
     if (state.dc !== null) config.dc = state.dc;
+    if (state.client) config.client = { ...state.client };
+    if (state.edge) config.edge = { ...state.edge };
 
     if (state.wasmPath) {
       config.wasm = {

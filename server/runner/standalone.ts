@@ -16,6 +16,7 @@ import { WorkerProxyWasmRunner } from "./WorkerProxyWasmRunner.js";
 import { HttpWasmRunner } from "./HttpWasmRunner.js";
 import { PortManager } from "./PortManager.js";
 import { detectWasmType } from "../utils/wasmTypeDetector.js";
+import { edgeDc } from "./requestContext.js";
 import { connectStores, resolveStoresRoot } from "../stores/StoresManager.js";
 
 /**
@@ -46,7 +47,7 @@ export async function createRunnerFromBuffer(
   const connection =
     given ??
     (config?.stores === false ? null : await connectStores(resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd())));
-  const stores = connection && { connection, dc: config?.dc ?? given?.dc ?? "local", owned: !given };
+  const stores = connection && { connection, dc: config?.dc ?? edgeDc(config?.edge) ?? given?.dc ?? "local", owned: !given };
 
   let runner: IWasmRunner;
   if (wasmType === "http-wasm") {

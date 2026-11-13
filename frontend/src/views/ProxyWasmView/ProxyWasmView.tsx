@@ -1,6 +1,9 @@
 import { DotenvPanel } from "../../components/common/DotenvPanel";
 import { RequestPanel } from "../../components/common/RequestPanel";
-import { ServerPropertiesPanel } from "../../components/proxy-wasm/ServerPropertiesPanel";
+import { RequestContextPanel } from "../../components/common/RequestContextPanel";
+import { OriginSection } from "../../components/proxy-wasm/OriginSection";
+import { DictionaryInput } from "../../components/common/DictionaryInput";
+import contextStyles from "../../components/common/RequestContextPanel/RequestContextPanel.module.css";
 import { HookStagesPanel } from "../../components/proxy-wasm/HookStagesPanel";
 import { ResponsePanel } from "../../components/common/ResponsePanel";
 import { useAppStore } from "../../stores";
@@ -33,10 +36,13 @@ export function ProxyWasmView() {
 
     // Config state
     properties,
-    calculatedProperties,
+    client,
+    edge,
     dotenv,
     logLevel,
     setProperties,
+    setClient,
+    setEdge,
     setCalculatedProperties,
     setDotenvEnabled,
     setDotenvPath,
@@ -73,7 +79,7 @@ export function ProxyWasmView() {
         ...hookCall,
         request_headers: finalHeaders,
         logLevel,
-      });
+      }, { client, edge });
 
       // Update hook results and final response
       setHookResults(newHookResults);
@@ -158,16 +164,6 @@ export function ProxyWasmView() {
             enabled: false,
             placeholder: "Bearer <token>",
           },
-          "x-debugger-status": {
-            value: "",
-            enabled: false,
-            placeholder: "HTTP status code for built-in responder",
-          },
-          "x-debugger-content": {
-            value: "",
-            enabled: false,
-            placeholder: "body-only | status-only for built-in responder",
-          },
         }}
         headersLabel="Request Headers"
         bodyLabel="Request Body"
@@ -184,11 +180,28 @@ export function ProxyWasmView() {
         onExpandedChange={(expanded) => setPanelExpanded("dotenv", expanded)}
       />
 
-      <ServerPropertiesPanel
-        properties={properties}
-        calculatedProperties={calculatedProperties}
-        onPropertiesChange={setProperties}
-      />
+      <RequestContextPanel
+        appType="proxy-wasm"
+        client={client}
+        edge={edge}
+        onClientChange={setClient}
+        onEdgeChange={setEdge}
+      >
+        <OriginSection url={url} headers={requestHeaders} onHeadersChange={setRequestHeaders} />
+        <div className={contextStyles.section}>
+          <h4 className={contextStyles.sectionTitle}>Properties</h4>
+          <p className={contextStyles.hint}>
+            Explicit properties win over the client settings. Calculated <code>request.*</code> values
+            are in each hook's Inputs.
+          </p>
+          <DictionaryInput
+            value={properties}
+            onChange={setProperties}
+            keyPlaceholder="Property path"
+            valuePlaceholder="Property value"
+          />
+        </div>
+      </RequestContextPanel>
 
       <HookStagesPanel
         results={hookResults}

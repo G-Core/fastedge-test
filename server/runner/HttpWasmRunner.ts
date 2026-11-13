@@ -27,6 +27,7 @@ import { validateDotenvLeafs } from "../utils/dotenv-loader.js";
 import { request as storesRequest, type RunnerStores } from "../stores/StoresManager.js";
 import type { StoreCall } from "../stores/trace.js";
 import { randomBytes } from "node:crypto";
+import { httpContextHeaders, withHeaders, type RequestContext } from "./requestContext.js";
 
 /**
  * HttpWasmRunner implementation
@@ -84,10 +85,18 @@ export class HttpWasmRunner implements IWasmRunner {
   /**
    * Load WASM binary and spawn fastedge-run process
    */
+  private contextHeaders: Record<string, string> = {};
+
+  /** Where the client is and which POP runs the app: request headers under the explicit ones. */
+  async setRequestContext(context: RequestContext): Promise<void> {
+    this.contextHeaders = httpContextHeaders(context);
+  }
+
   async load(
     bufferOrPath: Buffer | string,
     config?: RunnerConfig,
   ): Promise<void> {
+    if (config?.client || config?.edge) await this.setRequestContext({ client: config.client, edge: config.edge });
     // Update config if provided
     if (config?.dotenv?.enabled !== undefined) {
       this.dotenvEnabled = config.dotenv.enabled;
@@ -216,7 +225,7 @@ export class HttpWasmRunner implements IWasmRunner {
       // With stores on, a W3C traceparent names this request: fastedge-run tags its storage
       // calls with it. A valid caller trace id is kept, but the parent id is always new, so
       // every execution has its own value; duplicates and invalid values are replaced.
-      const headers = { ...request.headers };
+      const headers = withHeaders(this.contextHeaders, request.headers);
       let traceparent: string | undefined;
       if (this.stores) {
         traceparent = newTraceparent(headers);

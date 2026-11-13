@@ -372,6 +372,24 @@ test('counts hits', async ({ runner, stores }) => {
 
 ---
 
+## Client and Edge Location
+
+`client` (where the request comes from) and `edge` (which POP runs the app) are presets
+(`de`, `nl`, `us`) plus field overrides, in `fastedge-config.test.json` or `RunnerConfig`:
+
+```ts
+const runner = await createRunner('dist/app.wasm', {
+  client: { preset: 'nl' },                 // request.* geo properties / geoip-* headers
+  edge: { preset: 'de', city: 'Frankfurt' }, // dictionary dc, region, country, city, hostname
+});
+```
+
+- CDN apps get `request.*` properties, `GeoIP-*` / `X-Real-IP` headers, the edge dictionary keys
+  and `X-ID`. HTTP apps get `geoip-*`, `x-real-ip`, `dc` and `pop-*` headers.
+- Explicit properties, request headers and dotenv dictionary entries win over them.
+- The edge's `dc` is the cache bucket (the top-level `dc` wins). Leave both out to keep the old
+  behaviour. `runner.setRequestContext({ client, edge })` changes them between requests.
+
 ## JSON Schemas
 
 The package ships JSON Schema files for `fastedge-config.test.json` and all API request/response bodies, enabling IDE autocomplete and validation.
