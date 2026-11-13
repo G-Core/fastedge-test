@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { CollapsiblePanel } from "../CollapsiblePanel";
 import {
   advanceStoresClock,
+  getStoredValue,
   getStoresSnapshot,
   resetStores,
+  type StoredValue,
   type StoresSnapshot,
 } from "../../../api";
 import styles from "./StoresPanel.module.css";
@@ -23,6 +25,89 @@ function formatTtl(ms: number): string {
   return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
 }
 
+/** UTF-8 text (pretty JSON when it parses), or null for binary. */
+function decode(base64: string, truncated: boolean): string | null {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  let text: string;
+  try {
+    // A cut value may end mid-character: decode leniently at the cut, strictly elsewhere.
+    text = new TextDecoder("utf-8", { fatal: !truncated }).decode(bytes);
+  } catch {
+    return null;
+  }
+  if (!truncated) {
+    try {
+      return JSON.stringify(JSON.parse(text), null, 2);
+    } catch {
+      // not JSON
+    }
+  }
+  return text;
+}
+
+function Bytes({ value, truncated, size }: { value: string; truncated: boolean; size: number }) {
+  const text = decode(value, truncated);
+  return (
+    <>
+      {text === null && <span className={styles.note}>binary (base64)</span>}
+      <pre className={styles.value}>{text ?? value}</pre>
+      {truncated && <span className={styles.note}>first 4 KB of {size} B</span>}
+    </>
+  );
+}
+
+/** One entry's value, fetched when the row opens (and again after each refresh). */
+function ValueView({ where, entryKey, version }: { where: { dc: string } | { store: string }; entryKey: string; version: number }) {
+  const [state, setState] = useState<{ value: StoredValue | null } | { error: string } | null>(null);
+  const whereKey = JSON.stringify(where);
+  useEffect(() => {
+    let live = true;
+    getStoredValue(JSON.parse(whereKey), entryKey)
+      .then((value) => live && setState({ value }))
+      .catch((e) => live && setState({ error: e instanceof Error ? e.message : String(e) }));
+    return () => {
+      live = false;
+    };
+  }, [whereKey, entryKey, version]);
+
+  if (!state) return <p className={styles.empty}>Loading…</p>;
+  if ("error" in state) return <p className={styles.error}>{state.error}</p>;
+  const v = state.value;
+  if (!v) return <p className={styles.empty}>Gone (deleted or expired).</p>;
+  if (v.type === "string") return <Bytes {...v} />;
+  if (v.type === "bloom") {
+    return (
+      <>
+        <pre className={styles.value}>{v.items.join("\n")}</pre>
+        {v.count > v.items.length && <span className={styles.note}>first {v.items.length} of {v.count} items</span>}
+      </>
+    );
+  }
+  return (
+    <>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Score</th>
+            <th>Member</th>
+          </tr>
+        </thead>
+        <tbody>
+          {v.members.map((m, i) => (
+            <tr key={i}>
+              <td>{m.score}</td>
+              <td>
+                <Bytes {...m} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {v.count > v.members.length && <span className={styles.note}>first {v.members.length} of {v.count} members</span>}
+    </>
+  );
+}
+
 /** Re-render every second while mounted (TTL countdown). */
 function useTick(): number {
   const [now, setNow] = useState(() => Date.now());
@@ -38,7 +123,20 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
   const [fetchedAt, setFetchedAt] = useState(0);
   const [dc, setDc] = useState<string | null>(null); // null = the app's dc
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null); // the expanded row
   const tick = useTick();
+  const toggle = (id: string) => setOpen((current) => (current === id ? null : id));
+  const rowProps = (id: string) => ({
+    tabIndex: 0,
+    "aria-expanded": open === id,
+    onClick: () => toggle(id),
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggle(id);
+      }
+    },
+  });
 
   const refresh = useCallback(async () => {
     try {
@@ -121,13 +219,28 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
             </tr>
           </thead>
           <tbody>
-            {snapshot.cache.map((e) => (
-              <tr key={e.key}>
-                <td>{e.key}</td>
-                <td>{e.size} B</td>
-                <td>{formatTtl(e.expiresAt - snapshot.now - elapsed)}</td>
-              </tr>
-            ))}
+            {snapshot.cache.map((e) => {
+              const id = `cache:${snapshot.dc}:${e.key}`;
+              return (
+                <Fragment key={e.key}>
+                  <tr className={styles.row} {...rowProps(id)}>
+                    <td>
+                      <span className={styles.caret}>{open === id ? "▾" : "▸"}</span>
+                      {e.key}
+                    </td>
+                    <td>{e.size} B</td>
+                    <td>{formatTtl(e.expiresAt - snapshot.now - elapsed)}</td>
+                  </tr>
+                  {open === id && (
+                    <tr>
+                      <td colSpan={3} className={styles.detail}>
+                        <ValueView where={{ dc: snapshot.dc }} entryKey={e.key} version={fetchedAt} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -159,13 +272,28 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r) => (
-                      <tr key={`${r.type}:${r.key}`}>
-                        <td className={styles.type}>{r.type}</td>
-                        <td>{r.key}</td>
-                        <td>{r.detail}</td>
-                      </tr>
-                    ))}
+                    {rows.map((r) => {
+                      const id = `kv:${store.store}:${r.key}`;
+                      return (
+                        <Fragment key={`${r.type}:${r.key}`}>
+                          <tr className={styles.row} {...rowProps(id)}>
+                            <td className={styles.type}>
+                              <span className={styles.caret}>{open === id ? "▾" : "▸"}</span>
+                              {r.type}
+                            </td>
+                            <td>{r.key}</td>
+                            <td>{r.detail}</td>
+                          </tr>
+                          {open === id && (
+                            <tr>
+                              <td colSpan={3} className={styles.detail}>
+                                <ValueView where={{ store: store.store }} entryKey={r.key} version={fetchedAt} />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -179,7 +307,7 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
 
 /**
  * Storage panel: the cache entries of one dc (default: this app's) with their TTLs, and every
- * Edge KV store's keys by type. Read-only; Reset goes back to the fixtures, Advance clock moves
+ * Edge KV store's keys by type; click a row for its value. Read-only; Reset goes back to the fixtures, Advance clock moves
  * cache expiry. Refreshes after each request (`refreshKey` changes).
  */
 export function StoresPanel({ refreshKey }: { refreshKey: unknown }) {

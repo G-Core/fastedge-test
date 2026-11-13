@@ -395,11 +395,21 @@ Execution requests are processed one at a time, in the order they arrive, so a r
 
 Returns the `client` and `edge` preset values (`de`, `nl`, `us`), as the Request Context panel shows them.
 
+**Response**
+
+```typescript
+{
+  ok: true;
+  client: Record<ContextPreset, ClientContext>;
+  edge: Record<ContextPreset, EdgeContext>;
+}
+```
+
+**Example**
+
 ```bash
 curl -H "x-fastedge-token: <token>" http://localhost:5179/api/request-context/presets
 ```
-
-**Response `200`**
 
 ```json
 {
@@ -408,6 +418,12 @@ curl -H "x-fastedge-token: <token>" http://localhost:5179/api/request-context/pr
   "edge": { "de": { "dc": "fr5", "region": "eu", "country": "Germany", "city": "Frankfurt am Main", "hostname": "fr5-hw-edge-gpig-gc23", "popLat": "50.1049", "popLong": "8.6295", "popReg": "HE", "popCity": "Frankfurt am Main", "popContinent": "EU", "popCountryCode": "DE", "popCountryName": "Germany" }, "nl": { }, "us": { } }
 }
 ```
+
+**Error Responses**
+
+See [Error Handling](#error-handling) for `401` and `403` responses that apply to every `/api/*` endpoint.
+
+---
 
 ### POST /api/execute
 
@@ -864,7 +880,7 @@ curl -X POST http://localhost:5179/api/send \
 
 ## Stores
 
-The storage service backs the cache and Edge KV APIs of the loaded module. These endpoints inspect and control it. When no module is loaded, the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false`. `POST /api/stores/reset` and `POST /api/stores/advance-clock` return `409` in those cases.
+The storage service backs the cache and Edge KV APIs of the loaded module. These endpoints inspect and control it. When no module is loaded, the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false`. `GET /api/stores/value`, `POST /api/stores/reset`, and `POST /api/stores/advance-clock` return `409` in those cases.
 
 ### GET /api/stores
 
@@ -905,6 +921,50 @@ curl -H "x-fastedge-token: <token>" "http://localhost:5179/api/stores?dc=local"
 | Status | Condition                             |
 | ------ | ------------------------------------- |
 | `500`  | The storage service returned an error |
+
+---
+
+### GET /api/stores/value
+
+Returns one stored value, from the cache (`dc` and `key`) or from Edge KV (`store` and `key`).
+
+**Query Parameters**
+
+| Parameter | Type     | Description                                                           |
+| --------- | -------- | --------------------------------------------------------------------- |
+| `key`     | `string` | Key to read. Required.                                                |
+| `dc`      | `string` | Cache datacenter holding the key. Give exactly one of `dc` or `store`. |
+| `store`   | `string` | Edge KV store holding the key. Give exactly one of `dc` or `store`.    |
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  value: unknown; // null if the key no longer exists
+}
+```
+
+**Example**
+
+```bash
+curl -H "x-fastedge-token: <token>" "http://localhost:5179/api/stores/value?dc=local&key=session-1"
+```
+
+```json
+{
+  "ok": true,
+  "value": null
+}
+```
+
+**Error Responses**
+
+| Status | Condition                                                  |
+| ------ | ---------------------------------------------------------- |
+| `400`  | `key` is missing, or not exactly one of `dc` and `store` is given |
+| `409`  | No app with stores is loaded                               |
+| `500`  | The storage service returned an error                      |
 
 ---
 

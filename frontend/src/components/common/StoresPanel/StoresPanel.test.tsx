@@ -5,6 +5,7 @@ import * as api from "../../../api";
 
 vi.mock("../../../api", () => ({
   getStoresSnapshot: vi.fn(),
+  getStoredValue: vi.fn(),
   resetStores: vi.fn().mockResolvedValue(undefined),
   advanceStoresClock: vi.fn().mockResolvedValue(undefined),
 }));
@@ -60,5 +61,37 @@ describe("StoresPanel", () => {
     vi.mocked(api.getStoresSnapshot).mockResolvedValue({ enabled: false });
     open();
     expect(await screen.findByText(/Stores are off/)).toBeTruthy();
+  });
+
+  it("opens a row to show its value: JSON text, binary, sorted set members, gone", async () => {
+    const b64 = (text: string) => btoa(text);
+    const values = vi.mocked(api.getStoredValue);
+    values.mockResolvedValueOnce({ type: "string", size: 13, value: b64('{"a":[1,2]}'), truncated: false, expiresAt: 1 });
+    open();
+    fireEvent.click(await screen.findByText("page:/"));
+    await waitFor(() => expect(values).toHaveBeenCalledWith({ dc: "fr5" }, "page:/"));
+    expect((await screen.findByText(/"a": \[/)).textContent).toContain('"a": [\n    1,');
+
+    values.mockResolvedValueOnce({ type: "string", size: 3, value: btoa("\xff\xfe\x00"), truncated: false });
+    fireEvent.click(screen.getByText("alice"));
+    expect(await screen.findByText("binary (base64)")).toBeTruthy();
+    expect(values).toHaveBeenLastCalledWith({ store: "users" }, "alice");
+
+    values.mockResolvedValueOnce({
+      type: "zset",
+      count: 3,
+      members: [{ size: 2, value: b64("m1"), truncated: false, score: 1.5 }],
+    });
+    fireEvent.click(screen.getByText("scores"));
+    expect(await screen.findByText("m1")).toBeTruthy();
+    expect(screen.getByText("1.5")).toBeTruthy();
+    expect(screen.getByText("first 1 of 3 members")).toBeTruthy();
+
+    // Clicking again closes it; reopening a deleted entry says so.
+    fireEvent.click(screen.getByText("scores"));
+    expect(screen.queryByText("m1")).toBeNull();
+    values.mockResolvedValueOnce(null);
+    fireEvent.click(screen.getByText("scores"));
+    expect(await screen.findByText("Gone (deleted or expired).")).toBeTruthy();
   });
 });

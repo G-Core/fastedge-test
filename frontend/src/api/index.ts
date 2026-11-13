@@ -588,3 +588,16 @@ export async function advanceStoresClock(ms: number): Promise<void> {
     body: JSON.stringify({ ms }),
   });
 }
+
+/** One stored value (base64 bytes, cut to the first 4 KB; lists to 200 items). */
+type StoredBytes = { size: number; value: string; truncated: boolean };
+export type StoredValue =
+  | ({ type: "string"; expiresAt?: number } & StoredBytes)
+  | { type: "zset"; count: number; members: (StoredBytes & { score: number })[] }
+  | { type: "bloom"; count: number; items: string[] };
+
+/** A cache entry (`dc`) or Edge KV key (`store`); null if it is gone. */
+export async function getStoredValue(where: { dc: string } | { store: string }, key: string): Promise<StoredValue | null> {
+  const params = new URLSearchParams({ ...where, key });
+  return (await storesCall(`/value?${params}`)).value;
+}

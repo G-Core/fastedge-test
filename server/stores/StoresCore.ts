@@ -245,6 +245,43 @@ export class StoresCore {
    * What the stores hold, for the debugger's Stores panel (sizes, not values): the live cache
    * entries of one `dc`, every `dc` that has entries, and each Edge KV store's keys by type.
    */
+  /**
+   * One entry's value, for the Storage panel: a cache entry (`dc` given) or an Edge KV key
+   * (`store` given). Values are base64, cut to `INSPECT_MAX_BYTES`; lists to `INSPECT_MAX_ITEMS`.
+   * null when the entry does not exist (or the cache entry has expired).
+   */
+  inspect(where: { dc: string } | { store: string }, key: string): StoresValue | null {
+    const cut = (value: Uint8Array) => ({
+      size: value.length,
+      value: Buffer.from(value.subarray(0, INSPECT_MAX_BYTES)).toString("base64"),
+      truncated: value.length > INSPECT_MAX_BYTES,
+    });
+    if ("dc" in where) {
+      const row = this.q.live.get(where.dc, key, this.now()) as { value: Uint8Array; expires_at: number } | undefined;
+      return row ? { type: "string", expiresAt: row.expires_at, ...cut(row.value) } : null;
+    }
+    const { store } = where;
+    const type = (this.q.type.get(store, key) as { t: "string" | "zset" | "bloom" } | undefined)?.t;
+    if (type === "string") return { type, ...cut((this.q.kvGet.get(store, key) as { value: Uint8Array }).value) };
+    if (type === "zset") {
+      const rows = this.db
+        .prepare("SELECT member, score FROM kv_zset WHERE store = ? AND key = ? ORDER BY score, member")
+        .all(store, key) as { member: Uint8Array; score: number }[];
+      return {
+        type,
+        count: rows.length,
+        members: rows.slice(0, INSPECT_MAX_ITEMS).map((r) => ({ ...cut(r.member), score: r.score })),
+      };
+    }
+    if (type === "bloom") {
+      const rows = this.db
+        .prepare("SELECT item FROM kv_bloom WHERE store = ? AND key = ? ORDER BY item")
+        .all(store, key) as { item: string }[];
+      return { type, count: rows.length, items: rows.slice(0, INSPECT_MAX_ITEMS).map((r) => r.item) };
+    }
+    return null;
+  }
+
   snapshot(dc: string): StoresSnapshot {
     const now = this.now();
     const rows = <T>(sql: string, ...params: (string | number)[]) => this.db.prepare(sql).all(...params) as T[];
@@ -307,6 +344,16 @@ export class StoresCore {
     }
   }
 }
+
+/** Inspect limits: a value's first bytes, a list's first items. */
+export const INSPECT_MAX_BYTES = 4096;
+export const INSPECT_MAX_ITEMS = 200;
+
+type Bytes = { size: number; value: string; truncated: boolean };
+export type StoresValue =
+  | ({ type: "string"; expiresAt?: number } & Bytes)
+  | { type: "zset"; count: number; members: (Bytes & { score: number })[] }
+  | { type: "bloom"; count: number; items: string[] };
 
 export type StoresSnapshot = {
   /** The service clock (ms since epoch, moved by advance-clock). */

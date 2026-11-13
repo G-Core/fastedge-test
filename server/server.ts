@@ -478,6 +478,25 @@ app.get("/api/stores", async (req: Request, res: Response) => {
   }
 });
 
+/** Storage panel: one value, `?dc=&key=` (cache) or `?store=&key=` (Edge KV); null if gone. */
+app.get("/api/stores/value", async (req: Request, res: Response) => {
+  const { dc, store, key } = req.query;
+  if (typeof key !== "string" || (typeof dc === "string") === (typeof store === "string")) {
+    res.status(400).json({ ok: false, error: "key and exactly one of dc / store are required" });
+    return;
+  }
+  try {
+    if (!loadedStores) {
+      res.status(409).json({ ok: false, error: "no app with stores is loaded" });
+      return;
+    }
+    const value = await storesAdmin({ op: "inspect", key, ...(typeof dc === "string" ? { dc } : { store }) });
+    res.json({ ok: true, value });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
 /** Back to the fixtures: cache emptied (every `dc`), Edge KV re-seeded. */
 app.post("/api/stores/reset", async (_req: Request, res: Response) => {
   try {

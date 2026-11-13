@@ -9,7 +9,9 @@ switcher) and Edge KV keys by type, with Reset and Advance clock. See `features/
 ### 🎯 What Was Completed
 - Storage service: admin `snapshot` and `reset` (`StoresCore.snapshot`), no protocol bump
 - Debugger: `GET /api/stores`, `POST /api/stores/reset`, `POST /api/stores/advance-clock`
-- `components/common/StoresPanel`; refreshes after each request
+- `components/common/StoresPanel` (titled Storage); refreshes after each request; click a row
+  for its value (admin `inspect`, `GET /api/stores/value`)
+- HTTP view: the request's storage calls are a Storage tab of the Logging panel
 - Request context review fixes: a request's `client` / `edge` apply to that request only
   (`HookCall.context`, `callFullFlow` `context`, `HttpRequest.context`); loads run one at a time
 - `pnpm dev`: the watch build gets the `import.meta.url` shim the production bundle has

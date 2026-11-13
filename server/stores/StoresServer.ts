@@ -8,6 +8,7 @@
  *   service process can exit when the last client is gone;
  *   `{ op: "traces", requestId, hook? }` → the traced calls of one request (see trace.ts);
  *   `{ op: "snapshot", dc? }` → what the stores hold (StoresCore.snapshot);
+ *   `{ op: "inspect", key, dc | store }` → one cache entry's or KV key's value (StoresCore.inspect);
  *   `{ op: "reset" }`: back to the fixtures.
  * - A cache / KV body may carry `trace: { requestId, app, hook? }` to be recorded.
  *
@@ -99,6 +100,10 @@ export function startStoresServer(
         return { ok: true, value: traces.find(body.requestId, typeof body.hook === "string" ? body.hook : undefined) };
       }
       if (body.op === "snapshot") return { ok: true, value: core.snapshot(typeof body.dc === "string" ? body.dc : "local") };
+      if (body.op === "inspect" && typeof body.key === "string") {
+        if (typeof body.dc === "string") return { ok: true, value: core.inspect({ dc: body.dc }, body.key) };
+        if (typeof body.store === "string") return { ok: true, value: core.inspect({ store: body.store }, body.key) };
+      }
       if (body.op === "reset" && reset) {
         reset();
         return { ok: true, value: null };

@@ -95,9 +95,10 @@ Binary values are base64; i64/u64 are decimal strings (numbers accepted).
 | admin | `kv-stores` | | seeded store names |
 | admin | `advance-clock` | `ms` | new offset |
 | admin | `snapshot` | `dc?` (default `local`) | `{ now, dc, dcs, cache: [{key, size, expiresAt}], kv: [{store, strings, zsets, bloom}] }`: sizes, no values |
+| admin | `inspect` | `key` and `dc` or `store` | one value: `{ type: "string", size, value (base64), truncated, expiresAt? }`, `{ type: "zset", count, members: [{..., score}] }` or `{ type: "bloom", count, items }`; first 4 KB / 200 items; null if gone |
 | admin | `reset` | | cache emptied (every `dc`), KV re-seeded from the fixtures |
 
-`snapshot` and `reset` were added without a protocol bump (additive ops): an older running
+`snapshot`, `inspect` and `reset` were added without a protocol bump (additive ops): an older running
 service refuses them with `bad-request`, which the debugger reports as "close other fastedge-test
 instances, then restart this debugger" (its own lease keeps the old service alive); runners keep
 working with it.
@@ -106,10 +107,10 @@ working with it.
 
 `GET /api/stores?dc=` (default: the loaded app's `dc`, returned as `appDc`; `{ enabled: false }`
 when no app is loaded or it has stores off, without connecting to the service; Reset and Advance
-clock are then 409), `POST /api/stores/reset`, `POST /api/stores/advance-clock { ms }`. UI:
+clock are then 409), `GET /api/stores/value?key=&dc=|store=`, `POST /api/stores/reset`, `POST /api/stores/advance-clock { ms }`. UI:
 `frontend/src/components/common/StoresPanel/` in both views: cache entries of one `dc` with a TTL
 countdown and a `dc` switcher, Edge KV keys by type, Reset, Advance clock (+1 min / h / day).
-Read-only. Refreshes when opened, on a `dc` switch, and after each request.
+Click a row for its value (fetched then; UTF-8 text, pretty JSON, or base64 for binary). Read-only. Refreshes when opened, on a `dc` switch, and after each request.
 
 The fastedge-run client (FastEdge-lib `src/stores_service.rs`) implements the other side.
 

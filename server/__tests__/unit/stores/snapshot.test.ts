@@ -37,4 +37,33 @@ describe("stores snapshot and reset", () => {
       await stores.close();
     }
   });
+
+  it("inspects one value: cache, KV string, sorted set, bloom; long values are cut", async () => {
+    const stores = await createStores({ fixtures: false });
+    try {
+      stores.seed({ kv: { users: { strings: { a: "hello" }, zsets: { z: [["m2", 2], ["m1", 1]] }, bloom: { b: ["y", "x"] } } } });
+      stores.cache.set("k", "x".repeat(5000), { ttlMs: 1000 });
+      const inspect = async (body: object) => (await admin(stores, { op: "inspect", ...body })).value;
+      const b64 = (text: string) => Buffer.from(text).toString("base64");
+
+      const cached = await inspect({ dc: "local", key: "k" });
+      expect(cached).toMatchObject({ type: "string", size: 5000, truncated: true, expiresAt: expect.any(Number) });
+      expect(Buffer.from(cached.value, "base64").length).toBe(4096);
+      expect(await inspect({ store: "users", key: "a" })).toEqual({ type: "string", size: 5, value: b64("hello"), truncated: false });
+      expect(await inspect({ store: "users", key: "z" })).toEqual({
+        type: "zset",
+        count: 2,
+        members: [
+          { size: 2, value: b64("m1"), truncated: false, score: 1 },
+          { size: 2, value: b64("m2"), truncated: false, score: 2 },
+        ],
+      });
+      expect(await inspect({ store: "users", key: "b" })).toEqual({ type: "bloom", count: 2, items: ["x", "y"] });
+      expect(await inspect({ store: "users", key: "missing" })).toBeNull();
+      stores.advanceClock(2000);
+      expect(await inspect({ dc: "local", key: "k" })).toBeNull(); // expired
+    } finally {
+      await stores.close();
+    }
+  });
 });
