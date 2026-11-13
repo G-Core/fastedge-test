@@ -60,4 +60,30 @@ describe("RequestContextPanel", () => {
     fireEvent.click(edgeGroup.querySelectorAll("button")[3]); // US
     expect(onEdgeChange).toHaveBeenLastCalledWith({ preset: "us" });
   });
+
+  it("applies the edge dc on blur or Enter, not per keystroke", async () => {
+    const onEdgeChange = vi.fn();
+    render(
+      <RequestContextPanel
+        appType="proxy-wasm"
+        client={null}
+        edge={{ preset: "de" }}
+        onClientChange={vi.fn()}
+        onEdgeChange={onEdgeChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("Request Context"));
+    const dc = await screen.findByDisplayValue("fr5");
+    fireEvent.change(dc, { target: { value: "cc" } });
+    fireEvent.change(dc, { target: { value: "cch1" } });
+    expect(onEdgeChange).not.toHaveBeenCalled();
+    fireEvent.blur(dc);
+    expect(onEdgeChange).toHaveBeenCalledTimes(1);
+    expect(onEdgeChange).toHaveBeenCalledWith({ preset: "de", dc: "cch1" });
+
+    fireEvent.change(dc, { target: { value: "x" } });
+    fireEvent.keyDown(dc, { key: "Escape" });
+    fireEvent.blur(dc);
+    expect(onEdgeChange).toHaveBeenCalledTimes(1); // Escape dropped the draft
+  });
 });

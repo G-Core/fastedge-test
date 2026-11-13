@@ -6,7 +6,8 @@ import styles from "./RequestContextPanel.module.css";
 
 type Presets = Awaited<ReturnType<typeof getRequestContextPresets>>;
 type Context = { preset?: Preset } & Record<string, string | undefined>;
-type Field = { key: string; label: string };
+/** `blur`: the field applies on blur / Enter, not per keystroke (the edge dc reloads the app). */
+type Field = { key: string; label: string; apply?: "blur" };
 
 export const FLAGS: Record<Preset, string> = { de: "🇩🇪", nl: "🇳🇱", us: "🇺🇸" };
 
@@ -23,7 +24,7 @@ const CLIENT_FIELDS: Field[] = [
 ];
 
 const EDGE_FIELDS: Field[] = [
-  { key: "dc", label: "dc (cache bucket)" },
+  { key: "dc", label: "dc (cache bucket)", apply: "blur" },
   { key: "hostname", label: "Hostname" },
   { key: "region", label: "Region" },
   { key: "country", label: "Country" },
@@ -39,6 +40,45 @@ const POP_FIELDS: Field[] = [
   { key: "popLat", label: "pop-lat" },
   { key: "popLong", label: "pop-long" },
 ];
+
+/** A field input; with `onBlurOnly` it keeps a draft and applies it on blur or Enter. */
+function FieldInput({
+  value,
+  placeholder,
+  overridden,
+  onBlurOnly,
+  onChange,
+}: {
+  value: string;
+  placeholder: string;
+  overridden: boolean;
+  onBlurOnly: boolean;
+  onChange: (text: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null); // null = not editing
+  const commit = () => {
+    if (draft !== null && draft !== value) onChange(draft);
+    setDraft(null);
+  };
+  return (
+    <input
+      className={overridden ? styles.overridden : undefined}
+      value={draft ?? value}
+      placeholder={placeholder}
+      title={overridden ? "Overrides the preset" : onBlurOnly ? "Applies when you leave the field or press Enter" : undefined}
+      onChange={(e) => (onBlurOnly ? setDraft(e.target.value) : onChange(e.target.value))}
+      onBlur={onBlurOnly ? commit : undefined}
+      onKeyDown={
+        onBlurOnly
+          ? (e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") setDraft(null);
+            }
+          : undefined
+      }
+    />
+  );
+}
 
 interface ContextSectionProps {
   title: string;
@@ -101,21 +141,18 @@ function ContextSection({ title, hint, value, presets, fields, sublabel, onChang
       </div>
       {value !== null && (
         <div className={styles.fields}>
-          {fields.map(({ key, label }) => {
-            const overridden = value[key] !== undefined;
-            return (
-              <label key={key} className={styles.field}>
-                {label}
-                <input
-                  className={overridden ? styles.overridden : undefined}
-                  value={value[key] ?? base[key] ?? ""}
-                  placeholder={base[key] ?? ""}
-                  title={overridden ? "Overrides the preset" : undefined}
-                  onChange={(e) => setField(key, e.target.value)}
-                />
-              </label>
-            );
-          })}
+          {fields.map(({ key, label, apply }) => (
+            <label key={key} className={styles.field}>
+              {label}
+              <FieldInput
+                value={value[key] ?? base[key] ?? ""}
+                placeholder={base[key] ?? ""}
+                overridden={value[key] !== undefined}
+                onBlurOnly={apply === "blur"}
+                onChange={(text) => setField(key, text)}
+              />
+            </label>
+          ))}
         </div>
       )}
     </div>

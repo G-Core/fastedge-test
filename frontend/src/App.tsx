@@ -111,8 +111,8 @@ function App() {
     }
   }, [dotenv.enabled, wasmFile, wasmPath, reloadWasm]);
 
-  // The edge's dc is the cache bucket, fixed when the app loads: reload when it changes
-  // (debounced, so typing a dc reloads once). Everything else in the context goes with each request.
+  // The edge's dc is the cache bucket, fixed when the app loads: reload when it changes (the
+  // dc field applies on blur / Enter). Everything else in the context goes with each request.
   const edgeKey = edge ? `${edge.dc ?? ""}|${edge.preset ?? ""}` : "";
   const loadedEdgeKey = useRef(edgeKey);
   useEffect(() => {
@@ -120,10 +120,11 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadTime]);
   useEffect(() => {
-    if (edgeKey === loadedEdgeKey.current || !(wasmFile || wasmPath)) return;
-    const timer = setTimeout(() => reloadWasm(dotenv.enabled), 600);
-    return () => clearTimeout(timer);
-  }, [edgeKey, wasmFile, wasmPath, dotenv.enabled, reloadWasm]);
+    // A load in progress (e.g. a config load, which sets the edge first) uses the new edge itself.
+    if (loading || edgeKey === loadedEdgeKey.current || !(wasmFile || wasmPath)) return;
+    loadedEdgeKey.current = edgeKey; // one reload per change
+    void reloadWasm(dotenv.enabled);
+  }, [edgeKey, loading, wasmFile, wasmPath, dotenv.enabled, reloadWasm]);
 
   /**
    * Handle WebSocket events from server
@@ -336,8 +337,9 @@ function App() {
           </div>
         )}
 
-        {!loading && wasmPath && wasmType === 'http-wasm' && <HttpWasmView />}
-        {!loading && wasmPath && wasmType === 'proxy-wasm' && <ProxyWasmView />}
+        {/* A reload (dotenv, edge dc) keeps the view and its open panels on screen. */}
+        {wasmPath && wasmType === 'http-wasm' && <HttpWasmView />}
+        {wasmPath && wasmType === 'proxy-wasm' && <ProxyWasmView />}
       </div>
     </DragDropZone>
   );
