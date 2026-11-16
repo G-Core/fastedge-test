@@ -97,6 +97,7 @@ Binary values are base64; i64/u64 are decimal strings (numbers accepted).
 | admin | `snapshot` | `dc?` (default `local`) | `{ now, dc, dcs, cache: [{key, size, expiresAt}], kv: [{store, strings, zsets, bloom}] }`: sizes, no values |
 | admin | `inspect` | `key` and `dc` or `store` | one value: `{ type: "string", size, value (base64), truncated, expiresAt? }`, `{ type: "zset", count, members: [{..., score}] }` or `{ type: "bloom", count, items }`; first 4 KB / 200 items; null if gone |
 | admin | `reset` | | cache emptied (every `dc`), KV re-seeded from the fixtures |
+| admin | `pause-clock` | `paused` (bool) | `paused`: the clock stands still and moves only with `advance-clock` (a debugging aid; edge clocks never stop). `snapshot` reports `clockPaused` |
 | admin | `kv-put` | `store, key, data` (fixture format holding just `key`) | `null`; replaces the key whatever its type; creates the store |
 | admin | `kv-delete` | `store, key` | `null` |
 | admin | `kv-store-create` / `kv-store-delete` | `store` | `null` |
@@ -135,12 +136,20 @@ reload the fixtures); Save to fixtures keeps them.
 | `POST /api/storage/cache/expire` | `{ dc, key, ttlMs }` | new TTL from now, value kept (above the max = the max); `{ updated: false }` if gone |
 | `POST /api/storage/import` | `{ store, data, replace? }` | `data`: fixture format, or a plain object key → value (non-strings as JSON text) |
 | `POST /api/storage/reset`, `/advance-clock` | `{ ms }` | |
+| `POST /api/storage/clock` (and `/api/stores/clock` for the panel) | `{ paused }` | pause / resume the clock every app sees |
 | `GET /api/storage/fixtures/diff` | | `{ root, changes: [{ store, file, status: new / changed / deleted, current, proposed, hash }] }`: Edge KV fixture files vs the service; same data in another layout is not a change |
 | `POST /api/storage/fixtures/save` | `{ files: [{ file, hash }] }` | writes / deletes exactly those files; 409 if one changed since the diff |
 
 Values are the fixture format (UTF-8 string or `{ base64 }`) and are checked by the fixture
 parser, so the explorer holds only what a fixture can (no empty KV value). Store names: letters,
 digits, `. _ -` (they are file names). Only Edge KV is saved to fixtures; cache edits stay live.
+
+**Page** (`frontend/src/views/StorageExplorerView/`, header tab next to Debugger; the debugger
+stays mounted): Edge KV stores and keys (add / edit / delete, create / delete stores, Import JSON),
+Cache per dc (add / delete, Set TTL), Pause clock, Advance clock, Reset to fixtures, and Save to
+fixtures (a diff per file; ticked files saved, deletions opt-in). A value is edited in place only
+when the whole of it was read (not cut at 4 KB); sorted sets as `score member` lines. Tests:
+`createStores().pauseClock()`.
 
 **Importing a portal store (agents; shapes checked on preprod 2026-11-16):** list the store with
 the FastEdge API, `GET /fastedge/v1/kv/{store_id}/data` (`limit` ≤ 200, `offset`) →

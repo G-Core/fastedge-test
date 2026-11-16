@@ -1,5 +1,23 @@
 # Proxy-WASM Runner - Changelog
 
+## November 16, 2026 - Storage Explorer page; pause the stores clock
+
+### Overview
+A Storage Explorer page (header tab next to the Debugger) on the Storage Explorer API: browse and
+edit Edge KV and the cache, import JSON, set a cache entry's TTL, and Save to fixtures with a diff
+per file. Pause clock (panel and explorer): the stores clock stands still for every app until
+Advance clock moves it, a debugging aid (edge clocks never stop).
+
+### 🎯 What Was Completed
+- `views/StorageExplorerView/` (page, `SaveFixtures` dialog with a line diff); `App.tsx` page tabs
+- `StoresPanel`: `ClockPause`; value view / TTL / dc flags exported for reuse
+- Storage service admin `pause-clock`, snapshot `clockPaused`; `POST /api/storage/clock`,
+  `POST /api/stores/clock`, `POST /api/storage/cache/expire`; `TestStores.pauseClock()`
+
+### 🧪 Testing
+- Frontend `StorageExplorerView.test.tsx`, `StoresPanel.test.tsx` (pause); unit
+  `stores/explorer.test.ts` (pause); server `storage-explorer.test.ts`
+
 ## November 16, 2026 - Storage Explorer API
 
 ### Overview
