@@ -619,7 +619,10 @@ export async function getStoredValue(where: { dc: string } | { store: string }, 
 export type FixtureValue = string | { base64: string };
 
 /** What the cache (one dc) and Edge KV hold (as StoresSnapshot, without the app fields). */
-export type ExplorerSnapshot = Omit<Extract<StoresSnapshot, { enabled: true }>, "enabled" | "appDc">;
+export type ExplorerSnapshot = Omit<Extract<StoresSnapshot, { enabled: true }>, "enabled" | "appDc"> & {
+  /** The loaded app's cache bucket (the default dc), or null with no app (or stores off). */
+  appDc: string | null;
+};
 
 /** One Edge KV key: a string, a sorted set ([member, score]) or a bloom filter's items. */
 export type KvKeyInput =
@@ -653,7 +656,8 @@ async function storageCall(path: string, body?: unknown): Promise<any> {
 }
 
 export const storage = {
-  snapshot: (dc: string): Promise<ExplorerSnapshot> => storageCall(`?dc=${encodeURIComponent(dc)}`),
+  /** dc null = the loaded app's (or local). */
+  snapshot: (dc: string | null): Promise<ExplorerSnapshot> => storageCall(dc ? `?dc=${encodeURIComponent(dc)}` : ""),
   value: async (where: { dc: string } | { store: string }, key: string): Promise<StoredValue | null> =>
     (await storageCall(`/value?${new URLSearchParams({ ...where, key })}`)).value,
   putKv: (store: string, key: string, input: KvKeyInput) => storageCall("/kv/put", { store, key, ...input }),

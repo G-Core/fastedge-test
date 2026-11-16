@@ -580,7 +580,7 @@ app.post("/api/stores/advance-clock", async (req: Request, res: Response) => {
 });
 
 // Storage Explorer: manage the stores with or without an app loaded.
-mountStorageExplorer(app, getStores, () => process.env.WORKSPACE_PATH || process.cwd());
+mountStorageExplorer(app, getStores, () => process.env.WORKSPACE_PATH || process.cwd(), () => loadedStores?.dc ?? null);
 
 /** Pause (true) or resume (false) the service clock; advance-clock still moves it. */
 app.post("/api/stores/clock", async (req: Request, res: Response) => {

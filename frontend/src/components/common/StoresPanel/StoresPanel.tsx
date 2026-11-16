@@ -151,8 +151,16 @@ export const STORES_CHANGED = "fastedge:stores-changed";
 export function useTick(): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    // On whole seconds, so every view's countdown changes at the same moment.
+    let timer: ReturnType<typeof setTimeout>;
+    const next = () => {
+      timer = setTimeout(() => {
+        setNow(Date.now());
+        next();
+      }, 1000 - (Date.now() % 1000));
+    };
+    next();
+    return () => clearTimeout(timer);
   }, []);
   return now;
 }

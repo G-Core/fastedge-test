@@ -342,7 +342,7 @@ function CacheTab({ snapshot, version, fetchedAt, dc, setDc, act }: { snapshot: 
   const [ttl, setTtl] = useState("");
   const [otherDc, setOtherDc] = useState("");
   const elapsed = snapshot.clockPaused ? 0 : Math.max(0, tick - fetchedAt);
-  const dcs = [...new Set([dc, "local", ...snapshot.dcs, ...Object.keys(flags)])].sort();
+  const dcs = [...new Set([dc, "local", ...(snapshot.appDc ? [snapshot.appDc] : []), ...snapshot.dcs, ...Object.keys(flags)])].sort();
 
   return (
     <div>
@@ -354,6 +354,7 @@ function CacheTab({ snapshot, version, fetchedAt, dc, setDc, act }: { snapshot: 
               <option key={d} value={d}>
                 {flags[d] ? `${flags[d]} ` : ""}
                 {d}
+                {d === snapshot.appDc ? " (this app)" : ""}
               </option>
             ))}
           </select>
@@ -470,7 +471,7 @@ type Act = (action: () => Promise<unknown>, options?: { storeList?: boolean }) =
  */
 export function StorageExplorerView() {
   const [tab, setTab] = useState<"kv" | "cache">("kv");
-  const [dc, setDc] = useState("local");
+  const [dc, setDc] = useState<string | null>(null); // null = the loaded app's dc (or local)
   const [snapshot, setSnapshot] = useState<ExplorerSnapshot | null>(null);
   const [fetchedAt, setFetchedAt] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -555,7 +556,7 @@ export function StorageExplorerView() {
         ) : tab === "kv" ? (
           <KvTab snapshot={snapshot} version={fetchedAt} act={act} />
         ) : (
-          <CacheTab snapshot={snapshot} version={fetchedAt} fetchedAt={fetchedAt} dc={dc} setDc={setDc} act={act} />
+          <CacheTab snapshot={snapshot} version={fetchedAt} fetchedAt={fetchedAt} dc={snapshot.dc} setDc={(d) => setDc(d === snapshot.appDc ? null : d)} act={act} />
         )}
       </div>
     </div>

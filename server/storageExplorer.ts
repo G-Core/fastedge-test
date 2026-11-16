@@ -43,6 +43,8 @@ export function mountStorageExplorer(
   app: Express,
   getStores: () => Promise<StoresConnection | null>,
   workspace: () => string,
+  /** The loaded app's cache bucket, if an app with stores is loaded (the default dc). */
+  appDc: () => string | null,
 ): void {
   const call = async (kind: "admin" | "cache", body: Record<string, unknown>): Promise<unknown> => {
     const connection = await getStores();
@@ -104,8 +106,9 @@ export function mountStorageExplorer(
 
   // ── browse ──
   app.get("/api/storage", route(null, async (_b, req) => {
-    const dc = typeof req.query.dc === "string" && req.query.dc ? req.query.dc : "local";
-    return (await call("admin", { op: "snapshot", dc })) as object;
+    const loaded = appDc();
+    const dc = typeof req.query.dc === "string" && req.query.dc ? req.query.dc : loaded ?? "local";
+    return { appDc: loaded, ...((await call("admin", { op: "snapshot", dc })) as object) };
   }));
 
   app.get("/api/storage/value", route(null, async (_b, req) => {

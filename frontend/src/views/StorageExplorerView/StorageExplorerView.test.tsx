@@ -28,6 +28,7 @@ vi.mock("../../api", () => ({
 
 const s = vi.mocked(api.storage);
 const snapshot = {
+  appDc: null as string | null,
   now: 1_000_000,
   clockPaused: false,
   dc: "local",
@@ -97,6 +98,16 @@ describe("StorageExplorerView", () => {
     fireEvent.click(screen.getByText("Save 1 file"));
     await waitFor(() => expect(s.saveFixtures).toHaveBeenCalledWith([{ file: "fixtures/stores/kv/users.json", hash: "h2" }]));
     expect(await screen.findByText(/Saved fixtures\/stores\/kv\/users.json/)).toBeTruthy();
+  });
+
+  it("opens the cache on the loaded app's dc", async () => {
+    s.snapshot.mockResolvedValue({ ...snapshot, appDc: "fr5", dc: "fr5", dcs: ["fr5"] });
+    render(<StorageExplorerView />);
+    fireEvent.click(await screen.findByText(/^Cache/));
+    await waitFor(() => expect(screen.getByRole("combobox").textContent).toContain("fr5 (this app)"));
+    expect(s.snapshot).toHaveBeenCalledWith(null);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "am3" } });
+    await waitFor(() => expect(s.snapshot).toHaveBeenLastCalledWith("am3"));
   });
 
   it("pauses the clock", async () => {
