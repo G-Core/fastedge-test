@@ -82,34 +82,10 @@
           "type": "object",
           "properties": {
             "request": {
-              "type": "object",
-              "properties": {
-                "headers": {
-                  "$ref": "#/definitions/HeaderRecord"
-                },
-                "body": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "headers",
-                "body"
-              ]
+              "$ref": "#/definitions/HookBody"
             },
             "response": {
-              "type": "object",
-              "properties": {
-                "headers": {
-                  "$ref": "#/definitions/HeaderRecord"
-                },
-                "body": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "headers",
-                "body"
-              ]
+              "$ref": "#/definitions/HookBody"
             },
             "properties": {
               "type": "object",
@@ -125,34 +101,10 @@
           "type": "object",
           "properties": {
             "request": {
-              "type": "object",
-              "properties": {
-                "headers": {
-                  "$ref": "#/definitions/HeaderRecord"
-                },
-                "body": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "headers",
-                "body"
-              ]
+              "$ref": "#/definitions/HookBody"
             },
             "response": {
-              "type": "object",
-              "properties": {
-                "headers": {
-                  "$ref": "#/definitions/HeaderRecord"
-                },
-                "body": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "headers",
-                "body"
-              ]
+              "$ref": "#/definitions/HookBody"
             },
             "properties": {
               "type": "object",
@@ -194,6 +146,25 @@
         "output",
         "properties"
       ]
+    },
+    "HookBody": {
+      "type": "object",
+      "properties": {
+        "headers": {
+          "$ref": "#/definitions/HeaderRecord"
+        },
+        "body": {
+          "type": "string"
+        },
+        "isBase64": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "headers",
+        "body"
+      ],
+      "description": "Headers and body of the request or response; `isBase64`: the body is base64 of raw bytes (not text)."
     },
     "HeaderRecord": {
       "type": "object",

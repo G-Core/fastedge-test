@@ -21,6 +21,10 @@
             "body": {
               "type": "string"
             },
+            "isBase64": {
+              "type": "boolean",
+              "description": "`body` is base64 of raw bytes (a body that is not text, e.g. an image)."
+            },
             "method": {
               "type": "string"
             },
@@ -44,6 +48,10 @@
             },
             "body": {
               "type": "string"
+            },
+            "isBase64": {
+              "type": "boolean",
+              "description": "`body` is base64 of raw bytes."
             },
             "status": {
               "type": "number"
