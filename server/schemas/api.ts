@@ -35,6 +35,17 @@ export const ApiSendBodySchema = z.object({
   ...context,
 });
 
+/**
+ * Load a resource (several apps, one per hook): a config file in the workspace, or the config
+ * itself (paths relative to the workspace). Every file it reads must be inside the workspace.
+ */
+export const ApiResourceLoadBodySchema = z.object({
+  configPath: z.string().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+}).refine((body) => (body.configPath === undefined) !== (body.config === undefined), {
+  message: "Give exactly one of configPath or config",
+});
+
 export const ApiCallBodySchema = z.object({
   hook: z.enum(['onRequestHeaders', 'onRequestBody', 'onResponseHeaders', 'onResponseBody']),
   request: z.object({

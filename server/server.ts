@@ -25,7 +25,9 @@ import { WebSocketManager, StateManager } from "./websocket/index.js";
 import { detectWasmType } from "./utils/wasmTypeDetector.js";
 import { validatePath } from "./utils/pathValidator.js";
 import { resolveDotenvPath, validateDotenvLeafs, DotenvPathError } from "./utils/dotenv-loader.js";
+import { createResource, type Resource } from "./runner/resource.js";
 import {
+  ApiResourceLoadBodySchema,
   ApiLoadBodySchema,
   ApiSendBodySchema,
   ApiCallBodySchema,
@@ -63,6 +65,8 @@ const stateManager = new StateManager(wsManager, debug);
 // Initialize runner factory
 const runnerFactory = new WasmRunnerFactory();
 let currentRunner: IWasmRunner | null = null;
+/** The loaded resource (several apps), instead of a single app. */
+let currentResource: Resource | null = null;
 
 // Allowlist of known schema filenames. The /api/schema/:name route checks this
 // before serving a file, preventing path traversal through encoded slashes.
@@ -375,10 +379,12 @@ app.post("/api/load", serialized(async (req: Request, res: Response) => {
     // Auto-detect WASM type
     const wasmType = await detectWasmType(bufferOrPath);
 
-    // Cleanup previous runner
+    // Cleanup previous runner (or resource)
     if (currentRunner) {
       await currentRunner.cleanup();
     }
+    await currentResource?.cleanup();
+    currentResource = null;
 
     // Create appropriate runner based on detected type
     loadedStores = null; // until this load succeeds
@@ -428,6 +434,46 @@ app.post("/api/load", serialized(async (req: Request, res: Response) => {
       currentRunner = null;
     }
     res.status(500).json({ ok: false, error: String(error) });
+  }
+}));
+
+/**
+ * Load a resource: several apps, one per hook, as on a CDN resource. Every file it reads must be
+ * inside the workspace, so a resource spanning several projects is debugged from a folder that
+ * holds them all. Replaces the loaded app or resource; /api/send then runs it.
+ */
+app.post("/api/resource/load", serialized(async (req: Request, res: Response) => {
+  const parsed = ApiResourceLoadBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: parsed.error.flatten() });
+    return;
+  }
+  const root = process.env.WORKSPACE_PATH || process.cwd();
+  const { configPath, config } = parsed.data;
+
+  await currentRunner?.cleanup();
+  currentRunner = null;
+  await currentResource?.cleanup();
+  currentResource = null;
+  loadedStores = null; // until this load succeeds
+
+  try {
+    const storesOn = (await getStores()) !== null;
+    const resource = await createResource(configPath ? path.resolve(root, configPath) : (config as never), {
+      root,
+      ...(storesOn ? {} : { stores: false }),
+    });
+    currentResource = resource;
+    const stores = storesOn && resource.config.stores !== false;
+    loadedStores = stores ? { dc: resource.config.dc ?? edgeDc(resource.config.edge) ?? "local" } : null;
+
+    const apps = [...resource.apps].map(([name, runner]) => ({ name, wasmType: runner.getType() }));
+    const source = (req.headers["x-source"] as any) || "ui";
+    stateManager.emitResourceLoaded({ configPath: configPath ? path.resolve(root, configPath) : null, apps }, source);
+    res.json({ ok: true, apps, config: resource.config });
+  } catch (error) {
+    // A config, path or build problem: the caller can fix it.
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 }));
 
@@ -750,6 +796,25 @@ app.post("/api/send", async (req: Request, res: Response) => {
     return;
   }
   const { url, request, properties } = parsed.data;
+
+  if (currentResource) {
+    const source = (req.headers["x-source"] as any) || "ui";
+    try {
+      const result = await currentResource.request({
+        url,
+        method: request?.method,
+        headers: request?.headers,
+        body: request?.body,
+        properties,
+      });
+      stateManager.emitResourceRequestCompleted(result, source);
+      res.json({ ok: true, ...result });
+    } catch (error) {
+      stateManager.emitRequestFailed("Request execution failed", String(error), source);
+      res.status(500).json({ ok: false, error: String(error) });
+    }
+    return;
+  }
 
   if (!currentRunner) {
     res.status(400).json({

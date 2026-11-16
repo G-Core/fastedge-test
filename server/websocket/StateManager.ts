@@ -20,7 +20,10 @@ import {
   HttpWasmRequestCompletedEvent,
   HttpWasmLogEvent,
   ReloadWorkspaceWasmEvent,
+  ResourceLoadedEvent,
+  ResourceRequestCompletedEvent,
 } from "./types.js";
+import type { ResourceResult } from "../runner/resource.js";
 
 export class StateManager {
   private wsManager: WebSocketManager;
@@ -142,6 +145,16 @@ export class StateManager {
     );
 
     this.broadcast(event);
+  }
+
+  /** Emit resource loaded event */
+  public emitResourceLoaded(data: ResourceLoadedEvent["data"], source: EventSource = "system"): void {
+    this.broadcast(createEvent<ResourceLoadedEvent>("resource_loaded", source, data));
+  }
+
+  /** Emit resource request completed event */
+  public emitResourceRequestCompleted(result: ResourceResult, source: EventSource = "system"): void {
+    this.broadcast(createEvent<ResourceRequestCompletedEvent>("resource_request_completed", source, { result }));
   }
 
   /**

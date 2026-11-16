@@ -19,6 +19,8 @@ import type { FullFlowResult, HeaderRecord, HookResult } from "./types.js";
 import { HeaderManager } from "./HeaderManager.js";
 import { PropertyResolver } from "./PropertyResolver.js";
 import { cdnContext, withHeaders, type RequestContext } from "./requestContext.js";
+import { validatePathOrThrow } from "../utils/pathValidator.js";
+import { validateDotenvLeafs } from "../utils/dotenv-loader.js";
 import { CDN_HOOKS, isBuiltInUrl, runCdnFlow, type CdnHook, type OriginResponse } from "./cdnFlow.js";
 
 export type ResourceRequest = {
@@ -27,6 +29,8 @@ export type ResourceRequest = {
   method?: string;
   headers?: Record<string, string>;
   body?: string;
+  /** Over the config's `properties` (e.g. request.country), as for a single app. */
+  properties?: Record<string, unknown>;
 };
 
 export type ResourceResult = {
@@ -50,12 +54,20 @@ export interface Resource {
 export type CreateResourceOptions = {
   /** As for createRunner: on by default, false = off, or isolated test stores (createStores). */
   stores?: boolean | TestStores;
+  /**
+   * Confine every file the resource reads (its config, each app's wasm, referenced config and
+   * dotenv folder) to this folder, as the debugger confines loads to its workspace. A resource
+   * spanning several projects is then debugged from a folder holding them all (a monorepo).
+   */
+  root?: string;
 };
 
 /** A resource from a config file (paths relative to it) or an object (paths relative to the cwd). */
 export async function createResource(fileOrObject: string | ResourceConfigInput, options: CreateResourceOptions = {}): Promise<Resource> {
-  const baseDir = typeof fileOrObject === "string" ? path.dirname(path.resolve(fileOrObject)) : process.cwd();
-  const raw = typeof fileOrObject === "string" ? JSON.parse(await readFile(fileOrObject, "utf8")) : fileOrObject;
+  const confine = confinement(options.root);
+  const file = typeof fileOrObject === "string" ? confine(fileOrObject, "file") : undefined;
+  const baseDir = file ? path.dirname(file) : options.root ?? process.cwd();
+  const raw = file ? JSON.parse(await readFile(file, "utf8")) : fileOrObject;
   const config = ResourceConfigSchema.parse(raw);
   checkReferences(config);
 
@@ -64,7 +76,7 @@ export async function createResource(fileOrObject: string | ResourceConfigInput,
   const apps = new Map<string, IWasmRunner>();
   try {
     for (const [name, entry] of Object.entries(config.apps)) {
-      const app = await resolveApp(name, entry, baseDir);
+      const app = await resolveApp(name, entry, baseDir, confine);
       apps.set(name, await createRunner(app.wasm, {
         dotenv: app.dotenv,
         stores,
@@ -155,7 +167,7 @@ async function runRequest(
       body: request.body ?? config.request?.body ?? "",
       method: request.method ?? config.request?.method ?? "GET",
     },
-    properties: { ...applied.properties, ...config.properties },
+    properties: { ...applied.properties, ...config.properties, ...request.properties },
     enforceProductionPropertyRules: true,
   }, targetUrl);
 
@@ -195,11 +207,24 @@ async function httpAppOrigin(
 }
 
 /** An app entry's wasm and dotenv, from its own fields and its referenced config. */
-async function resolveApp(name: string, entry: ResourceConfig["apps"][string], baseDir: string) {
+type Confine = (file: string, kind: "file" | "wasm" | "dir") => string;
+
+/** Checks a path is inside `root` (lexically and through symlinks); identity without a root. */
+function confinement(root: string | undefined): Confine {
+  return (file, kind) => {
+    const absolute = path.resolve(file);
+    if (!root) return absolute;
+    const checked = validatePathOrThrow(absolute, { workspaceRoot: root, requireWasmExtension: kind === "wasm", checkExists: kind === "file" });
+    if (kind === "dir") validateDotenvLeafs(checked);
+    return checked;
+  };
+}
+
+async function resolveApp(name: string, entry: ResourceConfig["apps"][string], baseDir: string, confine: Confine) {
   let wasm = entry.wasm && path.resolve(baseDir, entry.wasm);
   let dotenv = entry.dotenv && { ...entry.dotenv, path: path.resolve(baseDir, entry.dotenv.path ?? ".") };
   if (entry.config) {
-    const file = path.resolve(baseDir, entry.config);
+    const file = confine(path.resolve(baseDir, entry.config), "file");
     const raw = JSON.parse(await readFile(file, "utf8"));
     if (raw && typeof raw === "object" && "apps" in raw) throw new Error(`app "${name}": ${entry.config} is a resource (resources cannot be nested)`);
     const referenced = TestConfigSchema.parse(raw);
@@ -208,6 +233,12 @@ async function resolveApp(name: string, entry: ResourceConfig["apps"][string], b
     dotenv ??= referenced.dotenv && { ...referenced.dotenv, path: path.resolve(dir, referenced.dotenv.path ?? ".") };
   }
   if (!wasm) throw new Error(`app "${name}": no wasm (set "wasm" or "config")`);
+  try {
+    wasm = confine(wasm, "wasm");
+    if (dotenv) dotenv.path = confine(dotenv.path, "dir");
+  } catch (error) {
+    throw new Error(`app "${name}": ${(error as Error).message}`);
+  }
   try {
     await readFile(wasm);
   } catch {

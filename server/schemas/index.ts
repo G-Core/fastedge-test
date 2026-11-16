@@ -23,6 +23,7 @@ export {
   SaveAsBodySchema,
   ApiDotenvBodySchema,
   ApiExecuteContextSchema,
+  ApiResourceLoadBodySchema,
 } from './api';
 
 export type {

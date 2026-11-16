@@ -18,6 +18,8 @@ import {
   ApiSendBodySchema,
   ApiCallBodySchema,
   ApiConfigBodySchema,
+  ApiResourceLoadBodySchema,
+  ResourceConfigSchema,
 } from '../server/schemas/index';
 
 const projectRoot = path.join(__dirname, '..');
@@ -37,6 +39,8 @@ const zodSchemas: Array<{ name: string; schema: { toJSONSchema(): object } }> = 
   { name: 'api-send', schema: ApiSendBodySchema },
   { name: 'api-call', schema: ApiCallBodySchema },
   { name: 'api-config', schema: ApiConfigBodySchema },
+  { name: 'resource-config', schema: ResourceConfigSchema },
+  { name: 'api-resource-load', schema: ApiResourceLoadBodySchema },
 ];
 
 for (const { name, schema } of zodSchemas) {
@@ -63,6 +67,11 @@ const tsSchemaConfigs = [
     name: 'hook-call',
     sourcePath: path.join(projectRoot, 'server/runner/types.ts'),
     typeName: 'HookCall',
+  },
+  {
+    name: 'resource-result',
+    sourcePath: path.join(projectRoot, 'server/runner/resource.ts'),
+    typeName: 'ResourceResult',
   },
   {
     name: 'http-request',

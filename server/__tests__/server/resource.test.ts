@@ -1,0 +1,56 @@
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { startTestServer, authedFetch, type TestServer } from "./helpers.js";
+
+const PROBE = resolve(process.cwd(), "wasm/cdn-apps/rust/resource-probe/resource-probe.wasm");
+
+describe("debugger server — resources", () => {
+  let server: TestServer;
+  const post = (route: string, body: unknown) =>
+    authedFetch(server.base, server.token, route, { method: "POST", body: JSON.stringify(body) });
+
+  beforeAll(async () => {
+    server = await startTestServer();
+    mkdirSync(join(server.workspacePath, "apps"));
+    copyFileSync(PROBE, join(server.workspacePath, "apps", "probe.wasm"));
+    writeFileSync(join(server.workspacePath, "resource.json"), JSON.stringify({
+      apps: { a: { wasm: "apps/probe.wasm" }, b: { wasm: "apps/probe.wasm" } },
+      main: { hooks: { onResponseHeaders: "a", onResponseBody: "b" }, origin: { url: "built-in" } },
+      stores: false,
+    }));
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it("loads a resource file from the workspace and /api/send runs it", async () => {
+    const load = await post("/api/resource/load", { configPath: "resource.json" });
+    expect(load.status).toBe(200);
+    expect((await load.json()).apps).toEqual([
+      { name: "a", wasmType: "proxy-wasm" },
+      { name: "b", wasmType: "proxy-wasm" },
+    ]);
+
+    const send = await post("/api/send", { url: "https://example.com/" });
+    expect(send.status).toBe(200);
+    const body = await send.json();
+    expect(body.rule).toBeNull();
+    expect(body.hooks.onResponseBody.app).toBe("b");
+    // b reads the custom property a wrote: properties belong to the request.
+    expect(body.finalResponse.body).toBe("respb: app=? global=0 trail=[] reqh=<none> resph=?\n");
+  });
+
+  it("refuses files outside the workspace", async () => {
+    const res = await post("/api/resource/load", {
+      config: { apps: { a: { wasm: PROBE } }, main: { origin: { url: "built-in" } } },
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("outside the workspace root");
+  });
+
+  it("refuses a body with neither or both of configPath and config", async () => {
+    expect((await post("/api/resource/load", {})).status).toBe(400);
+  });
+});

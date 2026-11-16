@@ -1,4 +1,5 @@
 import type { StoreCall } from "../stores/trace.js";
+import type { ResourceResult } from "../runner/resource.js";
 /**
  * WebSocket Event Types
  *
@@ -155,6 +156,26 @@ export interface ReloadWorkspaceWasmEvent extends BaseEvent {
 }
 
 /**
+ * Resource loaded (several apps, one per hook)
+ */
+export interface ResourceLoadedEvent extends BaseEvent {
+  type: "resource_loaded";
+  data: {
+    /** The config file, when loaded from one. */
+    configPath?: string | null;
+    apps: { name: string; wasmType: "proxy-wasm" | "http-wasm" }[];
+  };
+}
+
+/**
+ * Resource request completed: the rule that matched, each hook's app and result, the origin
+ */
+export interface ResourceRequestCompletedEvent extends BaseEvent {
+  type: "resource_request_completed";
+  data: { result: ResourceResult };
+}
+
+/**
  * Union of all possible events
  */
 export type ServerEvent =
@@ -167,7 +188,9 @@ export type ServerEvent =
   | HttpWasmRequestCompletedEvent
   | HttpWasmLogEvent
   | ConnectionStatusEvent
-  | ReloadWorkspaceWasmEvent;
+  | ReloadWorkspaceWasmEvent
+  | ResourceLoadedEvent
+  | ResourceRequestCompletedEvent;
 
 /**
  * Helper to create events with automatic timestamp

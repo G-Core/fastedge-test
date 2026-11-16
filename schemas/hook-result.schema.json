@@ -125,6 +125,17 @@
             "$ref": "#/definitions/StoreCall"
           },
           "description": "The cache / Edge KV calls this hook made, in order (stores on only)."
+        },
+        "localResponse": {
+          "$ref": "#/definitions/LocalResponse",
+          "description": "Set when the hook answered with send_http_response."
+        },
+        "customProperties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Custom properties later hooks of this request may read (see `HookCall.customProperties`)."
         }
       },
       "required": [
@@ -211,6 +222,42 @@
         "result",
         "at"
       ]
+    },
+    "LocalResponse": {
+      "type": "object",
+      "properties": {
+        "statusCode": {
+          "type": "number"
+        },
+        "statusText": {
+          "type": "string"
+        },
+        "headers": {
+          "$ref": "#/definitions/HeaderTuples",
+          "description": "The additional headers passed as send_http_response's 4th argument."
+        },
+        "bodyBase64": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "statusCode",
+        "statusText",
+        "headers",
+        "bodyBase64"
+      ],
+      "description": "A response a hook sent with send_http_response."
+    },
+    "HeaderTuples": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 2,
+        "maxItems": 2
+      }
     }
   }
 }

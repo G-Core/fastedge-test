@@ -64,6 +64,17 @@
         },
         "enforceProductionPropertyRules": {
           "type": "boolean"
+        },
+        "customProperties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Custom properties an earlier hook of this request wrote (and later hooks may read), when the hooks run on different apps: on the edge custom properties belong to the request, not the app."
+        },
+        "requestId": {
+          "type": "string",
+          "description": "Set when this call is one hook of a flow driven from outside the runner (a resource): the request id shared by the flow's hooks; `request` and `properties` already carry `context`."
         }
       },
       "required": [
