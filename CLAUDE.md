@@ -26,9 +26,11 @@ Before changing how a host function, property, header, store or response behaves
 4. **Describe the production behaviour** in a comment where you implement it, and list any known
    divergence in the feature doc (`context/features/`). Never hide one.
 
-This repo is **public**: never name or link internal repositories, hosts, file paths or
-components in code, comments, docs, tests or commit messages. Describe behaviour ("on the edge,
-in `onRequestHeaders` a write never fails"), not where it is implemented internally.
+This repo is **public**: never link or path-reference anything a public user cannot open:
+private repositories, their files, or folders that only exist on your machine. That covers code,
+comments, docs, tests and commit messages. Describe the production behaviour instead ("on the
+edge, a write in `onRequestHeaders` never fails"). Naming edge components (nginx, core-proxy)
+is fine.
 
 ---
 
