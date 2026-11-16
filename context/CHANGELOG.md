@@ -1,5 +1,20 @@
 # Proxy-WASM Runner - Changelog
 
+## November 16, 2026 - Property writes return what the edge returns
+
+### Overview
+Refused property writes now return what the edge returns: in `onRequestHeaders` a write never
+fails; in the later hooks only the eight `request.*` properties fail with BadArgument. Other refused writes return Ok and change
+nothing. Before, every refused write was BadArgument, so apps that unwrap `set_property` (the Rust
+SDK) trapped in the debugger but ran on the edge (e.g. setting `response.status` in
+`onResponseBody`). See `features/PROPERTY_IMPLEMENTATION_COMPLETE.md`.
+
+### 🎯 What Was Completed
+- `PropertyAccessControl`: `EDGE_REFUSED_WRITES`, `AccessCheckResult.ignored`; custom writes never fail
+- `HostFunctions.proxy_set_property`: an ignored write returns Ok, logs "has no effect"
+- Integration tests that asserted "access denied" for writes the edge accepts now assert
+  `assertPropertyWriteIgnored` (value still unchanged)
+
 ## November 13, 2026 - Stores panel
 
 ### Overview

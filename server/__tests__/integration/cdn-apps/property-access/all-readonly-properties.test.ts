@@ -8,7 +8,7 @@ import {
   getPropertyAccessViolations,
   logsContain,
 } from '../../utils/test-helpers';
-import { assertPropertyDenied } from '../../utils/property-assertions';
+import { assertPropertyWriteIgnored, assertPropertyDenied } from '../../utils/property-assertions';
 
 describe('All Read-Only Properties - Integration Tests', () => {
   // Test properties - geolocation from fastedge-config.test.json + additional test values
@@ -193,7 +193,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
       );
     });
 
-    it('should deny writing to request.extension', async () => {
+    it('accepts a write to request.extension with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook({
@@ -205,12 +205,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
         }),
         properties: testProperties,
       });
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.extension', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations[0]).toContain('read-only');
+      assertPropertyWriteIgnored(result, 'request.extension');
     });
 
     it('should NOT modify request.extension value', async () => {
@@ -232,7 +227,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
       expect(logsContain(result, 'Request ALTERED Extension >> .modified')).toBe(false);
     });
 
-    it('should deny writing to request.city', async () => {
+    it('accepts a write to request.city with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook({
@@ -244,12 +239,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
         }),
         properties: testProperties,
       });
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.city', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations.some(v => v.includes('read-only'))).toBe(true);
+      assertPropertyWriteIgnored(result, 'request.city');
     });
 
     it('should NOT modify request.city value', async () => {
@@ -271,7 +261,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
       expect(logsContain(result, 'Request ALTERED City >> Modified City')).toBe(false);
     });
 
-    it('should deny writing to request.asn', async () => {
+    it('accepts a write to request.asn with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook({
@@ -283,12 +273,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
         }),
         properties: testProperties,
       });
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.asn', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations.some(v => v.includes('read-only'))).toBe(true);
+      assertPropertyWriteIgnored(result, 'request.asn');
     });
 
     it('should NOT modify request.asn value', async () => {
@@ -310,7 +295,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
       expect(logsContain(result, 'Request ALTERED ASN >> 12345')).toBe(false);
     });
 
-    it('should deny writing to request.geo.lat', async () => {
+    it('accepts a write to request.geo.lat with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook({
@@ -322,12 +307,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
         }),
         properties: testProperties,
       });
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.geo.lat', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations.some(v => v.includes('read-only'))).toBe(true);
+      assertPropertyWriteIgnored(result, 'request.geo.lat');
     });
 
     it('should NOT modify request.geo.lat value', async () => {
@@ -349,7 +329,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
       expect(logsContain(result, 'Request ALTERED Geo Lat >> 99.9999')).toBe(false);
     });
 
-    it('should deny writing to request.geo.long', async () => {
+    it('accepts a write to request.geo.long with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook({
@@ -361,12 +341,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
         }),
         properties: testProperties,
       });
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.geo.long', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations.some(v => v.includes('read-only'))).toBe(true);
+      assertPropertyWriteIgnored(result, 'request.geo.long');
     });
 
     it('should NOT modify request.geo.long value', async () => {
@@ -388,7 +363,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
       expect(logsContain(result, 'Request ALTERED Geo Long >> 99.9999')).toBe(false);
     });
 
-    it('should deny writing to request.region', async () => {
+    it('accepts a write to request.region with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook({
@@ -400,12 +375,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
         }),
         properties: testProperties,
       });
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.region', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations.some(v => v.includes('read-only'))).toBe(true);
+      assertPropertyWriteIgnored(result, 'request.region');
     });
 
     it('should NOT modify request.region value', async () => {
@@ -427,7 +397,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
       expect(logsContain(result, 'Request ALTERED Region >> XX')).toBe(false);
     });
 
-    it('should deny writing to request.continent', async () => {
+    it('accepts a write to request.continent with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook({
@@ -439,12 +409,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
         }),
         properties: testProperties,
       });
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.continent', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations.some(v => v.includes('read-only'))).toBe(true);
+      assertPropertyWriteIgnored(result, 'request.continent');
     });
 
     it('should NOT modify request.continent value', async () => {
@@ -466,7 +431,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
       expect(logsContain(result, 'Request ALTERED Continent >> Modified Continent')).toBe(false);
     });
 
-    it('should deny writing to request.country.name', async () => {
+    it('accepts a write to request.country.name with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook({
@@ -478,12 +443,7 @@ describe('All Read-Only Properties - Integration Tests', () => {
         }),
         properties: testProperties,
       });
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.country.name', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations.some(v => v.includes('read-only'))).toBe(true);
+      assertPropertyWriteIgnored(result, 'request.country.name');
     });
 
     it('should NOT modify request.country.name value', async () => {

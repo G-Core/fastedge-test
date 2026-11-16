@@ -538,6 +538,27 @@ Added comprehensive property access control system that enforces FastEdge produc
 | `nginx.log_field1`     | String  | Write-only       | Not accessible| Not accessible    | Not accessible |
 | `response.status`      | Integer | Not accessible   | Not accessible| Read-only         | Read-only      |
 
+### What a refused write returns (edge parity, Nov 2026)
+
+"Read-only" above means the write never changes the value. What the app gets back follows the
+edge, not the table:
+
+| Hook | Write fails (BadArgument) | Write applied | Everything else |
+|---|---|---|---|
+| `onRequestHeaders` | never | url, host, path, query, `nginx.log_field1` | Ok, no effect |
+| `onRequestBody`, `onResponseHeaders`, `onResponseBody` | `request.url`, `.host`, `.path`, `.scheme`, `.method`, `.extension`, `.query`, `.x_real_ip` | custom properties | Ok, no effect (e.g. `response.status`, geo) |
+
+- "Ok, no effect" writes are logged as `set_property '<path>' in <hook> has no effect` (Warn),
+  not as access violations. Apps that `unwrap()` the write (the Rust SDK does) keep running, as on
+  the edge; e.g. setting `response.status` from `onResponseBody` does not change the status.
+- Custom property writes never fail. A later hook's write to a property created in
+  `onRequestHeaders` makes a new property in that hook.
+- Code: `EDGE_REFUSED_WRITES` and `AccessCheckResult.ignored` in `server/runner/PropertyAccessControl.ts`.
+- Not yet matched: in `onRequestHeaders` the edge does not keep custom properties set there (a
+  later read in that hook finds nothing), while the debugger keeps them for that hook; and the edge
+  ignores a url / host write that points at a non-public host, which the debugger applies (local
+  origins).
+
 ### Custom Property Behavior
 
 #### Example: Markdown Processing

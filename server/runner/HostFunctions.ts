@@ -330,6 +330,15 @@ export class HostFunctions {
             }
           }
 
+          if (!accessCheck.allowed && accessCheck.ignored) {
+            // As on the edge: the write returns Ok and changes nothing.
+            this.logs.push({
+              level: LogLevel.Warn,
+              message: `set_property '${path}' in ${currentHook} has no effect. ${accessCheck.reason}`,
+            });
+            return ProxyStatus.Ok;
+          }
+
           if (!accessCheck.allowed) {
             const denialMessage = `Property access denied: Cannot write '${path}' = '${value}' in ${currentHook}. ${accessCheck.reason}`;
             // Only log to stderr in non-test environments (tests check this.logs instead)

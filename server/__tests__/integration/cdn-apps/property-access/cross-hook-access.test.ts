@@ -6,6 +6,7 @@ import {
   createHookCall,
   hasPropertyAccessViolation,
 } from '../../utils/test-helpers';
+import { assertPropertyWriteIgnored } from '../../utils/property-assertions';
 
 describe('Property Access Across Different Hooks', () => {
   let runner: ProxyWasmRunner;
@@ -34,7 +35,7 @@ describe('Property Access Across Different Hooks', () => {
       expect(hasPropertyAccessViolation(result)).toBe(false);
     });
 
-    it('should deny writing to read-only properties in any hook', async () => {
+    it('accepts a write to request.method with no effect, as on the edge', async () => {
       const invalidMethodWasm = await loadCdnAppWasm(
         'properties',
         WASM_TEST_BINARIES.cdnApps.properties.invalidMethodWrite
@@ -50,8 +51,8 @@ describe('Property Access Across Different Hooks', () => {
         })
       );
 
-      // request.method is always read-only, even in onRequestHeaders
-      expect(hasPropertyAccessViolation(result)).toBe(true);
+      // request.method cannot be changed; in onRequestHeaders the edge returns Ok with no effect
+      assertPropertyWriteIgnored(result, 'request.method');
     });
   });
 
@@ -73,7 +74,7 @@ describe('Property Access Across Different Hooks', () => {
       expect(hasPropertyAccessViolation(result)).toBe(false);
     });
 
-    it('should deny writing to response.status (read-only)', async () => {
+    it('accepts a write to response.status with no effect, as on the edge', async () => {
       const invalidResponseStatusWasm = await loadCdnAppWasm(
         'properties',
         WASM_TEST_BINARIES.cdnApps.properties.invalidResponseStatusWrite
@@ -87,8 +88,8 @@ describe('Property Access Across Different Hooks', () => {
         })
       );
 
-      // response.status is read-only
-      expect(hasPropertyAccessViolation(result)).toBe(true);
+      // response.status cannot be changed; the edge accepts the write with no effect
+      assertPropertyWriteIgnored(result, 'response.status');
     });
   });
 });

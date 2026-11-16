@@ -6,6 +6,32 @@ Read `AGENTS.md` for company-wide agent rules. These are mandatory and override 
 
 ---
 
+## 🚨 RULE ZERO: Production Parity
+
+fastedge-test exists so developers and agents can build against a **local replica of the FastEdge
+edge**. An app that works here must work on the edge, and an app that fails on the edge must fail
+here **the same way**: same status codes, same errors, same values, same limits. A debugger that
+is more lenient than production is a bug, even when it makes an app "work".
+
+Before changing how a host function, property, header, store or response behaves:
+
+1. **Establish what production does**, not what this repo's docs or tests assume. Use the
+   production source if your environment gives you access to it (it is not public and is not
+   referenced from this repo), `FastEdge-lib` for HTTP apps (`fastedge-run`, public), and the
+   public FastEdge documentation.
+2. **If that does not settle it, probe the live edge** (deploy a probe app) and record the
+   result where the behaviour is implemented.
+3. **When an app fails locally, first ask whether it fails on the edge too.** Check the app's build
+   (stale binaries are common) before touching the debugger.
+4. **Describe the production behaviour** in a comment where you implement it, and list any known
+   divergence in the feature doc (`context/features/`). Never hide one.
+
+This repo is **public**: never name or link internal repositories, hosts, file paths or
+components in code, comments, docs, tests or commit messages. Describe behaviour ("on the edge,
+in `onRequestHeaders` a write never fails"), not where it is implemented internally.
+
+---
+
 ## 🎯 CRITICAL: Read Smart, Not Everything
 
 **DO NOT read all context files upfront.** This repository uses a **discovery-based context system** to minimize token usage while maximizing effectiveness.
