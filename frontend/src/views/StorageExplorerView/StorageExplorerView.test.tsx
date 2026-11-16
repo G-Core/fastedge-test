@@ -92,7 +92,7 @@ describe("StorageExplorerView", () => {
       ],
     });
     render(<StorageExplorerView />);
-    fireEvent.click(await screen.findByText("Save to fixtures…"));
+    fireEvent.click(await screen.findByText("Save…"));
     expect(await screen.findByText("Save 1 file")).toBeTruthy();
     fireEvent.click(screen.getByText("Save 1 file"));
     await waitFor(() => expect(s.saveFixtures).toHaveBeenCalledWith([{ file: "fixtures/stores/kv/users.json", hash: "h2" }]));

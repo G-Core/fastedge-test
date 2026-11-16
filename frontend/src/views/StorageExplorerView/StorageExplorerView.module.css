@@ -1,8 +1,68 @@
 .page {
-  background: #1e1e1e;
+  background: #252525;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+/* A labelled group of related buttons (Clock, Fixtures). */
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
   border: 1px solid #3d3d3d;
   border-radius: 4px;
-  padding: 12px;
+  background: #1e1e1e;
+}
+
+.groupLabel {
+  margin-right: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #808080;
+}
+
+/* The selected tab's content. */
+.content {
+  padding: 16px;
+  border: 1px solid #3d3d3d;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  background: #1e1e1e;
+}
+
+/* A section's title row: title (or picker) on the left, its actions on the right. */
+.sectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #3d3d3d;
+  font-size: 12px;
+}
+
+.sectionTitle {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.sectionHeader .sectionTitle {
+  margin: 0;
 }
 
 .row {
@@ -17,6 +77,8 @@
 
 .row input,
 .row select,
+.sectionHeader input,
+.sectionHeader select,
 .editor textarea,
 .newStore input {
   padding: 3px 6px;
@@ -45,19 +107,24 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin: 0;
+  font-weight: normal;
+  text-transform: none;
+  color: #a0a0a0;
 }
 
 .split {
   display: flex;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 20px;
 }
 
 .stores {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 160px;
+  min-width: 180px;
+  padding-right: 16px;
+  border-right: 1px solid #3d3d3d;
 }
 
 .store {

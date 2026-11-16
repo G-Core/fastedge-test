@@ -141,6 +141,9 @@ export function ClockPause({ paused, onToggle }: { paused: boolean; onToggle: (p
   );
 }
 
+/** Fired after the stores change outside an app's request (the Storage Explorer). */
+export const STORES_CHANGED = "fastedge:stores-changed";
+
 /** Re-render every second while mounted (TTL countdown). */
 export function useTick(): number {
   const [now, setNow] = useState(() => Date.now());
@@ -190,6 +193,13 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
     if (!loading) void refresh();
   }, [refresh, refreshKey, loading]);
 
+  // And after an edit in the Storage Explorer.
+  useEffect(() => {
+    const onChange = () => void refresh();
+    window.addEventListener(STORES_CHANGED, onChange);
+    return () => window.removeEventListener(STORES_CHANGED, onChange);
+  }, [refresh]);
+
   // And when the next cache entry expires, so expired entries drop out.
   useEffect(() => {
     if (!snapshot?.enabled || snapshot.cache.length === 0 || snapshot.clockPaused) return;
@@ -220,8 +230,8 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
   return (
     <div>
       <div className={styles.toolbar}>
-        <label>
-          Cache dc{" "}
+        <label className={styles.inline}>
+          Cache dc
           <select value={snapshot.dc} onChange={(e) => setDc(e.target.value === snapshot.appDc ? null : e.target.value)}>
             {dcs.map((d) => (
               <option key={d} value={d}>

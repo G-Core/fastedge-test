@@ -126,3 +126,14 @@
   border-color: #ffb74d;
   color: #ffb74d;
 }
+
+/* An inline label (the app's global label style is a block of its own). */
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: normal;
+  text-transform: none;
+  color: #a0a0a0;
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { StoresPanel } from "./StoresPanel";
+import { StoresPanel, STORES_CHANGED } from "./StoresPanel";
 import * as api from "../../../api";
 
 vi.mock("../../../api", () => ({
@@ -135,5 +135,13 @@ describe("StoresPanel", () => {
     expect(screen.getByText("1m 30s")).toBeTruthy(); // no countdown while paused
     fireEvent.click(screen.getByText("▶ Resume clock"));
     await waitFor(() => expect(api.pauseStoresClock).toHaveBeenCalledWith(false));
+  });
+
+  it("refreshes after an edit in the Storage Explorer", async () => {
+    open();
+    await screen.findByText("page:/");
+    const calls = vi.mocked(api.getStoresSnapshot).mock.calls.length;
+    window.dispatchEvent(new Event(STORES_CHANGED));
+    await waitFor(() => expect(vi.mocked(api.getStoresSnapshot).mock.calls.length).toBe(calls + 1));
   });
 });

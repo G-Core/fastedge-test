@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Tabs } from "../../components/common/Tabs";
-import { ADVANCE, ClockPause, ValueView, formatTtl, useDcFlags, useTick } from "../../components/common/StoresPanel/StoresPanel";
+import { ADVANCE, ClockPause, STORES_CHANGED, ValueView, formatTtl, useDcFlags, useTick } from "../../components/common/StoresPanel/StoresPanel";
 import panel from "../../components/common/StoresPanel/StoresPanel.module.css";
 import { storage, type ExplorerSnapshot, type FixtureValue, type KvKeyInput, type StoredValue } from "../../api";
 import { SaveFixtures } from "./SaveFixtures";
@@ -181,6 +181,7 @@ function KvTab({ snapshot, version, act }: { snapshot: ExplorerSnapshot; version
   return (
     <div className={styles.split}>
       <nav className={styles.stores} aria-label="Edge KV stores">
+        <h4 className={styles.sectionTitle}>Stores</h4>
         {snapshot.kv.map((s) => (
           <button
             key={s.store}
@@ -202,9 +203,11 @@ function KvTab({ snapshot, version, act }: { snapshot: ExplorerSnapshot; version
             e.preventDefault();
             const name = newStore.trim();
             if (!name) return;
-            void act(() => storage.createStore(name)).then(() => {
+            void act(() => storage.createStore(name)).then((ok) => {
+              if (!ok) return;
               setSelected(name);
               setNewStore("");
+              setMessage(`Created ${name}. A loaded HTTP app sees a new store after it reloads (fastedge-run reads the store list at start); CDN apps see it now.`);
             });
           }}
         >
@@ -220,8 +223,10 @@ function KvTab({ snapshot, version, act }: { snapshot: ExplorerSnapshot; version
           <p className={panel.empty}>No stores. Create one, or add fixtures under fixtures/stores/kv/.</p>
         ) : (
           <>
-            <div className={styles.row}>
-              <h4 className={panel.heading}>{store.store}</h4>
+            <div className={styles.sectionHeader}>
+              <h4 className={styles.sectionTitle}>
+                {store.store} <span className={styles.count}>{store.strings.length + store.zsets.length + store.bloom.length} keys</span>
+              </h4>
               <span className={panel.spacer} />
               <button type="button" className={panel.button} onClick={() => setMode("add")}>
                 Add key
@@ -341,9 +346,9 @@ function CacheTab({ snapshot, version, fetchedAt, dc, setDc, act }: { snapshot: 
 
   return (
     <div>
-      <div className={styles.row}>
-        <label>
-          dc{" "}
+      <div className={styles.sectionHeader}>
+        <label className={panel.inline}>
+          dc
           <select value={dc} onChange={(e) => setDc(e.target.value)}>
             {dcs.map((d) => (
               <option key={d} value={d}>
@@ -493,37 +498,45 @@ export function StorageExplorerView() {
       ok = false;
       setError(e instanceof Error ? e.message : String(e));
     }
-    if (ok) await refresh();
+    if (ok) {
+      window.dispatchEvent(new Event(STORES_CHANGED));
+      await refresh();
+    }
     return ok;
   };
 
   return (
     <div className={styles.page}>
-      <div className={panel.toolbar}>
+      <div className={styles.toolbar}>
         <button type="button" className={panel.button} onClick={() => void refresh()}>
           Refresh
         </button>
         <span className={panel.spacer} />
-        {snapshot && <ClockPause paused={snapshot.clockPaused} onToggle={(paused) => void act(() => storage.pauseClock(paused))} />}
-        <span>Advance clock</span>
-        {ADVANCE.map(([label, ms]) => (
-          <button key={label} type="button" className={panel.button} onClick={() => void act(() => storage.advanceClock(ms))}>
-            {label}
-          </button>
-        ))}
+        <div className={styles.group} role="group" aria-label="Clock">
+          <span className={styles.groupLabel}>Clock</span>
+          {snapshot && <ClockPause paused={snapshot.clockPaused} onToggle={(paused) => void act(() => storage.pauseClock(paused))} />}
+          {ADVANCE.map(([label, ms]) => (
+            <button key={label} type="button" className={panel.button} title={`Advance the clock ${label.slice(1)}`} onClick={() => void act(() => storage.advanceClock(ms))}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className={styles.group} role="group" aria-label="Fixtures">
+          <span className={styles.groupLabel}>Fixtures</span>
         <button
           type="button"
           className={panel.button}
-          title="Empty the cache (every dc) and re-seed Edge KV from fixtures/stores/: unsaved edits are lost"
+          title="Back to the fixture files: the cache (every dc) is emptied and Edge KV re-seeded; unsaved edits are lost"
           onClick={() => {
             if (window.confirm("Reset to the fixtures? Unsaved Edge KV edits and every cache entry are lost.")) void act(storage.reset);
           }}
         >
-          Reset to fixtures
+          Reset
         </button>
-        <button type="button" className={`${panel.button} ${styles.primary}`} onClick={() => setSaving(true)}>
-          Save to fixtures…
+        <button type="button" className={`${panel.button} ${styles.primary}`} title="Write Edge KV to the fixture files (shows the diff first)" onClick={() => setSaving(true)}>
+          Save…
         </button>
+        </div>
       </div>
       {error && <p className={panel.error}>{error}</p>}
       {saving && <SaveFixtures onClose={() => setSaving(false)} />}
@@ -536,13 +549,15 @@ export function StorageExplorerView() {
         active={tab}
         onChange={setTab}
       />
-      {!snapshot ? (
-        !error && <p className={panel.empty}>Loading…</p>
-      ) : tab === "kv" ? (
-        <KvTab snapshot={snapshot} version={fetchedAt} act={act} />
-      ) : (
-        <CacheTab snapshot={snapshot} version={fetchedAt} fetchedAt={fetchedAt} dc={dc} setDc={setDc} act={act} />
-      )}
+      <div className={styles.content}>
+        {!snapshot ? (
+          !error && <p className={panel.empty}>Loading…</p>
+        ) : tab === "kv" ? (
+          <KvTab snapshot={snapshot} version={fetchedAt} act={act} />
+        ) : (
+          <CacheTab snapshot={snapshot} version={fetchedAt} fetchedAt={fetchedAt} dc={dc} setDc={setDc} act={act} />
+        )}
+      </div>
     </div>
   );
 }

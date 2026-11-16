@@ -148,7 +148,10 @@ digits, `. _ -` (they are file names). Only Edge KV is saved to fixtures; cache 
 stays mounted): Edge KV stores and keys (add / edit / delete, create / delete stores, Import JSON),
 Cache per dc (add / delete, Set TTL), Pause clock, Advance clock, Reset to fixtures, and Save to
 fixtures (a diff per file; ticked files saved, deletions opt-in). A value is edited in place only
-when the whole of it was read (not cut at 4 KB); sorted sets as `score member` lines. Tests:
+when the whole of it was read (not cut at 4 KB); sorted sets as `score member` lines. Each edit
+fires `fastedge:stores-changed`, which the app views' Storage panel refreshes on. Apps see edits
+at once, except a **new store for a loaded HTTP app**: fastedge-run reads the store list when it
+starts, so the app opens a store created later only after a reload (CDN apps check per open). Tests:
 `createStores().pauseClock()`.
 
 **Importing a portal store (agents; shapes checked on preprod 2026-11-16):** list the store with
