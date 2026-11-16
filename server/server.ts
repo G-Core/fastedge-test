@@ -582,6 +582,24 @@ app.post("/api/stores/advance-clock", async (req: Request, res: Response) => {
 // Storage Explorer: manage the stores with or without an app loaded.
 mountStorageExplorer(app, getStores, () => process.env.WORKSPACE_PATH || process.cwd());
 
+/** Pause (true) or resume (false) the service clock; advance-clock still moves it. */
+app.post("/api/stores/clock", async (req: Request, res: Response) => {
+  const paused = req.body?.paused;
+  if (typeof paused !== "boolean") {
+    res.status(400).json({ ok: false, error: "paused must be a boolean" });
+    return;
+  }
+  try {
+    if (!loadedStores) {
+      res.status(409).json({ ok: false, error: "no app with stores is loaded" });
+      return;
+    }
+    res.json({ ok: true, paused: await storesAdmin({ op: "pause-clock", paused }) });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
 /** Release the shared lease on shutdown, so an unused service exits without waiting for the TTL. */
 async function releaseStores(): Promise<void> {
   const connection = await storesConnection?.catch(() => null);

@@ -55,4 +55,28 @@ describe("Storage Explorer admin ops", () => {
     expect(() => kvSeed({ strings: { a: { base64: "not base64!" } } }, "t")).toThrow("t strings.a: invalid base64");
     expect(kvSeed({ strings: { a: { base64: "AAE=" } } }, "t").strings.a).toEqual(Buffer.from([0, 1]));
   });
+
+  it("pauses the clock: it stands still and moves only when advanced", async () => {
+    const stores = await createStores({ fixtures: false });
+    try {
+      stores.pauseClock();
+      stores.cache.set("k", "v", { ttlMs: 1000 });
+      const at = (await admin(stores, { op: "snapshot", dc: "local" })).value;
+      expect(at.clockPaused).toBe(true);
+      await new Promise((r) => setTimeout(r, 30));
+      expect((await admin(stores, { op: "snapshot", dc: "local" })).value.now).toBe(at.now);
+      stores.advanceClock(999);
+      expect(stores.cache.get("k")).toBe("v");
+      stores.advanceClock(1);
+      expect(stores.cache.get("k")).toBeNull();
+      // Resumed, it runs on from where it stood.
+      const paused = (await admin(stores, { op: "pause-clock", paused: false })).value;
+      expect(paused).toBe(false);
+      const after = (await admin(stores, { op: "snapshot", dc: "local" })).value;
+      expect(after.now - at.now).toBeGreaterThanOrEqual(1000);
+      expect(after.now - at.now).toBeLessThan(1500);
+    } finally {
+      await stores.close();
+    }
+  });
 });

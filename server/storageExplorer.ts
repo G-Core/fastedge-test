@@ -181,6 +181,12 @@ export function mountStorageExplorer(
     await call("admin", { op: "advance-clock", ms });
   }));
 
+  /** Pause (true) or resume (false) the clock every app sees; advance-clock still moves it. */
+  app.post("/api/storage/clock", route(null, async (body: { paused?: unknown }) => {
+    if (typeof body?.paused !== "boolean") throw new HttpError(400, "paused must be a boolean");
+    return { paused: await call("admin", { op: "pause-clock", paused: body.paused }) };
+  }));
+
   // ── fixtures ──
   app.get("/api/storage/fixtures/diff", route(null, async () => ({ root: resolveStoresRoot(workspace()), changes: await diff() })));
 

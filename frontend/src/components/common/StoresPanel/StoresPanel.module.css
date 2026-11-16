@@ -121,3 +121,8 @@
   font-style: italic;
   color: #888;
 }
+
+.paused {
+  border-color: #ffb74d;
+  color: #ffb74d;
+}

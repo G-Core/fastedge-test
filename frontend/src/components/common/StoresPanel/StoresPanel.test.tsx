@@ -12,12 +12,14 @@ vi.mock("../../../api", () => ({
   }),
   resetStores: vi.fn().mockResolvedValue(undefined),
   advanceStoresClock: vi.fn().mockResolvedValue(undefined),
+  pauseStoresClock: vi.fn().mockResolvedValue(undefined),
 }));
 
-const snapshot = (dc = "fr5") => ({
+const snapshot = (dc = "fr5", clockPaused = false) => ({
   enabled: true as const,
   appDc: "fr5",
   now: 1_000_000,
+  clockPaused,
   dc,
   dcs: ["am3", "fr5"],
   cache: dc === "fr5" ? [{ key: "page:/", size: 12, expiresAt: 1_000_000 + 90_000 }] : [],
@@ -123,5 +125,15 @@ describe("StoresPanel", () => {
     open();
     expect(await screen.findByText("soon")).toBeTruthy();
     await waitFor(() => expect(screen.queryByText("soon")).toBeNull(), { timeout: 2000 });
+  });
+
+  it("pauses the clock: the TTL stands still, and Resume runs it again", async () => {
+    vi.mocked(api.getStoresSnapshot).mockResolvedValue(snapshot("fr5", true));
+    open();
+    expect(await screen.findByText("1m 30s")).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 1100));
+    expect(screen.getByText("1m 30s")).toBeTruthy(); // no countdown while paused
+    fireEvent.click(screen.getByText("▶ Resume clock"));
+    await waitFor(() => expect(api.pauseStoresClock).toHaveBeenCalledWith(false));
   });
 });

@@ -36,6 +36,8 @@ const fail = (error: string): Reply => ({ ok: false, error });
 export class StoresCore {
   private clockOffsetMs = 0;
   private cacheOps = 0;
+  /** Set while the clock is paused: the time it stands at. */
+  private pausedAt: number | null = null;
   private q: Record<string, StatementSync>;
 
   constructor(
@@ -95,12 +97,30 @@ export class StoresCore {
 
   /** The only clock: HTTP and CDN apps see expiry move together. */
   now(): number {
-    return Date.now() + this.clockOffsetMs;
+    return this.pausedAt ?? Date.now() + this.clockOffsetMs;
   }
 
+  /** Move the clock forward (paused or not). */
   advanceClock(ms: number): number {
-    this.clockOffsetMs += ms;
-    return this.clockOffsetMs;
+    if (this.pausedAt !== null) this.pausedAt += ms;
+    else this.clockOffsetMs += ms;
+    return this.now() - Date.now();
+  }
+
+  /**
+   * A debugging aid (edge clocks never stop): paused, the clock stands still for every app and
+   * moves only with advanceClock; resumed, it runs on from where it stood.
+   */
+  pauseClock(paused: boolean): void {
+    if (paused && this.pausedAt === null) this.pausedAt = this.now();
+    if (!paused && this.pausedAt !== null) {
+      this.clockOffsetMs = this.pausedAt - Date.now();
+      this.pausedAt = null;
+    }
+  }
+
+  clockPaused(): boolean {
+    return this.pausedAt !== null;
   }
 
   cache(body: Body): Reply {
@@ -355,6 +375,7 @@ export class StoresCore {
     );
     return {
       now,
+      clockPaused: this.clockPaused(),
       dc,
       dcs: rows<{ dc: string }>("SELECT DISTINCT dc FROM cache WHERE expires_at > ? ORDER BY dc", now).map((r) => r.dc),
       cache: rows<{ key: string; size: number; expiresAt: number }>(
@@ -415,6 +436,8 @@ export type StoresValue =
 export type StoresSnapshot = {
   /** The service clock (ms since epoch, moved by advance-clock). */
   now: number;
+  /** The clock is paused: it moves only with advance-clock. */
+  clockPaused: boolean;
   dc: string;
   /** Every `dc` with live cache entries. */
   dcs: string[];

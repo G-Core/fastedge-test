@@ -43,6 +43,13 @@ describe("debugger server — Storage Explorer", () => {
     expect((await call("/api/storage/cache/expire", { dc: "fr5", key: "missing", ttlMs: 1000 })).body.updated).toBe(false);
   });
 
+  it("pauses and resumes the clock", async () => {
+    expect((await call("/api/storage/clock", { paused: true })).body.paused).toBe(true);
+    expect((await call("/api/storage?dc=fr5")).body.clockPaused).toBe(true);
+    expect((await call("/api/storage/clock", { paused: false })).body.paused).toBe(false);
+    expect((await call("/api/storage/clock", { paused: "yes" })).status).toBe(400);
+  });
+
   it("imports plain JSON and refuses what the edge refuses", async () => {
     const imported = await call("/api/storage/import", { store: "flags", data: { beta: true, name: "x" } });
     expect(imported.body.keys).toBe(2);

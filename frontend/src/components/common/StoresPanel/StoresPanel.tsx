@@ -5,6 +5,7 @@ import { useAppStore } from "../../../stores";
 import type { Preset } from "../../../stores/types";
 import {
   advanceStoresClock,
+  pauseStoresClock,
   getRequestContextPresets,
   getStoredValue,
   getStoresSnapshot,
@@ -14,13 +15,13 @@ import {
 } from "../../../api";
 import styles from "./StoresPanel.module.css";
 
-const ADVANCE: [string, number][] = [
+export const ADVANCE: [string, number][] = [
   ["+1 min", 60_000],
   ["+1 h", 3_600_000],
   ["+1 day", 86_400_000],
 ];
 
-function formatTtl(ms: number): string {
+export function formatTtl(ms: number): string {
   if (ms <= 0) return "expired";
   const s = Math.ceil(ms / 1000);
   if (s < 60) return `${s}s`;
@@ -30,7 +31,7 @@ function formatTtl(ms: number): string {
 }
 
 /** UTF-8 text (pretty JSON when it parses), or null for binary. */
-function decode(base64: string, truncated: boolean): string | null {
+export function decode(base64: string, truncated: boolean): string | null {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   let text: string;
   try {
@@ -61,18 +62,18 @@ function Bytes({ value, truncated, size }: { value: string; truncated: boolean; 
 }
 
 /** One entry's value, fetched when the row opens (and again after each refresh). */
-function ValueView({ where, entryKey, version }: { where: { dc: string } | { store: string }; entryKey: string; version: number }) {
+export function ValueView({ where, entryKey, version, fetch = getStoredValue }: { where: { dc: string } | { store: string }; entryKey: string; version: number; fetch?: typeof getStoredValue }) {
   const [state, setState] = useState<{ value: StoredValue | null } | { error: string } | null>(null);
   const whereKey = JSON.stringify(where);
   useEffect(() => {
     let live = true;
-    getStoredValue(JSON.parse(whereKey), entryKey)
+    fetch(JSON.parse(whereKey), entryKey)
       .then((value) => live && setState({ value }))
       .catch((e) => live && setState({ error: e instanceof Error ? e.message : String(e) }));
     return () => {
       live = false;
     };
-  }, [whereKey, entryKey, version]);
+  }, [whereKey, entryKey, version, fetch]);
 
   if (!state) return <p className={styles.empty}>Loading…</p>;
   if ("error" in state) return <p className={styles.error}>{state.error}</p>;
@@ -113,7 +114,7 @@ function ValueView({ where, entryKey, version }: { where: { dc: string } | { sto
 }
 
 /** Flags for the edge presets' dcs (fr5 🇩🇪, am3 🇳🇱, sv5 🇺🇸); other dcs get none. */
-function useDcFlags(): Record<string, string> {
+export function useDcFlags(): Record<string, string> {
   const [flags, setFlags] = useState<Record<string, string>>({});
   useEffect(() => {
     getRequestContextPresets()
@@ -125,8 +126,23 @@ function useDcFlags(): Record<string, string> {
   return flags;
 }
 
+/** Pause / resume the service clock: paused, cache TTLs stand still until Advance clock moves them. */
+export function ClockPause({ paused, onToggle }: { paused: boolean; onToggle: (paused: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      className={`${styles.button} ${paused ? styles.paused : ""}`}
+      aria-pressed={paused}
+      title={paused ? "Clock paused for every app: TTLs move only with Advance clock. Click to run it again." : "Stop the clock for every app: TTLs then move only with Advance clock"}
+      onClick={() => onToggle(!paused)}
+    >
+      {paused ? "▶ Resume clock" : "⏸ Pause clock"}
+    </button>
+  );
+}
+
 /** Re-render every second while mounted (TTL countdown). */
-function useTick(): number {
+export function useTick(): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -176,7 +192,7 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
 
   // And when the next cache entry expires, so expired entries drop out.
   useEffect(() => {
-    if (!snapshot?.enabled || snapshot.cache.length === 0) return;
+    if (!snapshot?.enabled || snapshot.cache.length === 0 || snapshot.clockPaused) return;
     const next = Math.min(...snapshot.cache.map((e) => e.expiresAt - snapshot.now));
     const timer = setTimeout(() => void refresh(), Math.max(0, next - (Date.now() - fetchedAt)) + 250);
     return () => clearTimeout(timer);
@@ -198,8 +214,8 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
   if (!snapshot.enabled) return <p className={styles.empty}>Stores are off (or the storage service could not start).</p>;
 
   const dcs = [...new Set([snapshot.appDc, snapshot.dc, ...snapshot.dcs])].sort();
-  // The service clock moves with the wall clock between refreshes.
-  const elapsed = Math.max(0, tick - fetchedAt);
+  // The service clock moves with the wall clock between refreshes (not while paused).
+  const elapsed = snapshot.clockPaused ? 0 : Math.max(0, tick - fetchedAt);
 
   return (
     <div>
@@ -220,6 +236,7 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
           Refresh
         </button>
         <span className={styles.spacer} />
+        <ClockPause paused={snapshot.clockPaused} onToggle={(paused) => void act(() => pauseStoresClock(paused))} />
         <span>Advance clock</span>
         {ADVANCE.map(([label, ms]) => (
           <button key={label} type="button" className={styles.button} onClick={() => void act(() => advanceStoresClock(ms))}>

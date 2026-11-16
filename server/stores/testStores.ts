@@ -35,6 +35,8 @@ export interface TestStores {
   seed(data: StoresSeed): void;
   /** Move the service clock (cache expiry) for every runner on these stores. */
   advanceClock(ms: number): void;
+  /** Stop the clock (it then moves only with advanceClock), or with false run it on. */
+  pauseClock(paused?: boolean): void;
   /** Back to the fixtures: cache emptied, KV re-seeded. */
   reset(): void;
   /** Stop the service; its data is gone. */
@@ -92,6 +94,7 @@ export async function createStores(options: CreateStoresOptions = {}): Promise<T
     },
     seed: (data) => applySeed(core, data),
     advanceClock: (ms) => void core.advanceClock(ms),
+    pauseClock: (paused = true) => core.pauseClock(paused),
     reset,
     close: async () => {
       await server.close();

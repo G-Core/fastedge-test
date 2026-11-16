@@ -9,12 +9,16 @@ import { ConfigButtons } from "./components/common/ConfigButtons";
 import { DragDropZone } from "./components/common/DragDropZone";
 import { HttpWasmView } from "./views/HttpWasmView";
 import { ProxyWasmView } from "./views/ProxyWasmView";
+import { StorageExplorerView } from "./views/StorageExplorerView";
+import { Tabs } from "./components/common/Tabs";
 import { getEnvironment, type EnvironmentInfo } from "./api";
 import "./App.css";
 
 function App() {
   // Environment detection state
   const [_environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
+  // Page: the app debugger, or the Storage Explorer (the debugger stays mounted, hidden).
+  const [page, setPage] = useState<"debugger" | "storage">("debugger");
 
   // Get state and actions from stores
   const {
@@ -309,10 +313,22 @@ function App() {
           </h1>
           <ConnectionStatus status={wsStatus} />
         </header>
+        <Tabs
+          tabs={[
+            { id: "debugger", label: "Debugger" },
+            { id: "storage", label: "Storage Explorer" },
+          ]}
+          active={page}
+          onChange={setPage}
+          className="page-tabs"
+        />
 
         {wsStatus.error?.startsWith("Missing session token") && (
           <div className="error">{wsStatus.error}</div>
         )}
+        {page === "storage" && <StorageExplorerView />}
+
+        <div hidden={page !== "debugger"}>
         {error && <div className="error">{error}</div>}
 
         <WasmLoader
@@ -343,6 +359,7 @@ function App() {
         {/* A reload (dotenv, edge dc) keeps the view and its open panels on screen. */}
         {wasmPath && wasmType === 'http-wasm' && <HttpWasmView />}
         {wasmPath && wasmType === 'proxy-wasm' && <ProxyWasmView />}
+        </div>
       </div>
     </DragDropZone>
   );

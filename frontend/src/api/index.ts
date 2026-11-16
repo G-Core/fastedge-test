@@ -553,6 +553,8 @@ export type StoresSnapshot =
       appDc: string;
       /** The service clock (ms since epoch). */
       now: number;
+      /** The clock is paused: it moves only with Advance clock. */
+      clockPaused: boolean;
       dc: string;
       dcs: string[];
       cache: { key: string; size: number; expiresAt: number }[];
@@ -589,6 +591,15 @@ export async function advanceStoresClock(ms: number): Promise<void> {
   });
 }
 
+/** Pause (true) or resume (false) the service clock every app sees. */
+export async function pauseStoresClock(paused: boolean): Promise<void> {
+  await storesCall("/clock", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paused }),
+  });
+}
+
 /** One stored value (base64 bytes, cut to the first 4 KB; lists to 200 items). */
 type StoredBytes = { size: number; value: string; truncated: boolean };
 export type StoredValue =
@@ -601,3 +612,64 @@ export async function getStoredValue(where: { dc: string } | { store: string }, 
   const params = new URLSearchParams({ ...where, key });
   return (await storesCall(`/value?${params}`)).value;
 }
+
+// ── Storage Explorer (/api/storage/*): works with or without an app loaded ──────────────────
+
+/** A stored value as in fixture files: UTF-8 text, or { base64 }. */
+export type FixtureValue = string | { base64: string };
+
+/** What the cache (one dc) and Edge KV hold (as StoresSnapshot, without the app fields). */
+export type ExplorerSnapshot = Omit<Extract<StoresSnapshot, { enabled: true }>, "enabled" | "appDc">;
+
+/** One Edge KV key: a string, a sorted set ([member, score]) or a bloom filter's items. */
+export type KvKeyInput =
+  | { type: "string"; value: FixtureValue }
+  | { type: "zset"; members: [FixtureValue, number][] }
+  | { type: "bloom"; items: string[] };
+
+/** A change Save to fixtures would make to one fixture file. */
+export type FixtureChange = {
+  store: string;
+  file: string;
+  status: "new" | "changed" | "deleted";
+  current: string | null;
+  proposed: string | null;
+  hash: string;
+};
+
+async function storageCall(path: string, body?: unknown): Promise<any> {
+  const response = await apiFetch(
+    `${API_BASE}/storage${path}`,
+    body === undefined
+      ? undefined
+      : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+  );
+  const result = await response.json();
+  if (!response.ok || !result.ok) {
+    const error = typeof result.error === "string" ? result.error : JSON.stringify(result.error);
+    throw new Error(error || `Storage request failed (${response.status})`);
+  }
+  return result;
+}
+
+export const storage = {
+  snapshot: (dc: string): Promise<ExplorerSnapshot> => storageCall(`?dc=${encodeURIComponent(dc)}`),
+  value: async (where: { dc: string } | { store: string }, key: string): Promise<StoredValue | null> =>
+    (await storageCall(`/value?${new URLSearchParams({ ...where, key })}`)).value,
+  putKv: (store: string, key: string, input: KvKeyInput) => storageCall("/kv/put", { store, key, ...input }),
+  deleteKv: (store: string, key: string) => storageCall("/kv/delete", { store, key }),
+  createStore: (store: string) => storageCall("/kv/store", { store }),
+  deleteStore: (store: string) => storageCall("/kv/store/delete", { store }),
+  importKv: async (store: string, data: Record<string, unknown>, replace: boolean): Promise<number> =>
+    (await storageCall("/import", { store, data, replace })).keys,
+  putCache: (dc: string, key: string, value: FixtureValue, ttlMs?: number) => storageCall("/cache/put", { dc, key, value, ttlMs }),
+  expireCache: async (dc: string, key: string, ttlMs: number): Promise<boolean> =>
+    (await storageCall("/cache/expire", { dc, key, ttlMs })).updated,
+  deleteCache: (dc: string, key: string) => storageCall("/cache/delete", { dc, key }),
+  reset: () => storageCall("/reset", {}),
+  advanceClock: (ms: number) => storageCall("/advance-clock", { ms }),
+  pauseClock: (paused: boolean) => storageCall("/clock", { paused }),
+  fixturesDiff: async (): Promise<{ root: string; changes: FixtureChange[] }> => storageCall("/fixtures/diff"),
+  saveFixtures: async (files: { file: string; hash: string }[]): Promise<string[]> =>
+    (await storageCall("/fixtures/save", { files })).saved,
+};

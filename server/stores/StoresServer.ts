@@ -93,6 +93,10 @@ export function startStoresServer(
       if (body.op === "advance-clock" && typeof body.ms === "number") {
         return { ok: true, value: core.advanceClock(body.ms) };
       }
+      if (body.op === "pause-clock" && typeof body.paused === "boolean") {
+        core.pauseClock(body.paused);
+        return { ok: true, value: core.clockPaused() };
+      }
       if (body.op === "lease" && typeof body.id === "string" && typeof body.ttlMs === "number") {
         leases.set(body.id, Date.now() + body.ttlMs);
         return { ok: true, value: null };

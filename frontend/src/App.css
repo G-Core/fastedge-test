@@ -162,3 +162,7 @@ pre {
   margin: 0;
   font-size: 1.1rem;
 }
+
+.page-tabs {
+  margin-bottom: 12px;
+}
