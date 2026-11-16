@@ -4,6 +4,8 @@
  * another app; one written in onRequestHeaders never reaches a later hook.
  */
 import path from "node:path";
+import { copyFileSync, mkdtempSync, rmSync, utimesSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createResource, type Resource } from "../../../../runner/resource";
 import { runTestSuite } from "../../../../test-framework/suite-runner";
@@ -97,5 +99,24 @@ describe("resource test APIs", () => {
   fastedgeTest("the vitest resource fixture loads on the test's stores", async ({ resource }) => {
     const r = await resource(config);
     expect((await r.request({ url: "https://example.com/" })).hooks.onResponseBody?.app).toBe("a");
+  });
+});
+
+describe("resource reload", () => {
+  it("reloads an app whose wasm was rebuilt before the next request", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "resource-reload-"));
+    const app = path.join(dir, "app.wasm");
+    copyFileSync(wasm, app);
+    const r = await createResource({ apps: { a: { wasm: app } }, main: { hooks: { onResponseBody: "a" }, origin: { url: "built-in" } } }, { stores: false });
+    try {
+      expect((await r.request({ url: "https://example.com/" })).finalResponse.body).toContain("respb:");
+      // "Rebuild" a as an app that does not touch the body: the echo comes through.
+      copyFileSync(path.resolve(__dirname, "../../../../../wasm/cdn-apps/as/headers/headers.wasm"), app);
+      utimesSync(app, new Date(), new Date(Date.now() + 5000));
+      expect((await r.request({ url: "https://example.com/" })).finalResponse.body).not.toContain("respb:");
+    } finally {
+      await r.cleanup();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -7,7 +7,7 @@
  * headers and properties pass from hook to hook (custom properties too, across apps), and every
  * hook starts with fresh memory. See cdnFlow.ts.
  */
-import { readFile } from "fs/promises";
+import { readFile, stat } from "fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { ResourceConfigSchema, TestConfigSchema, type ResourceConfig, type ResourceConfigInput, type ResourceHooks, type ResourceOrigin } from "../schemas/config.js";
@@ -47,6 +47,7 @@ export interface Resource {
   readonly config: ResourceConfig;
   /** The loaded apps by name. */
   readonly apps: ReadonlyMap<string, IWasmRunner>;
+  /** Runs one request. An app whose wasm was rebuilt since it loaded is reloaded first. */
   request(request?: ResourceRequest): Promise<ResourceResult>;
   cleanup(): Promise<void>;
 }
@@ -74,9 +75,12 @@ export async function createResource(fileOrObject: string | ResourceConfigInput,
   const context: RequestContext = { client: config.client, edge: config.edge };
   const stores = options.stores ?? config.stores;
   const apps = new Map<string, IWasmRunner>();
+  // Each app's wasm and when it was built: a rebuilt app reloads before the next request.
+  const builds = new Map<string, { wasm: string; dotenv?: { enabled?: boolean; path: string }; mtimeMs: number }>();
   try {
     for (const [name, entry] of Object.entries(config.apps)) {
       const app = await resolveApp(name, entry, baseDir, confine);
+      const { mtimeMs } = await stat(app.wasm);
       apps.set(name, await createRunner(app.wasm, {
         dotenv: app.dotenv,
         stores,
@@ -84,6 +88,7 @@ export async function createResource(fileOrObject: string | ResourceConfigInput,
         client: config.client,
         edge: config.edge,
       }));
+      builds.set(name, { ...app, mtimeMs });
     }
     checkAppTypes(config, apps);
   } catch (error) {
@@ -91,10 +96,28 @@ export async function createResource(fileOrObject: string | ResourceConfigInput,
     throw error;
   }
 
+  // One reload check at a time, so concurrent requests do not reload an app twice.
+  let reloading: Promise<void> = Promise.resolve();
+  const reloadRebuilt = () => {
+    // A failed reload (a broken build) fails that request; the next one tries again.
+    reloading = reloading.catch(() => {}).then(async () => {
+      for (const [name, build] of builds) {
+        const { mtimeMs } = await stat(build.wasm).catch(() => ({ mtimeMs: build.mtimeMs }));
+        if (mtimeMs === build.mtimeMs) continue;
+        await apps.get(name)!.load(build.wasm, { dotenv: build.dotenv, client: config.client, edge: config.edge });
+        build.mtimeMs = mtimeMs;
+      }
+    });
+    return reloading;
+  };
+
   return {
     config,
     apps,
-    request: (request = {}) => runRequest(config, apps, context, request),
+    request: async (request = {}) => {
+      await reloadRebuilt();
+      return runRequest(config, apps, context, request);
+    },
     cleanup: async () => {
       await Promise.all([...apps.values()].map((runner) => runner.cleanup()));
     },
