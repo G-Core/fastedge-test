@@ -19,6 +19,7 @@ import {
   ApiStorageKvStoreSchema,
   ApiStorageCachePutSchema,
   ApiStorageCacheKeySchema,
+  ApiStorageCacheExpireSchema,
   ApiStorageImportSchema,
   ApiStorageFixturesSaveSchema,
 } from "./schemas/index.js";
@@ -159,6 +160,11 @@ export function mountStorageExplorer(
     const value = typeof body.value === "string" ? Buffer.from(body.value, "utf8").toString("base64") : body.value.base64;
     await call("cache", { op: "set", dc: body.dc, key: body.key, value, ttlMs: body.ttlMs ?? null });
   }));
+
+  /** New TTL from now, value kept; `updated: false` when the entry is gone or expired. */
+  app.post("/api/storage/cache/expire", route(ApiStorageCacheExpireSchema, async (body) => ({
+    updated: await call("cache", { op: "expire", dc: body.dc, key: body.key, ttlMs: body.ttlMs }),
+  })));
 
   app.post("/api/storage/cache/delete", route(ApiStorageCacheKeySchema, async (body) => {
     await call("cache", { op: "delete", dc: body.dc, key: body.key });

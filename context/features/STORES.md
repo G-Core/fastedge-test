@@ -132,6 +132,7 @@ reload the fixtures); Save to fixtures keeps them.
 | `POST /api/storage/kv/delete` | `{ store, key }` | |
 | `POST /api/storage/kv/store`, `/kv/store/delete` | `{ store }` | create / delete a store |
 | `POST /api/storage/cache/put`, `/cache/delete` | `{ dc, key, value, ttlMs? }`, `{ dc, key }` | |
+| `POST /api/storage/cache/expire` | `{ dc, key, ttlMs }` | new TTL from now, value kept (above the max = the max); `{ updated: false }` if gone |
 | `POST /api/storage/import` | `{ store, data, replace? }` | `data`: fixture format, or a plain object key → value (non-strings as JSON text) |
 | `POST /api/storage/reset`, `/advance-clock` | `{ ms }` | |
 | `GET /api/storage/fixtures/diff` | | `{ root, changes: [{ store, file, status: new / changed / deleted, current, proposed, hash }] }`: Edge KV fixture files vs the service; same data in another layout is not a change |

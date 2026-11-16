@@ -114,6 +114,9 @@ export const ApiStorageCachePutSchema = z.object({
 });
 export const ApiStorageCacheKeySchema = z.object({ dc: z.string().min(1), key: z.string().min(1) });
 
+/** A cache entry's new TTL from now, value kept (edge rules: above the max = the max). */
+export const ApiStorageCacheExpireSchema = z.object({ dc: z.string().min(1), key: z.string().min(1), ttlMs: z.number().int().min(0) });
+
 /**
  * Import into a store: the fixture format ({ strings, zsets, bloom }) or a plain JSON object of
  * key → value (strings as they are, anything else as JSON text). `replace` empties the store first.

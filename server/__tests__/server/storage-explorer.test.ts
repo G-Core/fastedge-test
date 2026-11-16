@@ -32,6 +32,17 @@ describe("debugger server — Storage Explorer", () => {
     expect(Buffer.from(value.value, "base64").toString()).toBe('{"role":"admin"}');
   });
 
+  it("changes a cache entry's TTL and keeps its value", async () => {
+    const before = (await call("/api/storage?dc=fr5")).body;
+    const expire = await call("/api/storage/cache/expire", { dc: "fr5", key: "page", ttlMs: 3_600_000 });
+    expect(expire.body.updated).toBe(true);
+    const after = (await call("/api/storage?dc=fr5")).body;
+    expect(after.cache[0].expiresAt - after.now).toBeGreaterThan(before.cache[0].expiresAt - before.now);
+    const value = (await call("/api/storage/value?dc=fr5&key=page")).body.value;
+    expect(Buffer.from(value.value, "base64").toString()).toBe("hi");
+    expect((await call("/api/storage/cache/expire", { dc: "fr5", key: "missing", ttlMs: 1000 })).body.updated).toBe(false);
+  });
+
   it("imports plain JSON and refuses what the edge refuses", async () => {
     const imported = await call("/api/storage/import", { store: "flags", data: { beta: true, name: "x" } });
     expect(imported.body.keys).toBe(2);

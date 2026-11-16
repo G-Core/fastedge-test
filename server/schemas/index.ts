@@ -29,6 +29,7 @@ export {
   ApiStorageKvStoreSchema,
   ApiStorageCachePutSchema,
   ApiStorageCacheKeySchema,
+  ApiStorageCacheExpireSchema,
   ApiStorageImportSchema,
   ApiStorageFixturesSaveSchema,
 } from './api';
