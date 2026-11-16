@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RequestConfigSchema, TestConfigSchema, ClientContextSchema, EdgeContextSchema } from './config';
+import { RequestConfigSchema, TestConfigSchema, ClientContextSchema, EdgeContextSchema, ResourceConfigSchema } from './config';
 
 /** Request context fields: when given, they replace the runner's client / edge from then on. */
 const context = { client: ClientContextSchema.optional(), edge: EdgeContextSchema.optional() };
@@ -45,6 +45,12 @@ export const ApiResourceLoadBodySchema = z.object({
   config: z.record(z.string(), z.unknown()).optional(),
 }).refine((body) => body.configPath === undefined || body.config === undefined, {
   message: "Give configPath or config, not both",
+});
+
+/** Write a resource file (default: the default resource file); the config is written as given. */
+export const ApiResourceSaveBodySchema = z.object({
+  configPath: z.string().optional(),
+  config: ResourceConfigSchema,
 });
 
 export const ApiCallBodySchema = z.object({

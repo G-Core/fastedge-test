@@ -24,6 +24,7 @@ export {
   ApiDotenvBodySchema,
   ApiExecuteContextSchema,
   ApiResourceLoadBodySchema,
+  ApiResourceSaveBodySchema,
   ApiStorageKvPutSchema,
   ApiStorageKvKeySchema,
   ApiStorageKvStoreSchema,

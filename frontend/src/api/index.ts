@@ -677,3 +677,64 @@ export const storage = {
   saveFixtures: async (files: { file: string; hash: string }[]): Promise<string[]> =>
     (await storageCall("/fixtures/save", { files })).saved,
 };
+
+// ── Resource (several apps, one per hook, as on a CDN resource) ──
+
+export const CDN_HOOKS = ["onRequestHeaders", "onRequestBody", "onResponseHeaders", "onResponseBody"] as const;
+export type CdnHook = (typeof CDN_HOOKS)[number];
+export type HookApp = string | { app: string; interruptOnError?: boolean };
+export type ResourceHooks = Partial<Record<CdnHook, HookApp>>;
+export type ResourceOrigin = { url: string } | { app: string };
+export type ResourceApp = { config?: string; wasm?: string; dotenv?: { enabled?: boolean; path?: string } };
+export type ResourceRule = { name?: string; match: string; hooks?: ResourceHooks; origin?: ResourceOrigin };
+/** A resource file as written; fields the page does not edit (client, edge, properties…) are kept. */
+export type ResourceConfig = {
+  apps: Record<string, ResourceApp>;
+  main: { hooks?: ResourceHooks; origin: ResourceOrigin };
+  rules?: ResourceRule[];
+  request?: { method?: string; url: string; headers?: Record<string, string>; body?: string };
+  [field: string]: unknown;
+};
+export type ResourceLoaded = { configPath?: string | null; apps: { name: string; wasmType: "proxy-wasm" | "http-wasm" }[] };
+export type ResourceHookResult = {
+  returnCode: number | null;
+  logs: { level: number; message: string }[];
+  input: { request: { headers: Record<string, string | string[]>; body: string }; response: { headers: Record<string, string | string[]>; body: string } };
+  output: { request: { headers: Record<string, string | string[]>; body: string }; response: { headers: Record<string, string | string[]>; body: string } };
+  storeCalls?: StoreCall[];
+  localResponse?: { status: number };
+  customProperties?: string[];
+};
+export type ResourceResult = {
+  rule: { index: number; name?: string; match: string } | null;
+  hooks: Partial<Record<CdnHook, { app: string; result: ResourceHookResult }>>;
+  origin?: { kind: "url" | "built-in" | "app"; app?: string; response: { status: number; statusText?: string; headers: Record<string, string | string[]>; body: string }; storeCalls?: StoreCall[] };
+  finalResponse: { status: number; statusText: string; headers: Record<string, string | string[]>; body: string; contentType: string; isBase64?: boolean };
+};
+
+async function resourceCall(path: string, body?: unknown): Promise<any> {
+  const response = await apiFetch(
+    `${API_BASE}${path}`,
+    body === undefined
+      ? undefined
+      : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+  );
+  const result = await response.json();
+  if (!response.ok || !result.ok) {
+    const error = typeof result.error === "string" ? result.error : JSON.stringify(result.error);
+    throw new Error(error || `Request failed (${response.status})`);
+  }
+  return result;
+}
+
+export const resource = {
+  /** The file as written (null = no file yet) and its full path. */
+  read: async (configPath: string): Promise<{ path: string; config: ResourceConfig | null }> =>
+    resourceCall(`/resource/config?path=${encodeURIComponent(configPath)}`),
+  save: async (configPath: string, config: ResourceConfig): Promise<string> =>
+    (await resourceCall("/resource/save", { configPath, config })).path,
+  /** Loads the file (replacing the debugger's app); the websocket's resource_loaded follows. */
+  load: async (configPath: string): Promise<ResourceLoaded> => resourceCall("/resource/load", { configPath }),
+  send: async (request: { url: string; method: string; headers: Record<string, string>; body: string }): Promise<ResourceResult> =>
+    resourceCall("/send", { url: request.url, request: { method: request.method, headers: request.headers, body: request.body } }),
+};

@@ -1,0 +1,161 @@
+.section {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  background: #1e1e1e;
+}
+
+.section input,
+.section select,
+.section textarea,
+.path {
+  padding: 3px 6px;
+  font-family: monospace;
+  font-size: 12px;
+  border: 1px solid #3d3d3d;
+  border-radius: 3px;
+  background: #181818;
+  color: #e0e0e0;
+}
+
+.path {
+  width: 380px;
+}
+
+/* The global form styles stretch fields to full width. */
+.section input:not([type="checkbox"]),
+.section select {
+  width: auto;
+}
+
+.hook select {
+  flex: 1;
+}
+
+.mono {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  color: #a0a0a0;
+}
+
+.table th {
+  padding: 4px 6px;
+  text-align: left;
+  font-weight: 600;
+  color: #808080;
+}
+
+.table td {
+  padding: 3px 6px;
+}
+
+.table td input:not([type="checkbox"]) {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* main or one rule */
+.card {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  background: #181818;
+}
+
+.cardTitle {
+  font-weight: 600;
+  color: #ff6c37;
+}
+
+.match {
+  min-width: 240px;
+}
+
+.hooks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 6px 16px;
+  margin: 8px 0;
+}
+
+.hook {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #a0a0a0;
+}
+
+.hook > .mono {
+  min-width: 130px;
+}
+
+.url {
+  flex: 1;
+  min-width: 260px;
+}
+
+.split {
+  display: flex;
+  gap: 8px;
+}
+
+.split textarea {
+  flex: 1;
+}
+
+/* The flow strip: each hook and the origin, in order. */
+.flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 12px;
+  color: #c0c0c0;
+  background: #181818;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.ran .status {
+  color: #81c784;
+}
+
+.error .status {
+  color: #e57373;
+}
+
+.skipped {
+  color: #707070;
+}
+
+.selectedStep {
+  border-color: #ff6c37;
+}
+
+.status {
+  font-size: 11px;
+}
+
+.detail {
+  margin-bottom: 12px;
+}

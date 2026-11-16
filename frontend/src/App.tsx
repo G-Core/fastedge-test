@@ -10,16 +10,22 @@ import { DragDropZone } from "./components/common/DragDropZone";
 import { HttpWasmView } from "./views/HttpWasmView";
 import { ProxyWasmView } from "./views/ProxyWasmView";
 import { StorageExplorerView } from "./views/StorageExplorerView";
+import { ResourceView } from "./views/ResourceView";
 import { Tabs } from "./components/common/Tabs";
 import { STORES_CHANGED } from "./components/common/StoresPanel/StoresPanel";
-import { getEnvironment, type EnvironmentInfo } from "./api";
+import { getEnvironment, type EnvironmentInfo, type ResourceLoaded, type ResourceResult } from "./api";
 import "./App.css";
 
 function App() {
   // Environment detection state
   const [_environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
-  // Page: the app debugger, or the Storage Explorer (the debugger stays mounted, hidden).
-  const [page, setPage] = useState<"debugger" | "storage">("debugger");
+  // Page: the app debugger, the Resource page or the Storage Explorer (the debugger and Resource
+  // page stay mounted, hidden).
+  type Page = "debugger" | "resource" | "storage";
+  const [page, setPage] = useState<Page>("debugger");
+  // The loaded resource (several apps) and its last request; a resource replaces the loaded app.
+  const [resourceLoaded, setResourceLoaded] = useState<ResourceLoaded | null>(null);
+  const [resourceResult, setResourceResult] = useState<ResourceResult | null>(null);
 
   // Get state and actions from stores
   const {
@@ -32,6 +38,7 @@ function App() {
     loadWasm,
     reloadWasm,
     setWasmLoaded,
+    clearWasm,
     loadingMode,
     loadTime,
     fileSize,
@@ -73,7 +80,7 @@ function App() {
     window.addEventListener(STORES_CHANGED, onChange);
     return () => window.removeEventListener(STORES_CHANGED, onChange);
   }, []);
-  const showPage = (next: "debugger" | "storage") => {
+  const showPage = (next: Page) => {
     if (next === "debugger" && storeListChanged.current && wasmType === "http-wasm" && wasmPath && !loading) {
       storeListChanged.current = false;
       void reloadWasm(dotenv.enabled);
@@ -164,6 +171,9 @@ function App() {
         console.log(
           `WASM loaded: ${event.data.filename} (${event.data.size} bytes)`,
         );
+        // An app replaces a loaded resource.
+        setResourceLoaded(null);
+        setResourceResult(null);
         // Store runner port so ResponsePanel can build the live preview URL
         setHttpRunnerPort(event.data.runnerPort ?? null);
         // Sync store when loaded externally (e.g. VSCode extension) so the
@@ -258,6 +268,17 @@ function App() {
         loadWasm(event.data.path, dotenv.enabled);
         break;
 
+      case "resource_loaded":
+        // A resource replaces the loaded app.
+        clearWasm();
+        setResourceLoaded(event.data);
+        setResourceResult(null);
+        break;
+
+      case "resource_request_completed":
+        setResourceResult(event.data.result);
+        break;
+
       case "connection_status":
         // Connection status update - handled by useWebSocket
         break;
@@ -335,6 +356,7 @@ function App() {
         <Tabs
           tabs={[
             { id: "debugger", label: "Debugger" },
+            { id: "resource", label: "Resource" },
             { id: "storage", label: "Storage Explorer" },
           ]}
           active={page}
@@ -346,6 +368,9 @@ function App() {
           <div className="error">{wsStatus.error}</div>
         )}
         {page === "storage" && <StorageExplorerView />}
+        <div hidden={page !== "resource"}>
+          <ResourceView loaded={resourceLoaded} result={resourceResult} onResult={setResourceResult} />
+        </div>
 
         <div hidden={page !== "debugger"}>
         {error && <div className="error">{error}</div>}

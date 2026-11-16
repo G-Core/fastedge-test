@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { startTestServer, authedFetch, type TestServer } from "./helpers.js";
 
@@ -54,5 +54,23 @@ describe("debugger server — resources", () => {
   it("loads a named file, and refuses both configPath and config", async () => {
     expect((await post("/api/resource/load", { configPath: ".fastedge-debug/fastedge-cdn-resource.test.json" })).status).toBe(200);
     expect((await post("/api/resource/load", { configPath: "x", config: {} })).status).toBe(400);
+  });
+
+  it("reads and saves a resource file as written; refuses bad configs and paths", async () => {
+    const get = (p: string) => authedFetch(server.base, server.token, `/api/resource/config?path=${encodeURIComponent(p)}`, {});
+    expect(await (await get("new/resource.json")).json()).toMatchObject({ ok: true, config: null });
+
+    const config = { apps: { a: { wasm: "../apps/probe.wasm" } }, main: { hooks: { onResponseBody: "a" }, origin: { url: "built-in" } } };
+    const save = await post("/api/resource/save", { configPath: "new/resource.json", config });
+    expect(save.status).toBe(200);
+    // No defaults (rules, properties) written in.
+    expect(JSON.parse(readFileSync(join(server.workspacePath, "new", "resource.json"), "utf8"))).toEqual(config);
+    expect((await (await get("new/resource.json")).json()).config).toEqual(config);
+
+    expect((await post("/api/resource/save", { configPath: "new/bad.json", config: { apps: {} } })).status).toBe(400);
+    expect((await post("/api/resource/save", { configPath: "../outside.json", config })).status).toBe(400);
+    expect((await post("/api/resource/save", { configPath: "new/resource.txt", config })).status).toBe(400);
+    symlinkSync("/tmp/fastedge-test-dangling-target.json", join(server.workspacePath, "new", "link.json"));
+    expect((await post("/api/resource/save", { configPath: "new/link.json", config })).status).toBe(400);
   });
 });

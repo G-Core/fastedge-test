@@ -23,12 +23,13 @@ import { HttpWasmRunner } from "./runner/HttpWasmRunner.js";
 import { CLIENT_PRESETS, EDGE_PRESETS, edgeDc, type RequestContext } from "./runner/requestContext.js";
 import { WebSocketManager, StateManager } from "./websocket/index.js";
 import { detectWasmType } from "./utils/wasmTypeDetector.js";
-import { validatePath } from "./utils/pathValidator.js";
+import { validatePath, validatePathOrThrow } from "./utils/pathValidator.js";
 import { resolveDotenvPath, validateDotenvLeafs, DotenvPathError } from "./utils/dotenv-loader.js";
 import { createResource, DEFAULT_RESOURCE_FILE, type Resource } from "./runner/resource.js";
 import { mountStorageExplorer } from "./storageExplorer.js";
 import {
   ApiResourceLoadBodySchema,
+  ApiResourceSaveBodySchema,
   ApiLoadBodySchema,
   ApiSendBodySchema,
   ApiCallBodySchema,
@@ -479,6 +480,45 @@ app.post("/api/resource/load", serialized(async (req: Request, res: Response) =>
     res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 }));
+
+/** A resource file in the workspace (default: the default resource file); it need not exist yet. */
+function resourceFile(configPath: unknown): string {
+  const root = process.env.WORKSPACE_PATH || process.cwd();
+  const file = typeof configPath === "string" && configPath ? configPath : DEFAULT_RESOURCE_FILE;
+  if (!file.endsWith(".json")) throw new Error("a resource file is a .json file");
+  return validatePathOrThrow(path.resolve(root, file), { workspaceRoot: root, requireWasmExtension: false, checkExists: false });
+}
+
+/** A resource file as written (no defaults filled in), for the Resource page; config null = no file yet. */
+app.get("/api/resource/config", async (req: Request, res: Response) => {
+  try {
+    const file = resourceFile(req.query.path);
+    const config = existsSync(file) ? JSON.parse(await fs.readFile(file, "utf-8")) : null;
+    res.json({ ok: true, path: file, config });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+/** Writes a resource file (checked against the resource schema first). Does not load it. */
+app.post("/api/resource/save", async (req: Request, res: Response) => {
+  const parsed = ApiResourceSaveBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const file = resourceFile(parsed.data.configPath);
+    // lstat: a dangling link too (the path check above follows only links that resolve).
+    if (lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(`${file} is a symlink: not saving through it`);
+    mkdirSync(path.dirname(file), { recursive: true });
+    // As given: the schema's defaults stay out of the file.
+    await fs.writeFile(file, JSON.stringify(req.body.config, null, 2) + "\n", "utf-8");
+    res.json({ ok: true, path: file });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
 
 /**
  * The storage service connection, shared by every runner this server creates and held for

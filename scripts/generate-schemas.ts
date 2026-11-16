@@ -19,6 +19,7 @@ import {
   ApiCallBodySchema,
   ApiConfigBodySchema,
   ApiResourceLoadBodySchema,
+  ApiResourceSaveBodySchema,
   ResourceConfigSchema,
 } from '../server/schemas/index';
 
@@ -41,6 +42,7 @@ const zodSchemas: Array<{ name: string; schema: { toJSONSchema(): object } }> = 
   { name: 'api-config', schema: ApiConfigBodySchema },
   { name: 'resource-config', schema: ResourceConfigSchema },
   { name: 'api-resource-load', schema: ApiResourceLoadBodySchema },
+  { name: 'api-resource-save', schema: ApiResourceSaveBodySchema },
 ];
 
 for (const { name, schema } of zodSchemas) {

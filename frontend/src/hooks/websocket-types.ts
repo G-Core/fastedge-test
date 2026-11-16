@@ -1,3 +1,4 @@
+import type { ResourceLoaded, ResourceResult } from "../api";
 /**
  * WebSocket Event Types (Frontend)
  *
@@ -117,6 +118,16 @@ export interface ReloadWorkspaceWasmEvent extends BaseEvent {
   };
 }
 
+export interface ResourceLoadedEvent extends BaseEvent {
+  type: "resource_loaded";
+  data: ResourceLoaded;
+}
+
+export interface ResourceRequestCompletedEvent extends BaseEvent {
+  type: "resource_request_completed";
+  data: { result: ResourceResult };
+}
+
 export type ServerEvent =
   | WasmLoadedEvent
   | RequestStartedEvent
@@ -127,4 +138,6 @@ export type ServerEvent =
   | ConnectionStatusEvent
   | HttpWasmRequestCompletedEvent
   | HttpWasmLogEvent
-  | ReloadWorkspaceWasmEvent;
+  | ReloadWorkspaceWasmEvent
+  | ResourceLoadedEvent
+  | ResourceRequestCompletedEvent;

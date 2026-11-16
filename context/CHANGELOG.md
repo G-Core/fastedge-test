@@ -1,5 +1,23 @@
 # Proxy-WASM Runner - Changelog
 
+## November 16, 2026 - Resource page
+
+### Overview
+A Resource page (header tab between Debugger and Storage Explorer) for resource files: apps, main
+and rules (the app on each hook, interrupt on error, origin), save / load, and requests with a
+flow strip of what each hook did. The file stays the source of truth for agents and tests. See
+`features/RESOURCES.md`.
+
+### 🎯 What Was Completed
+- `GET /api/resource/config`, `POST /api/resource/save` (`ApiResourceSaveBodySchema`)
+- `views/ResourceView/`; `api.resource`; websocket types `resource_loaded`,
+  `resource_request_completed`; `App.tsx` tab, a resource load clears the Debugger's app
+
+### 🧪 Testing
+- Frontend `ResourceView.test.tsx`; server `resource.test.ts` (read / save, bad config, outside
+  the workspace, non-JSON, dangling symlink); checked in a browser (load, rule match, edit and
+  Save and load, agent API send shown on the page, app load unloads the resource)
+
 ## November 16, 2026 - Storage Explorer page; pause the stores clock
 
 ### Overview
