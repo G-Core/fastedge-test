@@ -190,40 +190,40 @@ Pinning a port inside the 8100–8199 dynamic pool is allowed by the schema but 
 
 ## Resource Configuration
 
-A resource config file describes a CDN resource with several apps on one request, as configured on the edge. `main` assigns an app to each hook and sets the origin. Rules override the hooks and/or the origin for requests whose path matches. The file is separate from `fastedge-config.test.json` and has no `appType`; every app in it is a CDN (proxy-wasm) app, except an HTTP app used as the origin.
+A resource config file describes a CDN resource with several apps on one request, as configured on the edge. The default location is `.fastedge-debug/fastedge-cdn-resource.test.json` at the workspace root. `main` assigns an app to each hook and sets the origin. Rules override the hooks and/or the origin for requests whose path matches. The file is separate from `fastedge-config.test.json` and has no `appType`; every app in it is a CDN (proxy-wasm) app, except an HTTP app used as the origin.
 
 All paths in the file (`apps.<name>.config`, `apps.<name>.wasm`, `apps.<name>.dotenv.path`) are relative to the resource config file. In the debugger, every file the resource references must be inside the workspace, so debug a multi-project resource from a folder that holds all of its apps.
 
 ### Resource Fields
 
-| JSON Path                                    | Type                | Required | Default | Description                                                                                       |
-| -------------------------------------------- | ------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------- |
-| `$schema`                                    | `string`            | No       | —       | URI of the JSON Schema file.                                                                      |
-| `description`                                | `string`            | No       | —       | Human-readable label for the resource.                                                            |
-| `apps`                                       | `object`            | Yes      | —       | Map of app name to app definition. Hooks and origins refer to apps by these names.                |
-| `apps.<name>.config`                         | `string`            | No       | —       | Another project's `fastedge-config.test.json`. Its `wasm` and `dotenv` are used.                  |
-| `apps.<name>.wasm`                           | `string`            | No       | —       | Path to the built `.wasm`. Overrides the `wasm` of the referenced config.                         |
-| `apps.<name>.dotenv`                         | `object`            | No       | —       | Dotenv loading for this app. Same fields and rules as [`dotenv`](#dotenv-configuration).          |
-| `apps.<name>.dotenv.enabled`                 | `boolean`           | No       | `false` | Whether to load dotenv files for this app.                                                        |
-| `apps.<name>.dotenv.path`                    | `string`            | No       | —       | Directory containing the dotenv files for this app.                                               |
-| `main`                                       | `object`            | Yes      | —       | Default hooks and origin for requests that match no rule.                                         |
-| `main.hooks`                                 | `object`            | No       | `{}`    | App for each hook.                                                                                |
-| `main.hooks.onRequestHeaders`                | `string` or `object` | No      | —       | App name, or `{ app, interruptOnError }`.                                                         |
-| `main.hooks.onRequestBody`                   | `string` or `object` | No      | —       | App name, or `{ app, interruptOnError }`.                                                         |
-| `main.hooks.onResponseHeaders`               | `string` or `object` | No      | —       | App name, or `{ app, interruptOnError }`.                                                         |
-| `main.hooks.onResponseBody`                  | `string` or `object` | No      | —       | App name, or `{ app, interruptOnError }`.                                                         |
-| `main.origin`                                | `object`            | Yes      | —       | `{ "url": string }` or `{ "app": string }`. See [Origin](#origin).                                |
-| `rules`                                      | `array`             | No       | `[]`    | Ordered rules. The first rule whose `match` matches the request path applies.                     |
-| `rules[].name`                               | `string`            | No       | —       | Label for the rule.                                                                               |
-| `rules[].match`                              | `string`            | Yes      | —       | Regular expression tested against the request path.                                               |
-| `rules[].hooks`                              | `object`            | No       | —       | Same shape as `main.hooks`. When set, replaces the hooks of `main` completely.                    |
-| `rules[].origin`                             | `object`            | No       | —       | Same shape as `main.origin`. When set, replaces the origin of `main`.                             |
-| `properties`                                 | `object`            | No       | `{}`    | CDN properties passed to the apps. Values may be any JSON type.                                   |
-| `stores`                                     | `boolean`           | No       | `true`  | Enables the local cache and Edge KV. `false` makes every cache / KV call fail.                    |
-| `dc`                                         | `string`            | No       | `local` | Cache bucket name; must be non-empty.                                                             |
-| `client`                                     | `object`            | No       | —       | Where the client is. Same fields as [`client`](#client-and-edge-context).                         |
-| `edge`                                       | `object`            | No       | —       | Which edge POP runs the apps. Same fields as [`edge`](#client-and-edge-context).                  |
-| `request`                                    | `object`            | No       | —       | The request to simulate. Same fields as the CDN `request` (`method`, `url`, `headers`, `body`).   |
+| JSON Path                      | Type                 | Required | Default   | Description                                                                                     |
+| ------------------------------ | -------------------- | -------- | --------- | ----------------------------------------------------------------------------------------------- |
+| `$schema`                      | `string`             | No       | —         | URI of the JSON Schema file.                                                                    |
+| `description`                  | `string`             | No       | —         | Human-readable label for the resource.                                                          |
+| `apps`                         | `object`             | Yes      | —         | Map of app name to app definition. Hooks and origins refer to apps by these names.              |
+| `apps.<name>.config`           | `string`             | No       | —         | Another project's `fastedge-config.test.json`. Its `wasm` and `dotenv` are used.                |
+| `apps.<name>.wasm`             | `string`             | No       | —         | Path to the built `.wasm`. Overrides the `wasm` of the referenced config.                       |
+| `apps.<name>.dotenv`           | `object`             | No       | —         | Dotenv loading for this app. Same fields and rules as [`dotenv`](#dotenv-configuration).        |
+| `apps.<name>.dotenv.enabled`   | `boolean`            | No       | `false`   | Whether to load dotenv files for this app.                                                      |
+| `apps.<name>.dotenv.path`      | `string`             | No       | —         | Directory containing the dotenv files for this app.                                             |
+| `main`                         | `object`             | Yes      | —         | Default hooks and origin for requests that match no rule.                                       |
+| `main.hooks`                   | `object`             | No       | `{}`      | App for each hook.                                                                              |
+| `main.hooks.onRequestHeaders`  | `string` or `object` | No       | —         | App name, or `{ app, interruptOnError }`.                                                       |
+| `main.hooks.onRequestBody`     | `string` or `object` | No       | —         | App name, or `{ app, interruptOnError }`.                                                       |
+| `main.hooks.onResponseHeaders` | `string` or `object` | No       | —         | App name, or `{ app, interruptOnError }`.                                                       |
+| `main.hooks.onResponseBody`    | `string` or `object` | No       | —         | App name, or `{ app, interruptOnError }`.                                                       |
+| `main.origin`                  | `object`             | Yes      | —         | `{ "url": string }` or `{ "app": string }`. See [Origin](#origin).                              |
+| `rules`                        | `array`              | No       | `[]`      | Ordered rules. The first rule whose `match` matches the request path applies.                   |
+| `rules[].name`                 | `string`             | No       | —         | Label for the rule.                                                                             |
+| `rules[].match`                | `string`             | Yes      | —         | Regular expression tested against the request path.                                             |
+| `rules[].hooks`                | `object`             | No       | —         | Same shape as `main.hooks`. When set, replaces the hooks of `main` completely.                  |
+| `rules[].origin`               | `object`             | No       | —         | Same shape as `main.origin`. When set, replaces the origin of `main`.                           |
+| `properties`                   | `object`             | No       | `{}`      | CDN properties passed to the apps. Values may be any JSON type.                                 |
+| `stores`                       | `boolean`            | No       | `true`    | Enables the local cache and Edge KV. `false` makes every cache / KV call fail.                  |
+| `dc`                           | `string`             | No       | `"local"` | Cache bucket name; must be non-empty.                                                           |
+| `client`                       | `object`             | No       | —         | Where the client is. Same fields as [`client`](#client-and-edge-context).                       |
+| `edge`                         | `object`             | No       | —         | Which edge POP runs the apps. Same fields as [`edge`](#client-and-edge-context).                |
+| `request`                      | `object`             | No       | —         | The request to simulate. Same fields as the CDN `request` (`method`, `url`, `headers`, `body`). |
 
 `additionalProperties` is `false` in `apps.<name>`, `main`, `main.hooks`, `main.origin`, each rule, and the hook object form; unrecognised fields fail validation. The apps in `apps` run as proxy-wasm apps.
 
@@ -231,10 +231,10 @@ All paths in the file (`apps.<name>.config`, `apps.<name>.wasm`, `apps.<name>.do
 
 Each hook takes an app name from `apps`, or an object:
 
-| Field              | Type      | Required | Default | Description                                                                                                                                   |
-| ------------------ | --------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app`              | `string`  | Yes      | —       | Name of an entry in `apps`.                                                                                                                   |
-| `interruptOnError` | `boolean` | No       | `true`  | On a hook error, `true` ends the request with status 531; `false` lets the request go on as if the hook had not run (matching the edge).      |
+| Field              | Type      | Required | Default | Description                                                                                                                              |
+| ------------------ | --------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `app`              | `string`  | Yes      | —       | Name of an entry in `apps`.                                                                                                              |
+| `interruptOnError` | `boolean` | No       | `true`  | On a hook error, `true` ends the request with status 531; `false` lets the request go on as if the hook had not run (matching the edge). |
 
 ### Origin
 

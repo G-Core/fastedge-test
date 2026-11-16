@@ -1,6 +1,6 @@
 # REST API Reference
 
-The `@gcoredev/fastedge-test` debugger server exposes a REST API for loading WASM modules, executing requests, and managing test configuration.
+The `@gcoredev/fastedge-test` debugger server exposes a REST API for loading WASM modules, executing requests, managing local stores and test configuration.
 
 > **Note on header values.** Response-side and hook-result headers use `Record<string, string | string[]>`. Single-valued headers are a `string`. Multi-valued headers (notably `Set-Cookie` per RFC 6265) are a `string[]`. The HTTP-WASM `result.headers` field uses Node's `IncomingHttpHeaders` shape (`import type { IncomingHttpHeaders } from "node:http"`), which follows the same convention. Request-side header inputs are single-valued `Record<string, string>`.
 
@@ -343,11 +343,12 @@ Accepts an optional [`X-Source`](#x-source-header) request header.
 {
   configPath?: string;                // Path to a resource config file. Relative paths resolve
                                       // against the workspace root.
-  config?: Record<string, unknown>;   // Inline resource config. Used when `configPath` is absent.
+  config?: Record<string, unknown>;   // Inline resource config; paths inside it resolve against
+                                      // the workspace root.
 }
 ```
 
-Provide `configPath` or `config`. If both are present, `configPath` is used. Unknown top-level fields are rejected with `400`.
+Provide `configPath` or `config`, not both: giving both returns `400`. If neither is given, the default file `.fastedge-debug/fastedge-cdn-resource.test.json` in the workspace root is loaded.
 
 **Response**
 
@@ -383,9 +384,9 @@ curl -X POST http://localhost:5179/api/resource/load \
 
 **Error Responses**
 
-| Status | Condition                                                                                   |
-| ------ | ------------------------------------------------------------------------------------------- |
-| `400`  | Body failed validation (unknown field, or `configPath` / `config` of the wrong type)        |
+| Status | Condition                                                                                  |
+| ------ | ------------------------------------------------------------------------------------------ |
+| `400`  | Body failed validation (both `configPath` and `config` given, or either of the wrong type) |
 | `400`  | The resource config is invalid, a referenced path is outside the workspace, or a build fails |
 
 The previously loaded module or resource is discarded before the new one is created, so a failed load leaves nothing loaded. While a resource is loaded, `POST /api/execute`, `POST /api/call`, and `PATCH /api/dotenv` return `400` (no WASM module loaded).
@@ -451,6 +452,8 @@ curl -X PATCH http://localhost:5179/api/dotenv \
 ### Request context on execution endpoints
 
 `POST /api/execute`, `POST /api/call`, and `POST /api/send` accept optional `client` and `edge` fields (see [`ClientContext` and `EdgeContext`](#post-apiload)). If the body names either field, they apply to that request only; a field that is left out means none for that request. If the body names neither field, the context set at load time applies. Requests never change the loaded context, and the store datacenter chosen at load time does not change.
+
+When a resource is loaded, `POST /api/send` does not read `client` or `edge`; the resource uses the context from its own config.
 
 ---
 
@@ -1011,7 +1014,7 @@ curl -X POST http://localhost:5179/api/send \
 
 ## Stores
 
-The storage service backs the cache and Edge KV APIs of the loaded module or resource. These endpoints inspect and control it. When nothing is loaded, the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false`. `GET /api/stores/value`, `POST /api/stores/reset`, and `POST /api/stores/advance-clock` return `409` in those cases.
+The storage service backs the cache and Edge KV APIs of the loaded module or resource. These endpoints inspect and control it for the loaded app. When nothing is loaded, the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false`. `GET /api/stores/value`, `POST /api/stores/reset`, and `POST /api/stores/advance-clock` return `409` in those cases. To browse and edit the stores without an app loaded, use the [Storage Explorer](#storage-explorer) endpoints.
 
 ### GET /api/stores
 
@@ -1174,6 +1177,480 @@ curl -X POST http://localhost:5179/api/stores/advance-clock \
 | `400`  | `ms` is missing, not a number, or not greater than 0 |
 | `409`  | No app with stores is loaded                         |
 | `500`  | The storage service returned an error                |
+
+---
+
+## Storage Explorer
+
+The `/api/storage/*` endpoints browse and edit the local cache and Edge KV with or without an app loaded; the server starts the storage service when it is needed. Edits live in the service until it restarts or is reset, and both reload the fixtures. [Save to fixtures](#post-apistoragefixturessave) keeps Edge KV edits by writing them to fixture files. Cache edits are not saved to fixtures. Apps read Edge KV but never write it.
+
+Every endpoint answers `{ ok: true, ...result }` on success and `{ ok: false, error }` on failure. Values use the fixture format, and the explorer only stores what a fixture can hold (for example, an Edge KV value cannot be empty).
+
+```typescript
+type StoredValue = string | { base64: string }; // UTF-8 text, or base64 for binary
+type StoreName = string; // Letters, digits, ".", "_" and "-"; not starting with "." "_" or "-"; at most 128 characters
+```
+
+Store names are also fixture file names (`fixtures/stores/kv/<store>.json`).
+
+**Error Responses (all `/api/storage/*` endpoints)**
+
+| Status | Condition                                                                         |
+| ------ | --------------------------------------------------------------------------------- |
+| `400`  | Body or query failed validation, or the value is not valid fixture data           |
+| `409`  | The running storage service is older than this debugger and refuses the operation |
+| `409`  | Save to fixtures: a file changed since the diff, or was not in it                 |
+| `500`  | The storage service returned an error                                             |
+| `503`  | The storage service is not available                                              |
+
+Each endpoint below lists only the errors specific to it.
+
+---
+
+### GET /api/storage
+
+Returns a snapshot of the cache for one datacenter and of every Edge KV store. The snapshot holds sizes, not values.
+
+**Query Parameters**
+
+| Parameter | Type     | Default | Description                  |
+| --------- | -------- | ------- | ---------------------------- |
+| `dc`      | `string` | `local` | Cache datacenter to inspect. |
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  now: number;  // Service clock time
+  dc: string;   // The datacenter the cache entries belong to
+  dcs: string[]; // Datacenters that hold cache entries
+  cache: { key: string; size: number; expiresAt: number | null }[];
+  kv: { store: string; strings: unknown; zsets: unknown; bloom: unknown }[];
+}
+```
+
+**Example**
+
+```bash
+curl -H "x-fastedge-token: <token>" "http://localhost:5179/api/storage?dc=local"
+```
+
+---
+
+### GET /api/storage/value
+
+Returns one stored value, from the cache (`dc` and `key`) or from Edge KV (`store` and `key`).
+
+**Query Parameters**
+
+| Parameter | Type     | Description                                                            |
+| --------- | -------- | ---------------------------------------------------------------------- |
+| `key`     | `string` | Key to read. Required.                                                 |
+| `dc`      | `string` | Cache datacenter holding the key. Give exactly one of `dc` or `store`. |
+| `store`   | `string` | Edge KV store holding the key. Give exactly one of `dc` or `store`.    |
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  value:
+    | { type: "string"; size: number; value: string; truncated: boolean; expiresAt?: number } // value is base64; first 4 KB
+    | { type: "zset"; count: number; members: { value: string; score: number }[] }            // first 200 members
+    | { type: "bloom"; count: number; items: string[] }                                       // first 200 items
+    | null; // The key no longer exists
+}
+```
+
+**Example**
+
+```bash
+curl -H "x-fastedge-token: <token>" "http://localhost:5179/api/storage/value?store=users&key=alice"
+```
+
+**Endpoint-specific errors:** `400` when `key` is missing or not exactly one of `dc` and `store` is given.
+
+---
+
+### POST /api/storage/kv/put
+
+Replaces one Edge KV key, whatever its current type, and creates the store if it does not exist.
+
+**Request Body**
+
+```typescript
+type KvPutBody =
+  | { store: StoreName; key: string; type: "string"; value: StoredValue }
+  | { store: StoreName; key: string; type: "zset"; members: [StoredValue, number][] } // [member, score]
+  | { store: StoreName; key: string; type: "bloom"; items: string[] };
+```
+
+`key` must be non-empty.
+
+**Response**
+
+```typescript
+{ ok: true }
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/storage/kv/put \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "store": "users", "key": "alice", "type": "string", "value": "{\"plan\":\"pro\"}" }'
+```
+
+---
+
+### POST /api/storage/kv/delete
+
+Deletes one Edge KV key.
+
+**Request Body**
+
+```typescript
+{ store: StoreName; key: string }
+```
+
+**Response**
+
+```typescript
+{ ok: true }
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/storage/kv/delete \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "store": "users", "key": "alice" }'
+```
+
+---
+
+### POST /api/storage/kv/store
+
+Creates an empty Edge KV store.
+
+**Request Body**
+
+```typescript
+{ store: StoreName }
+```
+
+**Response**
+
+```typescript
+{ ok: true }
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/storage/kv/store \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "store": "users" }'
+```
+
+---
+
+### POST /api/storage/kv/store/delete
+
+Deletes an Edge KV store and every key in it.
+
+**Request Body**
+
+```typescript
+{ store: StoreName }
+```
+
+**Response**
+
+```typescript
+{ ok: true }
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/storage/kv/store/delete \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "store": "users" }'
+```
+
+---
+
+### POST /api/storage/import
+
+Imports data into an Edge KV store, creating the store if needed.
+
+**Request Body**
+
+```typescript
+{
+  store: StoreName;
+  data: Record<string, unknown>; // Fixture format, or a plain key → value object
+  replace?: boolean;             // Delete the store's current contents first (default: false)
+}
+```
+
+`data` is read as the fixture format when its keys are only `strings`, `zsets` and `bloom` and each is an object:
+
+```typescript
+{
+  strings?: Record<string, StoredValue>;
+  zsets?: Record<string, [StoredValue, number][]>;
+  bloom?: Record<string, string[]>;
+}
+```
+
+Any other object is read as plain `key → value` pairs: string values are stored as they are and every other value is stored as its JSON text.
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  keys: number; // Number of keys written
+}
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/storage/import \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "store": "flags",
+    "replace": true,
+    "data": { "strings": { "beta": "on" }, "bloom": { "seen": ["a", "b"] } }
+  }'
+```
+
+```json
+{
+  "ok": true,
+  "keys": 2
+}
+```
+
+#### Importing a FastEdge portal KV store
+
+An agent can turn a KV store from the FastEdge portal into fixture data with the FastEdge API. Start with the store's id.
+
+1. List the store's keys with `GET /fastedge/v1/kv/{store_id}/data`. The query parameters are `limit` (at most 200) and `offset`. The response is `{ count, entries: [{ key, datatype, payload? }] }`. Page until every entry is read.
+2. Map each entry by `datatype`:
+   - `kv`: the list carries `payload: { value, encoding }`. Set `strings[key]` to `value`, or to `{ base64: value }` when `encoding` is `base64`.
+   - `sorted_set`: the list has no payload. Read the key with `GET /fastedge/v1/kv/{store_id}/data/{key}`, paginated the same way. The response is `{ payload: [{ value, encoding, score }] }`. Set `zsets[key]` to `[[value, score], ...]`.
+   - `bloom_filter`: the list has no payload. Read the key the same way. The response is `{ payload: [{ value, encoding }] }`. Set `bloom[key]` to `[value, ...]`.
+3. Send the result to `POST /api/storage/import` as `data`, or write it to `fixtures/stores/kv/<store>.json`.
+
+What cannot be imported:
+
+- A value with encoding `masked` or `sha256` cannot be recovered. Skip it and tell the user.
+- BYOD stores keep their data outside the portal and cannot be imported this way.
+
+---
+
+### POST /api/storage/cache/put
+
+Writes one cache entry in a datacenter.
+
+**Request Body**
+
+```typescript
+{
+  dc: string;          // Non-empty
+  key: string;         // Non-empty
+  value: StoredValue;  // Cache values may be empty
+  ttlMs?: number;      // Integer >= 0; omitted uses the cache's default TTL
+}
+```
+
+**Response**
+
+```typescript
+{ ok: true }
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/storage/cache/put \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "dc": "local", "key": "session-1", "value": "abc", "ttlMs": 60000 }'
+```
+
+---
+
+### POST /api/storage/cache/delete
+
+Deletes one cache entry.
+
+**Request Body**
+
+```typescript
+{ dc: string; key: string }
+```
+
+**Response**
+
+```typescript
+{ ok: true }
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/storage/cache/delete \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "dc": "local", "key": "session-1" }'
+```
+
+---
+
+### POST /api/storage/reset
+
+Returns the stores to their fixtures: the cache is emptied for every datacenter and Edge KV is re-seeded. Edits not saved to fixtures are lost.
+
+**Response**
+
+```typescript
+{ ok: true }
+```
+
+**Example**
+
+```bash
+curl -X POST -H "x-fastedge-token: <token>" http://localhost:5179/api/storage/reset
+```
+
+---
+
+### POST /api/storage/advance-clock
+
+Moves the storage service clock forward, so cache entries expire without waiting.
+
+**Request Body**
+
+```typescript
+{ ms: number } // A finite number greater than 0
+```
+
+**Response**
+
+```typescript
+{ ok: true }
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/storage/advance-clock \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "ms": 3600000 }'
+```
+
+**Endpoint-specific errors:** `400` when `ms` is missing, not a number, or not greater than 0.
+
+---
+
+### GET /api/storage/fixtures/diff
+
+Lists the changes Save to fixtures would make: each Edge KV store's fixture file compared with what the service holds. Data that differs only in layout or key order is not a change.
+
+**Response**
+
+```typescript
+type FixtureChange = {
+  store: string;
+  file: string;                          // Path relative to `root`
+  status: "new" | "changed" | "deleted";
+  current: string | null;                // The file now (null = no file)
+  proposed: string | null;               // The file after saving (null = deleted)
+  hash: string;                          // Pass back to the save endpoint
+};
+
+{
+  ok: true;
+  root: string;            // The stores root the files are relative to
+  changes: FixtureChange[];
+}
+```
+
+**Example**
+
+```bash
+curl -H "x-fastedge-token: <token>" http://localhost:5179/api/storage/fixtures/diff
+```
+
+```json
+{
+  "ok": true,
+  "root": "/home/user/project",
+  "changes": [
+    {
+      "store": "flags",
+      "file": "fixtures/stores/kv/flags.json",
+      "status": "new",
+      "current": null,
+      "proposed": "{\n  \"strings\": {\n    \"beta\": \"on\"\n  }\n}",
+      "hash": "9f2c..."
+    }
+  ]
+}
+```
+
+---
+
+### POST /api/storage/fixtures/save
+
+Writes or deletes exactly the fixture files the caller approved from the diff. Each file is sent with the `hash` the diff gave it, so only what the diff showed is written.
+
+**Request Body**
+
+```typescript
+{
+  files: { file: string; hash: string }[]; // At least one entry
+}
+```
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  saved: string[]; // The files written or deleted
+}
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/storage/fixtures/save \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "files": [{ "file": "fixtures/stores/kv/flags.json", "hash": "9f2c..." }] }'
+```
+
+```json
+{
+  "ok": true,
+  "saved": ["fixtures/stores/kv/flags.json"]
+}
+```
+
+**Endpoint-specific errors:** `409` when a listed file changed since the diff or was not in it. Request the diff again and resubmit. No file is written in that case.
 
 ---
 
@@ -1428,15 +1905,15 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Response / Type Schemas
 
-| Name                   | Description                                                                       |
-| ---------------------- | --------------------------------------------------------------------------------- |
-| `fastedge-config.test` | Config file format for `fastedge-config.test.json`                                |
-| `hook-result`          | Shape of a single `HookResult`                                                    |
-| `hook-call`            | Shape of a `HookCall` input                                                       |
-| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints                     |
-| `resource-result`      | Shape of the `POST /api/send` response when a resource is loaded                  |
-| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution                                 |
-| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution                        |
+| Name                   | Description                                                      |
+| ---------------------- | ---------------------------------------------------------------- |
+| `fastedge-config.test` | Config file format for `fastedge-config.test.json`               |
+| `hook-result`          | Shape of a single `HookResult`                                   |
+| `hook-call`            | Shape of a `HookCall` input                                      |
+| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints    |
+| `resource-result`      | Shape of the `POST /api/send` response when a resource is loaded |
+| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution                |
+| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution       |
 
 **Example**
 
@@ -1493,8 +1970,9 @@ When a request body fails schema validation, `error` is the flattened validation
 | `401`  | Missing or invalid `x-fastedge-token` header on an `/api/*` request                                |
 | `403`  | `Host` header not allowed, or a save-as path not approved by the save dialog                       |
 | `404`  | Resource not found (config file, schema file)                                                      |
-| `409`  | Request conflicts with server state (no app with stores is loaded)                                 |
+| `409`  | Request conflicts with server state (no app with stores is loaded, stale fixture diff)             |
 | `500`  | Internal error during execution, I/O, or the storage service                                       |
+| `503`  | The storage service is not available (Storage Explorer endpoints)                                  |
 
 ---
 
