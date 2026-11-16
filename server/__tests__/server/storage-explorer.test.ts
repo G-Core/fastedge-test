@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, symlinkSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { startTestServer, authedFetch, type TestServer } from "./helpers.js";
 
@@ -66,5 +66,18 @@ describe("debugger server — Storage Explorer", () => {
     // Saved files no longer differ.
     const after = (await call("/api/storage/fixtures/diff")).body.changes.map((c: { store: string }) => c.store);
     expect(after).toEqual(["flags"]);
+  });
+
+  it("does not save through a symlink", async () => {
+    await call("/api/storage/kv/put", { store: "linked", key: "k", type: "string", value: "v" });
+    const outside = join(server.workspacePath, "outside.json");
+    writeFileSync(outside, "keep");
+    mkdirSync(join(server.workspacePath, "fixtures/stores/kv"), { recursive: true });
+    symlinkSync(outside, join(server.workspacePath, "fixtures/stores/kv/linked.json"));
+    const change = (await call("/api/storage/fixtures/diff")).body.changes.find((c: { store: string }) => c.store === "linked");
+    const save = await call("/api/storage/fixtures/save", { files: [{ file: change.file, hash: change.hash }] });
+    expect(save.status).toBe(400);
+    expect(readFileSync(outside, "utf8")).toBe("keep");
+    rmSync(join(server.workspacePath, "fixtures/stores/kv/linked.json"));
   });
 });

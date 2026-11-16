@@ -112,7 +112,10 @@ function record(v: unknown, where: string): Record<string, unknown> {
 function value(v: unknown, where: string): Uint8Array {
   if (typeof v === "string") return Buffer.from(v, "utf8");
   if (typeof v === "object" && v !== null && typeof (v as { base64?: unknown }).base64 === "string") {
-    return Buffer.from((v as { base64: string }).base64, "base64");
+    const b64 = (v as { base64: string }).base64;
+    // Buffer.from accepts any text as base64 (skipping what it cannot read): check it first.
+    if (b64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) throw new Error(`${where}: invalid base64`);
+    return Buffer.from(b64, "base64");
   }
   throw new Error(`${where}: expected a string or { "base64": "..." }`);
 }

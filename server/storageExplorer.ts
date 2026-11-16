@@ -8,7 +8,7 @@
  */
 import type { Express, Request, Response } from "express";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, lstatSync, realpathSync } from "node:fs";
 import path from "node:path";
 import type { ZodType } from "zod";
 import { request as storesRequest, resolveStoresRoot, type StoresConnection } from "./stores/StoresManager.js";
@@ -185,6 +185,15 @@ export function mountStorageExplorer(
       if (changes.get(file)?.hash !== hash) throw new HttpError(409, `${file} changed since the diff: get the diff again`);
     }
     const root = resolveStoresRoot(workspace());
+    // Never write through a symlink: the kv folder must be the real one, and no file a link.
+    const dir = path.join(root, KV_DIR);
+    if (existsSync(dir) && realpathSync(dir) !== path.join(realpathSync(root), KV_DIR)) {
+      throw new HttpError(400, `${KV_DIR} is a symlink: not saving through it`);
+    }
+    for (const { file } of body.files) {
+      const full = path.join(root, file);
+      if (existsSync(full) && lstatSync(full).isSymbolicLink()) throw new HttpError(400, `${file} is a symlink: not saving through it`);
+    }
     for (const { file } of body.files) {
       const change = changes.get(file)!;
       const full = path.join(root, change.file);

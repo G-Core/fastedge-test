@@ -50,4 +50,9 @@ describe("Storage Explorer admin ops", () => {
     expect(Object.keys(JSON.parse(text).strings)).toEqual(["a", "b"]);
     expect(kvSeed(JSON.parse(text), "t")).toEqual(seed);
   });
+
+  it("refuses malformed base64", () => {
+    expect(() => kvSeed({ strings: { a: { base64: "not base64!" } } }, "t")).toThrow("t strings.a: invalid base64");
+    expect(kvSeed({ strings: { a: { base64: "AAE=" } } }, "t").strings.a).toEqual(Buffer.from([0, 1]));
+  });
 });
