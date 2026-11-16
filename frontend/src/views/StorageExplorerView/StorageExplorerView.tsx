@@ -203,11 +203,11 @@ function KvTab({ snapshot, version, act }: { snapshot: ExplorerSnapshot; version
             e.preventDefault();
             const name = newStore.trim();
             if (!name) return;
-            void act(() => storage.createStore(name)).then((ok) => {
+            void act(() => storage.createStore(name), { storeList: true }).then((ok) => {
               if (!ok) return;
               setSelected(name);
               setNewStore("");
-              setMessage(`Created ${name}. A loaded HTTP app sees a new store after it reloads (fastedge-run reads the store list at start); CDN apps see it now.`);
+              setMessage(`Created ${name}. A loaded HTTP app reloads when you go back to the Debugger, so it can open it.`);
             });
           }}
         >
@@ -238,7 +238,7 @@ function KvTab({ snapshot, version, act }: { snapshot: ExplorerSnapshot; version
                 type="button"
                 className={panel.button}
                 onClick={() => {
-                  if (window.confirm(`Delete store ${store.store} and all its keys?`)) void act(() => storage.deleteStore(store.store));
+                  if (window.confirm(`Delete store ${store.store} and all its keys?`)) void act(() => storage.deleteStore(store.store), { storeList: true });
                 }}
               >
                 Delete store
@@ -461,7 +461,7 @@ function CacheTab({ snapshot, version, fetchedAt, dc, setDc, act }: { snapshot: 
 }
 
 /** Run an edit, then refresh; resolves true when the edit succeeded. */
-type Act = (action: () => Promise<unknown>) => Promise<boolean>;
+type Act = (action: () => Promise<unknown>, options?: { storeList?: boolean }) => Promise<boolean>;
 
 /**
  * Storage Explorer: browse and edit the local Edge KV stores and cache (with or without an app
@@ -490,7 +490,7 @@ export function StorageExplorerView() {
     void refresh();
   }, [refresh]);
 
-  const act: Act = async (action) => {
+  const act: Act = async (action, options) => {
     let ok = true;
     try {
       await action();
@@ -499,7 +499,7 @@ export function StorageExplorerView() {
       setError(e instanceof Error ? e.message : String(e));
     }
     if (ok) {
-      window.dispatchEvent(new Event(STORES_CHANGED));
+      window.dispatchEvent(new CustomEvent(STORES_CHANGED, { detail: { storeList: options?.storeList ?? false } }));
       await refresh();
     }
     return ok;

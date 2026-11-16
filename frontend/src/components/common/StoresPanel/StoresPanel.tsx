@@ -141,7 +141,10 @@ export function ClockPause({ paused, onToggle }: { paused: boolean; onToggle: (p
   );
 }
 
-/** Fired after the stores change outside an app's request (the Storage Explorer). */
+/**
+ * Fired after the stores change outside an app's request (the Storage Explorer). `detail.storeList`:
+ * a store was created or deleted (a loaded HTTP app reloads to see it: fastedge-run reads the list at start).
+ */
 export const STORES_CHANGED = "fastedge:stores-changed";
 
 /** Re-render every second while mounted (TTL countdown). */

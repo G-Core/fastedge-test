@@ -11,6 +11,7 @@ import { HttpWasmView } from "./views/HttpWasmView";
 import { ProxyWasmView } from "./views/ProxyWasmView";
 import { StorageExplorerView } from "./views/StorageExplorerView";
 import { Tabs } from "./components/common/Tabs";
+import { STORES_CHANGED } from "./components/common/StoresPanel/StoresPanel";
 import { getEnvironment, type EnvironmentInfo } from "./api";
 import "./App.css";
 
@@ -61,6 +62,24 @@ function App() {
     setWsStatus,
     setWorkspaceRoot,
   } = useAppStore();
+
+  // fastedge-run reads the KV store list when it starts: after the explorer creates or deletes a
+  // store, a loaded HTTP app reloads on the way back to the debugger.
+  const storeListChanged = useRef(false);
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      if ((e as CustomEvent<{ storeList?: boolean }>).detail?.storeList) storeListChanged.current = true;
+    };
+    window.addEventListener(STORES_CHANGED, onChange);
+    return () => window.removeEventListener(STORES_CHANGED, onChange);
+  }, []);
+  const showPage = (next: "debugger" | "storage") => {
+    if (next === "debugger" && storeListChanged.current && wasmType === "http-wasm" && wasmPath && !loading) {
+      storeListChanged.current = false;
+      void reloadWasm(dotenv.enabled);
+    }
+    setPage(next);
+  };
 
   // WebSocket connection for real-time updates
   const { status } = useWebSocket({
@@ -319,7 +338,7 @@ function App() {
             { id: "storage", label: "Storage Explorer" },
           ]}
           active={page}
-          onChange={setPage}
+          onChange={showPage}
           className="page-tabs"
         />
 

@@ -151,7 +151,9 @@ fixtures (a diff per file; ticked files saved, deletions opt-in). A value is edi
 when the whole of it was read (not cut at 4 KB); sorted sets as `score member` lines. Each edit
 fires `fastedge:stores-changed`, which the app views' Storage panel refreshes on. Apps see edits
 at once, except a **new store for a loaded HTTP app**: fastedge-run reads the store list when it
-starts, so the app opens a store created later only after a reload (CDN apps check per open). Tests:
+starts, so the app opens a store created later only after a reload (CDN apps check per open):
+creating or deleting a store sets `detail.storeList`, and a loaded HTTP app then reloads when the
+user goes back to the Debugger page. Tests:
 `createStores().pauseClock()`.
 
 **Importing a portal store (agents; shapes checked on preprod 2026-11-16):** list the store with
