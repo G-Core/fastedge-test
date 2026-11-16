@@ -61,7 +61,7 @@
     "dev": "npm-run-all -p dev:backend dev:frontend",
     "dev:backend": "run-p dev:backend:esbuild dev:backend:server",
     "dev:backend:esbuild": "node esbuild/watch-server.js",
-    "dev:backend:server": "sleep 2 && node bin/fastedge-debug.js",
+    "dev:backend:server": "sleep 2 && FORCE_COLOR=1 FASTEDGE_DEV_FRONTEND=http://localhost:5173 node bin/fastedge-debug.js",
     "dev:frontend": "cd frontend && pnpm exec vite",
     "generate:docs": "./fastedge-plugin-source/generate-docs.sh",
     "start": "node bin/fastedge-debug.js",

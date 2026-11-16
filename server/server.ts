@@ -1190,9 +1190,15 @@ export async function startServer(port = defaultPort): Promise<void> {
       // When no token was injected externally (CLI mode), log the full URL with
       // the token in the fragment so only the local user reading stderr can open it.
       if (!process.env.FASTEDGE_DEBUG_TOKEN) {
-        console.error(
-          `Open: http://${hostForUrl}:${resolvedPort}/#token=${SESSION_TOKEN}`,
-        );
+        // The link to click: highlighted (bold, underlined cyan) on a colour terminal, or with
+        // FORCE_COLOR (pnpm dev, whose runner pipes output); never with NO_COLOR.
+        const color = !process.env.NO_COLOR && (process.stderr.isTTY || !!process.env.FORCE_COLOR);
+        const link = (url: string) => (color ? `\x1b[1;4;36m${url}\x1b[0m` : url);
+        console.error(`\nOpen: ${link(`http://${hostForUrl}:${resolvedPort}/#token=${SESSION_TOKEN}`)}`);
+        // pnpm dev: the Vite dev server (hot reload) needs the same token.
+        const devFrontend = process.env.FASTEDGE_DEV_FRONTEND;
+        if (devFrontend) console.error(`Dev:  ${link(`${devFrontend.replace(/\/$/, "")}/#token=${SESSION_TOKEN}`)} (hot reload)`);
+        console.error("");
       }
       writePortFile(resolvedPort);
       resolve();
