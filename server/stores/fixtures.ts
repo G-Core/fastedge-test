@@ -47,7 +47,25 @@ function jsonFiles(dir: string): [string, unknown, string][] {
     });
 }
 
-function kvSeed(data: unknown, where: string): KvSeed {
+/**
+ * A KV fixture (`{ strings, zsets, bloom }`) as written to `fixtures/stores/kv/<store>.json`: keys
+ * sorted, a value as UTF-8 text when it is valid UTF-8, else `{ "base64": "..." }`.
+ */
+export function kvFixtureText(seed: KvSeed): string {
+  const out = (v: Uint8Array) => {
+    const text = Buffer.from(v).toString("utf8");
+    return Buffer.from(text, "utf8").equals(Buffer.from(v)) ? text : { base64: Buffer.from(v).toString("base64") };
+  };
+  const sorted = <T>(o: Record<string, T>) => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
+  const fixture: Record<string, unknown> = {};
+  if (Object.keys(seed.strings).length) fixture.strings = sorted(Object.fromEntries(Object.entries(seed.strings).map(([k, v]) => [k, out(v)])));
+  if (Object.keys(seed.zsets).length) fixture.zsets = sorted(Object.fromEntries(Object.entries(seed.zsets).map(([k, m]) => [k, m.map(([member, s]) => [out(member), s])])));
+  if (Object.keys(seed.bloom).length) fixture.bloom = sorted(seed.bloom);
+  return JSON.stringify(fixture, null, 2) + "\n";
+}
+
+/** Parse KV data in the fixture format; throws with the offending path. */
+export function kvSeed(data: unknown, where: string): KvSeed {
   const o = record(data, where);
   const seed: KvSeed = { strings: Object.create(null), zsets: Object.create(null), bloom: Object.create(null) };
   for (const [k, v] of Object.entries(record(o.strings ?? {}, `${where} strings`))) {

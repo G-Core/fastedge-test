@@ -86,3 +86,45 @@ export type ApiCallBody = z.infer<typeof ApiCallBodySchema>;
 export type ApiConfigBody = z.infer<typeof ApiConfigBodySchema>;
 export type SaveAsBody = z.infer<typeof SaveAsBodySchema>;
 export type ApiDotenvBody = z.infer<typeof ApiDotenvBodySchema>;
+
+// ── Storage Explorer (/api/storage/*): manage the local cache and Edge KV ─────────────────────
+
+/** A store name; it is also a fixture file name (fixtures/stores/kv/<store>.json). */
+const StoreName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/, "store names: letters, digits, . _ - (not first)");
+
+/** A value as in fixture files: UTF-8 text, or { base64 }. */
+const StoredValue = z.union([z.string(), z.object({ base64: z.string() }).strict()]);
+
+/** Replace one Edge KV key (any type) of a store, creating the store if needed. */
+export const ApiStorageKvPutSchema = z.discriminatedUnion("type", [
+  z.object({ store: StoreName, key: z.string().min(1), type: z.literal("string"), value: StoredValue }),
+  z.object({ store: StoreName, key: z.string().min(1), type: z.literal("zset"), members: z.array(z.tuple([StoredValue, z.number()])) }),
+  z.object({ store: StoreName, key: z.string().min(1), type: z.literal("bloom"), items: z.array(z.string()) }),
+]);
+
+export const ApiStorageKvKeySchema = z.object({ store: StoreName, key: z.string().min(1) });
+export const ApiStorageKvStoreSchema = z.object({ store: StoreName });
+
+/** Write one cache entry of a dc; ttlMs default = the cache's default TTL. */
+export const ApiStorageCachePutSchema = z.object({
+  dc: z.string().min(1),
+  key: z.string().min(1),
+  value: StoredValue,
+  ttlMs: z.number().int().min(0).optional(),
+});
+export const ApiStorageCacheKeySchema = z.object({ dc: z.string().min(1), key: z.string().min(1) });
+
+/**
+ * Import into a store: the fixture format ({ strings, zsets, bloom }) or a plain JSON object of
+ * key → value (strings as they are, anything else as JSON text). `replace` empties the store first.
+ */
+export const ApiStorageImportSchema = z.object({
+  store: StoreName,
+  data: z.record(z.string(), z.unknown()),
+  replace: z.boolean().optional(),
+});
+
+/** Write the fixture files the diff showed: each with the hash the diff gave it. */
+export const ApiStorageFixturesSaveSchema = z.object({
+  files: z.array(z.object({ file: z.string(), hash: z.string() })).min(1),
+});

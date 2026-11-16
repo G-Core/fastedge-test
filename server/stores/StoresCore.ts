@@ -242,6 +242,63 @@ export class StoresCore {
   }
 
   /**
+   * Storage Explorer: replace one Edge KV key (whatever its type) with `seed`, which holds just
+   * that key; the store is created if needed. Apps still only read Edge KV.
+   */
+  putKvKey(store: string, key: string, seed: KvSeed): void {
+    this.transaction(() => {
+      this.deleteKey(store, key);
+      this.db.prepare("INSERT OR IGNORE INTO kv_store (name) VALUES (?)").run(store);
+      const value = seed.strings[key];
+      if (value) this.db.prepare("INSERT INTO kv_string (store, key, value) VALUES (?, ?, ?)").run(store, key, value);
+      for (const [member, s] of seed.zsets[key] ?? []) {
+        this.db.prepare("INSERT OR REPLACE INTO kv_zset (store, key, member, score) VALUES (?, ?, ?, ?)").run(store, key, member, s);
+      }
+      for (const item of seed.bloom[key] ?? []) {
+        this.db.prepare("INSERT OR IGNORE INTO kv_bloom (store, key, item) VALUES (?, ?, ?)").run(store, key, item);
+      }
+    });
+  }
+
+  /** Storage Explorer: delete one Edge KV key. */
+  deleteKvKey(store: string, key: string): void {
+    this.transaction(() => this.deleteKey(store, key));
+  }
+
+  /** Storage Explorer: an empty store (apps can open it), or drop a store and its keys. */
+  createKvStore(store: string): void {
+    this.db.prepare("INSERT OR IGNORE INTO kv_store (name) VALUES (?)").run(store);
+  }
+
+  deleteKvStore(store: string): void {
+    this.transaction(() => {
+      for (const table of ["kv_string", "kv_zset", "kv_bloom"]) this.db.prepare(`DELETE FROM ${table} WHERE store = ?`).run(store);
+      this.db.prepare("DELETE FROM kv_store WHERE name = ?").run(store);
+    });
+  }
+
+  /** Every Edge KV store's full contents (for Save to fixtures). */
+  exportKv(): Record<string, KvSeed> {
+    const out: Record<string, KvSeed> = {};
+    for (const store of this.kvStores()) out[store] = { strings: {}, zsets: {}, bloom: {} };
+    const rows = <T>(sql: string) => this.db.prepare(sql).all() as T[];
+    for (const r of rows<{ store: string; key: string; value: Uint8Array }>("SELECT store, key, value FROM kv_string ORDER BY store, key")) {
+      out[r.store].strings[r.key] = r.value;
+    }
+    for (const r of rows<{ store: string; key: string; member: Uint8Array; score: number }>("SELECT store, key, member, score FROM kv_zset ORDER BY store, key, score, member")) {
+      (out[r.store].zsets[r.key] ??= []).push([r.member, r.score]);
+    }
+    for (const r of rows<{ store: string; key: string; item: string }>("SELECT store, key, item FROM kv_bloom ORDER BY store, key, item")) {
+      (out[r.store].bloom[r.key] ??= []).push(r.item);
+    }
+    return out;
+  }
+
+  private deleteKey(store: string, key: string): void {
+    for (const table of ["kv_string", "kv_zset", "kv_bloom"]) this.db.prepare(`DELETE FROM ${table} WHERE store = ? AND key = ?`).run(store, key);
+  }
+
+  /**
    * What the stores hold, for the debugger's Stores panel (sizes, not values): the live cache
    * entries of one `dc`, every `dc` that has entries, and each Edge KV store's keys by type.
    */

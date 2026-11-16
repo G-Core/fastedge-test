@@ -26,6 +26,7 @@ import { detectWasmType } from "./utils/wasmTypeDetector.js";
 import { validatePath } from "./utils/pathValidator.js";
 import { resolveDotenvPath, validateDotenvLeafs, DotenvPathError } from "./utils/dotenv-loader.js";
 import { createResource, DEFAULT_RESOURCE_FILE, type Resource } from "./runner/resource.js";
+import { mountStorageExplorer } from "./storageExplorer.js";
 import {
   ApiResourceLoadBodySchema,
   ApiLoadBodySchema,
@@ -577,6 +578,9 @@ app.post("/api/stores/advance-clock", async (req: Request, res: Response) => {
     res.status(500).json({ ok: false, error: String(error) });
   }
 });
+
+// Storage Explorer: manage the stores with or without an app loaded.
+mountStorageExplorer(app, getStores, () => process.env.WORKSPACE_PATH || process.cwd());
 
 /** Release the shared lease on shutdown, so an unused service exits without waiting for the TTL. */
 async function releaseStores(): Promise<void> {

@@ -24,6 +24,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { BadRequest, type Reply, type StoresCore } from "./StoresCore.js";
 import { TraceLog } from "./trace.js";
+import { kvFixtureText, kvSeed } from "./fixtures.js";
 
 // Additive ops (snapshot, reset) keep the protocol: clients of either version can share a service.
 export const STORES_PROTOCOL = 1;
@@ -103,6 +104,32 @@ export function startStoresServer(
       if (body.op === "inspect" && typeof body.key === "string") {
         if (typeof body.dc === "string") return { ok: true, value: core.inspect({ dc: body.dc }, body.key) };
         if (typeof body.store === "string") return { ok: true, value: core.inspect({ store: body.store }, body.key) };
+      }
+      // Storage Explorer edits (Edge KV stays read-only to apps).
+      if (body.op === "kv-put" && typeof body.store === "string" && typeof body.key === "string") {
+        let seed;
+        try {
+          seed = kvSeed(body.data, "data");
+        } catch (error) {
+          throw new BadRequest((error as Error).message);
+        }
+        core.putKvKey(body.store, body.key, seed);
+        return { ok: true, value: null };
+      }
+      if (body.op === "kv-delete" && typeof body.store === "string" && typeof body.key === "string") {
+        core.deleteKvKey(body.store, body.key);
+        return { ok: true, value: null };
+      }
+      if (body.op === "kv-store-create" && typeof body.store === "string") {
+        core.createKvStore(body.store);
+        return { ok: true, value: null };
+      }
+      if (body.op === "kv-store-delete" && typeof body.store === "string") {
+        core.deleteKvStore(body.store);
+        return { ok: true, value: null };
+      }
+      if (body.op === "kv-export") {
+        return { ok: true, value: Object.fromEntries(Object.entries(core.exportKv()).map(([store, seed]) => [store, kvFixtureText(seed)])) };
       }
       if (body.op === "reset" && reset) {
         reset();

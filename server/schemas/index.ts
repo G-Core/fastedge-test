@@ -24,6 +24,13 @@ export {
   ApiDotenvBodySchema,
   ApiExecuteContextSchema,
   ApiResourceLoadBodySchema,
+  ApiStorageKvPutSchema,
+  ApiStorageKvKeySchema,
+  ApiStorageKvStoreSchema,
+  ApiStorageCachePutSchema,
+  ApiStorageCacheKeySchema,
+  ApiStorageImportSchema,
+  ApiStorageFixturesSaveSchema,
 } from './api';
 
 export type {
