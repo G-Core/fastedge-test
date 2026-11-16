@@ -2,8 +2,7 @@
  * FastEdge proxy-wasm host functions for the cache (`proxy_cache_*`) and Edge KV
  * (`proxy_kv_store_*`), over a synchronous connection to the storage service.
  *
- * Signatures, encodings and statuses follow the FastEdge engine
- * (crates/proxywasm/src/host/cache.rs and key_value.rs):
+ * Signatures, encodings and statuses follow the edge:
  * - a key, pattern or item that is not UTF-8 → BadArgument;
  * - cache: access denied / bad argument → BadArgument, anything else → InternalFailure;
  *   `set` TTL 0 = default, negative = BadArgument; a missing key on `get` is Ok with the

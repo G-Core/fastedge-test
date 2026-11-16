@@ -44,8 +44,7 @@ cache is shared per account per POP by HTTP and CDN apps.
 - **`dc`** (`RunnerConfig.dc`, `/api/load` `dc`, default `local`): the cache bucket.
 - **Stores root:** `FASTEDGE_STORES_ROOT`, else the nearest ancestor with `.git`, else the app
   folder (WORKSPACE_PATH / cwd). Sibling app folders in one repo share the service.
-- Host functions follow the engine's signatures, encodings and statuses
-  (`crates/proxywasm/src/host/cache.rs`, `key_value.rs`). The worker blocks on each call
+- Host functions follow the edge's signatures, encodings and statuses. The worker blocks on each call
   (deadline 5 s; the parent's HTTP timeout is 4 s); a failure is `InternalFailure`, never retried.
 - **Stores off:** the functions still link; every call returns `InternalFailure` and the first
   call in a hook logs `[host] stores are off: ...`.
