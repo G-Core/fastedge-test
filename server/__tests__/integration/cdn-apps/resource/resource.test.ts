@@ -6,6 +6,8 @@
 import path from "node:path";
 import { copyFileSync, mkdtempSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createResource, type Resource } from "../../../../runner/resource";
 import { runTestSuite } from "../../../../test-framework/suite-runner";
@@ -117,6 +119,43 @@ describe("resource reload", () => {
     } finally {
       await r.cleanup();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("resource request URL", () => {
+  const readonlyRead = path.resolve(__dirname, "../../../../../wasm/cdn-apps/as/properties/valid-readonly-read.wasm");
+  let origin: Server;
+  let seen: string[] = [];
+  beforeAll(async () => {
+    origin = createServer((req, res) => { seen.push(`${req.headers["x-forwarded-host"]} ${req.url}`); res.end("origin"); });
+    await new Promise<void>((done) => origin.listen(0, "127.0.0.1", done));
+  });
+  afterAll(() => new Promise<void>((done) => origin.close(() => done())));
+
+  it("gives the first hook the request's URL properties", async () => {
+    const r = await createResource({ apps: { p: { wasm: readonlyRead } }, main: { hooks: { onRequestHeaders: "p" }, origin: { url: "built-in" } } }, { stores: false });
+    try {
+      const result = await r.request({ url: "https://example.com/img/cat.png?x=1" });
+      const logs = result.hooks.onRequestHeaders!.result.logs.map((l) => l.message);
+      expect(logs.some((m) => m.endsWith("Request Extension: png"))).toBe(true);
+      expect(JSON.parse(result.finalResponse.body).requestUrl).toBe("https://example.com/img/cat.png?x=1");
+    } finally {
+      await r.cleanup();
+    }
+  });
+
+  it("sends the request's path and query to a URL origin, as a CDN forwards it", async () => {
+    const port = (origin.address() as AddressInfo).port;
+    const r = await createResource({ apps: { a: fixture("a") }, main: { hooks: {}, origin: { url: `http://127.0.0.1:${port}` } } }, { stores: false });
+    try {
+      seen = [];
+      const result = await r.request({ url: "https://shop.example/account?id=7" });
+      expect(seen).toEqual(["shop.example /account?id=7"]);
+      expect(result.origin?.kind).toBe("url");
+      expect(result.finalResponse.body).toBe("origin");
+    } finally {
+      await r.cleanup();
     }
   });
 });

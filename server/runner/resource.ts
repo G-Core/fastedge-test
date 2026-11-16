@@ -21,7 +21,7 @@ import { PropertyResolver } from "./PropertyResolver.js";
 import { cdnContext, withHeaders, type RequestContext } from "./requestContext.js";
 import { validatePathOrThrow } from "../utils/pathValidator.js";
 import { validateDotenvLeafs } from "../utils/dotenv-loader.js";
-import { CDN_HOOKS, isBuiltInUrl, runCdnFlow, type CdnHook, type OriginResponse } from "./cdnFlow.js";
+import { BUILTIN_SHORTHAND, BUILTIN_URL, CDN_HOOKS, builtInResponse, fetchOrigin, isBuiltInUrl, runCdnFlow, type CdnHook, type OriginRequest, type OriginResponse } from "./cdnFlow.js";
 
 /** Where the debugger looks for a resource when none is named (relative to the workspace). */
 export const DEFAULT_RESOURCE_FILE = ".fastedge-debug/fastedge-cdn-resource.test.json";
@@ -148,12 +148,16 @@ async function runRequest(
   const chosen = rule ? config.rules[rule.index] : undefined;
   const hooks: ResourceHooks = chosen?.hooks ?? config.main.hooks;
   const origin: ResourceOrigin = chosen?.origin ?? config.main.origin;
-  const targetUrl = "url" in origin ? origin.url : url;
+  // The request is the client's (its URL gives request.url / path / query ...); the origin gets it
+  // at the origin's host, with the request's path and query, as a CDN forwards it.
+  const requestUrl = url === BUILTIN_SHORTHAND ? BUILTIN_URL : url;
 
   // The client and edge apply once, to the request every app sees.
   const applied = cdnContext(context);
   const requestId = randomUUID();
   const properties = new PropertyResolver();
+  properties.extractRuntimePropertiesFromUrl(requestUrl);
+  const { "request.method": _method, ...urlProperties } = properties.getCalculatedProperties();
   const result: Omit<ResourceResult, "finalResponse"> = { rule, hooks: {} };
   let originStoreCalls: StoreCall[] | undefined;
 
@@ -170,22 +174,29 @@ async function runRequest(
       const runner = apps.get(assigned.app)!;
       return { callHook: (call) => runner.callHook({ ...call, requestId, context }) };
     },
-    start: (target) => properties.extractRuntimePropertiesFromUrl(target),
+    start: () => {},
     calculatedProperties: () => properties.getCalculatedProperties(),
     log: () => {},
     onHookError: (hook) => (hookApp(hook)!.interruptOnError ? "interrupt" : "continue"),
     onOrigin: (response) => {
       result.origin = "app" in origin
         ? { kind: "app", app: origin.app, response, ...(originStoreCalls ? { storeCalls: originStoreCalls } : {}) }
-        : { kind: isBuiltInUrl(targetUrl) ? "built-in" : "url", response };
+        : { kind: isBuiltInUrl(origin.url) ? "built-in" : "url", response };
     },
-    ...("app" in origin
-      ? { origin: async (originRequest) => {
-          const answer = await httpAppOrigin(apps.get(origin.app)!, originRequest, context);
-          originStoreCalls = answer.storeCalls;
-          return answer.response;
-        } }
-      : {}),
+    origin: async (originRequest: OriginRequest) => {
+      if ("app" in origin) {
+        const answer = await httpAppOrigin(apps.get(origin.app)!, originRequest, context);
+        originStoreCalls = answer.storeCalls;
+        return answer.response;
+      }
+      const log = { log: () => {} };
+      if (isBuiltInUrl(origin.url)) {
+        return builtInResponse(log, originRequest.method, originRequest.headers, originRequest.body, originRequest.properties);
+      }
+      const forwarded = new URL(originRequest.url);
+      const target = new URL(forwarded.pathname + forwarded.search, origin.url).href;
+      return fetchOrigin(log, target, originRequest.method, originRequest.headers, originRequest.body, { ...originRequest.properties, "request.url": target });
+    },
   }, {
     hook: "",
     request: {
@@ -193,9 +204,9 @@ async function runRequest(
       body: request.body ?? config.request?.body ?? "",
       method: request.method ?? config.request?.method ?? "GET",
     },
-    properties: { ...applied.properties, ...config.properties, ...request.properties },
+    properties: { ...urlProperties, ...applied.properties, ...config.properties, ...request.properties },
     enforceProductionPropertyRules: true,
-  }, targetUrl);
+  }, requestUrl);
 
   for (const hook of CDN_HOOKS) {
     const hookResult = flow.hookResults[hook];

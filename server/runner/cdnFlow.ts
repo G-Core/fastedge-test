@@ -50,7 +50,7 @@ export interface CdnFlowHost {
   onHookError?(hook: CdnHook, error: unknown): "continue" | "interrupt";
 }
 
-export type OriginRequest = { url: string; method: string; headers: HeaderRecord; body: string };
+export type OriginRequest = { url: string; method: string; headers: HeaderRecord; body: string; properties: Record<string, unknown> };
 
 /** Ends the flow early with this result. */
 class FlowEnd {
@@ -174,7 +174,7 @@ async function flow(host: CdnFlowHost, call: HookCall, url: string): Promise<Ful
   try {
     // Phase 2: Obtain origin response (built-in responder or real HTTP fetch)
     const origin = host.origin
-      ? await host.origin({ url: (propertiesAfterRequestBody["request.url"] as string) || targetUrl, method: requestMethod, headers: modifiedRequestHeaders, body: modifiedRequestBody })
+      ? await host.origin({ url: (propertiesAfterRequestBody["request.url"] as string) || targetUrl, method: requestMethod, headers: modifiedRequestHeaders, body: modifiedRequestBody, properties: propertiesAfterRequestBody })
       : isBuiltIn
       ? builtInResponse(host, requestMethod, modifiedRequestHeaders, modifiedRequestBody, propertiesAfterRequestBody)
       : await fetchOrigin(host, targetUrl, requestMethod, modifiedRequestHeaders, modifiedRequestBody, propertiesAfterRequestBody);
@@ -284,8 +284,8 @@ export type OriginResponse = {
  *   x-debugger-status  — HTTP status code (default 200)
  *   x-debugger-content — "body-only" | "status-only" (default: full JSON echo)
  */
-function builtInResponse(
-  host: CdnFlowHost,
+export function builtInResponse(
+  host: Pick<CdnFlowHost, "log">,
   requestMethod: string,
   requestHeaders: HeaderRecord,
   requestBody: string,
@@ -345,8 +345,8 @@ function builtInResponse(
 }
 
 /** Real HTTP fetch to origin. */
-async function fetchOrigin(
-  host: CdnFlowHost,
+export async function fetchOrigin(
+  host: Pick<CdnFlowHost, "log">,
   targetUrl: string,
   requestMethod: string,
   requestHeaders: HeaderRecord,
