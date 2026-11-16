@@ -380,8 +380,8 @@ export class ProxyWasmRunner implements IWasmRunner {
     const responseHeaders = HeaderManager.normalize(
       call.response?.headers ?? {},
     );
-    const requestBody = call.request.body ?? "";
-    const responseBody = call.response?.body ?? "";
+    const requestBody = bodyBytes(call.request.body, call.request.isBase64);
+    const responseBody = bodyBytes(call.response?.body, call.response?.isBase64);
     const requestMethod = call.request.method ?? "GET";
     const responseStatus = call.response?.status ?? 200;
     const responseStatusText = call.response?.statusText ?? "OK";
@@ -452,11 +452,11 @@ export class ProxyWasmRunner implements IWasmRunner {
     const inputState = {
       request: {
         headers: { ...requestHeaders },
-        body: requestBody,
+        ...bodyOf(requestBody, call.request.isBase64),
       },
       response: {
         headers: { ...responseHeaders },
-        body: responseBody,
+        ...bodyOf(responseBody, call.response?.isBase64),
       },
       properties: this.propertyResolver.getAllProperties(),
     };
@@ -555,11 +555,11 @@ export class ProxyWasmRunner implements IWasmRunner {
     const outputState = {
       request: {
         headers: { ...this.hostFunctions.getRequestHeaders() },
-        body: this.hostFunctions.getRequestBody(),
+        ...bodyOf(this.hostFunctions.getRequestBodyBytes(), call.request.isBase64),
       },
       response: {
         headers: { ...this.hostFunctions.getResponseHeaders() },
-        body: this.hostFunctions.getResponseBody(),
+        ...bodyOf(this.hostFunctions.getResponseBodyBytes(), call.response?.isBase64),
       },
       properties: this.propertyResolver.getAllProperties(),
     };
@@ -655,8 +655,8 @@ export class ProxyWasmRunner implements IWasmRunner {
     hook: string,
     requestHeaders: HeaderMap | HeaderRecord,
     responseHeaders: HeaderMap | HeaderRecord,
-    requestBody: string,
-    responseBody: string,
+    requestBody: Uint8Array,
+    responseBody: Uint8Array,
   ): {
     exportName: string;
     args: number[];
@@ -679,7 +679,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       case "onRequestBody":
         return {
           exportName: "proxy_on_request_body",
-          args: [this.currentContextId, byteLength(requestBody), 1],
+          args: [this.currentContextId, requestBody.byteLength, 1],
         };
       case "onResponseHeaders":
         return {
@@ -689,7 +689,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       case "onResponseBody":
         return {
           exportName: "proxy_on_response_body",
-          args: [this.currentContextId, byteLength(responseBody), 1],
+          args: [this.currentContextId, responseBody.byteLength, 1],
         };
       default:
         throw new Error(`Unsupported hook: ${hook}`);
@@ -893,6 +893,28 @@ export class ProxyWasmRunner implements IWasmRunner {
   getType(): WasmType {
     return "proxy-wasm";
   }
+}
+
+/** A hook call's body as raw bytes: base64 when `isBase64`, otherwise text (UTF-8). */
+function bodyBytes(body: string | undefined, isBase64: boolean | undefined): Uint8Array {
+  return isBase64 ? new Uint8Array(Buffer.from(body ?? "", "base64")) : new TextEncoder().encode(body ?? "");
+}
+
+const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
+
+/**
+ * A body for a hook result: base64 when the call's body was base64, or when the bytes are not
+ * text (a hook may write any bytes, as on the edge); otherwise the text.
+ */
+function bodyOf(bytes: Uint8Array, isBase64: boolean | undefined): { body: string; isBase64?: true } {
+  if (!isBase64) {
+    try {
+      return { body: strictUtf8.decode(bytes) };
+    } catch {
+      // not UTF-8: base64 below
+    }
+  }
+  return { body: Buffer.from(bytes).toString("base64"), isBase64: true };
 }
 
 function byteLength(value: string): number {

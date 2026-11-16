@@ -64,6 +64,13 @@ impl HttpContext for Probe {
             self.set_http_response_body(0, size, b"");
             return Action::Continue;
         }
+        // x-probe-invert: flip every byte of the body (the body is bytes, not text: e.g. an image).
+        if self.get_http_request_header("x-probe-invert").is_some() {
+            let body = self.get_http_response_body(0, size).unwrap_or_default();
+            let inverted: Vec<u8> = body.iter().map(|b| !b).collect();
+            self.set_http_response_body(0, size, &inverted);
+            return Action::Continue;
+        }
         let seen = self.mark("respb");
         let report = format!("respb: {seen}\n");
         self.set_http_response_body(0, size, report.as_bytes());

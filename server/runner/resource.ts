@@ -191,11 +191,11 @@ async function runRequest(
       }
       const log = { log: () => {} };
       if (isBuiltInUrl(origin.url)) {
-        return builtInResponse(log, originRequest.method, originRequest.headers, originRequest.body, originRequest.properties);
+        return builtInResponse(log, originRequest.method, originRequest.headers, originRequest.body, originRequest.properties, originRequest.isBase64);
       }
       const forwarded = new URL(originRequest.url);
       const target = new URL(forwarded.pathname + forwarded.search, origin.url).href;
-      return fetchOrigin(log, target, originRequest.method, originRequest.headers, originRequest.body, { ...originRequest.properties, "request.url": target });
+      return fetchOrigin(log, target, originRequest.method, originRequest.headers, originRequest.body, { ...originRequest.properties, "request.url": target }, originRequest.isBase64);
     },
   }, {
     hook: "",
@@ -226,6 +226,8 @@ async function httpAppOrigin(
     path: url.pathname + url.search,
     method: request.method,
     headers: Object.fromEntries(Object.entries(HeaderManager.flattenToMap(request.headers)).filter(([key]) => !key.startsWith(":"))),
+    // ponytail: execute() takes text, so a request body a hook made binary (isBase64) reaches the
+    // app as its base64; give HttpRequest a byte body if a resource needs that.
     body: request.body,
     context,
   });

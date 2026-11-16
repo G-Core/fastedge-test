@@ -15,6 +15,8 @@ export type HookCall = {
   request: {
     headers: HeaderRecord;
     body: string;
+    /** `body` is base64 of raw bytes (a body that is not text, e.g. an image). */
+    isBase64?: boolean;
     method?: string;
     path?: string;
     scheme?: string;
@@ -30,6 +32,8 @@ export type HookCall = {
   response?: {
     headers: HeaderRecord;
     body: string;
+    /** `body` is base64 of raw bytes. */
+    isBase64?: boolean;
     status?: number;
     statusText?: string;
   };
@@ -56,17 +60,20 @@ export type LocalResponse = {
   bodyBase64: string;
 };
 
+/** Headers and body of the request or response; `isBase64`: the body is base64 of raw bytes (not text). */
+export type HookBody = { headers: HeaderRecord; body: string; isBase64?: boolean };
+
 export type HookResult = {
   returnCode: number | null;
   logs: { level: number; message: string }[];
   input: {
-    request: { headers: HeaderRecord; body: string };
-    response: { headers: HeaderRecord; body: string };
+    request: HookBody;
+    response: HookBody;
     properties?: Record<string, unknown>;
   };
   output: {
-    request: { headers: HeaderRecord; body: string };
-    response: { headers: HeaderRecord; body: string };
+    request: HookBody;
+    response: HookBody;
     properties?: Record<string, unknown>;
   };
   properties: Record<string, unknown>;

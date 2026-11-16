@@ -1,5 +1,25 @@
 # Proxy-WASM Runner - Changelog
 
+## November 16, 2026 - Fix: CDN hooks get bodies as raw bytes
+
+### Overview
+Bodies were carried as strings: a binary origin body (an image) reached onResponseBody as its
+base64 text, and bytes a hook wrote that were not UTF-8 were mangled. As on the edge, hooks now
+get and set raw bytes (single app and resource). Found with the Rust SDK's convert_image example
+(PNG → AVIF), which now converts here.
+
+### 🎯 What Was Completed
+- `HostFunctions` keeps bodies as `Uint8Array` (`getRequestBodyBytes` / `getResponseBodyBytes`)
+- `HookCall.request/response.isBase64`, `HookResult` input/output `isBase64` (`HookBody`): base64
+  when the call's body was, or when a hook wrote bytes that are not UTF-8
+- `runCdnFlow` carries the flag origin → hooks → `finalResponse.isBase64`; `fetchOrigin` and the
+  built-in responder (body-only) send a binary request body as bytes. A resource's HTTP-app origin
+  still gets such a request body as base64 text (`execute()` takes text)
+
+### 🧪 Testing
+- Integration `cdn-apps/resource/resource.test.ts` "binary bodies" (resource and single app; the
+  resource probe's `x-probe-invert` flips every body byte). Fail before the fix, pass after.
+
 ## November 16, 2026 - Resource page
 
 ### Overview

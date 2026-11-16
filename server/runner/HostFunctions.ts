@@ -30,8 +30,9 @@ export class HostFunctions {
   private logs: LogEntry[] = [];
   private requestHeaders: HeaderTuples = [];
   private responseHeaders: HeaderTuples = [];
-  private requestBody = "";
-  private responseBody = "";
+  // Raw bytes, as on the edge: a body need not be text (an image, a compressed payload).
+  private requestBody: Uint8Array = new Uint8Array(0);
+  private responseBody: Uint8Array = new Uint8Array(0);
   private vmConfig = "";
   private pluginConfig = "";
   private currentContextId = 1;
@@ -100,13 +101,13 @@ export class HostFunctions {
   setHeadersAndBodies(
     reqHeaders: HeaderMap | HeaderRecord,
     resHeaders: HeaderMap | HeaderRecord,
-    reqBody: string,
-    resBody: string,
+    reqBody: string | Uint8Array,
+    resBody: string | Uint8Array,
   ): void {
     this.requestHeaders = HeaderManager.recordToTuples(reqHeaders);
     this.responseHeaders = HeaderManager.recordToTuples(resHeaders);
-    this.requestBody = reqBody;
-    this.responseBody = resBody;
+    this.requestBody = typeof reqBody === "string" ? textEncoder.encode(reqBody) : reqBody;
+    this.responseBody = typeof resBody === "string" ? textEncoder.encode(resBody) : resBody;
   }
 
   setConfigs(vmConfig: string, pluginConfig: string): void {
@@ -190,11 +191,21 @@ export class HostFunctions {
     return HeaderManager.tuplesToRecord(this.responseHeaders);
   }
 
+  /** The request body as text (UTF-8); see getRequestBodyBytes for the raw bytes. */
   getRequestBody(): string {
+    return new TextDecoder().decode(this.requestBody);
+  }
+
+  /** The response body as text (UTF-8); see getResponseBodyBytes for the raw bytes. */
+  getResponseBody(): string {
+    return new TextDecoder().decode(this.responseBody);
+  }
+
+  getRequestBodyBytes(): Uint8Array {
     return this.requestBody;
   }
 
-  getResponseBody(): string {
+  getResponseBodyBytes(): Uint8Array {
     return this.responseBody;
   }
 
@@ -523,8 +534,7 @@ export class HostFunctions {
           }
           return ProxyStatus.Ok;
         }
-        const body = this.getBody(bufferType);
-        const bytes = textEncoder.encode(body);
+        const bytes = this.getBody(bufferType);
         const slice = bytes.slice(
           start,
           length > 0 ? start + length : undefined,
@@ -544,8 +554,7 @@ export class HostFunctions {
         flagsPtr: number,
       ) => {
         this.setLastHostCall(`proxy_get_buffer_status type=${bufferType}`);
-        const body = this.getBody(bufferType);
-        const length = byteLength(body);
+        const length = this.getBody(bufferType).byteLength;
         this.memory.writeU32(lengthPtr, length);
         this.memory.writeU32(flagsPtr, 1); // end_of_stream = true
         return ProxyStatus.Ok;
@@ -561,8 +570,7 @@ export class HostFunctions {
         this.setLastHostCall(
           `proxy_set_buffer_bytes type=${bufferType} start=${start} length=${length} dataLen=${dataLen}`,
         );
-        const body = this.getBody(bufferType);
-        const bytes = textEncoder.encode(body);
+        const bytes = this.getBody(bufferType);
         const insert = this.memory.readBytes(dataPtr, dataLen);
         const prefix = bytes.slice(0, start);
         const suffix = bytes.slice(start + length);
@@ -572,8 +580,7 @@ export class HostFunctions {
         next.set(prefix, 0);
         next.set(insert, prefix.length);
         next.set(suffix, prefix.length + insert.length);
-        const updated = new TextDecoder().decode(next);
-        this.setBody(bufferType, updated);
+        this.setBody(bufferType, next);
         return ProxyStatus.Ok;
       },
 
@@ -896,26 +903,26 @@ export class HostFunctions {
   }
 
 
-  private getBody(bufferType: number): string {
+  private getBody(bufferType: number): Uint8Array {
     if (bufferType === BufferType.ResponseBody) {
       return this.responseBody;
     }
     if (bufferType === BufferType.VmConfiguration) {
-      return this.vmConfig;
+      return textEncoder.encode(this.vmConfig);
     }
     if (bufferType === BufferType.PluginConfiguration) {
-      return this.pluginConfig;
+      return textEncoder.encode(this.pluginConfig);
     }
     return this.requestBody;
   }
 
-  private setBody(bufferType: number, value: string): void {
+  private setBody(bufferType: number, value: Uint8Array): void {
     if (bufferType === BufferType.ResponseBody) {
       this.responseBody = value;
     } else if (bufferType === BufferType.VmConfiguration) {
-      this.vmConfig = value;
+      this.vmConfig = new TextDecoder().decode(value);
     } else if (bufferType === BufferType.PluginConfiguration) {
-      this.pluginConfig = value;
+      this.pluginConfig = new TextDecoder().decode(value);
     } else {
       this.requestBody = value;
     }
@@ -934,8 +941,4 @@ export class HostFunctions {
     this.lastHostCall = message;
     this.logDebug(`host_call ${message}`);
   }
-}
-
-function byteLength(value: string): number {
-  return textEncoder.encode(value).length;
 }

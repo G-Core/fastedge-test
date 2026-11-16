@@ -50,7 +50,8 @@ export interface CdnFlowHost {
   onHookError?(hook: CdnHook, error: unknown): "continue" | "interrupt";
 }
 
-export type OriginRequest = { url: string; method: string; headers: HeaderRecord; body: string; properties: Record<string, unknown> };
+/** `isBase64`: a request hook wrote a body that is not text; `body` is base64 of its bytes. */
+export type OriginRequest = { url: string; method: string; headers: HeaderRecord; body: string; isBase64?: boolean; properties: Record<string, unknown> };
 
 /** Ends the flow early with this result. */
 class FlowEnd {
@@ -113,6 +114,8 @@ async function flow(host: CdnFlowHost, call: HookCall, url: string): Promise<Ful
   // The request's state as it moves from hook to hook.
   let requestHeaders: HeaderRecord = call.request.headers;
   let requestBody = call.request.body;
+  // Bodies that are not text (an image) travel as base64 with this flag, hook to hook.
+  let requestIsBase64 = call.request.isBase64;
   let properties = call.properties;
   let customProperties = call.customProperties ?? [];
   // Response headers added in the request phase (add_http_response_header) carry into the response phase.
@@ -153,12 +156,13 @@ async function flow(host: CdnFlowHost, call: HookCall, url: string): Promise<Ful
 
   // Phase 1: Run request hooks
   for (const hook of ["onRequestHeaders", "onRequestBody"] as const) {
-    const result = await runHook(hook, { ...call, request: { ...call.request, headers: requestHeaders, body: requestBody }, properties });
+    const result = await runHook(hook, { ...call, request: { ...call.request, headers: requestHeaders, body: requestBody, isBase64: requestIsBase64 }, properties });
     const local = localResponse(result);
     if (local) return local;
     if (result) {
       requestHeaders = result.output.request.headers;
       requestBody = result.output.request.body;
+      requestIsBase64 = result.output.request.isBase64;
       // onRequestBody's output is the host's cumulative state (already includes onRequestHeaders'
       // mutations) for one app; across apps each hook's output already starts from the last one.
       requestPhaseResponseHeaders = { ...requestPhaseResponseHeaders, ...(result.output.response.headers ?? {}) };
@@ -174,10 +178,10 @@ async function flow(host: CdnFlowHost, call: HookCall, url: string): Promise<Ful
   try {
     // Phase 2: Obtain origin response (built-in responder or real HTTP fetch)
     const origin = host.origin
-      ? await host.origin({ url: (propertiesAfterRequestBody["request.url"] as string) || targetUrl, method: requestMethod, headers: modifiedRequestHeaders, body: modifiedRequestBody, properties: propertiesAfterRequestBody })
+      ? await host.origin({ url: (propertiesAfterRequestBody["request.url"] as string) || targetUrl, method: requestMethod, headers: modifiedRequestHeaders, body: modifiedRequestBody, isBase64: requestIsBase64, properties: propertiesAfterRequestBody })
       : isBuiltIn
-      ? builtInResponse(host, requestMethod, modifiedRequestHeaders, modifiedRequestBody, propertiesAfterRequestBody)
-      : await fetchOrigin(host, targetUrl, requestMethod, modifiedRequestHeaders, modifiedRequestBody, propertiesAfterRequestBody);
+      ? builtInResponse(host, requestMethod, modifiedRequestHeaders, modifiedRequestBody, propertiesAfterRequestBody, requestIsBase64)
+      : await fetchOrigin(host, targetUrl, requestMethod, modifiedRequestHeaders, modifiedRequestBody, propertiesAfterRequestBody, requestIsBase64);
 
     // Merge response-header state set during request phase into the response-phase input.
     // Production: response headers added via add_http_response_header during onRequestHeaders /
@@ -188,14 +192,15 @@ async function flow(host: CdnFlowHost, call: HookCall, url: string): Promise<Ful
     host.onOrigin?.(origin);
     let responseHeaders = HeaderManager.appendMerge(requestPhaseResponseHeaders, origin.headers);
     let responseBody = origin.body;
+    let responseIsBase64 = origin.isBase64;
 
     // Phase 3: Run response hooks with real response data
     // Custom properties from onRequestHeaders do not reach the response hooks.
     for (const hook of ["onResponseHeaders", "onResponseBody"] as const) {
       const result = await runHook(hook, {
         ...call,
-        request: { ...call.request, headers: modifiedRequestHeaders, body: modifiedRequestBody },
-        response: { headers: responseHeaders, body: responseBody, status: origin.status, statusText: origin.statusText },
+        request: { ...call.request, headers: modifiedRequestHeaders, body: modifiedRequestBody, isBase64: requestIsBase64 },
+        response: { headers: responseHeaders, body: responseBody, isBase64: responseIsBase64, status: origin.status, statusText: origin.statusText },
         properties,
       });
       const local = localResponse(result);
@@ -203,7 +208,10 @@ async function flow(host: CdnFlowHost, call: HookCall, url: string): Promise<Ful
       if (result) {
         responseHeaders = result.output.response.headers;
         // onResponseBody gets the origin's body: only its own output is final.
-        if (hook === "onResponseBody") responseBody = result.output.response.body;
+        if (hook === "onResponseBody") {
+          responseBody = result.output.response.body;
+          responseIsBase64 = result.output.response.isBase64 ?? false;
+        }
         host.log(`Headers after ${hook}: ${JSON.stringify(responseHeaders)}`);
       }
     }
@@ -219,7 +227,7 @@ async function flow(host: CdnFlowHost, call: HookCall, url: string): Promise<Ful
         headers: responseHeaders,
         body: responseBody,
         contentType: finalContentType,
-        isBase64: origin.isBase64,
+        isBase64: responseIsBase64,
       },
       calculatedProperties: host.calculatedProperties(),
     };
@@ -242,7 +250,7 @@ async function flow(host: CdnFlowHost, call: HookCall, url: string): Promise<Ful
     host.log(fullErrorMessage);
 
     // The last request state the hooks produced
-    const lastRequestState = { headers: modifiedRequestHeaders, body: modifiedRequestBody };
+    const lastRequestState = { headers: modifiedRequestHeaders, body: modifiedRequestBody, ...(requestIsBase64 ? { isBase64: true } : {}) };
 
     // Return error in response hooks
     const errorResult: HookResult = {
@@ -290,6 +298,8 @@ export function builtInResponse(
   requestHeaders: HeaderRecord,
   requestBody: string,
   properties: Record<string, unknown>,
+  /** `requestBody` is base64 of raw bytes: body-only echoes the bytes; the JSON echo shows the base64. */
+  requestIsBase64 = false,
 ): OriginResponse {
   host.log("Using built-in responder");
 
@@ -313,11 +323,13 @@ export function builtInResponse(
 
   let body: string;
   let contentType: string;
+  let isBase64 = false;
   if (contentMode === "status-only") {
     body = "";
     contentType = "text/plain";
   } else if (contentMode === "body-only") {
     body = requestBody || "";
+    isBase64 = requestIsBase64;
     contentType = HeaderManager.firstValue(requestHeaders["content-type"]) || "text/plain";
   } else {
     // Default: full JSON echo (similar to http-responder)
@@ -337,10 +349,10 @@ export function builtInResponse(
   return {
     status,
     statusText,
-    headers: { "content-type": contentType, "content-length": String(Buffer.byteLength(body)) },
+    headers: { "content-type": contentType, "content-length": String(isBase64 ? Buffer.from(body, "base64").length : Buffer.byteLength(body)) },
     body,
     contentType,
-    isBase64: false,
+    isBase64,
   };
 }
 
@@ -352,6 +364,8 @@ export async function fetchOrigin(
   requestHeaders: HeaderRecord,
   requestBody: string,
   properties: Record<string, unknown>,
+  /** `requestBody` is base64 of raw bytes. */
+  requestIsBase64 = false,
 ): Promise<OriginResponse> {
   // `request.url` is the single routing source (FastEdge production
   // parity — the `geoRedirect` example is the canonical pattern). WASM
@@ -414,7 +428,7 @@ export async function fetchOrigin(
 
   // Add body for methods that support it
   if (["POST", "PUT", "PATCH"].includes(requestMethod.toUpperCase()) && requestBody) {
-    fetchOptions.body = requestBody;
+    fetchOptions.body = requestIsBase64 ? Buffer.from(requestBody, "base64") : requestBody;
   }
 
   await checkEgressAllowed(actualTargetUrl);

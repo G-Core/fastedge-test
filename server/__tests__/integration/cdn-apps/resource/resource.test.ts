@@ -10,6 +10,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createResource, type Resource } from "../../../../runner/resource";
+import { createRunner } from "../../../../runner/standalone";
 import { runTestSuite } from "../../../../test-framework/suite-runner";
 import { test as fastedgeTest } from "../../../../test-framework/vitest";
 
@@ -154,6 +155,59 @@ describe("resource request URL", () => {
       expect(seen).toEqual(["shop.example /account?id=7"]);
       expect(result.origin?.kind).toBe("url");
       expect(result.finalResponse.body).toBe("origin");
+    } finally {
+      await r.cleanup();
+    }
+  });
+});
+
+/** As on the edge, hooks get a body's raw bytes, whether or not it is text (an image). */
+describe("binary bodies", () => {
+  const image = Buffer.from(Array.from({ length: 256 }, (_, i) => i)); // not valid UTF-8
+  const inverted = Buffer.from(image.map((b) => 255 - b));
+  let origin: Server;
+  let url: string;
+  beforeAll(async () => {
+    origin = createServer((req, res) => {
+      if (req.url === "/text") return void res.end("origin");
+      res.writeHead(200, { "content-type": "image/png" }).end(image);
+    });
+    await new Promise<void>((done) => origin.listen(0, "127.0.0.1", done));
+    url = `http://127.0.0.1:${(origin.address() as AddressInfo).port}`;
+  });
+  afterAll(() => new Promise<void>((done) => origin.close(() => done())));
+
+  it("onResponseBody gets an image's bytes and the client gets the bytes it wrote", async () => {
+    const r = await createResource({ apps: { a: fixture("a") }, main: { hooks: { onResponseBody: "a" }, origin: { url } } }, { stores: false });
+    try {
+      const result = await r.request({ url: "https://example.com/photo.png", headers: { "x-probe-invert": "1" } });
+      const hook = result.hooks.onResponseBody!.result;
+      expect(hook.input.response).toMatchObject({ isBase64: true, body: image.toString("base64") });
+      expect(result.finalResponse.isBase64).toBe(true);
+      expect(Buffer.from(result.finalResponse.body, "base64")).toEqual(inverted);
+    } finally {
+      await r.cleanup();
+    }
+  });
+
+  it("a single app (the debugger's full flow) does the same", async () => {
+    const runner = await createRunner(wasm, { stores: false });
+    try {
+      const result = await runner.callFullFlow(`${url}/photo.png`, "GET", { "x-probe-invert": "1" }, "", {}, true);
+      expect(result.finalResponse.isBase64).toBe(true);
+      expect(Buffer.from(result.finalResponse.body, "base64")).toEqual(inverted);
+    } finally {
+      await runner.cleanup();
+    }
+  });
+
+  it("a text body a hook makes binary comes back as base64", async () => {
+    const r = await createResource({ apps: { a: fixture("a") }, main: { hooks: { onResponseBody: "a" }, origin: { url } } }, { stores: false });
+    try {
+      const result = await r.request({ url: "https://example.com/text", headers: { "x-probe-invert": "1" } });
+      expect(result.hooks.onResponseBody!.result.input.response.isBase64).toBeUndefined();
+      expect(result.finalResponse.isBase64).toBe(true);
+      expect(Buffer.from(result.finalResponse.body, "base64")).toEqual(Buffer.from(Buffer.from("origin").map((b) => 255 - b)));
     } finally {
       await r.cleanup();
     }
