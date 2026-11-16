@@ -361,6 +361,23 @@ export class PropertyAccessControl {
   }
 
   /**
+   * Custom properties an earlier hook of the request wrote, possibly on another app: readable
+   * here too (on the edge they belong to the request).
+   */
+  seedCustomProperties(paths: string[]): void {
+    for (const path of paths) {
+      if (!this.customProperties.has(path)) {
+        this.customProperties.set(path, { createdIn: HookContext.OnRequestBody, value: new Uint8Array() });
+      }
+    }
+  }
+
+  /** The custom properties later hooks may read (not those created in onRequestHeaders). */
+  readableCustomProperties(): string[] {
+    return [...this.customProperties].filter(([, data]) => data.createdIn !== HookContext.OnRequestHeaders).map(([path]) => path);
+  }
+
+  /**
    * Reset custom properties when moving between hook contexts
    * Called when transitioning from request to response hooks
    */

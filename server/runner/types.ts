@@ -35,6 +35,25 @@ export type HookCall = {
   };
   properties: Record<string, unknown>;
   enforceProductionPropertyRules?: boolean; // Default: true - Enforce property access control rules
+  /**
+   * Custom properties an earlier hook of this request wrote (and later hooks may read), when the
+   * hooks run on different apps: on the edge custom properties belong to the request, not the app.
+   */
+  customProperties?: string[];
+  /**
+   * Set when this call is one hook of a flow driven from outside the runner (a resource): the
+   * request id shared by the flow's hooks; `request` and `properties` already carry `context`.
+   */
+  requestId?: string;
+};
+
+/** A response a hook sent with send_http_response. */
+export type LocalResponse = {
+  statusCode: number;
+  statusText: string;
+  /** The additional headers passed as send_http_response's 4th argument. */
+  headers: HeaderTuples;
+  bodyBase64: string;
 };
 
 export type HookResult = {
@@ -53,6 +72,10 @@ export type HookResult = {
   properties: Record<string, unknown>;
   /** The cache / Edge KV calls this hook made, in order (stores on only). */
   storeCalls?: StoreCall[];
+  /** Set when the hook answered with send_http_response. */
+  localResponse?: LocalResponse;
+  /** Custom properties later hooks of this request may read (see `HookCall.customProperties`). */
+  customProperties?: string[];
 };
 
 export enum ProxyStatus {

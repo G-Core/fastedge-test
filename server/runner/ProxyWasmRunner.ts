@@ -26,14 +26,11 @@ import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { StoreCall } from "../stores/trace.js";
 import { cdnContext, contextProperties, withHeaders, type RequestContext } from "./requestContext.js";
+import { BUILTIN_SHORTHAND, BUILTIN_URL, runCdnFlow } from "./cdnFlow.js";
 
 const textEncoder = new TextEncoder();
 
-/** Canonical URL substituted for the "built-in" shorthand so all downstream
- *  code (URL parsing, pseudo-header derivation, property extraction) works
- *  with a valid URL instead of a bare keyword. */
-export const BUILTIN_URL = "http://fastedge-builtin.debug";
-export const BUILTIN_SHORTHAND = "built-in";
+export { BUILTIN_URL, BUILTIN_SHORTHAND };
 
 export class ProxyWasmRunner implements IWasmRunner {
   private module: WebAssembly.Module | null = null; // Compiled module (reused)
@@ -240,6 +237,17 @@ export class ProxyWasmRunner implements IWasmRunner {
     return this.callContext.run({ ...c, callerHeaders: call.request.headers ?? {} }, () => work(applied));
   }
 
+  /**
+   * A request's headers without the ones the context added: request_started reports these, and the
+   * UI copies them into its editable headers, where they would stay after the context changed.
+   */
+  private ownHeaders<T>(headers: Record<string, T>): Record<string, T> {
+    const ctx = this.callContext.getStore();
+    if (!ctx?.callerHeaders) return headers;
+    const caller = ctx.callerHeaders;
+    return Object.fromEntries(Object.entries(headers).filter(([k]) => !Object.hasOwn(ctx.headers, k) || Object.hasOwn(caller, k)));
+  }
+
   async load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void> {
     if (config?.client || config?.edge) await this.setRequestContext({ client: config.client, edge: config.edge });
     // Update config if provided
@@ -293,600 +301,27 @@ export class ProxyWasmRunner implements IWasmRunner {
     if (!this.module) {
       throw new Error("WASM module not loaded");
     }
-
-    // Normalise the "built-in" shorthand to a real URL so every downstream
-    // consumer (URL parsing, pseudo-headers, property extraction) just works.
-    // Allow query params on built-in URL (e.g. http://fastedge-builtin.debug?key=value)
-    const isBuiltIn = targetUrl === BUILTIN_SHORTHAND
-      || targetUrl === BUILTIN_URL
-      || targetUrl.startsWith(BUILTIN_URL + '?')
-      || targetUrl.startsWith(BUILTIN_URL + '/');
-    if (targetUrl === BUILTIN_SHORTHAND) {
-      targetUrl = BUILTIN_URL;
-      this.logDebug(`Substituted "${BUILTIN_SHORTHAND}" → ${BUILTIN_URL}`);
-    }
-
-    const results: Record<string, HookResult> = {};
-
-    // Extract runtime properties from target URL before executing hooks
-    this.propertyResolver.extractRuntimePropertiesFromUrl(targetUrl);
-    this.logDebug(`Extracted runtime properties from URL: ${targetUrl}`);
-
-    // Auto-inject Host header from URL if not already present
-    // This matches browser behavior where Host is automatically set
-    const hasHost = Object.keys(call.request.headers ?? {}).some(
-      (key) => key.toLowerCase() === "host",
-    );
-    if (!hasHost) {
-      const urlObj = new URL(targetUrl);
-      const hostValue =
-        urlObj.port && urlObj.port !== "80" && urlObj.port !== "443"
-          ? `${urlObj.hostname}:${urlObj.port}`
-          : urlObj.hostname;
-      call.request.headers = call.request.headers ?? {};
-      call.request.headers["host"] = hostValue;
-      this.logDebug(`Auto-injected Host header: ${hostValue}`);
-    }
-
-    // Emit request started event
-    if (this.stateManager) {
-      const requestMethod = call.request.method ?? "GET";
-      // The UI copies these into its editable headers: leave out the ones the context added, or
-      // they would stay as explicit values after the context changes.
-      const ctx = this.callContext.getStore();
-      const shown = Object.fromEntries(
-        Object.entries(call.request.headers ?? {}).filter(
-          ([k]) => !ctx?.callerHeaders || !Object.hasOwn(ctx.headers, k) || Object.hasOwn(ctx.callerHeaders, k),
-        ),
-      );
-      this.stateManager.emitRequestStarted(
-        targetUrl,
-        requestMethod,
-        shown,
-        "system",
-      );
-    }
-
-    // Phase 1: Run request hooks
-    results.onRequestHeaders = await this.callHook({
-      ...call,
-      hook: "onRequestHeaders",
-    });
-
-    // Emit hook executed event
-    if (this.stateManager) {
-      this.stateManager.emitHookExecuted(
-        "onRequestHeaders",
-        results.onRequestHeaders.returnCode,
-        results.onRequestHeaders.logs.length,
-        results.onRequestHeaders.input,
-        results.onRequestHeaders.output,
-        "system",
-      );
-    }
-
-    // Check if WASM sent a local response (e.g., 302 redirect) — skip origin fetch
-    if (results.onRequestHeaders.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
-      const local = this.hostFunctions.getLocalResponse()!;
-      const responseHeaders = results.onRequestHeaders.output.response.headers;
-      this.hostFunctions.resetLocalResponse();
-
-      // Merge the additional headers passed as send_http_response's 4th arg
-      // on top of any headers set via stream_context.headers.response.add().
-      // appendMerge concatenates rather than overwrites, preserving multi-value
-      // semantics (e.g. Set-Cookie).
-      const mergedHeaders = local.headers.length > 0
-        ? HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))
-        : responseHeaders;
-
-      const contentType = HeaderManager.firstValue(mergedHeaders['content-type']) || 'text/plain';
-      const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
-
-      return {
-        hookResults: results,
-        finalResponse: {
-          status: local.statusCode,
-          statusText: local.statusText,
-          headers: mergedHeaders,
-          body,
-          contentType,
-          isBase64,
-        },
-        calculatedProperties: this.propertyResolver.getCalculatedProperties(),
-      };
-    }
-
-    // Pass modified headers from onRequestHeaders to onRequestBody
-    const headersAfterRequestHeaders =
-      results.onRequestHeaders.output.request.headers;
-    const propertiesAfterRequestHeaders = results.onRequestHeaders.properties;
-    this.logDebug(
-      `Headers after onRequestHeaders: ${JSON.stringify(headersAfterRequestHeaders)}`,
-    );
-
-    results.onRequestBody = await this.callHook({
-      ...call,
-      request: {
-        ...call.request,
-        headers: headersAfterRequestHeaders,
-      },
-      properties: propertiesAfterRequestHeaders,
-      hook: "onRequestBody",
-    });
-
-    // Emit hook executed event
-    if (this.stateManager) {
-      this.stateManager.emitHookExecuted(
-        "onRequestBody",
-        results.onRequestBody.returnCode,
-        results.onRequestBody.logs.length,
-        results.onRequestBody.input,
-        results.onRequestBody.output,
-        "system",
-      );
-    }
-
-    // Check if WASM sent a local response from onRequestBody
-    if (results.onRequestBody.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
-      const local = this.hostFunctions.getLocalResponse()!;
-      const responseHeaders = results.onRequestBody.output.response.headers;
-      this.hostFunctions.resetLocalResponse();
-
-      // See post-onRequestHeaders short-circuit above for the merge rationale.
-      const mergedHeaders = local.headers.length > 0
-        ? HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))
-        : responseHeaders;
-
-      const contentType = HeaderManager.firstValue(mergedHeaders['content-type']) || 'text/plain';
-      const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
-
-      return {
-        hookResults: results,
-        finalResponse: {
-          status: local.statusCode,
-          statusText: local.statusText,
-          headers: mergedHeaders,
-          body,
-          contentType,
-          isBase64,
-        },
-        calculatedProperties: this.propertyResolver.getCalculatedProperties(),
-      };
-    }
-
-    // Get modified request data from hooks
-    const modifiedRequestHeaders = results.onRequestBody.output.request.headers;
-    const modifiedRequestBody = results.onRequestBody.output.request.body;
-    const propertiesAfterRequestBody = results.onRequestBody.properties;
-    this.logDebug(
-      `Final headers for fetch: ${JSON.stringify(modifiedRequestHeaders)}`,
-    );
-    const requestMethod = call.request.method ?? "GET";
-
-    // Phase 2: Obtain origin response (built-in responder or real HTTP fetch)
-    let responseHeaders: HeaderRecord;
-    let responseBody: string;
-    let responseStatus: number;
-    let responseStatusText: string;
-    let contentType: string;
-    let isBase64 = false;
-
-    try {
-      if (isBuiltIn) {
-        // Built-in responder: generate response locally without a network fetch.
-        // Control headers (stripped before building the response):
-        //   x-debugger-status  — HTTP status code (default 200)
-        //   x-debugger-content — "body-only" | "status-only" (default: full JSON echo)
-        this.logDebug("Using built-in responder");
-
-        const rawStatus = (HeaderManager.firstValue(modifiedRequestHeaders["x-debugger-status"]) || "").trim();
-        if (rawStatus === "") {
-          responseStatus = 200;
-        } else {
-          const parsed = parseInt(rawStatus, 10);
-          responseStatus = Number.isFinite(parsed) && parsed >= 100 && parsed <= 599
-            ? parsed
-            : 400;
-          if (responseStatus === 400 && rawStatus !== "400") {
-            this.logDebug(`Invalid x-debugger-status "${rawStatus}", defaulting to 400`);
-          }
-        }
-        responseStatusText = responseStatus === 200 ? "OK" : String(responseStatus);
-        const responseContentMode =
-          HeaderManager.firstValue(modifiedRequestHeaders["x-debugger-content"]) || "";
-
-        // Strip debugger control headers so they don't leak into the echo or response hooks
-        delete modifiedRequestHeaders["x-debugger-status"];
-        delete modifiedRequestHeaders["x-debugger-content"];
-
-        if (responseContentMode === "status-only") {
-          responseBody = "";
-          contentType = "text/plain";
-        } else if (responseContentMode === "body-only") {
-          responseBody = modifiedRequestBody || "";
-          contentType = HeaderManager.firstValue(modifiedRequestHeaders["content-type"]) || "text/plain";
-        } else {
-          // Default: full JSON echo (similar to http-responder)
-          contentType = "application/json";
-          // Mirror the post-hook request.url so the echo reflects what would
-          // have been fetched in production (WASM can rewrite this via
-          // set_property). Falls back to BUILTIN_URL if the hook cleared it.
-          responseBody = JSON.stringify({
-            method: requestMethod,
-            reqHeaders: modifiedRequestHeaders,
-            reqBody: modifiedRequestBody || "",
-            requestUrl:
-              (propertiesAfterRequestBody["request.url"] as string) || BUILTIN_URL,
-          });
-        }
-
-        responseHeaders = {
-          "content-type": contentType,
-          "content-length": String(Buffer.byteLength(responseBody)),
-        };
-
-        this.logDebug(
-          `Built-in responder: ${responseStatus} ${responseStatusText}, mode=${responseContentMode || "full"}`,
-        );
-      } else {
-        // Real HTTP fetch to origin.
-        //
-        // `request.url` is the single routing source (FastEdge production
-        // parity — the `geoRedirect` example is the canonical pattern). WASM
-        // writes to `request.path`, `request.host`, `request.scheme`, or
-        // `request.query` return Ok but do NOT affect the outbound fetch
-        // target, matching the silent-drop behaviour on production. WASM code
-        // that needs to re-route must rewrite `request.url` directly.
-        const actualTargetUrl =
-          (propertiesAfterRequestBody["request.url"] as string) || targetUrl;
-        const actualScheme = new URL(actualTargetUrl).protocol.replace(":", "");
-
-        this.logDebug(`Original URL: ${targetUrl}`);
-        this.logDebug(`Effective URL: ${actualTargetUrl}`);
-        this.logDebug(`Fetching ${requestMethod} ${actualTargetUrl}`);
-
-        // Preserve the host header as x-forwarded-host since fetch() will override it.
-        // fetch's HeadersInit requires single-string values; modifiedRequestHeaders may
-        // include multi-valued entries (from duplicate hook additions), so flatten to a
-        // comma-joined map — acceptable for request headers (never Set-Cookie).
-        const fetchHeaders: Record<string, string> = HeaderManager.flattenToMap(
-          modifiedRequestHeaders,
-        );
-
-        // Strip HTTP/2 pseudo-headers (:method, :path, :authority, :scheme).
-        // WASM hooks legitimately read them via proxy_get_header_map_value, but
-        // HTTP/1.1 fetch rejects them with "Headers.append: \":method\" is an
-        // invalid header name." Production FastEdge also drops pseudo-headers
-        // before upstream fetch. The proxy_http_call branch below does the same.
-        for (const key of Object.keys(fetchHeaders)) {
-          if (key.startsWith(":")) {
-            delete fetchHeaders[key];
-          }
-        }
-
-        // If there's a host header, also add it as x-forwarded-host
-        const hostHeader = Object.entries(modifiedRequestHeaders).find(
-          ([key]) => key.toLowerCase() === "host",
-        );
-
-        if (hostHeader) {
-          const hostValue = HeaderManager.firstValue(hostHeader[1]) ?? "";
-          fetchHeaders["x-forwarded-host"] = hostValue;
-          this.logDebug(`Adding x-forwarded-host: ${hostValue}`);
-        }
-
-        // Auto-inject standard proxy headers derived from the effective URL
-        fetchHeaders["x-forwarded-proto"] = actualScheme;
-        this.logDebug(`Adding x-forwarded-proto: ${actualScheme}`);
-
-        fetchHeaders["x-forwarded-port"] =
-          actualScheme === "https" ? "443" : "80";
-        this.logDebug(
-          `Adding x-forwarded-port: ${fetchHeaders["x-forwarded-port"]}`,
-        );
-
-        // Add X-Real-IP and X-Forwarded-For if set in properties
-        const realIp = this.propertyResolver.resolve("request.x_real_ip");
-        if (realIp && realIp !== "") {
-          fetchHeaders["x-real-ip"] = String(realIp);
-          fetchHeaders["x-forwarded-for"] = String(realIp);
-          this.logDebug(`Adding x-real-ip and x-forwarded-for: ${realIp}`);
-        }
-
-        const fetchOptions: RequestInit = {
-          method: requestMethod,
-          headers: fetchHeaders,
-          // Redirects are not followed; the redirect target was not checked against the egress policy.
-          redirect: "manual",
-        };
-
-        // Add body for methods that support it
-        if (
-          ["POST", "PUT", "PATCH"].includes(requestMethod.toUpperCase()) &&
-          modifiedRequestBody
-        ) {
-          fetchOptions.body = modifiedRequestBody;
-        }
-
-        await checkEgressAllowed(actualTargetUrl);
-        const response = await fetch(actualTargetUrl, fetchOptions);
-
-        // Extract response headers — preserve multiple Set-Cookie entries as string[]
-        // (RFC 6265 §3: Set-Cookie is the canonical exception to comma-combine).
-        responseHeaders = {};
-        response.headers.forEach((value, key) => {
-          if (key.toLowerCase() !== "set-cookie") {
-            responseHeaders[key] = value;
-          }
-        });
-        const setCookies = response.headers.getSetCookie();
-        if (setCookies.length > 0) {
-          responseHeaders["set-cookie"] = setCookies;
-        }
-
-        contentType = response.headers.get("content-type") || "text/plain";
-        responseStatus = response.status;
-        responseStatusText = response.statusText;
-
-        // Check if response is binary (image, video, audio, etc.)
-        const isBinary =
-          contentType.startsWith("image/") ||
-          contentType.startsWith("video/") ||
-          contentType.startsWith("audio/") ||
-          contentType.includes("application/octet-stream") ||
-          contentType.includes("application/pdf") ||
-          contentType.includes("application/zip");
-
-        if (isBinary) {
-          // For binary content, convert to base64
-          const arrayBuffer = await response.arrayBuffer();
-          responseBody = Buffer.from(arrayBuffer).toString("base64");
-          isBase64 = true;
-          this.logDebug(
-            `Binary response converted to base64 (${arrayBuffer.byteLength} bytes)`,
-          );
-        } else {
-          // For text content, just get as text
-          responseBody = await response.text();
-        }
-
-        this.logDebug(
-          `Fetch completed: ${responseStatus} ${responseStatusText}`,
-        );
-      }
-
-      // Merge response-header state set during request phase into the response-phase input.
-      // Production: response headers added via add_http_response_header during onRequestHeaders /
-      // onRequestBody are carried into the response phase alongside (not silently overwritten
-      // by) the origin's headers. Append-merge so that names present on both sides surface as
-      // string[] — mirroring how Envoy represents cross-phase add_http_response_header colliding
-      // with the upstream response.
-      //
-      // Inner merge stays as a shallow spread because onRequestBody's output is the host's
-      // cumulative state (already includes onRequestHeaders' mutations); the spread just lets
-      // it supersede the earlier snapshot rather than re-appending the same values.
-      const requestPhaseResponseHeaders = {
-        ...(results.onRequestHeaders.output.response.headers ?? {}),
-        ...(results.onRequestBody.output.response.headers ?? {}),
-      };
-      const mergedResponseHeaders = HeaderManager.appendMerge(
-        requestPhaseResponseHeaders,
-        responseHeaders,
-      );
-
-      // Phase 3: Run response hooks with real response data
-      // Use modified request headers from Phase 1, not original
-      const responseCall = {
-        ...call,
-        request: {
-          ...call.request,
-          headers: modifiedRequestHeaders,
-          body: modifiedRequestBody,
-        },
-        response: {
-          headers: mergedResponseHeaders,
-          body: responseBody,
-          status: responseStatus,
-          statusText: responseStatusText,
-        },
-        properties: propertiesAfterRequestBody,
-      };
-
-      // Reset custom properties from onRequestHeaders before moving to response hooks
-      // (production behavior: custom properties created in onRequestHeaders are not available in response hooks)
-      this.propertyAccessControl.resetCustomPropertiesForNewContext();
-
-      results.onResponseHeaders = await this.callHook({
-        ...responseCall,
-        hook: "onResponseHeaders",
-      });
-
-      // Emit hook executed event
-      if (this.stateManager) {
-        this.stateManager.emitHookExecuted(
-          "onResponseHeaders",
-          results.onResponseHeaders.returnCode,
-          results.onResponseHeaders.logs.length,
-          results.onResponseHeaders.input,
-          results.onResponseHeaders.output,
-          "system",
-        );
-      }
-
-      // Check if WASM sent a local response from onResponseHeaders — short-circuit response chain
-      if (results.onResponseHeaders.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
-        const local = this.hostFunctions.getLocalResponse()!;
-        const responseHeaders = results.onResponseHeaders.output.response.headers;
-        this.hostFunctions.resetLocalResponse();
-
-        // See post-onRequestHeaders short-circuit above for the merge rationale.
-        const mergedHeaders = local.headers.length > 0
-          ? HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))
-          : responseHeaders;
-
-        const contentType = HeaderManager.firstValue(mergedHeaders['content-type']) || 'text/plain';
-        const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
-        return {
-          hookResults: results,
-          finalResponse: {
-            status: local.statusCode,
-            statusText: local.statusText,
-            headers: mergedHeaders,
-            body,
-            contentType,
-            isBase64,
-          },
-          calculatedProperties: this.propertyResolver.getCalculatedProperties(),
-        };
-      }
-
-      // Pass modified headers from onResponseHeaders to onResponseBody
-      const headersAfterResponseHeaders =
-        results.onResponseHeaders.output.response.headers;
-      const propertiesAfterResponseHeaders =
-        results.onResponseHeaders.properties;
-      this.logDebug(
-        `Headers after onResponseHeaders: ${JSON.stringify(headersAfterResponseHeaders)}`,
-      );
-
-      results.onResponseBody = await this.callHook({
-        ...responseCall,
-        response: {
-          ...responseCall.response,
-          headers: headersAfterResponseHeaders,
-        },
-        properties: propertiesAfterResponseHeaders,
-        hook: "onResponseBody",
-      });
-
-      // Emit hook executed event
-      if (this.stateManager) {
-        this.stateManager.emitHookExecuted(
-          "onResponseBody",
-          results.onResponseBody.returnCode,
-          results.onResponseBody.logs.length,
-          results.onResponseBody.input,
-          results.onResponseBody.output,
-          "system",
-        );
-      }
-
-      // Check if WASM sent a local response from onResponseBody — short-circuit response chain
-      if (results.onResponseBody.returnCode === 1 && this.hostFunctions.hasLocalResponse()) {
-        const local = this.hostFunctions.getLocalResponse()!;
-        const responseHeaders = results.onResponseBody.output.response.headers;
-        this.hostFunctions.resetLocalResponse();
-
-        // See post-onRequestHeaders short-circuit above for the merge rationale.
-        const mergedHeaders = local.headers.length > 0
-          ? HeaderManager.appendMerge(responseHeaders, HeaderManager.tuplesToRecord(local.headers))
-          : responseHeaders;
-
-        const contentType = HeaderManager.firstValue(mergedHeaders['content-type']) || 'text/plain';
-        const { body, isBase64 } = encodeLocalResponseBody(local.body, contentType);
-        return {
-          hookResults: results,
-          finalResponse: {
-            status: local.statusCode,
-            statusText: local.statusText,
-            headers: mergedHeaders,
-            body,
-            contentType,
-            isBase64,
-          },
-          calculatedProperties: this.propertyResolver.getCalculatedProperties(),
-        };
-      }
-
-      // Get final response after WASM modifications
-      const finalHeaders = results.onResponseBody.output.response.headers;
-      const finalBody = results.onResponseBody.output.response.body;
-      this.logDebug(`Final response body length: ${finalBody.length}`);
-
-      // Get calculated runtime properties to return to frontend
-      const calculatedProperties =
-        this.propertyResolver.getCalculatedProperties();
-
-      // Derive contentType from final headers (WASM may have changed it during response hooks)
-      const finalContentType = HeaderManager.firstValue(finalHeaders["content-type"]) || contentType;
-
-      return {
-        hookResults: results,
-        finalResponse: {
-          status: responseStatus,
-          statusText: responseStatusText,
-          headers: finalHeaders,
-          body: finalBody,
-          contentType: finalContentType,
-          isBase64,
-        },
-        calculatedProperties,
-      };
-    } catch (error) {
-      // Extract detailed error information
-      let errorMessage = "Fetch failed";
-      let errorDetails = "";
-
-      if (error instanceof Error) {
-        errorMessage = error.message;
-        if ((error as any).cause) {
-          errorDetails = ` (cause: ${String((error as any).cause)})`;
-        }
-      } else {
-        errorMessage = String(error);
-      }
-
-      const fullErrorMessage = `Failed to fetch ${requestMethod} ${targetUrl}: ${errorMessage}${errorDetails}`;
-      this.logDebug(fullErrorMessage);
-
-      // Get the last successful request state
-      const lastRequestState = results.onRequestBody?.output?.request || {
-        headers: modifiedRequestHeaders,
-        body: modifiedRequestBody,
-      };
-
-      // Return error in response hooks
-      const errorResult: HookResult = {
-        returnCode: null,
-        logs: [{ level: 4, message: fullErrorMessage }],
-        input: {
-          request: lastRequestState,
-          response: { headers: {}, body: "" },
-        },
-        output: {
-          request: lastRequestState,
-          response: { headers: {}, body: "" },
-        },
-        properties: call.properties,
-      };
-      results.onResponseHeaders = errorResult;
-      results.onResponseBody = errorResult;
-
-      // Get calculated runtime properties even on error
-      const calculatedProperties =
-        this.propertyResolver.getCalculatedProperties();
-
-      return {
-        hookResults: results,
-        finalResponse: {
-          status: 0,
-          statusText: "Fetch Failed",
-          headers: {},
-          body: fullErrorMessage,
-          contentType: "text/plain",
-        },
-        calculatedProperties,
-      };
-    }
+    // This app runs every hook.
+    return runCdnFlow({
+      runnerFor: () => this,
+      start: (url) => this.propertyResolver.extractRuntimePropertiesFromUrl(url),
+      calculatedProperties: () => this.propertyResolver.getCalculatedProperties(),
+      log: (message) => this.logDebug(message),
+      events: this.stateManager,
+      ownHeaders: (headers) => this.ownHeaders(headers),
+    }, call, targetUrl);
   }
 
   async callHook(call: HookCall): Promise<HookResult> {
     const run = (c: HookCall) => {
-      const context = { requestId: this.flowRequestId.getStore() ?? randomUUID(), hook: c.hook };
+      const context = { requestId: this.flowRequestId.getStore() ?? call.requestId ?? randomUUID(), hook: c.hook };
       return this.trace.run(context, () => this.runHook(c));
     };
     // Inside a full flow the context is already applied (and a hook may have removed a header).
-    return this.flowRequestId.getStore() ? run(call) : this.withContext(call, call.context, run);
+    if (this.flowRequestId.getStore()) return run(call);
+    // One hook of a flow driven from outside (a resource): only the edge dictionary is still needed.
+    if (call.requestId) return this.callContext.run(call.context ? cdnContext(call.context) : this.context, () => run(call));
+    return this.withContext(call, call.context, run);
   }
 
   private async runHook(call: HookCall): Promise<HookResult> {
@@ -899,6 +334,7 @@ export class ProxyWasmRunner implements IWasmRunner {
 
     // Clear stale local response from any previous hook execution
     this.hostFunctions.resetLocalResponse();
+    if (call.customProperties) this.propertyAccessControl.seedCustomProperties(call.customProperties);
 
     // Create fresh instance for this hook call (isolated context)
     const imports = this.createImports();
@@ -1134,6 +570,7 @@ export class ProxyWasmRunner implements IWasmRunner {
     );
 
     const storeCalls = this.storeCalls();
+    const local = this.hostFunctions.getLocalResponse();
     return {
       returnCode,
       logs: filteredLogs,
@@ -1141,6 +578,8 @@ export class ProxyWasmRunner implements IWasmRunner {
       output: outputState,
       properties: this.propertyResolver.getAllProperties(),
       ...(storeCalls ? { storeCalls } : {}),
+      ...(local ? { localResponse: { statusCode: local.statusCode, statusText: local.statusText, headers: local.headers, bodyBase64: Buffer.from(local.body).toString("base64") } } : {}),
+      customProperties: this.propertyAccessControl.readableCustomProperties(),
     };
   }
 
@@ -1475,24 +914,4 @@ function ensureNullTerminated(value: string): string {
     return "";
   }
   return value.endsWith("\0") ? value : `${value}\0`;
-}
-
-/** Encode a local response body (raw bytes from WASM) for the finalResponse.
- *  Mirrors the binary detection logic used for origin fetch responses. */
-function encodeLocalResponseBody(
-  body: Uint8Array,
-  contentType: string,
-): { body: string; isBase64: boolean } {
-  const isBinary =
-    contentType.startsWith("image/") ||
-    contentType.startsWith("video/") ||
-    contentType.startsWith("audio/") ||
-    contentType.includes("application/octet-stream") ||
-    contentType.includes("application/pdf") ||
-    contentType.includes("application/zip");
-
-  if (isBinary) {
-    return { body: Buffer.from(body).toString("base64"), isBase64: true };
-  }
-  return { body: new TextDecoder().decode(body), isBase64: false };
 }
