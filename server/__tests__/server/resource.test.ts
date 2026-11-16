@@ -14,8 +14,9 @@ describe("debugger server — resources", () => {
     server = await startTestServer();
     mkdirSync(join(server.workspacePath, "apps"));
     copyFileSync(PROBE, join(server.workspacePath, "apps", "probe.wasm"));
-    writeFileSync(join(server.workspacePath, "resource.json"), JSON.stringify({
-      apps: { a: { wasm: "apps/probe.wasm" }, b: { wasm: "apps/probe.wasm" } },
+    mkdirSync(join(server.workspacePath, ".fastedge-debug"), { recursive: true });
+    writeFileSync(join(server.workspacePath, ".fastedge-debug", "fastedge-cdn-resource.test.json"), JSON.stringify({
+      apps: { a: { wasm: "../apps/probe.wasm" }, b: { wasm: "../apps/probe.wasm" } },
       main: { hooks: { onResponseHeaders: "a", onResponseBody: "b" }, origin: { url: "built-in" } },
       stores: false,
     }));
@@ -25,8 +26,8 @@ describe("debugger server — resources", () => {
     await server.close();
   });
 
-  it("loads a resource file from the workspace and /api/send runs it", async () => {
-    const load = await post("/api/resource/load", { configPath: "resource.json" });
+  it("loads the default resource file and /api/send runs it", async () => {
+    const load = await post("/api/resource/load", {});
     expect(load.status).toBe(200);
     expect((await load.json()).apps).toEqual([
       { name: "a", wasmType: "proxy-wasm" },
@@ -50,7 +51,8 @@ describe("debugger server — resources", () => {
     expect((await res.json()).error).toContain("outside the workspace root");
   });
 
-  it("refuses a body with neither or both of configPath and config", async () => {
-    expect((await post("/api/resource/load", {})).status).toBe(400);
+  it("loads a named file, and refuses both configPath and config", async () => {
+    expect((await post("/api/resource/load", { configPath: ".fastedge-debug/fastedge-cdn-resource.test.json" })).status).toBe(200);
+    expect((await post("/api/resource/load", { configPath: "x", config: {} })).status).toBe(400);
   });
 });

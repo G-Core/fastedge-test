@@ -10,7 +10,7 @@ export { HttpWasmRunner } from "./HttpWasmRunner.js";
 export { WasmRunnerFactory } from "./WasmRunnerFactory.js";
 export { NullStateManager } from "./NullStateManager.js";
 export { createRunner, createRunnerFromBuffer } from "./standalone.js";
-export { createResource, matchRule } from "./resource.js";
+export { createResource, matchRule, DEFAULT_RESOURCE_FILE } from "./resource.js";
 export type { Resource, ResourceRequest, ResourceResult, CreateResourceOptions } from "./resource.js";
 export type { OriginResponse, CdnHook } from "./cdnFlow.js";
 

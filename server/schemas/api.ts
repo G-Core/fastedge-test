@@ -37,13 +37,14 @@ export const ApiSendBodySchema = z.object({
 
 /**
  * Load a resource (several apps, one per hook): a config file in the workspace, or the config
- * itself (paths relative to the workspace). Every file it reads must be inside the workspace.
+ * itself (paths relative to the workspace); neither = the default file,
+ * `.fastedge-debug/fastedge-cdn-resource.test.json`. Every file it reads must be inside the workspace.
  */
 export const ApiResourceLoadBodySchema = z.object({
   configPath: z.string().optional(),
   config: z.record(z.string(), z.unknown()).optional(),
-}).refine((body) => (body.configPath === undefined) !== (body.config === undefined), {
-  message: "Give exactly one of configPath or config",
+}).refine((body) => body.configPath === undefined || body.config === undefined, {
+  message: "Give configPath or config, not both",
 });
 
 export const ApiCallBodySchema = z.object({

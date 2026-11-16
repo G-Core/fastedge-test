@@ -23,6 +23,9 @@ import { validatePathOrThrow } from "../utils/pathValidator.js";
 import { validateDotenvLeafs } from "../utils/dotenv-loader.js";
 import { CDN_HOOKS, isBuiltInUrl, runCdnFlow, type CdnHook, type OriginResponse } from "./cdnFlow.js";
 
+/** Where the debugger looks for a resource when none is named (relative to the workspace). */
+export const DEFAULT_RESOURCE_FILE = ".fastedge-debug/fastedge-cdn-resource.test.json";
+
 export type ResourceRequest = {
   /** Default: the config's `request.url`. */
   url?: string;

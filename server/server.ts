@@ -25,7 +25,7 @@ import { WebSocketManager, StateManager } from "./websocket/index.js";
 import { detectWasmType } from "./utils/wasmTypeDetector.js";
 import { validatePath } from "./utils/pathValidator.js";
 import { resolveDotenvPath, validateDotenvLeafs, DotenvPathError } from "./utils/dotenv-loader.js";
-import { createResource, type Resource } from "./runner/resource.js";
+import { createResource, DEFAULT_RESOURCE_FILE, type Resource } from "./runner/resource.js";
 import {
   ApiResourceLoadBodySchema,
   ApiLoadBodySchema,
@@ -438,7 +438,8 @@ app.post("/api/load", serialized(async (req: Request, res: Response) => {
 }));
 
 /**
- * Load a resource: several apps, one per hook, as on a CDN resource. Every file it reads must be
+ * Load a resource: several apps, one per hook, as on a CDN resource (default file
+ * .fastedge-debug/fastedge-cdn-resource.test.json in the workspace). Every file it reads must be
  * inside the workspace, so a resource spanning several projects is debugged from a folder that
  * holds them all. Replaces the loaded app or resource; /api/send then runs it.
  */
@@ -449,7 +450,8 @@ app.post("/api/resource/load", serialized(async (req: Request, res: Response) =>
     return;
   }
   const root = process.env.WORKSPACE_PATH || process.cwd();
-  const { configPath, config } = parsed.data;
+  const { config } = parsed.data;
+  const configPath = config ? undefined : parsed.data.configPath ?? DEFAULT_RESOURCE_FILE;
 
   await currentRunner?.cleanup();
   currentRunner = null;

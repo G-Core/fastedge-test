@@ -7,6 +7,9 @@ flow, shared with single apps), `server/schemas/config.ts` (`ResourceConfigSchem
 
 ## Config
 
+Default file: `.fastedge-debug/fastedge-cdn-resource.test.json` at the workspace root (what
+`POST /api/resource/load` with no body loads); any file with `apps` is a resource.
+
 ```jsonc
 {
   "apps": {
