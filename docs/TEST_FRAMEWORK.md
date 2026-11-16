@@ -14,6 +14,7 @@ import {
   loadConfigFile,
   mockOrigins,
   createStores,
+  createResource,
   assertRequestHeader,
   assertNoRequestHeader,
   assertResponseHeader,
@@ -41,6 +42,8 @@ import {
 import type {
   TestSuite,
   TestCase,
+  ResourceTestSuite,
+  ResourceTestCase,
   TestResult,
   SuiteResult,
   FlowOptions,
@@ -50,6 +53,9 @@ import type {
   MockOriginsOptions,
   TestStores,
   CreateStoresOptions,
+  Resource,
+  ResourceRequest,
+  ResourceResult,
 } from "@gcoredev/fastedge-test/test";
 ```
 
@@ -93,6 +99,37 @@ interface TestCase {
 ```
 
 `context.stores` is this test's own cache and Edge KV (a fresh instance per test, seeded from `fixtures/stores/`), or the instance given in `runnerConfig.stores`. It is `null` when `runnerConfig.stores` is `false`. See [TestStores](#teststores--createstoresoptions).
+
+### ResourceTestSuite & ResourceTestCase
+
+A suite over a resource (several apps on one request, one app per hook). Each test receives a fresh, loaded resource on its own stores.
+
+```typescript
+/** A test case of a ResourceTestSuite: receives a fresh, loaded resource. */
+interface ResourceTestCase {
+  name: string;
+  run: (resource: Resource, context: { stores: TestStores | null }) => Promise<void>;
+}
+
+/**
+ * A suite over a resource (several apps, one per hook): a config file (paths relative to it) or
+ * object. Each test gets a fresh resource on its own stores.
+ */
+interface ResourceTestSuite {
+  resource: string | ResourceConfigInput;
+  /** Default: this test's own stores; false = off; or an instance shared by every test. */
+  stores?: false | TestStores;
+  tests: ResourceTestCase[];
+}
+```
+
+| Field      | Type                           | Required | Description                                                                                          |
+| ---------- | ------------------------------ | -------- | ---------------------------------------------------------------------------------------------------- |
+| `resource` | `string \| ResourceConfigInput` | Yes      | Path to a resource config file (app paths are relative to it), or an equivalent config object        |
+| `stores`   | `false \| TestStores`          | No       | Default: each test gets its own stores. `false` disables stores; an instance is shared by every test |
+| `tests`    | `ResourceTestCase[]`           | Yes      | Test cases to execute; must be non-empty                                                             |
+
+Resource suites are defined with `defineTestSuite` and run with `runTestSuite` or `runAndExit`, the same as runner suites. `Resource`, `ResourceRequest` and `ResourceResult` are exported as types; `Resource` is created with [createResource](#createresource).
 
 ### TestResult & SuiteResult
 
@@ -311,10 +348,10 @@ Within `runTestSuite`, `runnerConfig.stores` is handled per test: when omitted o
 ### defineTestSuite
 
 ```typescript
-function defineTestSuite(suite: TestSuite): TestSuite
+function defineTestSuite<T extends TestSuite | ResourceTestSuite>(config: T): T
 ```
 
-Validates and returns a typed `TestSuite` definition. Throws if neither `wasmPath` nor `wasmBuffer` is provided, or if `tests` is empty.
+Validates and returns a typed suite definition. For a `TestSuite`, throws if neither `wasmPath` nor `wasmBuffer` is provided. For both suite kinds, throws if `tests` is empty.
 
 ```typescript
 import {
@@ -342,10 +379,10 @@ const suite = defineTestSuite({
 ### runTestSuite
 
 ```typescript
-function runTestSuite(suite: TestSuite): Promise<SuiteResult>
+function runTestSuite(suite: TestSuite | ResourceTestSuite): Promise<SuiteResult>
 ```
 
-Executes all test cases in the suite sequentially. Each test receives a **fresh runner instance** and its own stores (cache and Edge KV, seeded from `fixtures/stores/`), so tests are fully isolated. A thrown error or failed assertion marks that test as failed; remaining tests still execute.
+Executes all test cases in the suite sequentially. Each test receives a **fresh runner instance** (or a fresh resource, for a `ResourceTestSuite`) and its own stores (cache and Edge KV, seeded from `fixtures/stores/`), so tests are fully isolated. A thrown error or failed assertion marks that test as failed; remaining tests still execute.
 
 ```typescript
 import { defineTestSuite, runTestSuite } from "@gcoredev/fastedge-test/test";
@@ -370,7 +407,7 @@ for (const r of result.results) {
 ### runAndExit
 
 ```typescript
-function runAndExit(suite: TestSuite): Promise<never>
+function runAndExit(suite: TestSuite | ResourceTestSuite): Promise<never>
 ```
 
 Runs the suite, prints a summary to stdout, then calls `process.exit(0)` if all tests pass or `process.exit(1)` if any fail. Intended for standalone Node.js test scripts run in CI.
@@ -565,9 +602,43 @@ try {
 }
 ```
 
+### createResource
+
+```typescript
+function createResource(
+  resource: string | ResourceConfigInput,
+  options?: { stores?: false | TestStores },
+): Promise<Resource>
+```
+
+Loads a resource: several apps handling one request, one app per hook. `resource` is a path to a resource config file (app paths are resolved relative to it) or an equivalent config object. The returned `Resource` is released with `cleanup()`. `runTestSuite` creates and cleans up a resource for every test of a `ResourceTestSuite`; call `createResource` directly when composing a resource outside a suite. Request and result shapes are exported as the `ResourceRequest` and `ResourceResult` types.
+
+```typescript
+import {
+  defineTestSuite,
+  runAndExit,
+} from "@gcoredev/fastedge-test/test";
+
+const suite = defineTestSuite({
+  resource: "./fastedge-resource.json",
+  tests: [
+    {
+      name: "resource loads on its own stores",
+      async run(_resource, context) {
+        if (context.stores === null) {
+          throw new Error("expected per-test stores");
+        }
+      },
+    },
+  ],
+});
+
+await runAndExit(suite);
+```
+
 ## Vitest Fixtures
 
-The `@gcoredev/fastedge-test/vitest` sub-path exports a vitest `test` function extended with two fixtures, `stores` and `runner`. Use it when writing tests with vitest instead of `defineTestSuite`. `vitest` must be installed in the consuming project.
+The `@gcoredev/fastedge-test/vitest` sub-path exports a vitest `test` function extended with three fixtures: `stores`, `runner` and `resource`. Use it when writing tests with vitest instead of `defineTestSuite`. `vitest` must be installed in the consuming project.
 
 ```typescript
 import { test, createStores } from "@gcoredev/fastedge-test/vitest";
@@ -576,15 +647,17 @@ import type { FastEdgeFixtures, TestStores } from "@gcoredev/fastedge-test/vites
 type FastEdgeFixtures = {
   stores: TestStores;
   runner: (wasm: string | Buffer, config?: RunnerConfig) => Promise<IWasmRunner>;
+  resource: (config: string | ResourceConfigInput) => Promise<Resource>;
 };
 ```
 
-| Fixture  | Type                                                                     | Description                                                                                                                                                         |
-| -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stores` | `TestStores`                                                             | This test's own in-memory cache and Edge KV, seeded from `fixtures/stores/`. Closed when the test ends                                                              |
-| `runner` | `(wasm: string \| Buffer, config?: RunnerConfig) => Promise<IWasmRunner>` | Loads a runner from a `.wasm` path or buffer on this test's `stores` (unless `config.stores` is set). Runners are cleaned up when the test ends |
+| Fixture    | Type                                                                      | Description                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `stores`   | `TestStores`                                                              | This test's own in-memory cache and Edge KV, seeded from `fixtures/stores/`; closed when the test ends                              |
+| `runner`   | `(wasm: string \| Buffer, config?: RunnerConfig) => Promise<IWasmRunner>` | Loads a runner from a `.wasm` path or buffer on this test's `stores` (unless `config.stores` is set); cleaned up when the test ends |
+| `resource` | `(config: string \| ResourceConfigInput) => Promise<Resource>`            | Loads a resource (several apps, one per hook) on this test's `stores`; cleaned up when the test ends                                |
 
-CDN and HTTP runners created within one test share that test's stores. To share stores across several tests on purpose (an ordered journey), call `createStores()` in `beforeAll`, pass the instance as `RunnerConfig.stores`, and close it in `afterAll`.
+CDN and HTTP runners and resources created within one test share that test's stores. To share stores across several tests on purpose (an ordered journey), call `createStores()` in `beforeAll`, pass the instance as `RunnerConfig.stores`, and close it in `afterAll`.
 
 ```typescript
 import { expect } from "vitest";

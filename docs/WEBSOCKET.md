@@ -394,6 +394,7 @@ interface HttpWasmRequestCompletedEvent {
       statusText: string;
       headers: Record<string, string | string[] | undefined>;
       body: string;
+      storeCalls?: StoreCall[];
       contentType: string | null;
       isBase64?: boolean;
     };
@@ -403,14 +404,15 @@ interface HttpWasmRequestCompletedEvent {
 
 `response.headers` mirrors Node's `IncomingHttpHeaders`. `undefined` values are dropped during JSON serialization and do not appear on the wire.
 
-| Field                  | Type                                              | Description                                           |
-| ---------------------- | ------------------------------------------------- | ----------------------------------------------------- |
-| `response.status`      | `number`                                          | HTTP status code                                      |
-| `response.statusText`  | `string`                                          | HTTP status text                                      |
-| `response.headers`     | `Record<string, string \| string[] \| undefined>` | Response headers (`undefined` values omitted in JSON) |
-| `response.body`        | `string`                                          | Response body (may be base64 if `isBase64` is `true`) |
-| `response.contentType` | `string \| null`                                  | Content-Type, or `null` if absent                     |
-| `response.isBase64`    | `boolean \| undefined`                            | Whether `body` is base64-encoded                      |
+| Field                  | Type                                              | Description                                                                       |
+| ---------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `response.status`      | `number`                                          | HTTP status code                                                                  |
+| `response.statusText`  | `string`                                          | HTTP status text                                                                  |
+| `response.headers`     | `Record<string, string \| string[] \| undefined>` | Response headers (`undefined` values omitted in JSON)                             |
+| `response.body`        | `string`                                          | Response body (may be base64 if `isBase64` is `true`)                             |
+| `response.storeCalls`  | `StoreCall[] \| undefined`                        | Cache and Edge KV calls the app made, in order. Present only when stores are on   |
+| `response.contentType` | `string \| null`                                  | Content-Type, or `null` if absent                                                 |
+| `response.isBase64`    | `boolean \| undefined`                            | Whether `body` is base64-encoded                                                  |
 
 **Example:**
 
@@ -508,6 +510,179 @@ interface ConnectionStatusEvent {
   "data": {
     "connected": true,
     "clientCount": 1
+  }
+}
+```
+
+---
+
+### resource_loaded
+
+Fired when a resource (several apps, one app per hook) has been loaded.
+
+```typescript
+interface ResourceLoadedEvent {
+  type: "resource_loaded";
+  timestamp: number;
+  source: "ui" | "ai_agent" | "api" | "system";
+  data: {
+    configPath?: string | null;
+    apps: { name: string; wasmType: "proxy-wasm" | "http-wasm" }[];
+  };
+}
+```
+
+| Field         | Type                                                       | Description                                                |
+| ------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
+| `configPath?` | `string \| null`                                           | The config file the resource was loaded from, if any       |
+| `apps`        | `{ name: string; wasmType: 'proxy-wasm' \| 'http-wasm' }[]` | The resource's apps by name, with each app's WASM type    |
+
+**Example:**
+
+```json
+{
+  "type": "resource_loaded",
+  "timestamp": 1742734800020,
+  "source": "api",
+  "data": {
+    "configPath": "/workspace/resource.json",
+    "apps": [
+      { "name": "auth", "wasmType": "proxy-wasm" },
+      { "name": "origin", "wasmType": "http-wasm" }
+    ]
+  }
+}
+```
+
+---
+
+### resource_request_completed
+
+Fired when a request has run through a resource: the rule that matched, each hook's app and result, and the origin response.
+
+```typescript
+interface ResourceRequestCompletedEvent {
+  type: "resource_request_completed";
+  timestamp: number;
+  source: "ui" | "ai_agent" | "api" | "system";
+  data: {
+    result: {
+      rule: { index: number; name?: string; match: string } | null;
+      hooks: Partial<
+        Record<
+          "onRequestHeaders" | "onRequestBody" | "onResponseHeaders" | "onResponseBody",
+          {
+            app: string;
+            result: {
+              returnCode: number | null;
+              logs: { level: number; message: string }[];
+              input: {
+                request: { headers: Record<string, string | string[]>; body: string };
+                response: { headers: Record<string, string | string[]>; body: string };
+                properties?: Record<string, unknown>;
+              };
+              output: {
+                request: { headers: Record<string, string | string[]>; body: string };
+                response: { headers: Record<string, string | string[]>; body: string };
+                properties?: Record<string, unknown>;
+              };
+              properties: Record<string, unknown>;
+              storeCalls?: StoreCall[];
+              localResponse?: {
+                statusCode: number;
+                statusText: string;
+                headers: [string, string][];
+                bodyBase64: string;
+              };
+              customProperties?: string[];
+            };
+          }
+        >
+      >;
+      origin?: {
+        kind: "url" | "built-in" | "app";
+        app?: string;
+        response: {
+          status: number;
+          statusText: string;
+          headers: Record<string, string | string[]>;
+          body: string;
+          contentType: string;
+          isBase64?: boolean;
+        };
+        storeCalls?: StoreCall[];
+      };
+      finalResponse: {
+        status: number;
+        statusText: string;
+        headers: Record<string, string | string[]>;
+        body: string;
+        contentType: string;
+        isBase64?: boolean;
+      };
+    };
+  };
+}
+```
+
+| Field                | Type                                   | Description                                                                                  |
+| -------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `result.rule`        | `object \| null`                       | The rule that matched the request path (`index`, optional `name`, `match` regex), or `null` when the request used `main` |
+| `result.hooks`       | `object`                               | Each hook that ran, keyed by camelCase hook name, with the app that ran it and its result    |
+| `result.origin`      | `object \| undefined`                  | What answered before the response hooks. Absent when a request hook sent the response itself |
+| `result.finalResponse` | `object`                             | The response returned to the client                                                          |
+
+`result.origin.kind` is `"url"` for an upstream URL, `"built-in"` for the built-in responder, and `"app"` when an http-wasm app of the resource answered (`app` then names it).
+
+**Example:**
+
+```json
+{
+  "type": "resource_request_completed",
+  "timestamp": 1742734800700,
+  "source": "api",
+  "data": {
+    "result": {
+      "rule": { "index": 0, "name": "api", "match": "^/api/" },
+      "hooks": {
+        "onRequestHeaders": {
+          "app": "auth",
+          "result": {
+            "returnCode": 0,
+            "logs": [],
+            "input": {
+              "request": { "headers": { "host": "example.com" }, "body": "" },
+              "response": { "headers": {}, "body": "" }
+            },
+            "output": {
+              "request": { "headers": { "host": "example.com", "x-user": "42" }, "body": "" },
+              "response": { "headers": {}, "body": "" }
+            },
+            "properties": {}
+          }
+        }
+      },
+      "origin": {
+        "kind": "app",
+        "app": "origin",
+        "response": {
+          "status": 200,
+          "statusText": "OK",
+          "headers": { "content-type": "text/plain" },
+          "body": "Hello, world!",
+          "contentType": "text/plain",
+          "isBase64": false
+        }
+      },
+      "finalResponse": {
+        "status": 200,
+        "statusText": "OK",
+        "headers": { "content-type": "text/plain" },
+        "body": "Hello, world!",
+        "contentType": "text/plain",
+        "isBase64": false
+      }
+    }
   }
 }
 ```

@@ -73,7 +73,7 @@ All `/api/*` requests also validate the `Host` header. Requests whose `Host` is 
 
 ### X-Source Header
 
-The `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
+The `POST /api/load`, `POST /api/resource/load`, `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
 | Value      | Description                                             |
 | ---------- | ------------------------------------------------------- |
@@ -156,9 +156,11 @@ See [Error Handling](#error-handling) for `401` and `403` responses that apply t
 
 ### POST /api/load
 
-Loads a WASM binary into the runner. Accepts either a file path or a base64-encoded binary. Automatically detects whether the module is HTTP-WASM or Proxy-WASM. Any previously loaded module is cleaned up first.
+Loads a WASM binary into the runner. Accepts either a file path or a base64-encoded binary. Automatically detects whether the module is HTTP-WASM or Proxy-WASM. Any previously loaded module or resource is cleaned up first.
 
-Loads and execution requests are processed one at a time, in the order they arrive.
+Loads (`POST /api/load` and `POST /api/resource/load`) are processed one at a time, in the order they arrive, so an older load cannot finish last and replace a newer one. Other requests are not queued.
+
+Accepts an optional [`X-Source`](#x-source-header) request header.
 
 **Request Body**
 
@@ -327,6 +329,69 @@ If a load fails with `500`, the previously loaded module is discarded and no mod
 
 ---
 
+### POST /api/resource/load
+
+Loads a resource: several apps, one per hook, as on a CDN resource. Replaces any loaded module or resource. Once a resource is loaded, [`POST /api/send`](#post-apisend) runs it.
+
+Every file the resource reads must be inside the workspace root (`WORKSPACE_PATH` if set, otherwise the server's working directory), so a resource that spans several projects is debugged from a folder that holds them all.
+
+Accepts an optional [`X-Source`](#x-source-header) request header.
+
+**Request Body**
+
+```typescript
+{
+  configPath?: string;                // Path to a resource config file. Relative paths resolve
+                                      // against the workspace root.
+  config?: Record<string, unknown>;   // Inline resource config. Used when `configPath` is absent.
+}
+```
+
+Provide `configPath` or `config`. If both are present, `configPath` is used. Unknown top-level fields are rejected with `400`.
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  apps: { name: string; wasmType: "http-wasm" | "proxy-wasm" }[]; // The apps in the resource
+  config: Record<string, unknown>;                                // The resolved resource config
+}
+```
+
+The resolved `config` can include `stores` (set to `false` to run without the storage service), `dc`, and `edge`, which behave as described for [`POST /api/load`](#post-apiload).
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/resource/load \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "configPath": "resources/main.resource.json" }'
+```
+
+```json
+{
+  "ok": true,
+  "apps": [
+    { "name": "auth", "wasmType": "proxy-wasm" },
+    { "name": "origin", "wasmType": "http-wasm" }
+  ],
+  "config": {}
+}
+```
+
+**Error Responses**
+
+| Status | Condition                                                                                   |
+| ------ | ------------------------------------------------------------------------------------------- |
+| `400`  | Body failed validation (unknown field, or `configPath` / `config` of the wrong type)        |
+| `400`  | The resource config is invalid, a referenced path is outside the workspace, or a build fails |
+
+The previously loaded module or resource is discarded before the new one is created, so a failed load leaves nothing loaded. While a resource is loaded, `POST /api/execute`, `POST /api/call`, and `PATCH /api/dotenv` return `400` (no WASM module loaded).
+
+---
+
 ### PATCH /api/dotenv
 
 Applies updated dotenv settings to the currently loaded WASM module without reloading the binary. For Proxy-WASM, this resets stores and reloads dotenv files in-place. For HTTP-WASM, this restarts the underlying process with updated flags.
@@ -386,8 +451,6 @@ curl -X PATCH http://localhost:5179/api/dotenv \
 ### Request context on execution endpoints
 
 `POST /api/execute`, `POST /api/call`, and `POST /api/send` accept optional `client` and `edge` fields (see [`ClientContext` and `EdgeContext`](#post-apiload)). If the body names either field, they apply to that request only; a field that is left out means none for that request. If the body names neither field, the context set at load time applies. Requests never change the loaded context, and the store datacenter chosen at load time does not change.
-
-Execution requests are processed one at a time, in the order they arrive, so a request's context and its execution are not interleaved with another request.
 
 ---
 
@@ -754,7 +817,9 @@ curl -X POST http://localhost:5179/api/call \
 
 Executes the full Proxy-WASM CDN request/response flow. Equivalent to `POST /api/execute` for Proxy-WASM, but validates the request body against a schema. Only valid for Proxy-WASM modules.
 
-Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`X-Source`](#x-source-header) request header.
+If a resource is loaded through [`POST /api/resource/load`](#post-apiresourceload), the request runs through the resource instead and the response has the [resource result](#response--resource) shape.
+
+Requires a WASM module or resource to be loaded. Accepts an optional [`X-Source`](#x-source-header) request header.
 
 **Request Body**
 
@@ -775,7 +840,7 @@ Requires a WASM module to be loaded via `POST /api/load`. Accepts an optional [`
 
 The upstream response is generated at runtime — either by a real fetch against `url`, or by the built-in responder when `url === "built-in"`. The published `api-send` JSON schema lists `properties` as required; the server accepts a body without it and uses `{}`.
 
-**Response**
+**Response — single module**
 
 ```typescript
 {
@@ -794,6 +859,72 @@ The upstream response is generated at runtime — either by a real fetch against
 ```
 
 `HookResult` has the same shape as documented in [`POST /api/call`](#post-apicall). `hookResults` is keyed by hook name. `calculatedProperties` uses the same `request.*` keys listed under [`POST /api/execute`](#post-apiexecute).
+
+**Response — resource**
+
+```typescript
+type HeaderRecord = Record<string, string | string[]>;
+
+type StoreCall = {
+  app: "cdn" | "http";
+  hook?: string;
+  kind: "cache" | "kv";
+  op: string;
+  dc?: string;      // Cache bucket (cache calls)
+  store?: string;   // Edge KV store (KV calls)
+  key?: string;
+  pattern?: string;
+  prefix?: string;
+  result: string;   // "ok", or the service's error (e.g. "wrong-type", "invalid-pattern")
+  value?: string;   // A count, a flag, or the size of a value or list
+  at: number;       // Wall-clock time (ms since epoch)
+};
+
+type ResourceHookResult = HookResult & {
+  storeCalls?: StoreCall[]; // Cache / Edge KV calls the hook made, in order (stores on only)
+  localResponse?: {         // Set when the hook answered with send_http_response
+    statusCode: number;
+    statusText: string;
+    headers: [string, string][];
+    bodyBase64: string;
+  };
+  customProperties?: string[]; // Custom properties later hooks of this request may read
+};
+
+type ResourceHook = { app: string; result: ResourceHookResult };
+
+{
+  ok: true;
+  rule: { index: number; name?: string; match: string } | null; // The rule that matched, or null for main
+  hooks: {
+    onRequestHeaders?: ResourceHook;
+    onRequestBody?: ResourceHook;
+    onResponseHeaders?: ResourceHook;
+    onResponseBody?: ResourceHook;
+  };                                                            // Each hook that ran, with the app that ran it
+  origin?: {                                                    // Absent when a request hook sent the response
+    kind: "url" | "built-in" | "app";
+    app?: string;
+    response: {
+      status: number;
+      statusText: string;
+      headers: HeaderRecord;
+      body: string;
+      contentType: string;
+      isBase64: boolean;
+    };
+    storeCalls?: StoreCall[];
+  };
+  finalResponse: {
+    status: number;
+    statusText: string;
+    headers: HeaderRecord;
+    body: string;
+    contentType: string;
+    isBase64?: boolean;
+  };
+}
+```
 
 **Example**
 
@@ -873,14 +1004,14 @@ curl -X POST http://localhost:5179/api/send \
 | ------ | ---------------------------------------------------------------------------- |
 | `400`  | Body failed validation (`url` missing or neither `built-in` nor a valid URL) |
 | `400`  | Body failed validation (invalid `client` or `edge`)                          |
-| `400`  | No WASM module is loaded                                                     |
+| `400`  | No WASM module or resource is loaded                                         |
 | `500`  | Execution failed, including use against an HTTP-WASM module                  |
 
 ---
 
 ## Stores
 
-The storage service backs the cache and Edge KV APIs of the loaded module. These endpoints inspect and control it. When no module is loaded, the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false`. `GET /api/stores/value`, `POST /api/stores/reset`, and `POST /api/stores/advance-clock` return `409` in those cases.
+The storage service backs the cache and Edge KV APIs of the loaded module or resource. These endpoints inspect and control it. When nothing is loaded, the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false`. `GET /api/stores/value`, `POST /api/stores/reset`, and `POST /api/stores/advance-clock` return `409` in those cases.
 
 ### GET /api/stores
 
@@ -930,9 +1061,9 @@ Returns one stored value, from the cache (`dc` and `key`) or from Edge KV (`stor
 
 **Query Parameters**
 
-| Parameter | Type     | Description                                                           |
-| --------- | -------- | --------------------------------------------------------------------- |
-| `key`     | `string` | Key to read. Required.                                                |
+| Parameter | Type     | Description                                                            |
+| --------- | -------- | ---------------------------------------------------------------------- |
+| `key`     | `string` | Key to read. Required.                                                 |
 | `dc`      | `string` | Cache datacenter holding the key. Give exactly one of `dc` or `store`. |
 | `store`   | `string` | Edge KV store holding the key. Give exactly one of `dc` or `store`.    |
 
@@ -960,11 +1091,11 @@ curl -H "x-fastedge-token: <token>" "http://localhost:5179/api/stores/value?dc=l
 
 **Error Responses**
 
-| Status | Condition                                                  |
-| ------ | ---------------------------------------------------------- |
+| Status | Condition                                                         |
+| ------ | ----------------------------------------------------------------- |
 | `400`  | `key` is missing, or not exactly one of `dc` and `store` is given |
-| `409`  | No app with stores is loaded                               |
-| `500`  | The storage service returned an error                      |
+| `409`  | No app with stores is loaded                                      |
+| `500`  | The storage service returned an error                             |
 
 ---
 
@@ -1287,23 +1418,25 @@ Returns the JSON Schema document with `Content-Type: application/json`.
 
 #### Request Schemas
 
-| Name         | Description                         |
-| ------------ | ----------------------------------- |
-| `api-load`   | Request body for `POST /api/load`   |
-| `api-send`   | Request body for `POST /api/send`   |
-| `api-call`   | Request body for `POST /api/call`   |
-| `api-config` | Request body for `POST /api/config` |
+| Name                | Description                                |
+| ------------------- | ------------------------------------------ |
+| `api-load`          | Request body for `POST /api/load`          |
+| `api-resource-load` | Request body for `POST /api/resource/load` |
+| `api-send`          | Request body for `POST /api/send`          |
+| `api-call`          | Request body for `POST /api/call`          |
+| `api-config`        | Request body for `POST /api/config`        |
 
 #### Response / Type Schemas
 
-| Name                   | Description                                                   |
-| ---------------------- | ------------------------------------------------------------- |
-| `fastedge-config.test` | Config file format for `fastedge-config.test.json`            |
-| `hook-result`          | Shape of a single `HookResult`                                |
-| `hook-call`            | Shape of a `HookCall` input                                   |
-| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints |
-| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution             |
-| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution    |
+| Name                   | Description                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| `fastedge-config.test` | Config file format for `fastedge-config.test.json`                                |
+| `hook-result`          | Shape of a single `HookResult`                                                    |
+| `hook-call`            | Shape of a `HookCall` input                                                       |
+| `full-flow-result`     | Shape of the `FullFlowResult` returned by full-flow endpoints                     |
+| `resource-result`      | Shape of the `POST /api/send` response when a resource is loaded                  |
+| `http-request`         | Shape of an `HttpRequest` for HTTP-WASM execution                                 |
+| `http-response`        | Shape of an `HttpResponse` returned by HTTP-WASM execution                        |
 
 **Example**
 

@@ -8,6 +8,8 @@ Low-level programmatic API for executing WASM binaries. Use this when you need d
 import {
   createRunner,
   createRunnerFromBuffer,
+  createResource,
+  matchRule,
   createStores,
   ProxyWasmRunner,
   HttpWasmRunner,
@@ -29,7 +31,14 @@ import type {
   HookResult,
   FullFlowResult,
   HookCall,
+  LocalResponse,
   StoreCall,
+  Resource,
+  ResourceRequest,
+  ResourceResult,
+  CreateResourceOptions,
+  CdnHook,
+  OriginResponse,
   TestStores,
   CreateStoresOptions,
   StoresSeed,
@@ -40,11 +49,13 @@ import type {
 } from '@gcoredev/fastedge-test';
 ```
 
-`HeaderMap`, `HeaderRecord`, `LogEntry`, `ProxyStatus`, and `EventSource` are described under [Supporting Types](#supporting-types) and [IStateManager](#istatemanager). They are not exported from the package root.
+`HeaderMap`, `HeaderRecord`, `HeaderTuples`, `LogEntry`, `ProxyStatus`, and `EventSource` are described under [Supporting Types](#supporting-types) and [IStateManager](#istatemanager). They are not exported from the package root.
 
 `createStores()` builds an isolated in-memory store instance (`TestStores`) that can be passed as `RunnerConfig.stores`. Its options and seed types are `CreateStoresOptions` and `StoresSeed`. See [stores](#runnerconfig) under `RunnerConfig` for how a runner uses the instance.
 
 `CLIENT_PRESETS`, `EDGE_PRESETS`, `ClientContext`, `EdgeContext`, `RequestContext`, and `Preset` describe the simulated client location and edge POP. See [Request Context](#request-context).
+
+`createResource`, `matchRule`, and the `Resource*` types run several apps on one request. See [Resources](#resources).
 
 ## Creating a Runner
 
@@ -107,6 +118,17 @@ const runner = await createRunnerFromBuffer(buffer, {
   runnerType: 'proxy-wasm',
 });
 await runner.cleanup();
+```
+
+### createResource
+
+Creates a `Resource`: several apps that handle one request, as on a CDN resource. The full definition is under [Resources](#resources).
+
+```typescript
+function createResource(
+  fileOrObject: string | ResourceConfigInput,
+  options?: CreateResourceOptions
+): Promise<Resource>
 ```
 
 ## IWasmRunner Interface
@@ -250,9 +272,11 @@ Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fet
 
 If a request context is set (see [Request Context](#request-context)), its properties and headers are added to the call; the `properties` and `headers` arguments take precedence. When `context` is passed, it is used for this flow instead of the runner's context.
 
-**Local response short-circuit.** If a WASM module calls `proxy_send_local_response` in any hook and returns `StopIteration` (return code `1`), the runner short-circuits immediately. For request-phase hooks (`onRequestHeaders`, `onRequestBody`), this skips the remaining request hooks, the origin fetch, and all response hooks. For response-phase hooks (`onResponseHeaders`, `onResponseBody`), this skips any remaining response hooks. In all cases, `finalResponse` is built from the locally-sent status, headers, and body — matching CDN production behavior. This is how redirect modules (for example geo-redirect) and early error responses work.
+**Local response short-circuit.** If a WASM module calls `proxy_send_local_response` in any hook and returns `StopIteration` (return code `1`), the runner short-circuits immediately. For request-phase hooks (`onRequestHeaders`, `onRequestBody`), this skips the remaining request hooks, the origin fetch, and all response hooks. For response-phase hooks (`onResponseHeaders`, `onResponseBody`), this skips any remaining response hooks. In all cases, `finalResponse` is built from the locally-sent status, headers, and body — matching CDN production behavior. The hook's `HookResult.localResponse` holds the same response. This is how redirect modules (for example geo-redirect) and early error responses work.
 
 **Origin fetch failure.** If the origin fetch throws (DNS failure, connection refused, and similar), `callFullFlow` does not reject. It returns a `FullFlowResult` whose `finalResponse` has `status: 0`, `statusText: "Fetch Failed"`, and an error message in `body`.
+
+**Hook failure.** If a hook traps, the error propagates and `callFullFlow` rejects. A [Resource](#resources) handles hook failures differently (`interruptOnError`).
 
 Only available on proxy-wasm runners. Calling on `HttpWasmRunner` throws.
 
@@ -396,6 +420,242 @@ A request context describes where the client is and which edge POP runs the app.
 Values you set explicitly always win over the context: properties passed to `callFullFlow()` / `callHook()`, headers on the request, and dictionary keys from dotenv files.
 
 `CLIENT_PRESETS` and `EDGE_PRESETS` are the preset definitions behind the preset names. `ClientContext`, `EdgeContext`, `RequestContext`, and `Preset` are the exported types for the values accepted by `RunnerConfig.client`, `RunnerConfig.edge`, and `setRequestContext()`; their full declarations ship in the package's type definitions.
+
+## Resources
+
+A resource runs several apps on one request, as a CDN resource does on the edge. Each CDN hook is assigned to one app. The origin is a URL, the built-in responder, or an HTTP app. Rules select different hooks or a different origin by request path.
+
+```typescript
+function createResource(
+  fileOrObject: string | ResourceConfigInput,
+  options?: CreateResourceOptions
+): Promise<Resource>
+
+function matchRule(config: ResourceConfig, url: string): ResourceResult["rule"]
+```
+
+**Parameters**
+
+| Parameter      | Type                           | Description                                                                                                 |
+| -------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `fileOrObject` | `string \| ResourceConfigInput` | Path to a resource config JSON file (paths inside it are relative to the file), or a config object (paths relative to the current working directory, or to `options.root`) |
+| `options`      | `CreateResourceOptions`        | Optional settings                                                                                           |
+
+`createResource` loads every app with `createRunner`, validates the config, and rejects when:
+
+- a hook, rule, or origin names an app that is not in `apps`;
+- a rule's `match` is not a valid regular expression;
+- an app has no `wasm`, or its wasm file does not exist;
+- a hook is assigned to an HTTP app, or an app origin is a CDN app;
+- a referenced config is itself a resource (resources cannot be nested).
+
+If loading any app fails, the apps already loaded are cleaned up before the error is rethrown.
+
+`matchRule` returns the first rule whose `match` regular expression matches the path of `url`, or `null` when no rule matches (main applies).
+
+### Resource Config
+
+`ResourceConfigInput` is not exported by name. The accepted shape is:
+
+```typescript
+type ResourceConfigInput = {
+  $schema?: string;
+  description?: string;
+  /** The apps of the resource, by name. */
+  apps: Record<string, {
+    /** Another project's fastedge-config.test.json: its wasm and dotenv, paths relative to it. */
+    config?: string;
+    /** The built wasm, relative to the resource config. Overrides the referenced config's. */
+    wasm?: string;
+    dotenv?: { enabled?: boolean; path?: string };
+  }>;
+  main: {
+    /** The app for each hook. Default: no hooks. */
+    hooks?: ResourceHooks;
+    origin: ResourceOrigin;
+  };
+  /** First match wins. A rule's `hooks` replace main's hooks completely; its `origin` replaces main's origin. */
+  rules?: Array<{
+    name?: string;
+    /** Regular expression tested against the request path. */
+    match: string;
+    hooks?: ResourceHooks;
+    origin?: ResourceOrigin;
+  }>;
+  /** Properties for every request (for example `request.country`). */
+  properties?: Record<string, unknown>;
+  stores?: boolean;
+  dc?: string;
+  client?: ClientContext;
+  edge?: EdgeContext;
+  /** Default request for `Resource.request()`. */
+  request?: {
+    method?: string; // default: "GET"
+    url: string;
+    headers?: Record<string, string>;
+    body?: string;
+  };
+};
+
+type ResourceHooks = {
+  [hook in CdnHook]?: string | { app: string; interruptOnError?: boolean };
+};
+
+/** A URL ("built-in" for the built-in responder) or an HTTP app of the resource. */
+type ResourceOrigin = { url: string } | { app: string };
+
+type CdnHook = "onRequestHeaders" | "onRequestBody" | "onResponseHeaders" | "onResponseBody";
+```
+
+A hook assigned as a string is the same as `{ app, interruptOnError: true }`. A hook with no app passes the request through unchanged. `stores`, `dc`, `client`, and `edge` behave as in [RunnerConfig](#runnerconfig) and apply to every app.
+
+### CreateResourceOptions
+
+```typescript
+type CreateResourceOptions = {
+  /** As for createRunner: on by default, false = off, or isolated test stores (createStores). */
+  stores?: boolean | TestStores;
+  /**
+   * Confine every file the resource reads (its config, each app's wasm, referenced config and
+   * dotenv folder) to this folder, as the debugger confines loads to its workspace. A resource
+   * spanning several projects is then debugged from a folder holding them all (a monorepo).
+   */
+  root?: string;
+};
+```
+
+`options.stores` takes precedence over the config's `stores`.
+
+### Resource
+
+```typescript
+interface Resource {
+  readonly config: ResourceConfig;
+  /** The loaded apps by name. */
+  readonly apps: ReadonlyMap<string, IWasmRunner>;
+  /** Runs one request. An app whose wasm was rebuilt since it loaded is reloaded first. */
+  request(request?: ResourceRequest): Promise<ResourceResult>;
+  cleanup(): Promise<void>;
+}
+
+type ResourceRequest = {
+  /** Default: the config's `request.url`. */
+  url?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  /** Over the config's `properties` (e.g. request.country), as for a single app. */
+  properties?: Record<string, unknown>;
+};
+```
+
+`request()` rejects with `resource.request: no url (set request.url in the config or pass one)` when neither the call nor the config provides a URL. Omitted `method`, `headers`, and `body` fall back to the config's `request`, then to `"GET"`, `{}`, and `""`. Properties merge in this order, later wins: the context's properties, the config's `properties`, the call's `properties`.
+
+`cleanup()` cleans up every app. Call it in test teardown.
+
+### ResourceResult
+
+```typescript
+type ResourceResult = {
+  /** The rule that matched, or null for main. */
+  rule: { index: number; name?: string; match: string } | null;
+  /** Each hook that ran, with the app that ran it. */
+  hooks: Partial<Record<CdnHook, { app: string; result: HookResult }>>;
+  /** What answered before the response hooks. Absent when a request hook sent the response. */
+  origin?: {
+    kind: "url" | "built-in" | "app";
+    app?: string;
+    response: OriginResponse;
+    storeCalls?: StoreCall[];
+  };
+  finalResponse: FullFlowResult["finalResponse"];
+};
+
+type OriginResponse = {
+  status: number;
+  statusText: string;
+  headers: HeaderRecord;
+  body: string;
+  contentType: string;
+  isBase64: boolean;
+};
+```
+
+| Field           | Description                                                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `rule`          | The matching rule's index in `rules`, its `name`, and its `match`; `null` when main handled the request                           |
+| `hooks`         | One entry per hook that ran, with the name of the app that ran it and its `HookResult`                                            |
+| `origin`        | Present when the origin answered. `kind` is `"url"` for a fetch, `"built-in"` for the built-in responder, `"app"` for an HTTP app |
+| `finalResponse` | The response after all hooks, or the response a hook sent with `send_http_response`                                               |
+
+### State Between Hooks
+
+As on the edge, every app sees the same request:
+
+- Every hook starts with fresh memory, including two hooks that run on the same app. Nothing in WASM memory carries over.
+- Request headers, request body, and properties pass from hook to hook.
+- Custom properties set in `onRequestBody` or in a later hook reach later hooks, including hooks that run on another app.
+- Custom properties set in `onRequestHeaders` never reach later hooks.
+- Response headers added during the request phase carry into the response phase.
+- The client and edge are the resource's (`client` and `edge` in the config) and apply once to the request.
+
+### Hook Errors
+
+When a hook traps, `interruptOnError` decides the outcome:
+
+| `interruptOnError` | Result                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `true` (default)   | The request ends. `finalResponse.status` is `531` with an empty body                                                |
+| `false`            | The request continues as if the hook had not run                                                                    |
+
+In both cases the failed hook's entry in `hooks` has `returnCode: null` and a log entry `"<hook> failed: <reason>"`.
+
+### Rebuilt Apps
+
+Before each `request()`, the resource checks the modification time of every app's wasm file. An app whose file changed since it was loaded is reloaded before the request runs. A failed reload (a broken build) fails that request; the next request tries again. Concurrent requests do not reload an app twice.
+
+### Difference from the Edge
+
+Every app in a resource can open every fixture KV store. On the edge, an app opens only the stores attached to it. An app that works here because it reads a store it is not attached to fails on the edge.
+
+### Resource Example
+
+```typescript
+import { createResource } from '@gcoredev/fastedge-test';
+
+const resource = await createResource({
+  apps: {
+    auth: { wasm: './auth/build/auth.wasm' },
+    rewrite: { wasm: './rewrite/build/rewrite.wasm' },
+    api: { wasm: './api/build/api.wasm' },
+  },
+  main: {
+    hooks: {
+      onRequestHeaders: 'auth',
+      onResponseHeaders: { app: 'rewrite', interruptOnError: false },
+    },
+    origin: { url: 'built-in' },
+  },
+  rules: [
+    {
+      name: 'api',
+      match: '^/api/',
+      origin: { app: 'api' }, // an HTTP app answers as the origin
+    },
+  ],
+  request: { url: 'http://example.com/', method: 'GET' },
+});
+
+try {
+  const result = await resource.request({ url: 'http://example.com/api/users' });
+  console.log(result.rule?.name);                    // "api"
+  console.log(result.origin?.kind);                  // "app"
+  console.log(result.hooks.onRequestHeaders?.app);   // "auth"
+  console.log(result.finalResponse.status);
+} finally {
+  await resource.cleanup();
+}
+```
 
 ## Type Definitions
 
@@ -563,23 +823,36 @@ type HookCall = {
   };
   properties: Record<string, unknown>;
   enforceProductionPropertyRules?: boolean; // Default: true - Enforce property access control rules
+  /**
+   * Custom properties an earlier hook of this request wrote (and later hooks may read), when the
+   * hooks run on different apps: on the edge custom properties belong to the request, not the app.
+   */
+  customProperties?: string[];
+  /**
+   * Set when this call is one hook of a flow driven from outside the runner (a resource): the
+   * request id shared by the flow's hooks; `request` and `properties` already carry `context`.
+   */
+  requestId?: string;
 };
 ```
 
-| Field                            | Description                                    |
-| -------------------------------- | ---------------------------------------------- |
-| `hook`                           | Hook name (see below)                          |
-| `context`                        | Client and edge for this call only             |
-| `request`                        | Request state passed to the hook               |
-| `response`                       | Seed state for response hooks via `callHook()` |
-| `properties`                     | Shared properties                              |
-| `enforceProductionPropertyRules` | Defaults to `true`                             |
+| Field                            | Description                                                                              |
+| -------------------------------- | ---------------------------------------------------------------------------------------- |
+| `hook`                           | Hook name (see below)                                                                    |
+| `context`                        | Client and edge for this call only                                                       |
+| `request`                        | Request state passed to the hook                                                         |
+| `response`                       | Seed state for response hooks via `callHook()`                                           |
+| `properties`                     | Shared properties                                                                        |
+| `enforceProductionPropertyRules` | Defaults to `true`                                                                       |
+| `customProperties`               | Names of custom properties written by earlier hooks of the request, for cross-app flows |
+| `requestId`                      | Request id shared by the hooks of a flow driven from outside the runner                  |
 
 - `hook`: one of `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`.
 - `context`: when omitted, the runner's context is used. See [Request Context](#request-context).
 - `response`: not consumed by `callFullFlow()` or by request hooks. The full-flow path generates the upstream response at runtime.
 - `properties`: for example `request.path`, `vm_config`, `plugin_config`.
 - `enforceProductionPropertyRules`: set to `false` to allow property access that the production CDN blocks.
+- `customProperties` and `requestId`: set by [Resources](#resources) when hooks of one request run on different apps. Calls made directly with `callHook()` do not need them.
 
 `HeaderRecord` is `Record<string, string | string[]>` — multi-valued headers (for example multiple `Set-Cookie`) are represented as `string[]`.
 
@@ -602,19 +875,40 @@ type HookResult = {
   properties: Record<string, unknown>;
   /** The cache / Edge KV calls this hook made, in order (stores on only). */
   storeCalls?: StoreCall[];
+  /** Set when the hook answered with send_http_response. */
+  localResponse?: LocalResponse;
+  /** Custom properties later hooks of this request may read (see `HookCall.customProperties`). */
+  customProperties?: string[];
 };
 ```
 
-| Field        | Description                                                         |
-| ------------ | ------------------------------------------------------------------- |
-| `returnCode` | Value returned by the hook export, or `null` if not exported        |
-| `logs`       | Log entries emitted during hook execution                           |
-| `input`      | State seen by the hook before execution                             |
-| `output`     | State after hook execution                                          |
-| `properties` | All shared properties after execution                               |
-| `storeCalls` | Cache and Edge KV calls made by the hook, in order (stores on only) |
+| Field              | Description                                                                |
+| ------------------ | -------------------------------------------------------------------------- |
+| `returnCode`       | Value returned by the hook export, or `null` if not exported               |
+| `logs`             | Log entries emitted during hook execution                                  |
+| `input`            | State seen by the hook before execution                                    |
+| `output`           | State after hook execution                                                 |
+| `properties`       | All shared properties after execution                                      |
+| `storeCalls`       | Cache and Edge KV calls made by the hook, in order (stores on only)        |
+| `localResponse`    | The response the hook sent with `send_http_response`, if any               |
+| `customProperties` | Custom properties later hooks of the request may read                      |
 
 `storeCalls` is present only when the runner has stores enabled. See [StoreCall](#storecall) for the shape of each entry.
+
+### LocalResponse
+
+```typescript
+/** A response a hook sent with send_http_response. */
+type LocalResponse = {
+  statusCode: number;
+  statusText: string;
+  /** The additional headers passed as send_http_response's 4th argument. */
+  headers: HeaderTuples;
+  bodyBase64: string;
+};
+```
+
+`bodyBase64` is the response body encoded as base64. `HeaderTuples` is `[string, string][]`.
 
 ### StoreCall
 
@@ -673,6 +967,7 @@ type FullFlowResult = {
 type WasmType = "http-wasm" | "proxy-wasm";
 
 type HeaderMap = Record<string, string>;
+type HeaderTuples = [string, string][];
 
 // Wire/projection format for hook and full-flow results.
 // Single-valued headers are a string; multi-valued (e.g. set-cookie) are a string[].
@@ -692,7 +987,7 @@ enum ProxyStatus {
 }
 ```
 
-Only `WasmType` is exported from this group of types at the package root. `HeaderRecord` appears in the exported `HookCall`, `HookResult`, and `FullFlowResult` types; the other types above are not exported.
+Only `WasmType` is exported from this group of types at the package root. `HeaderRecord` and `HeaderTuples` appear in the exported `HookCall`, `HookResult`, `LocalResponse`, and `FullFlowResult` types; the other types above are not exported.
 
 Log levels follow the proxy-wasm convention: `0` = Trace, `1` = Debug, `2` = Info, `3` = Warn, `4` = Error.
 
@@ -841,6 +1136,7 @@ async function testCdnApp() {
     });
 
     console.log('Hook output headers:', hookResult.output.request.headers);
+    console.log('Local response:', hookResult.localResponse);
   } finally {
     await runner.cleanup();
   }
