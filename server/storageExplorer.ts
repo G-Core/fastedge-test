@@ -8,7 +8,7 @@
  */
 import type { Express, Request, Response } from "express";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, lstatSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, lstatSync } from "node:fs";
 import path from "node:path";
 import type { ZodType } from "zod";
 import { request as storesRequest, resolveStoresRoot, type StoresConnection } from "./stores/StoresManager.js";
@@ -185,14 +185,21 @@ export function mountStorageExplorer(
       if (changes.get(file)?.hash !== hash) throw new HttpError(409, `${file} changed since the diff: get the diff again`);
     }
     const root = resolveStoresRoot(workspace());
-    // Never write through a symlink: the kv folder must be the real one, and no file a link.
-    const dir = path.join(root, KV_DIR);
-    if (existsSync(dir) && realpathSync(dir) !== path.join(realpathSync(root), KV_DIR)) {
-      throw new HttpError(400, `${KV_DIR} is a symlink: not saving through it`);
-    }
+    // Never write through a symlink: no part from the stores root to the file may be one
+    // (lstat sees dangling links too).
+    const isLink = (p: string) => {
+      try {
+        return lstatSync(p).isSymbolicLink();
+      } catch {
+        return false;
+      }
+    };
     for (const { file } of body.files) {
-      const full = path.join(root, file);
-      if (existsSync(full) && lstatSync(full).isSymbolicLink()) throw new HttpError(400, `${file} is a symlink: not saving through it`);
+      const parts = file.split(path.sep);
+      for (let i = 1; i <= parts.length; i++) {
+        const part = parts.slice(0, i).join(path.sep);
+        if (isLink(path.join(root, part))) throw new HttpError(400, `${part} is a symlink: not saving through it`);
+      }
     }
     for (const { file } of body.files) {
       const change = changes.get(file)!;

@@ -79,5 +79,12 @@ describe("debugger server — Storage Explorer", () => {
     expect(save.status).toBe(400);
     expect(readFileSync(outside, "utf8")).toBe("keep");
     rmSync(join(server.workspacePath, "fixtures/stores/kv/linked.json"));
+
+    // A dangling link is refused too.
+    symlinkSync(join(server.workspacePath, "nowhere.json"), join(server.workspacePath, "fixtures/stores/kv/linked.json"));
+    const again = (await call("/api/storage/fixtures/diff")).body.changes.find((c: { store: string }) => c.store === "linked");
+    expect((await call("/api/storage/fixtures/save", { files: [{ file: again.file, hash: again.hash }] })).status).toBe(400);
+    expect(existsSync(join(server.workspacePath, "nowhere.json"))).toBe(false);
+    rmSync(join(server.workspacePath, "fixtures/stores/kv/linked.json"));
   });
 });
