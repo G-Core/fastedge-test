@@ -1,5 +1,31 @@
 # Proxy-WASM Runner - Changelog
 
+## November 16, 2026 - Resources: several apps on one request
+
+### Overview
+A resource runs one request through several apps as a CDN resource does: one CDN app per hook,
+rules that replace main's hooks / origin by path, and an origin that is a URL, the built-in
+responder or an HTTP app. Available to tests (`createResource`, vitest `resource` fixture,
+`runTestSuite` resource suites) and the debugger API (`POST /api/resource/load`, `/api/send`).
+Edge behaviour measured with a live probe. See `features/RESOURCES.md`.
+
+### 🎯 What Was Completed
+- `runner/cdnFlow.ts`: the CDN request flow, moved out of `ProxyWasmRunner`; a single app runs
+  every hook through it (behaviour unchanged)
+- `HookResult.localResponse` / `.customProperties`, `HookCall.customProperties` / `.requestId`
+  (additive): custom properties belong to the request across apps; a flow hook starts with exactly
+  its request's (before, a runner kept custom properties from earlier requests)
+- `runner/resource.ts`: config (`ResourceConfigSchema`), rules, app refs, `interrupt_on_error`
+  (531 / continue), workspace bound (`root`), reload of rebuilt apps before each request
+- Debugger: `POST /api/resource/load`, `/api/send` runs a loaded resource; websocket
+  `resource_loaded`, `resource_request_completed`; schemas `resource-config`,
+  `api-resource-load`, `resource-result`
+- Test app `cdn-apps/rust/cdn-resource-probe` (the live probe)
+
+### 🧪 Testing
+- Unit `cdnFlow.test.ts`; integration `cdn-apps/resource`, `http-apps/resource` (HTTP-app origin);
+  server `resource.test.ts`
+
 ## November 16, 2026 - Property writes return what the edge returns
 
 ### Overview

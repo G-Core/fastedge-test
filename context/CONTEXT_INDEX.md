@@ -38,6 +38,7 @@ This index helps you discover relevant documentation without reading thousands o
 - `features/HTTP_CALL_IMPLEMENTATION.md` (~200 lines) - ✅ proxy_http_call PAUSE/resume loop, binary header format, Rust SDK init order (NEW)
 - `features/STORES.md` (~100 lines) - 🚧 Local storage service (cache + Edge KV on node:sqlite): API, edge semantics, known differences, fixtures. Core done, not wired into the runners yet (Nov 2026)
 - `features/REQUEST_CONTEXT.md` (~50 lines) - ✅ Client / edge / origin: presets DE/NL/US, how they expand per app type, explicit-wins rules, the Request Context panel (Nov 2026)
+- `features/RESOURCES.md` (~75 lines) - ✅ Resources: several apps on one request (one per hook, rules, HTTP-app origin), measured edge behaviour, test and debugger API, known differences (Nov 2026)
 - `features/NPM_PACKAGE_PLAN.md` (~250 lines) - ✅ Full 5-phase plan for @gcoredev/fastedge-test npm package (Phases 1-4 complete)
 - `features/HTTP_WASM_IMPLEMENTATION.md` (~400 lines) - ✅ HTTP WASM runner support, FastEdge-run CLI integration, process management; detection + `runnerType` override + legacy sync detection sections are current (Mar 2026); API section is outdated
 - `features/HTTP_WASM_UI.md` (~1,200 lines) - ✅ Postman-like UI for HTTP WASM, adaptive UI architecture, component organization (NEW - Feb 10, 2026)
