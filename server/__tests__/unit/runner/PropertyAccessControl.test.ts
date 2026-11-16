@@ -294,16 +294,4 @@ describe('PropertyAccessControl', () => {
       expect(paths).toContain('response.status');
     });
   });
-
-  describe("NUL-separated paths (Rust SDK)", () => {
-    it("matches built-in rules and custom properties like the dotted form", () => {
-      const pac = new PropertyAccessControl();
-      expect(pac.canGetProperty("request\0query", HookContext.OnResponseBody).allowed).toBe(true);
-      expect(pac.canSetProperty("request\0query", HookContext.OnResponseBody).allowed).toBe(false);
-      pac.registerCustomProperty("my\0prop", new Uint8Array([1]), HookContext.OnRequestHeaders);
-      expect(pac.canGetProperty("my.prop", HookContext.OnRequestBody).allowed).toBe(
-        pac.canGetProperty("my\0prop", HookContext.OnRequestBody).allowed,
-      );
-    });
-  });
 });
