@@ -97,8 +97,12 @@ Binary values are base64; i64/u64 are decimal strings (numbers accepted).
 | admin | `snapshot` | `dc?` (default `local`) | `{ now, dc, dcs, cache: [{key, size, expiresAt}], kv: [{store, strings, zsets, bloom}] }`: sizes, no values |
 | admin | `inspect` | `key` and `dc` or `store` | one value: `{ type: "string", size, value (base64), truncated, expiresAt? }`, `{ type: "zset", count, members: [{..., score}] }` or `{ type: "bloom", count, items }`; first 4 KB / 200 items; null if gone |
 | admin | `reset` | | cache emptied (every `dc`), KV re-seeded from the fixtures |
+| admin | `kv-put` | `store, key, data` (fixture format holding just `key`) | `null`; replaces the key whatever its type; creates the store |
+| admin | `kv-delete` | `store, key` | `null` |
+| admin | `kv-store-create` / `kv-store-delete` | `store` | `null` |
+| admin | `kv-export` | | `{ [store]: fixture file text }` (keys sorted; UTF-8 text, else `{ base64 }`) |
 
-`snapshot`, `inspect` and `reset` were added without a protocol bump (additive ops): an older running
+`snapshot`, `inspect`, `reset` and the Storage Explorer ops (`kv-*`) were added without a protocol bump (additive ops): an older running
 service refuses them with `bad-request`, which the debugger reports as "close other fastedge-test
 instances, then restart this debugger" (its own lease keeps the old service alive); runners keep
 working with it.
@@ -113,6 +117,43 @@ countdown and a `dc` switcher, Edge KV keys by type, Reset, Advance clock (+1 mi
 Click a row for its value (fetched then; UTF-8 text, pretty JSON, or base64 for binary). Read-only. Refreshes when opened, on a `dc` switch, and after each request.
 
 The fastedge-run client (FastEdge-lib `src/stores_service.rs`) implements the other side.
+
+## Storage Explorer (debugger)
+
+`/api/storage/*` (`server/storageExplorer.ts`): manage the stores with or without an app loaded
+(starts the service when needed). Edits live in the service until it restarts or resets (both
+reload the fixtures); Save to fixtures keeps them.
+
+| Endpoint | Body / query | Does |
+|---|---|---|
+| `GET /api/storage` | `?dc=` (default `local`) | snapshot |
+| `GET /api/storage/value` | `?key=` and `dc=` or `store=` | one value (as `inspect`) |
+| `POST /api/storage/kv/put` | `{ store, key, type: "string", value }`, `{ ..., type: "zset", members }`, `{ ..., type: "bloom", items }` | replace one key |
+| `POST /api/storage/kv/delete` | `{ store, key }` | |
+| `POST /api/storage/kv/store`, `/kv/store/delete` | `{ store }` | create / delete a store |
+| `POST /api/storage/cache/put`, `/cache/delete` | `{ dc, key, value, ttlMs? }`, `{ dc, key }` | |
+| `POST /api/storage/import` | `{ store, data, replace? }` | `data`: fixture format, or a plain object key → value (non-strings as JSON text) |
+| `POST /api/storage/reset`, `/advance-clock` | `{ ms }` | |
+| `GET /api/storage/fixtures/diff` | | `{ root, changes: [{ store, file, status: new / changed / deleted, current, proposed, hash }] }`: Edge KV fixture files vs the service; same data in another layout is not a change |
+| `POST /api/storage/fixtures/save` | `{ files: [{ file, hash }] }` | writes / deletes exactly those files; 409 if one changed since the diff |
+
+Values are the fixture format (UTF-8 string or `{ base64 }`) and are checked by the fixture
+parser, so the explorer holds only what a fixture can (no empty KV value). Store names: letters,
+digits, `. _ -` (they are file names). Only Edge KV is saved to fixtures; cache edits stay live.
+
+**Importing a portal store (agents; shapes checked on preprod 2026-11-16):** list the store with
+the FastEdge API, `GET /fastedge/v1/kv/{store_id}/data` (`limit` ≤ 200, `offset`) →
+`{ count, entries: [{ key, datatype, payload? }] }`, and map each entry by `datatype`:
+- `kv`: `payload: { value, encoding }` → `strings[key]` = `value` (`{ base64: value }` when
+  `encoding` is `base64`);
+- `sorted_set` / `bloom_filter`: no payload in the list; read the key,
+  `GET /fastedge/v1/kv/{store_id}/data/{key}` (paginated the same way) →
+  `{ payload: [{ value, encoding, score }] }` → `zsets[key] = [[value, score], ...]`, or
+  `{ payload: [{ value, encoding }] }` → `bloom[key] = [value, ...]`.
+
+A value with encoding `masked` or `sha256` cannot be recovered: skip it and say so. BYOD stores
+keep their data elsewhere and cannot be imported this way. Write `fixtures/stores/kv/<store>.json`,
+or `POST /api/storage/import` the same data.
 
 ## Edge semantics matched
 

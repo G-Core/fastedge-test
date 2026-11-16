@@ -1,5 +1,21 @@
 # Proxy-WASM Runner - Changelog
 
+## November 16, 2026 - Storage Explorer API
+
+### Overview
+Manage the local cache and Edge KV from the debugger, with or without an app loaded: edit keys,
+create / delete stores, import (fixture format or plain JSON), and Save to fixtures, which shows a
+diff first and writes only what the diff showed. Portal stores are imported by agents (FastEdge
+API → fixture file). See `features/STORES.md` (Storage Explorer).
+
+### 🎯 What Was Completed
+- Storage service admin ops `kv-put`, `kv-delete`, `kv-store-create`, `kv-store-delete`,
+  `kv-export` (additive, protocol 1); `fixtures.ts` `kvFixtureText` (writes the fixture format)
+- `server/storageExplorer.ts`: `/api/storage/*`; schemas in `schemas/api.ts`
+
+### 🧪 Testing
+- Unit `stores/explorer.test.ts`; server `storage-explorer.test.ts`
+
 ## November 16, 2026 - Resources: several apps on one request
 
 ### Overview
