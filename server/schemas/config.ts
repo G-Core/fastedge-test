@@ -88,6 +88,68 @@ const HttpConfigSchema = BaseConfigSchema.extend({
 // Discriminated union — appType determines which schema validates
 export const TestConfigSchema = z.union([HttpConfigSchema, CdnConfigSchema]);
 
+/**
+ * A resource: several apps on one CDN resource, as configured on the edge. `main` gives each
+ * hook its app and the origin; the first rule whose `match` regex matches the request path
+ * replaces main's hooks completely (when it sets `hooks`) and/or its origin.
+ */
+const HookAppSchema = z.union([
+  z.string(),
+  z.object({
+    app: z.string(),
+    /** As on the edge: on a hook error the request ends with 531 (true) or goes on as if the hook had not run (false). Default true. */
+    interruptOnError: z.boolean().optional(),
+  }).strict(),
+]);
+
+export const ResourceHooksSchema = z.object({
+  onRequestHeaders: HookAppSchema.optional(),
+  onRequestBody: HookAppSchema.optional(),
+  onResponseHeaders: HookAppSchema.optional(),
+  onResponseBody: HookAppSchema.optional(),
+}).strict();
+
+/** A URL ("built-in" for the built-in responder) or an HTTP app of the resource. */
+export const ResourceOriginSchema = z.union([
+  z.object({ url: z.string() }).strict(),
+  z.object({ app: z.string() }).strict(),
+]);
+
+export const ResourceAppSchema = z.object({
+  /** Another project's fastedge-config.test.json: its wasm and dotenv, paths relative to it. */
+  config: z.string().optional(),
+  /** The built wasm, relative to this file. Overrides the referenced config's. */
+  wasm: z.string().optional(),
+  dotenv: DotenvSchema.optional(),
+}).strict();
+
+export const ResourceConfigSchema = z.object({
+  $schema: z.string().optional(),
+  description: z.string().optional(),
+  apps: z.record(z.string(), ResourceAppSchema),
+  main: z.object({
+    hooks: ResourceHooksSchema.optional().default({}),
+    origin: ResourceOriginSchema,
+  }).strict(),
+  rules: z.array(z.object({
+    name: z.string().optional(),
+    match: z.string(),
+    hooks: ResourceHooksSchema.optional(),
+    origin: ResourceOriginSchema.optional(),
+  }).strict()).optional().default([]),
+  properties: z.record(z.string(), z.unknown()).optional().default({}),
+  stores: z.boolean().optional(),
+  dc: z.string().min(1).optional(),
+  client: ClientContextSchema.optional(),
+  edge: EdgeContextSchema.optional(),
+  request: CdnRequestConfigSchema.optional(),
+});
+
+export type ResourceConfig = z.infer<typeof ResourceConfigSchema>;
+export type ResourceConfigInput = z.input<typeof ResourceConfigSchema>;
+export type ResourceHooks = z.infer<typeof ResourceHooksSchema>;
+export type ResourceOrigin = z.infer<typeof ResourceOriginSchema>;
+
 // Backward-compat alias: the old flat RequestConfigSchema is the CDN variant
 export const RequestConfigSchema = CdnRequestConfigSchema;
 

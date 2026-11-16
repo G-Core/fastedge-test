@@ -39,6 +39,22 @@ export interface CdnFlowHost {
   events?: IStateManager | null;
   /** The request headers to report in request_started (without the context's own). */
   ownHeaders?<T>(headers: Record<string, T>): Record<string, T>;
+  /** The origin when it is not a URL (a resource's HTTP app); default: built-in responder or fetch. */
+  origin?(request: OriginRequest): Promise<OriginResponse>;
+  /** Called with the origin's response before the response hooks run. */
+  onOrigin?(response: OriginResponse): void;
+  /**
+   * A hook threw (trapped). "continue": the request goes on as if the hook had not run;
+   * "interrupt": the client gets 531. Default: the error propagates (single app).
+   */
+  onHookError?(hook: CdnHook, error: unknown): "continue" | "interrupt";
+}
+
+export type OriginRequest = { url: string; method: string; headers: HeaderRecord; body: string };
+
+/** Ends the flow early with this result. */
+class FlowEnd {
+  constructor(readonly result: FullFlowResult) {}
 }
 
 export function isBuiltInUrl(url: string): boolean {
@@ -53,6 +69,15 @@ export function isBuiltInUrl(url: string): boolean {
  * method), the starting properties and `requestId` when the runners are not the one driving it.
  */
 export async function runCdnFlow(host: CdnFlowHost, call: HookCall, url: string): Promise<FullFlowResult> {
+  try {
+    return await flow(host, call, url);
+  } catch (error) {
+    if (error instanceof FlowEnd) return error.result;
+    throw error;
+  }
+}
+
+async function flow(host: CdnFlowHost, call: HookCall, url: string): Promise<FullFlowResult> {
   // Allow query params on built-in URL (e.g. http://fastedge-builtin.debug?key=value)
   const isBuiltIn = isBuiltInUrl(url);
   let targetUrl = url;
@@ -96,7 +121,23 @@ export async function runCdnFlow(host: CdnFlowHost, call: HookCall, url: string)
   const runHook = async (hook: CdnHook, hookCall: HookCall): Promise<HookResult | undefined> => {
     const runner = host.runnerFor(hook);
     if (!runner) return undefined;
-    const result = await runner.callHook({ ...hookCall, hook, customProperties });
+    let result: HookResult;
+    try {
+      result = await runner.callHook({ ...hookCall, hook, customProperties });
+    } catch (error) {
+      if (!host.onHookError) throw error;
+      const message = `${hook} failed: ${error instanceof Error ? error.message : String(error)}`;
+      host.log(message);
+      const state = { request: hookCall.request, response: hookCall.response ?? { headers: {}, body: "" } };
+      results[hook] = { returnCode: null, logs: [{ level: 4, message }], input: state, output: state, properties };
+      if (host.onHookError(hook, error) === "continue") return undefined;
+      // As on the edge: a trap is status 531, and interrupt_on_error ends the request with it.
+      throw new FlowEnd({
+        hookResults: results,
+        finalResponse: { status: 531, statusText: "", headers: {}, body: "", contentType: "text/plain" },
+        calculatedProperties: host.calculatedProperties(),
+      });
+    }
     results[hook] = result;
     host.events?.emitHookExecuted(hook, result.returnCode, result.logs.length, result.input, result.output, "system");
     properties = result.properties;
@@ -132,7 +173,9 @@ export async function runCdnFlow(host: CdnFlowHost, call: HookCall, url: string)
 
   try {
     // Phase 2: Obtain origin response (built-in responder or real HTTP fetch)
-    const origin = isBuiltIn
+    const origin = host.origin
+      ? await host.origin({ url: (propertiesAfterRequestBody["request.url"] as string) || targetUrl, method: requestMethod, headers: modifiedRequestHeaders, body: modifiedRequestBody })
+      : isBuiltIn
       ? builtInResponse(host, requestMethod, modifiedRequestHeaders, modifiedRequestBody, propertiesAfterRequestBody)
       : await fetchOrigin(host, targetUrl, requestMethod, modifiedRequestHeaders, modifiedRequestBody, propertiesAfterRequestBody);
 
@@ -142,6 +185,7 @@ export async function runCdnFlow(host: CdnFlowHost, call: HookCall, url: string)
     // by) the origin's headers. Append-merge so that names present on both sides surface as
     // string[] — mirroring how Envoy represents cross-phase add_http_response_header colliding
     // with the upstream response.
+    host.onOrigin?.(origin);
     let responseHeaders = HeaderManager.appendMerge(requestPhaseResponseHeaders, origin.headers);
     let responseBody = origin.body;
 
@@ -180,6 +224,7 @@ export async function runCdnFlow(host: CdnFlowHost, call: HookCall, url: string)
       calculatedProperties: host.calculatedProperties(),
     };
   } catch (error) {
+    if (error instanceof FlowEnd) throw error;
     // Extract detailed error information
     let errorMessage = "Fetch failed";
     let errorDetails = "";
@@ -224,7 +269,7 @@ export async function runCdnFlow(host: CdnFlowHost, call: HookCall, url: string)
   }
 }
 
-type OriginResponse = {
+export type OriginResponse = {
   status: number;
   statusText: string;
   headers: HeaderRecord;

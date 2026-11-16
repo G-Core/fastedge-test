@@ -41,6 +41,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdn-resource-probe"
+version = "0.1.0"
+dependencies = [
+ "proxy-wasm",
+]
+
+[[package]]
 name = "cdn-stores"
 version = "0.1.0"
 dependencies = [

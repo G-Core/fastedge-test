@@ -10,10 +10,13 @@ export { HttpWasmRunner } from "./HttpWasmRunner.js";
 export { WasmRunnerFactory } from "./WasmRunnerFactory.js";
 export { NullStateManager } from "./NullStateManager.js";
 export { createRunner, createRunnerFromBuffer } from "./standalone.js";
+export { createResource, matchRule } from "./resource.js";
+export type { Resource, ResourceRequest, ResourceResult, CreateResourceOptions } from "./resource.js";
+export type { OriginResponse, CdnHook } from "./cdnFlow.js";
 
 export type { IWasmRunner, WasmType, RunnerConfig, HttpRequest, HttpResponse } from "./IWasmRunner.js";
 export type { IStateManager } from "./IStateManager.js";
-export type { HookResult, FullFlowResult, HookCall } from "./types.js";
+export type { HookResult, FullFlowResult, HookCall, LocalResponse } from "./types.js";
 export type { StoreCall } from "../stores/trace.js";
 export { createStores } from "../stores/testStores.js";
 export type { TestStores, CreateStoresOptions } from "../stores/testStores.js";

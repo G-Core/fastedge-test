@@ -15,12 +15,16 @@
  *   `createStores()` in `beforeAll` and pass it as `RunnerConfig.stores`.
  * - `runner(wasm, config?)`: a loaded runner (path or buffer) on this test's stores, cleaned up
  *   when the test ends. CDN and HTTP runners of one test share the stores.
+ * - `resource(fileOrObject)`: a loaded resource (several apps, one per hook) on this test's
+ *   stores, cleaned up when the test ends.
  */
 
 import { test as base } from "vitest";
 import { createRunner, createRunnerFromBuffer } from "../runner/standalone.js";
 import type { IWasmRunner, RunnerConfig } from "../runner/IWasmRunner.js";
 import { createStores, type TestStores } from "../stores/testStores.js";
+import { createResource, type Resource } from "../runner/resource.js";
+import type { ResourceConfigInput } from "../schemas/config.js";
 
 export { createStores };
 export type { TestStores };
@@ -28,6 +32,7 @@ export type { TestStores };
 export type FastEdgeFixtures = {
   stores: TestStores;
   runner: (wasm: string | Buffer, config?: RunnerConfig) => Promise<IWasmRunner>;
+  resource: (fileOrObject: string | ResourceConfigInput) => Promise<Resource>;
 };
 
 export const test = base.extend<FastEdgeFixtures>({
@@ -49,6 +54,18 @@ export const test = base.extend<FastEdgeFixtures>({
           typeof wasm === "string" ? await createRunner(wasm, withStores) : await createRunnerFromBuffer(wasm, withStores);
         made.push(runner);
         return runner;
+      });
+    } finally {
+      await Promise.all(made.map((r) => r.cleanup()));
+    }
+  },
+  resource: async ({ stores }, use) => {
+    const made: Resource[] = [];
+    try {
+      await use(async (fileOrObject) => {
+        const resource = await createResource(fileOrObject, { stores });
+        made.push(resource);
+        return resource;
       });
     } finally {
       await Promise.all(made.map((r) => r.cleanup()));

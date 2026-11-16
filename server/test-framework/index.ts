@@ -9,6 +9,8 @@ export { defineTestSuite, runTestSuite, runAndExit, runFlow, runHttpRequest, loa
 
 export { mockOrigins } from "./mock-origins.js";
 export { createStores } from "../stores/testStores.js";
+export { createResource } from "../runner/resource.js";
+export type { Resource, ResourceRequest, ResourceResult } from "../runner/resource.js";
 export type { TestStores, CreateStoresOptions } from "../stores/testStores.js";
 export type { MockOriginsHandle, MockOriginsOptions } from "./mock-origins.js";
 
@@ -46,6 +48,8 @@ export {
 export type {
   TestSuite,
   TestCase,
+  ResourceTestSuite,
+  ResourceTestCase,
   TestResult,
   SuiteResult,
   FlowOptions,

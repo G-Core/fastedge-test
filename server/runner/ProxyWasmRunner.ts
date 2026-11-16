@@ -334,7 +334,7 @@ export class ProxyWasmRunner implements IWasmRunner {
 
     // Clear stale local response from any previous hook execution
     this.hostFunctions.resetLocalResponse();
-    if (call.customProperties) this.propertyAccessControl.seedCustomProperties(call.customProperties);
+    if (call.customProperties) this.propertyAccessControl.setRequestCustomProperties(call.customProperties);
 
     // Create fresh instance for this hook call (isolated context)
     const imports = this.createImports();

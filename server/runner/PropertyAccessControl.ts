@@ -361,14 +361,14 @@ export class PropertyAccessControl {
   }
 
   /**
-   * Custom properties an earlier hook of the request wrote, possibly on another app: readable
-   * here too (on the edge they belong to the request).
+   * Start a hook of a request with exactly the custom properties its earlier hooks wrote,
+   * possibly on another app (on the edge they belong to the request). Drops any left from an
+   * earlier request.
    */
-  seedCustomProperties(paths: string[]): void {
+  setRequestCustomProperties(paths: string[]): void {
+    this.customProperties.clear();
     for (const path of paths) {
-      if (!this.customProperties.has(path)) {
-        this.customProperties.set(path, { createdIn: HookContext.OnRequestBody, value: new Uint8Array() });
-      }
+      this.customProperties.set(path, { createdIn: HookContext.OnRequestBody, value: new Uint8Array() });
     }
   }
 

@@ -8,14 +8,15 @@ import { TestConfigSchema } from "../schemas/config.js";
 import type { TestConfig } from "../schemas/config.js";
 import type { IWasmRunner, HttpResponse } from "../runner/IWasmRunner.js";
 import type { FullFlowResult } from "../runner/types.js";
-import type { TestSuite, SuiteResult, TestResult, FlowOptions, HttpRequestOptions } from "./types.js";
+import type { TestSuite, ResourceTestSuite, SuiteResult, TestResult, FlowOptions, HttpRequestOptions } from "./types.js";
+import { createResource } from "../runner/resource.js";
 
 /**
  * Validate and return a typed TestSuite definition.
  * Throws if neither wasmPath nor wasmBuffer is provided, or if tests is empty.
  */
-export function defineTestSuite(config: TestSuite): TestSuite {
-  if (!config.wasmPath && !config.wasmBuffer) {
+export function defineTestSuite<T extends TestSuite | ResourceTestSuite>(config: T): T {
+  if (!("resource" in config) && !config.wasmPath && !config.wasmBuffer) {
     throw new Error("TestSuite requires either wasmPath or wasmBuffer");
   }
   if (!config.tests || config.tests.length === 0) {
@@ -61,25 +62,31 @@ export async function loadConfigFile(configPath: string): Promise<TestConfig> {
  * from `fixtures/stores/`), so tests are fully isolated.
  * Tests run sequentially. A thrown error (or failed assertion) marks the test as failed.
  */
-export async function runTestSuite(suite: TestSuite): Promise<SuiteResult> {
+export async function runTestSuite(suite: TestSuite | ResourceTestSuite): Promise<SuiteResult> {
   const suiteStart = Date.now();
   const results: TestResult[] = [];
 
   for (const test of suite.tests) {
     const testStart = Date.now();
     // Each test gets its own isolated stores, unless the suite gives an instance or turns them off.
-    const configured = suite.runnerConfig?.stores;
+    const configured = "resource" in suite ? suite.stores : suite.runnerConfig?.stores;
     let own: TestStores | null = null;
     try {
       if (configured !== false && typeof configured !== "object") own = await createStores({ dc: "resource" in suite ? undefined : (suite.runnerConfig?.dc ?? edgeDc(suite.runnerConfig?.edge)) }); // the app's bucket
       const stores = own ?? (typeof configured === "object" ? configured : null);
-      const runnerConfig = { ...suite.runnerConfig, stores: stores ?? false };
-      const runner = suite.wasmBuffer
-        ? await createRunnerFromBuffer(suite.wasmBuffer, runnerConfig)
-        : await createRunner(suite.wasmPath!, runnerConfig);
+      let runner: { cleanup(): Promise<void> };
+      if ("resource" in suite) {
+        runner = await createResource(suite.resource, { stores: stores ?? false });
+      } else {
+        const runnerConfig = { ...suite.runnerConfig, stores: stores ?? false };
+        runner = suite.wasmBuffer
+          ? await createRunnerFromBuffer(suite.wasmBuffer, runnerConfig)
+          : await createRunner(suite.wasmPath!, runnerConfig);
+      }
 
       try {
-        await test.run(runner, { stores });
+        // The suite's own test type matches what was created above.
+        await test.run(runner as never, { stores });
         results.push({
           name: test.name,
           passed: true,
@@ -204,7 +211,7 @@ export async function runHttpRequest(
  * Exits with code 0 if all tests pass, code 1 if any fail.
  * Intended for standalone Node.js test scripts (CI pipelines, Makefile targets).
  */
-export async function runAndExit(suite: TestSuite): Promise<never> {
+export async function runAndExit(suite: TestSuite | ResourceTestSuite): Promise<never> {
   const results = await runTestSuite(suite);
 
   console.log("");
