@@ -1,5 +1,23 @@
 # Proxy-WASM Runner - Changelog
 
+## November 17, 2026 - Fix: JSON schemas required fields that have defaults
+
+### Overview
+`schemas/*.schema.json` (what editors validate config files and API bodies against) were
+generated from the Zod schemas' output shape, so fields with a default (`properties`, `appType`,
+`request.method` / `headers` / `body`, a resource's `rules` and `main.hooks`) were required, and
+files the server accepts were flagged. They are now generated from the input shape
+(`toJSONSchema({ io: "input" })`).
+
+### 🎯 What Was Completed
+- `scripts/generate-schemas.ts`: input-shaped Zod schemas; all eight regenerated. Objects that
+  are not strict in Zod (e.g. `dotenv`, `request`) now allow unknown keys, as the server does
+  (it drops them)
+
+### 🧪 Testing
+- `server/__tests__/unit/schemas/config.test.ts`: the generated schemas' required fields; every
+  config and resource file in the repo and proto validates (jsonschema, draft 2020-12)
+
 ## November 17, 2026 - Multi-app: Send runs the edits; sticky file bar; overwrite check
 
 ### Overview

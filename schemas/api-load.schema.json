@@ -17,8 +17,7 @@
         "path": {
           "type": "string"
         }
-      },
-      "additionalProperties": false
+      }
     },
     "httpPort": {
       "type": "integer",
@@ -123,6 +122,5 @@
       },
       "additionalProperties": false
     }
-  },
-  "additionalProperties": false
+  }
 }

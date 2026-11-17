@@ -22,8 +22,7 @@
           },
           "required": [
             "path"
-          ],
-          "additionalProperties": false
+          ]
         },
         "properties": {
           "default": {},
@@ -42,8 +41,7 @@
             "path": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         },
         "stores": {
           "type": "boolean"
@@ -178,20 +176,14 @@
             }
           },
           "required": [
-            "method",
-            "path",
-            "headers",
-            "body"
-          ],
-          "additionalProperties": false
+            "path"
+          ]
         }
       },
       "required": [
-        "properties",
         "appType",
         "request"
-      ],
-      "additionalProperties": false
+      ]
     },
     {
       "type": "object",
@@ -214,8 +206,7 @@
           },
           "required": [
             "path"
-          ],
-          "additionalProperties": false
+          ]
         },
         "properties": {
           "default": {},
@@ -234,8 +225,7 @@
             "path": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         },
         "stores": {
           "type": "boolean"
@@ -366,12 +356,8 @@
             }
           },
           "required": [
-            "method",
-            "url",
-            "headers",
-            "body"
-          ],
-          "additionalProperties": false
+            "url"
+          ]
         },
         "origin": {
           "anyOf": [
@@ -433,11 +419,8 @@
         }
       },
       "required": [
-        "properties",
-        "appType",
         "request"
-      ],
-      "additionalProperties": false
+      ]
     }
   ]
 }

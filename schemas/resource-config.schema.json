@@ -31,8 +31,7 @@
               "path": {
                 "type": "string"
               }
-            },
-            "additionalProperties": false
+            }
           }
         },
         "additionalProperties": false
@@ -208,7 +207,6 @@
         }
       },
       "required": [
-        "hooks",
         "origin"
       ],
       "additionalProperties": false
@@ -528,19 +526,12 @@
         }
       },
       "required": [
-        "method",
-        "url",
-        "headers",
-        "body"
-      ],
-      "additionalProperties": false
+        "url"
+      ]
     }
   },
   "required": [
     "apps",
-    "main",
-    "rules",
-    "properties"
-  ],
-  "additionalProperties": false
+    "main"
+  ]
 }

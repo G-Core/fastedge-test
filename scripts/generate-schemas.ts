@@ -32,9 +32,11 @@ if (!fs.existsSync(schemasDir)) {
 }
 
 // --- Zod → JSON Schema for config/API types ---
-// Zod v4 exposes toJSONSchema() as an instance method on each schema
+// Zod v4 exposes toJSONSchema() as an instance method on each schema. These are all things people
+// and agents write (config files, request bodies), so the schema describes the input: a field with
+// a default (e.g. `properties`, `request.body`, `rules`) is optional, as the server accepts it.
 
-const zodSchemas: Array<{ name: string; schema: { toJSONSchema(): object } }> = [
+const zodSchemas: Array<{ name: string; schema: { toJSONSchema(params?: { io?: 'input' | 'output' }): object } }> = [
   { name: 'fastedge-config.test', schema: TestConfigSchema },
   { name: 'api-load', schema: ApiLoadBodySchema },
   { name: 'api-send', schema: ApiSendBodySchema },
@@ -46,7 +48,7 @@ const zodSchemas: Array<{ name: string; schema: { toJSONSchema(): object } }> = 
 ];
 
 for (const { name, schema } of zodSchemas) {
-  const jsonSchema = schema.toJSONSchema();
+  const jsonSchema = schema.toJSONSchema({ io: 'input' });
   const outputPath = path.join(schemasDir, `${name}.schema.json`);
   fs.writeFileSync(outputPath, JSON.stringify(jsonSchema, null, 2) + '\n');
   console.log(`✓ Generated ${name}.schema.json`);

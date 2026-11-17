@@ -38,8 +38,7 @@
           "default": "",
           "type": "string"
         }
-      },
-      "additionalProperties": false
+      }
     },
     "properties": {
       "default": {},
@@ -200,8 +199,6 @@
     }
   },
   "required": [
-    "url",
-    "properties"
-  ],
-  "additionalProperties": false
+    "url"
+  ]
 }

@@ -30,8 +30,7 @@
       "required": [
         "headers",
         "body"
-      ],
-      "additionalProperties": false
+      ]
     },
     "response": {
       "type": "object",
@@ -52,8 +51,7 @@
       "required": [
         "headers",
         "body"
-      ],
-      "additionalProperties": false
+      ]
     },
     "properties": {
       "default": {},
@@ -156,8 +154,6 @@
     }
   },
   "required": [
-    "hook",
-    "properties"
-  ],
-  "additionalProperties": false
+    "hook"
+  ]
 }
