@@ -26,6 +26,14 @@ export function ConfigButtons() {
           `file://${event.data.configDir}/`,
         ).pathname;
       }
+      // The origin's files too (the debugger otherwise reads them against the workspace).
+      const builtIn = config.origin && 'builtIn' in config.origin ? config.origin.builtIn : null;
+      for (const key of ['files', 'bodyFile'] as const) {
+        const value = builtIn?.[key];
+        if (builtIn && value && event.data.configDir && !value.startsWith('/')) {
+          builtIn[key] = decodeURIComponent(new URL(value, `file://${event.data.configDir}/`).pathname);
+        }
+      }
 
       loadFromConfig(config);
 

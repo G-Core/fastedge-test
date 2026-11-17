@@ -556,4 +556,21 @@ describe('ConfigSlice', () => {
       expect(result.current.method).toBe('GET');
     });
   });
+
+  describe('origin', () => {
+  it('loads a CDN config\'s origin and writes it back; HTTP configs have none', () => {
+    const { result } = renderHook(() => useAppStore());
+    const origin = { builtIn: { files: 'assets' } };
+    act(() => {
+      result.current.loadFromConfig({ appType: 'proxy-wasm', request: { method: 'GET', url: 'https://example.com/a.png', headers: {}, body: '' }, properties: {}, logLevel: 2, origin });
+    });
+    expect(result.current.origin).toEqual(origin);
+    expect(result.current.exportConfig().origin).toEqual(origin);
+
+    act(() => {
+      result.current.loadFromConfig({ appType: 'http-wasm', request: { method: 'GET', path: '/', headers: {}, body: '' }, properties: {}, logLevel: 2, origin });
+    });
+    expect(result.current.origin).toBeNull();
+  });
+});
 });

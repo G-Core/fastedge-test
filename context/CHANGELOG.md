@@ -1,5 +1,24 @@
 # Proxy-WASM Runner - Changelog
 
+## November 17, 2026 - Origin editor (Debugger and multi-app)
+
+### Overview
+The built-in origin can be set in the UI: one Origin editor for the Debugger's CDN apps and for
+the multi-app page's main and rules (echo, fixed response, serve a folder, URL, HTTP app). Fix:
+opening another resource file kept the previous file's request URL.
+
+### 🎯 What Was Completed
+- `OriginEditor` (shared); `OriginSection` uses it (echo controls kept for the request URL)
+- Store `origin` (load / export with the config, sent with `/api/send`); VS Code config loads
+  resolve its paths against the config's folder, as for dotenv
+- `/api/workspace/files`: `folders` and `files` for the path suggestions
+- `ResourceView`: rule cards use the editor; the request section restarts from each opened file
+
+### 🧪 Testing
+- `OriginEditor.test.tsx`, `configSlice.test.ts` (origin), `ResourceView.test.tsx` (open takes the
+  file's request), server `resource.test.ts` (folders / files lists); browser: convert-images with
+  `files: ../assets` (no asset server), Debugger fixed response
+
 ## November 17, 2026 - Built-in origin declared in the config (fixed response, files)
 
 ### Overview

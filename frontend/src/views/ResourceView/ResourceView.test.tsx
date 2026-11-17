@@ -28,6 +28,8 @@ describe("ResourceView", () => {
       wasm: ["apps/edge/target/wasm32-wasip1/release/edge.wasm"],
       configs: [DEFAULT_RESOURCE_FILE, "apps/edge/fixtures/one.test.json"],
       dotenvDirs: ["apps/edge/fixtures"],
+      folders: [],
+      files: [],
       truncated: false,
     });
   });
@@ -157,5 +159,14 @@ describe("ResourceView", () => {
     expect(screen.getByText(/No logs at this level/)).toBeTruthy();
     fireEvent.click(screen.getByText("Outputs"));
     expect(screen.getByText("Response Body (Modified): binary, 3 bytes (shown as base64)")).toBeTruthy();
+  });
+
+  it("opening another file takes that file's request", async () => {
+    render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
+    await screen.findByLabelText("sso config");
+    r.read.mockResolvedValue({ path: "/ws/other.json", config: { ...config(), request: { url: "https://example.com/shadow.png" } } });
+    fireEvent.change(screen.getByLabelText("Resource file"), { target: { value: "other.json" } });
+    fireEvent.click(screen.getByText("Open"));
+    expect(await screen.findByDisplayValue("https://example.com/shadow.png")).toBeTruthy();
   });
 });

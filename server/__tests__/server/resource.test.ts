@@ -93,6 +93,11 @@ describe("debugger server — resources", () => {
     expect(body.wasm).toEqual(["app/target/wasm32-wasip1/release/app.wasm", "apps/probe.wasm"]);
     expect(body.configs).toEqual([".fastedge-debug/fastedge-cdn-resource.test.json", "app/fixtures/one.test.json"]);
     expect(body.dotenvDirs).toEqual(["app/fixtures"]);
+    // Servable by a built-in origin: no dot folders or files, no build output.
+    expect(body.folders).toEqual(expect.arrayContaining(["app", "app/fixtures", "apps"]));
+    expect(body.folders.some((f: string) => f.includes("target") || f.startsWith("."))).toBe(false);
+    expect(body.files).toContain("app/fixtures/one.test.json");
+    expect(body.files.some((f: string) => f.endsWith(".env") || f.includes("target/") || f.startsWith("."))).toBe(false);
     expect(body.truncated).toBe(false);
   });
 

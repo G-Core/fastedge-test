@@ -14,6 +14,7 @@ import {
 import { useWorkspaceFiles } from "../../hooks/useWorkspaceFiles";
 import { LogLevelSelector } from "../../components/common/LogLevelSelector";
 import { HookDetail } from "../../components/proxy-wasm/HookStagesPanel";
+import { OriginEditor } from "../../components/proxy-wasm/OriginEditor";
 import { useAppStore } from "../../stores";
 import type { HookResult } from "../../types";
 import { JsonDisplay } from "../../components/common/JsonDisplay";
@@ -57,7 +58,10 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const opened = useRef<string | null>(null);
+  // Bumped on every open: the request section starts again from the file's `request`.
+  const [openCount, setOpenCount] = useState(0);
   const [files, refreshFiles] = useWorkspaceFiles();
+  const paths: PathSuggestions = { files, toPath: (p) => relativePath(resourceDir(files, path), p), onFocusPath: refreshFiles };
 
   const run = async (work: () => Promise<string | void>) => {
     setBusy(true);
@@ -77,6 +81,7 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
       opened.current = read.path;
       setPath(file);
       setConfig(read.config);
+      setOpenCount((n) => n + 1);
       setDirty(false);
       return read.config ? undefined : `${read.path} does not exist yet: start a new resource and save it there.`;
     });
@@ -182,6 +187,7 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
               apps={apps}
               onHooks={(hooks) => edit((c) => void (c.main.hooks = hooks))}
               onOrigin={(origin) => edit((c) => void (c.main.origin = origin!))}
+              paths={paths}
             />
             {(config.rules ?? []).map((rule, i) => (
               <RuleCard
@@ -204,10 +210,11 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
                 onRemove={() => edit((c) => void c.rules!.splice(i, 1))}
                 first={i === 0}
                 last={i === config.rules!.length - 1}
+                paths={paths}
               />
             ))}
           </section>
-          <RequestSection config={config} enabled={isLoaded && !busy} onResult={onResult} setMessage={setMessage} />
+          <RequestSection key={openCount} config={config} enabled={isLoaded && !busy} onResult={onResult} setMessage={setMessage} />
           {result && isLoaded && <ResultSection result={result} />}
         </>
       )}
@@ -216,10 +223,15 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
 }
 
 /** The path fields' dropdowns: workspace files, written relative to the resource file. */
+/** The resource file's folder, workspace-relative ("" = the workspace root). */
+function resourceDir(files: WorkspaceFiles | null, resourcePath: string): string {
+  const fromRoot = files && resourcePath.startsWith(`${files.root}/`) ? resourcePath.slice(files.root.length + 1) : resourcePath;
+  return fromRoot.includes("/") ? fromRoot.slice(0, fromRoot.lastIndexOf("/")) : "";
+}
+
 function Suggestions({ files, resourcePath }: { files: WorkspaceFiles | null; resourcePath: string }) {
   if (!files) return null;
-  const fromRoot = resourcePath.startsWith(`${files.root}/`) ? resourcePath.slice(files.root.length + 1) : resourcePath;
-  const dir = fromRoot.includes("/") ? fromRoot.slice(0, fromRoot.lastIndexOf("/")) : "";
+  const dir = resourceDir(files, resourcePath);
   const list = (id: string, paths: string[], relative: boolean) => (
     <datalist id={id}>
       {paths.map((p) => (
@@ -346,11 +358,14 @@ interface RuleCardProps {
   onRemove?: () => void;
   first?: boolean;
   last?: boolean;
+  paths: PathSuggestions;
 }
 
-function RuleCard({ title, rule, hooks, origin, apps, onRule, onHooks, onOrigin, onMove, onRemove, first, last }: RuleCardProps) {
+/** Workspace files for path fields, and how a workspace path is written in the resource file. */
+type PathSuggestions = { files: WorkspaceFiles | null; toPath: (workspacePath: string) => string; onFocusPath: () => void };
+
+function RuleCard({ title, rule, hooks, origin, apps, onRule, onHooks, onOrigin, onMove, onRemove, first, last, paths }: RuleCardProps) {
   const isRule = !!rule;
-  const originValue = !origin ? "" : "app" in origin ? `app:${origin.app}` : origin.url === "built-in" ? "built-in" : "url";
 
   return (
     <div className={styles.card} aria-label={title}>
@@ -419,29 +434,15 @@ function RuleCard({ title, rule, hooks, origin, apps, onRule, onHooks, onOrigin,
         </div>
       )}
 
-      <div className={explorer.row}>
-        <span>Origin</span>
-        <select
-          aria-label={`${title} origin`}
-          value={originValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            onOrigin(v === "" ? undefined : v === "built-in" ? { url: "built-in" } : v === "url" ? { url: "https://" } : { app: v.slice(4) });
-          }}
-        >
-          {isRule && <option value="">main's</option>}
-          <option value="built-in">built-in responder</option>
-          <option value="url">URL</option>
-          {apps.map((a) => (
-            <option key={a} value={`app:${a}`}>
-              app: {a}
-            </option>
-          ))}
-        </select>
-        {originValue === "url" && (
-          <input className={styles.match} aria-label={`${title} origin URL`} value={(origin as { url: string }).url} onChange={(e) => onOrigin({ url: e.target.value })} />
-        )}
-      </div>
+      <OriginEditor
+        label={`${title} origin`}
+        value={origin}
+        onChange={onOrigin}
+        unsetLabel={isRule ? "main's" : undefined}
+        apps={apps}
+        echoControls={<p className={panel.note}>Status and body follow the request's x-debugger-status / x-debugger-content headers (deprecated: use a fixed response).</p>}
+        {...paths}
+      />
     </div>
   );
 }

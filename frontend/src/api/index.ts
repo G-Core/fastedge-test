@@ -1,6 +1,6 @@
 import { HookCall, HookResult, StoreCall } from "../types";
-import type { TestConfig, ClientContext, EdgeContext, Preset } from "../stores/types";
-export type { TestConfig } from "../stores/types";
+import type { TestConfig, ClientContext, EdgeContext, Preset, Origin } from "../stores/types";
+export type { TestConfig, BuiltInOrigin, Origin } from "../stores/types";
 import { hasFilesystemAccess } from "../utils/environment";
 import { getFilePath, hasFilePath, formatFileSize } from "../utils/filePath";
 import { getToken } from "../utils/token";
@@ -342,6 +342,8 @@ export async function sendFullFlow(
   method: string,
   params: HookCall,
   context?: RequestContext,
+  /** Where the response comes from instead of `url` (paths relative to the workspace). */
+  origin?: Origin | null,
 ): Promise<{
   hookResults: Record<string, HookResult>;
   finalResponse: {
@@ -363,6 +365,7 @@ export async function sendFullFlow(
     },
     properties: params.properties || {},
     ...requestContext(context),
+    ...(origin ? { origin } : {}),
     // logLevel not sent - server always returns all logs for client-side filtering
   };
 
@@ -684,7 +687,7 @@ export const CDN_HOOKS = ["onRequestHeaders", "onRequestBody", "onResponseHeader
 export type CdnHook = (typeof CDN_HOOKS)[number];
 export type HookApp = string | { app: string; interruptOnError?: boolean };
 export type ResourceHooks = Partial<Record<CdnHook, HookApp>>;
-export type ResourceOrigin = { url: string } | { app: string };
+export type ResourceOrigin = Origin | { app: string };
 export type ResourceApp = { config?: string; wasm?: string; dotenv?: { enabled?: boolean; path?: string } };
 export type ResourceRule = { name?: string; match: string; hooks?: ResourceHooks; origin?: ResourceOrigin };
 /** A resource file as written; fields the page does not edit (client, edge, properties…) are kept. */
@@ -738,6 +741,9 @@ export interface WorkspaceFiles {
   wasm: string[];
   configs: string[];
   dotenvDirs: string[];
+  /** Folders and files a built-in origin can serve (no dot paths, no build output). */
+  folders: string[];
+  files: string[];
   truncated: boolean;
 }
 

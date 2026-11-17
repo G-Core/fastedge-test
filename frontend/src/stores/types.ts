@@ -100,7 +100,14 @@ export interface ConfigState {
   client: ClientContext | null;
   /** Which edge POP runs the app (`edge` in the config file); null = none. */
   edge: EdgeContext | null;
+  /** CDN apps: where the response comes from (`origin` in the config file); null = the request URL. */
+  origin: Origin | null;
 }
+
+/** The built-in responder declared in a config: a fixed response, or a folder served by path. */
+export type BuiltInOrigin = { status?: number; headers?: Record<string, string>; body?: string; bodyFile?: string; files?: string };
+/** Where a CDN request's response comes from ("built-in" URL = the echo responder). */
+export type Origin = { url: string } | { builtIn: BuiltInOrigin };
 
 export type Preset = "de" | "nl" | "us";
 
@@ -144,6 +151,7 @@ export interface ConfigActions {
   setCalculatedProperties: (properties: Record<string, string>) => void;
   setClient: (client: ClientContext | null) => void;
   setEdge: (edge: EdgeContext | null) => void;
+  setOrigin: (origin: Origin | null) => void;
   loadFromConfig: (config: TestConfig) => void;
   exportConfig: () => TestConfig;
   resetConfig: () => void;
@@ -269,6 +277,7 @@ export interface TestConfig {
   dc?: string;
   client?: ClientContext;
   edge?: EdgeContext;
+  origin?: Origin;
 }
 
 export interface PersistConfig {

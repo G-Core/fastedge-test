@@ -15,6 +15,8 @@ describe("WasmLoader file path", () => {
       wasm: [".fastedge-debug/app.wasm", "app/target/wasm32-wasip1/release/app.wasm"],
       configs: [],
       dotenvDirs: [],
+      folders: [],
+      files: [],
       truncated: false,
     });
     const onPathLoad = vi.fn();

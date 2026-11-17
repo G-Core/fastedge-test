@@ -54,6 +54,12 @@ framework's `runFlow` as `origin` (`loadConfigFile` resolves it).
 "origin": { "url": "built-in" }                                     // the echo below, unchanged
 ```
 
+- **UI:** one Origin editor (`components/proxy-wasm/OriginEditor/`) on the Debugger (CDN, in
+  Request Context; stored as `origin` in the config and sent with `/api/send`) and on the
+  multi-app page (main and each rule). Choices: the request URL (Debugger) or main's (rule), echo,
+  fixed response (status, headers, text or a file), serve a folder, URL, an HTTP app (resources).
+  Folder and file fields suggest workspace paths (`/api/workspace/files` `folders` / `files`:
+  no dot paths, no build output).
 - One body source at most (`body`, `bodyFile`, `files`); `files` sets the status itself (200 / 404).
   `headers` apply over the generated ones. HEAD gets the headers without the body.
 - Paths are relative to the config file (`/api/send`: to the workspace) and must be inside the
