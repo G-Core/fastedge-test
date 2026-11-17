@@ -12,11 +12,14 @@ folder). The browser's file picker gives contents, not paths, so the server list
   folders, workspace-relative; skips `node_modules`, `.git`, cargo `deps`/`build`; no symlinks
 - `ResourceView`: `<datalist>` suggestions on the resource file, config, wasm and dotenv fields
   (refetched on focus); dotenv path field next to the checkbox; `api.resource.files()`
+- Debugger "File path" field: the same list of workspace `.wasm` files, as full paths (a relative
+  path there resolves against the server's working directory, not the workspace). Shared hook
+  `hooks/useWorkspaceFiles.ts`
 
 ### 🧪 Testing
 - Server `resource.test.ts` (listing, skips, symlink); frontend `ResourceView.test.tsx`
-  (relative suggestions, dotenv path saved, `relativePath`); checked in a browser on a three-app
-  resource
+  (relative suggestions, dotenv path saved, `relativePath`), `WasmLoader.test.tsx`; checked in a
+  browser on a three-app resource and a Debugger path load
 
 ## November 16, 2026 - Fix: CDN hooks get bodies as raw bytes
 

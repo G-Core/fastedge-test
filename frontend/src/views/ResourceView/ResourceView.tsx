@@ -10,6 +10,7 @@ import {
   type ResourceResult,
   type WorkspaceFiles,
 } from "../../api";
+import { useWorkspaceFiles } from "../../hooks/useWorkspaceFiles";
 import { LogsViewer } from "../../components/common/LogsViewer";
 import { JsonDisplay } from "../../components/common/JsonDisplay";
 import { ResponsePanel } from "../../components/common/ResponsePanel";
@@ -50,14 +51,7 @@ export function ResourceView({ loaded, result, onResult }: ResourceViewProps) {
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const opened = useRef<string | null>(null);
-  const [files, setFiles] = useState<WorkspaceFiles | null>(null);
-  const filesAt = useRef(0);
-  // Fetched when a path field gets focus, so new builds show up; at most every 2 s.
-  const refreshFiles = () => {
-    if (Date.now() - filesAt.current < 2000) return;
-    filesAt.current = Date.now();
-    resource.files().then(setFiles, () => {});
-  };
+  const [files, refreshFiles] = useWorkspaceFiles();
 
   const run = async (work: () => Promise<string | void>) => {
     setBusy(true);

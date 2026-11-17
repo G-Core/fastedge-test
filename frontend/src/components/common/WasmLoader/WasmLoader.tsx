@@ -1,6 +1,7 @@
 import { ChangeEvent, useState, useEffect, useRef } from "react";
 import styles from "./WasmLoader.module.css";
 import { formatFileSize } from "../../../utils/filePath";
+import { useWorkspaceFiles } from "../../../hooks/useWorkspaceFiles";
 
 type LoaderTab = 'path' | 'upload';
 
@@ -33,6 +34,7 @@ export function WasmLoader({
   const [wasmPath, setWasmPath] = useState("");
   const [activeTab, setActiveTab] = useState<LoaderTab>(defaultTab);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [files, refreshFiles] = useWorkspaceFiles();
 
   // Update active tab when defaultTab changes (environment detection completes)
   useEffect(() => {
@@ -157,10 +159,18 @@ export function WasmLoader({
                 className={styles.pathInput}
                 placeholder="<workspace>/.fastedge-debug/app.wasm"
                 value={wasmPath}
+                list="wasm-loader-files"
+                aria-label="WASM file path"
+                title={wasmPath}
+                onFocus={refreshFiles}
                 onChange={(e) => setWasmPath(e.target.value)}
                 onKeyDown={handlePathKeyDown}
                 disabled={loading}
               />
+              {/* Full paths: a relative one resolves against the server's working directory, not the workspace. */}
+              <datalist id="wasm-loader-files">
+                {files?.wasm.map((p) => <option key={p} value={`${files.root}/${p}`} />)}
+              </datalist>
               <button
                 onClick={handlePathLoad}
                 disabled={loading || !wasmPath.trim()}
