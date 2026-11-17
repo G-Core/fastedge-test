@@ -28,6 +28,8 @@ function App() {
   // The loaded resource (several apps) and its last request; a resource replaces the loaded app.
   const [resourceLoaded, setResourceLoaded] = useState<ResourceLoaded | null>(null);
   const [resourceResult, setResourceResult] = useState<ResourceResult | null>(null);
+  // The last resource file saved through the API (by this page or anyone else).
+  const [resourceSaved, setResourceSaved] = useState<{ configPath: string; version: string } | null>(null);
 
   // Get state and actions from stores
   const {
@@ -279,6 +281,10 @@ function App() {
         setResourceResult(null);
         break;
 
+      case "resource_saved":
+        setResourceSaved(event.data);
+        break;
+
       case "resource_request_completed":
         setResourceResult(event.data.result);
         break;
@@ -379,7 +385,7 @@ function App() {
         )}
         {page === "storage" && <StorageExplorerView />}
         <div hidden={page !== "debugger" || !multiApp}>
-          <ResourceView loaded={resourceLoaded} result={resourceResult} onResult={setResourceResult} appLoaded={!!wasmPath} />
+          <ResourceView loaded={resourceLoaded} result={resourceResult} onResult={setResourceResult} appLoaded={!!wasmPath} saved={resourceSaved} />
         </div>
 
         <div hidden={page !== "debugger" || multiApp}>

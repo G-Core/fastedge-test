@@ -192,3 +192,18 @@
 .detail {
   margin-bottom: 12px;
 }
+
+/* The file bar stays in reach while the page scrolls */
+.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #1a1a1a;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.unsaved {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffb74d;
+}

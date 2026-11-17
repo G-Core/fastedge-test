@@ -71,7 +71,15 @@ properties from hook to hook; a flow hook starts with exactly those (none from a
   storage calls, inputs, outputs with properties). Fields the page does not edit (properties, client, edge,
   request…) are kept. Loading a resource clears the Debugger's app and loading an app unloads
   the resource (the server holds one or the other). It follows websocket events, so a resource an
-  agent loads or runs through the API shows there too. Path fields (resource file, config, wasm,
+  agent loads or runs through the API shows there too. **Send** runs what is on screen: with
+  unsaved edits it is "Save, load and send", before a load "Load and send". The file bar sticks to
+  the top with an "Unsaved changes" marker; Ctrl/Cmd+S saves. **Overwrite check:**
+  `GET /api/resource/config` returns the file's `version` (content hash); `POST /api/resource/save`
+  with `expectedVersion` answers 409 `{ conflict, version }` when the file changed since (an agent,
+  an editor), unless `force` (without `expectedVersion`: no check). The page asks before
+  overwriting. Every save emits `resource_saved { configPath, version }`: a page showing that file
+  reloads it, or warns when it has unsaved edits. Edits made on disk without the API are caught
+  only at save time. Path fields (resource file, config, wasm,
   dotenv folder) offer the workspace's `.wasm` files, `*.test.json` files and `.env` folders as a
   dropdown, written relative to the resource file (`GET /api/workspace/files`: workspace-relative
   lists, `node_modules`, `.git` and cargo's `deps`/`build` skipped, symlinks not followed, 500 per

@@ -119,4 +119,26 @@ describe("debugger server — resources", () => {
     expect((await post("/api/resource/load", {})).status).toBe(200);
     expect((await send({ builtIn: { files: "site" } })).status).toBe(400);
   });
+
+  it("refuses to overwrite a resource file changed since it was read, unless forced", async () => {
+    const get = async () => (await authedFetch(server.base, server.token, "/api/resource/config?path=v%2Fres.json", {})).json();
+    const config = { apps: { a: { wasm: "../apps/probe.wasm" } }, main: { origin: { url: "built-in" } } };
+    expect((await get()).version).toBeNull();
+
+    // First save: the caller saw no file (null).
+    const first = await post("/api/resource/save", { configPath: "v/res.json", config, expectedVersion: null });
+    expect(first.status).toBe(200);
+    const { version } = await first.json();
+    expect((await get()).version).toBe(version);
+
+    // Someone else writes it; a save based on the old version is refused.
+    writeFileSync(join(server.workspacePath, "v", "res.json"), JSON.stringify({ ...config, description: "agent" }));
+    const stale = await post("/api/resource/save", { configPath: "v/res.json", config, expectedVersion: version });
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ conflict: true, version: (await get()).version });
+
+    expect((await post("/api/resource/save", { configPath: "v/res.json", config, expectedVersion: version, force: true })).status).toBe(200);
+    // No expectedVersion: no check (agents that do not read first).
+    expect((await post("/api/resource/save", { configPath: "v/res.json", config })).status).toBe(200);
+  });
 });

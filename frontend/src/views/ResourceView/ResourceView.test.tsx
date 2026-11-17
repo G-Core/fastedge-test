@@ -20,8 +20,9 @@ const config = (): api.ResourceConfig => ({
 describe("ResourceView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    r.read.mockResolvedValue({ path: FULL, config: config() });
-    r.save.mockResolvedValue(FULL);
+    r.read.mockResolvedValue({ path: FULL, config: config(), version: "v1" });
+    r.save.mockResolvedValue({ path: FULL, version: "v2" });
+    r.send.mockResolvedValue({ rule: null, hooks: {}, finalResponse: { status: 200, statusText: "OK", headers: {}, body: "", contentType: "text/plain" } });
     r.load.mockResolvedValue({ configPath: FULL, apps: [] });
     r.files.mockResolvedValue({
       root: "/ws",
@@ -50,7 +51,7 @@ describe("ResourceView", () => {
   });
 
   it("removing an app takes it off every hook and origin", async () => {
-    r.read.mockResolvedValue({ path: FULL, config: { ...config(), main: { hooks: { onRequestHeaders: "sso" }, origin: { app: "sso" } } } });
+    r.read.mockResolvedValue({ path: FULL, config: { ...config(), main: { hooks: { onRequestHeaders: "sso" }, origin: { app: "sso" } } }, version: "v1" });
     render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
     await screen.findByLabelText("sso config");
     fireEvent.click(screen.getAllByText("Remove")[0]);
@@ -62,7 +63,7 @@ describe("ResourceView", () => {
   });
 
   it("starts a new resource when there is no file, then saves and loads it", async () => {
-    r.read.mockResolvedValue({ path: FULL, config: null });
+    r.read.mockResolvedValue({ path: FULL, config: null, version: null });
     render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
     fireEvent.click(await screen.findByText("New resource"));
     fireEvent.change(screen.getByLabelText("New app name"), { target: { value: "edge" } });
@@ -164,9 +165,55 @@ describe("ResourceView", () => {
   it("opening another file takes that file's request", async () => {
     render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
     await screen.findByLabelText("sso config");
-    r.read.mockResolvedValue({ path: "/ws/other.json", config: { ...config(), request: { url: "https://example.com/shadow.png" } } });
+    r.read.mockResolvedValue({ path: "/ws/other.json", config: { ...config(), request: { url: "https://example.com/shadow.png" } }, version: "v9" });
     fireEvent.change(screen.getByLabelText("Resource file"), { target: { value: "other.json" } });
     fireEvent.click(screen.getByText("Open"));
     expect(await screen.findByDisplayValue("https://example.com/shadow.png")).toBeTruthy();
+  });
+
+  it("Send saves and loads the edits first; unchanged, it only sends", async () => {
+    render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
+    await screen.findByLabelText("sso config");
+    expect(screen.getByRole("button", { name: "Load and send" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("main onResponseBody"), { target: { value: "totp" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save, load and send" }));
+    await waitFor(() => expect(r.send).toHaveBeenCalled());
+    expect(r.save.mock.calls[0][2]).toEqual({ expectedVersion: "v1" });
+    expect(r.save.mock.invocationCallOrder[0]).toBeLessThan(r.load.mock.invocationCallOrder[0]);
+    expect(r.load.mock.invocationCallOrder[0]).toBeLessThan(r.send.mock.invocationCallOrder[0]);
+  });
+
+  it("asks before overwriting a file changed on disk", async () => {
+    const confirm = vi.spyOn(window, "confirm");
+    render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
+    await screen.findByLabelText("sso config");
+    fireEvent.change(screen.getByLabelText("main onResponseBody"), { target: { value: "totp" } });
+
+    r.save.mockRejectedValueOnce(new api.ResourceConflictError("changed", "v3"));
+    confirm.mockReturnValueOnce(false);
+    fireEvent.click(screen.getByText("Save"));
+    expect(await screen.findByText(/Not saved: the file changed on disk/)).toBeTruthy();
+    expect(r.save).toHaveBeenCalledTimes(1);
+
+    r.save.mockRejectedValueOnce(new api.ResourceConflictError("changed", "v3"));
+    confirm.mockReturnValueOnce(true);
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(r.save).toHaveBeenCalledTimes(3));
+    expect(r.save.mock.calls[2][2]).toEqual({ force: true });
+    confirm.mockRestore();
+  });
+
+  it("reloads the file when it is saved elsewhere, or warns when there are unsaved edits", async () => {
+    const { rerender } = render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
+    await screen.findByLabelText("sso config");
+    expect(r.read).toHaveBeenCalledTimes(1);
+    rerender(<ResourceView loaded={null} result={null} onResult={vi.fn()} saved={{ configPath: FULL, version: "agent-1" }} />);
+    expect(await screen.findByText("Reloaded: the file was saved elsewhere.")).toBeTruthy();
+    expect(r.read).toHaveBeenCalledTimes(2);
+
+    fireEvent.change(screen.getByLabelText("main onResponseBody"), { target: { value: "totp" } });
+    rerender(<ResourceView loaded={null} result={null} onResult={vi.fn()} saved={{ configPath: FULL, version: "agent-2" }} />);
+    expect(await screen.findByText(/saved elsewhere while you have unsaved edits/)).toBeTruthy();
+    expect(r.read).toHaveBeenCalledTimes(2);
   });
 });

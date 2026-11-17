@@ -545,6 +545,19 @@
         "properties"
       ],
       "additionalProperties": false
+    },
+    "expectedVersion": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "force": {
+      "type": "boolean"
     }
   },
   "required": [

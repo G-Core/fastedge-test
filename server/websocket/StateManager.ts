@@ -21,6 +21,7 @@ import {
   HttpWasmLogEvent,
   ReloadWorkspaceWasmEvent,
   ResourceLoadedEvent,
+  ResourceSavedEvent,
   ResourceRequestCompletedEvent,
 } from "./types.js";
 import type { ResourceResult } from "../runner/resource.js";
@@ -150,6 +151,11 @@ export class StateManager {
   /** Emit resource loaded event */
   public emitResourceLoaded(data: ResourceLoadedEvent["data"], source: EventSource = "system"): void {
     this.broadcast(createEvent<ResourceLoadedEvent>("resource_loaded", source, data));
+  }
+
+  /** Emit resource saved event */
+  public emitResourceSaved(data: ResourceSavedEvent["data"], source: EventSource = "system"): void {
+    this.broadcast(createEvent<ResourceSavedEvent>("resource_saved", source, data));
   }
 
   /** Emit resource request completed event */

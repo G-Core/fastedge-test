@@ -53,6 +53,12 @@ export const ApiResourceLoadBodySchema = z.object({
 export const ApiResourceSaveBodySchema = z.object({
   configPath: z.string().optional(),
   config: ResourceConfigSchema,
+  /**
+   * The version the caller read (`GET /api/resource/config`; null = no file then). When the file
+   * changed since, the save is refused (409) unless `force`. Unset: no check.
+   */
+  expectedVersion: z.string().nullable().optional(),
+  force: z.boolean().optional(),
 });
 
 export const ApiCallBodySchema = z.object({

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   CDN_HOOKS,
   resource,
+  ResourceConflictError,
   type CdnHook,
   type ResourceConfig,
   type ResourceHookResult,
@@ -44,6 +45,8 @@ interface ResourceViewProps {
   onResult: (result: ResourceResult) => void;
   /** The Debugger has an app loaded (loading a resource replaces it). */
   appLoaded?: boolean;
+  /** The last resource file saved through the API (this page, an agent, another tab). */
+  saved?: { configPath: string; version: string } | null;
 }
 
 /**
@@ -51,13 +54,18 @@ interface ResourceViewProps {
  * origin), save it, load it and send requests through it. The file is the source of truth: agents
  * and tests use the same file through the API.
  */
-export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceViewProps) {
+export function ResourceView({ loaded, result, onResult, appLoaded, saved }: ResourceViewProps) {
   const [path, setPath] = useState(DEFAULT_RESOURCE_FILE);
   const [config, setConfig] = useState<ResourceConfig | null>(null);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const opened = useRef<string | null>(null);
+  // The opened file as typed (`path` may since have been edited) and its content version.
+  const openedAs = useRef<string | null>(null);
+  const version = useRef<string | null>(null);
+  const saving = useRef(false);
+  const root = useRef<HTMLDivElement>(null);
   // Bumped on every open: the request section starts again from the file's `request`.
   const [openCount, setOpenCount] = useState(0);
   const [files, refreshFiles] = useWorkspaceFiles();
@@ -79,6 +87,8 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
     run(async () => {
       const read = await resource.read(file);
       opened.current = read.path;
+      openedAs.current = file;
+      version.current = read.version;
       setPath(file);
       setConfig(read.config);
       setOpenCount((n) => n + 1);
@@ -104,28 +114,86 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
     setDirty(true);
   };
 
-  const save = () =>
-    run(async () => {
-      const saved = await resource.save(path, config!);
-      opened.current = saved;
+  /**
+   * Writes the page's config to `path`. Changed on disk since it was read (an agent, an editor)?
+   * Ask before overwriting. Another existing file than the opened one? Ask too.
+   */
+  const writeFile = async (): Promise<string> => {
+    let expectedVersion = version.current;
+    if (path !== openedAs.current) {
+      const target = await resource.read(path);
+      if (target.config && !window.confirm(`${target.path} already exists. Overwrite it?`)) throw new Error("Not saved.");
+      expectedVersion = target.version;
+    }
+    saving.current = true;
+    try {
+      let written;
+      try {
+        written = await resource.save(path, config!, { expectedVersion });
+      } catch (e) {
+        if (!(e instanceof ResourceConflictError)) throw e;
+        const overwrite = window.confirm(
+          `${opened.current ?? path} changed on disk since you opened it (an agent or an editor saved it).\n\nOverwrite it with your edits? Cancel keeps your edits unsaved; Open reloads the file (and drops them).`,
+        );
+        if (!overwrite) throw new Error("Not saved: the file changed on disk. Open it again to see the changes (your edits would be lost), or save again to overwrite.");
+        written = await resource.save(path, config!, { force: true });
+      }
+      opened.current = written.path;
+      openedAs.current = path;
+      version.current = written.version;
       setDirty(false);
-      return `Saved ${saved}.`;
-    });
+      return written.path;
+    } finally {
+      saving.current = false;
+    }
+  };
+
+  const save = () => run(async () => `Saved ${await writeFile()}.`);
+
+  /** Saves edits (if any) and loads the file (if not loaded, or edited). */
+  const prepare = async () => {
+    if (!dirty && isLoaded) return;
+    if (dirty || opened.current === null) await writeFile();
+    await resource.load(path);
+  };
 
   const saveAndLoad = () =>
     run(async () => {
-      if (dirty || opened.current === null) opened.current = await resource.save(path, config!);
-      setDirty(false);
+      if (dirty || opened.current === null) await writeFile();
       const result = await resource.load(path);
       return `Loaded ${result.apps.map((a) => a.name).join(", ")}.`;
     });
 
+  // Ctrl / Cmd + S saves, while this page is the one on screen.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "s" || !root.current?.offsetParent || !config) return;
+      e.preventDefault();
+      void save();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  // The opened file was saved elsewhere (an agent, another tab): show it, or warn about our edits.
+  useEffect(() => {
+    // ponytail: a save event arriving while this page saves is taken as ours.
+    if (!saved || saving.current || saved.configPath !== opened.current || saved.version === version.current) return;
+    if (!dirty) {
+      void open(openedAs.current ?? path).then(() => setMessage({ error: false, text: "Reloaded: the file was saved elsewhere." }));
+    } else {
+      setMessage({ error: true, text: "The file was saved elsewhere while you have unsaved edits. Saving will ask before overwriting it." });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved]);
+
   const isLoaded = !!loaded && !!loaded.configPath && loaded.configPath === opened.current;
+  const sendLabel = dirty ? "Save, load and send" : isLoaded ? "Send" : "Load and send";
   const apps = Object.keys(config?.apps ?? {});
 
   return (
-    <div className={explorer.page}>
-      <div className={explorer.toolbar}>
+    <div className={explorer.page} ref={root}>
+      <div className={`${explorer.toolbar} ${styles.sticky}`}>
         <div className={explorer.group}>
           <span className={explorer.groupLabel}>File</span>
           <input
@@ -147,8 +215,12 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
             {dirty ? "Save and load" : "Load"}
           </button>
         </div>
+        {dirty && (
+          <span className={styles.unsaved} title="Ctrl/Cmd+S saves; Send saves and loads first">
+            ● Unsaved changes
+          </span>
+        )}
         <span className={panel.note}>
-          {dirty ? "Unsaved changes. " : ""}
           {isLoaded
             ? `Loaded: ${loaded!.apps.map((a) => `${a.name} (${a.wasmType})`).join(", ")}.`
             : loaded
@@ -181,6 +253,7 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
               </button>
             </div>
             <RuleCard
+              key={`main-${openCount}`}
               title="main"
               hooks={config.main.hooks ?? {}}
               origin={config.main.origin}
@@ -191,7 +264,7 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
             />
             {(config.rules ?? []).map((rule, i) => (
               <RuleCard
-                key={i}
+                key={`${openCount}-${i}`}
                 title={`rule ${i + 1}`}
                 rule={rule}
                 hooks={rule.hooks}
@@ -214,7 +287,7 @@ export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceVi
               />
             ))}
           </section>
-          <RequestSection key={openCount} config={config} enabled={isLoaded && !busy} onResult={onResult} setMessage={setMessage} />
+          <RequestSection key={openCount} config={config} label={sendLabel} disabled={busy} prepare={prepare} onResult={onResult} setMessage={setMessage} />
           {result && isLoaded && <ResultSection result={result} />}
         </>
       )}
@@ -449,12 +522,18 @@ function RuleCard({ title, rule, hooks, origin, apps, onRule, onHooks, onOrigin,
 
 function RequestSection({
   config,
-  enabled,
+  label,
+  disabled,
+  prepare,
   onResult,
   setMessage,
 }: {
   config: ResourceConfig;
-  enabled: boolean;
+  /** "Send", or what else Send does first: "Save, load and send" / "Load and send". */
+  label: string;
+  disabled: boolean;
+  /** Saves and loads the page's edits first, when needed. */
+  prepare: () => Promise<void>;
   onResult: (result: ResourceResult) => void;
   setMessage: (m: { error: boolean; text: string } | null) => void;
 }) {
@@ -472,6 +551,7 @@ function RequestSection({
       const parsed = Object.fromEntries(
         headers.split("\n").filter((l) => l.includes(":")).map((l) => [l.slice(0, l.indexOf(":")).trim(), l.slice(l.indexOf(":") + 1).trim()]),
       );
+      await prepare();
       onResult(await resource.send({ url, method, headers: parsed, body }));
       setMessage(null);
     } catch (e) {
@@ -485,7 +565,7 @@ function RequestSection({
     <section className={styles.section}>
       <div className={explorer.sectionHeader}>
         <h4 className={explorer.sectionTitle}>Request</h4>
-        {!enabled && <span className={panel.note}>Load the resource to send requests through it.</span>}
+        {label !== "Send" && <span className={panel.note}>Send saves and loads your edits first.</span>}
       </div>
       <div className={explorer.row}>
         <select aria-label="Method" value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -493,9 +573,9 @@ function RequestSection({
             <option key={m}>{m}</option>
           ))}
         </select>
-        <input className={styles.url} aria-label="URL" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && enabled && void send()} />
-        <button type="button" className={`${panel.button} ${explorer.primary}`} disabled={!enabled || sending} onClick={() => void send()}>
-          Send
+        <input className={styles.url} aria-label="URL" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !disabled && !sending && void send()} />
+        <button type="button" className={`${panel.button} ${explorer.primary}`} disabled={disabled || sending} onClick={() => void send()}>
+          {label}
         </button>
       </div>
       <div className={styles.split}>

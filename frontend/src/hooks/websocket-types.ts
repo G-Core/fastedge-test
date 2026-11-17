@@ -123,6 +123,12 @@ export interface ResourceLoadedEvent extends BaseEvent {
   data: ResourceLoaded;
 }
 
+/** A resource file was saved through the API: its full path and new content version. */
+export interface ResourceSavedEvent extends BaseEvent {
+  type: "resource_saved";
+  data: { configPath: string; version: string };
+}
+
 export interface ResourceRequestCompletedEvent extends BaseEvent {
   type: "resource_request_completed";
   data: { result: ResourceResult };
@@ -140,4 +146,5 @@ export type ServerEvent =
   | HttpWasmLogEvent
   | ReloadWorkspaceWasmEvent
   | ResourceLoadedEvent
+  | ResourceSavedEvent
   | ResourceRequestCompletedEvent;

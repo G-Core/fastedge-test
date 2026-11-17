@@ -747,12 +747,38 @@ export interface WorkspaceFiles {
   truncated: boolean;
 }
 
+/** The resource file changed on disk since it was read (an agent, an editor). */
+export class ResourceConflictError extends Error {
+  constructor(message: string, readonly version: string | null) {
+    super(message);
+  }
+}
+
 export const resource = {
-  /** The file as written (null = no file yet) and its full path. */
-  read: async (configPath: string): Promise<{ path: string; config: ResourceConfig | null }> =>
+  /** The file as written (null = no file yet), its full path and content version (null = no file). */
+  read: async (configPath: string): Promise<{ path: string; config: ResourceConfig | null; version: string | null }> =>
     resourceCall(`/resource/config?path=${encodeURIComponent(configPath)}`),
-  save: async (configPath: string, config: ResourceConfig): Promise<string> =>
-    (await resourceCall("/resource/save", { configPath, config })).path,
+  /**
+   * Writes the file. With `expectedVersion` (what was read), a file changed since is refused with
+   * ResourceConflictError unless `force`.
+   */
+  save: async (
+    configPath: string,
+    config: ResourceConfig,
+    options: { expectedVersion?: string | null; force?: boolean } = {},
+  ): Promise<{ path: string; version: string }> => {
+    const response = await apiFetch(`${API_BASE}/resource/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ configPath, config, ...options }),
+    });
+    const result = await response.json();
+    if (response.status === 409) throw new ResourceConflictError(result.error, result.version ?? null);
+    if (!response.ok || !result.ok) {
+      throw new Error(typeof result.error === "string" ? result.error : JSON.stringify(result.error));
+    }
+    return { path: result.path, version: result.version };
+  },
   /** Loads the file (replacing the debugger's app); the websocket's resource_loaded follows. */
   load: async (configPath: string): Promise<ResourceLoaded> => resourceCall("/resource/load", { configPath }),
   send: async (request: { url: string; method: string; headers: Record<string, string>; body: string }): Promise<ResourceResult> =>

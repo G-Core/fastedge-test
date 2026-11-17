@@ -168,6 +168,15 @@ export interface ResourceLoadedEvent extends BaseEvent {
 }
 
 /**
+ * A resource file was saved through the API (the page, an agent): its full path and version, so
+ * a page showing that file can reload it (or warn about its own unsaved edits).
+ */
+export interface ResourceSavedEvent extends BaseEvent {
+  type: "resource_saved";
+  data: { configPath: string; version: string };
+}
+
+/**
  * Resource request completed: the rule that matched, each hook's app and result, the origin
  */
 export interface ResourceRequestCompletedEvent extends BaseEvent {
@@ -190,6 +199,7 @@ export type ServerEvent =
   | ConnectionStatusEvent
   | ReloadWorkspaceWasmEvent
   | ResourceLoadedEvent
+  | ResourceSavedEvent
   | ResourceRequestCompletedEvent;
 
 /**

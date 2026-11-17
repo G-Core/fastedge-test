@@ -492,12 +492,17 @@ function resourceFile(configPath: unknown): string {
   return validatePathOrThrow(path.resolve(root, file), { workspaceRoot: root, requireWasmExtension: false, checkExists: false });
 }
 
+/** A file's content version (a hash), or null when there is no file. */
+function contentVersion(text: string | null): string | null {
+  return text === null ? null : createHash("sha256").update(text).digest("hex").slice(0, 16);
+}
+
 /** A resource file as written (no defaults filled in), for the Resource page; config null = no file yet. */
 app.get("/api/resource/config", async (req: Request, res: Response) => {
   try {
     const file = resourceFile(req.query.path);
-    const config = existsSync(file) ? JSON.parse(await fs.readFile(file, "utf-8")) : null;
-    res.json({ ok: true, path: file, config });
+    const text = existsSync(file) ? await fs.readFile(file, "utf-8") : null;
+    res.json({ ok: true, path: file, config: text === null ? null : JSON.parse(text), version: contentVersion(text) });
   } catch (error) {
     res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
@@ -526,10 +531,21 @@ app.post("/api/resource/save", async (req: Request, res: Response) => {
     const file = resourceFile(parsed.data.configPath);
     // lstat: a dangling link too (the path check above follows only links that resolve).
     if (lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(`${file} is a symlink: not saving through it`);
+    // Someone else (an agent, an editor) changed the file since the caller read it.
+    if (parsed.data.expectedVersion !== undefined && !parsed.data.force) {
+      const current = contentVersion(existsSync(file) ? await fs.readFile(file, "utf-8") : null);
+      if (current !== parsed.data.expectedVersion) {
+        res.status(409).json({ ok: false, conflict: true, version: current, error: `${file} changed since it was read` });
+        return;
+      }
+    }
     mkdirSync(path.dirname(file), { recursive: true });
     // As given: the schema's defaults stay out of the file.
-    await fs.writeFile(file, JSON.stringify(req.body.config, null, 2) + "\n", "utf-8");
-    res.json({ ok: true, path: file });
+    const text = JSON.stringify(req.body.config, null, 2) + "\n";
+    await fs.writeFile(file, text, "utf-8");
+    const version = contentVersion(text)!;
+    stateManager.emitResourceSaved({ configPath: file, version }, (req.headers["x-source"] as any) || "ui");
+    res.json({ ok: true, path: file, version });
   } catch (error) {
     res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }

@@ -1,5 +1,26 @@
 # Proxy-WASM Runner - Changelog
 
+## November 17, 2026 - Multi-app: Send runs the edits; sticky file bar; overwrite check
+
+### Overview
+Edits on the multi-app page took effect only after "Save and load" at the top of the page. Send
+now saves and loads first when needed ("Save, load and send" / "Load and send"), the file bar
+sticks with an "Unsaved changes" marker and Ctrl/Cmd+S, and saving never silently overwrites a
+file an agent or editor changed.
+
+### 🎯 What Was Completed
+- `/api/resource/config` `version`; `/api/resource/save` `expectedVersion` / `force` (409 with the
+  current version); websocket `resource_saved`
+- `ResourceView`: conflict prompt (and before overwriting another existing file), `prepare` before
+  Send, sticky toolbar, Ctrl/Cmd+S, reload / warn on `resource_saved`; rule cards remount per open
+- `api.resource.save` returns `{ path, version }`; `ResourceConflictError`
+
+### 🧪 Testing
+- Server `resource.test.ts` (409, force, no check); `ResourceView.test.tsx` (send order, conflict
+  prompt, saved elsewhere); browser: header edit → Save, load and send → response has it; agent
+  API save reloads the page; disk edit + Ctrl+S asks and keeps the disk file on cancel; bar stays
+  pinned when scrolled
+
 ## November 17, 2026 - Origin editor (Debugger and multi-app)
 
 ### Overview
