@@ -1,4 +1,5 @@
 import { readFile } from "fs/promises";
+import { resolveOrigin } from "../runner/origin.js";
 import path from "path";
 import { createRunner, createRunnerFromBuffer } from "../runner/standalone.js";
 import { createStores, type TestStores } from "../stores/testStores.js";
@@ -50,6 +51,10 @@ export async function loadConfigFile(configPath: string): Promise<TestConfig> {
   if (result.data.dotenv?.path && !path.isAbsolute(result.data.dotenv.path)) {
     const configDir = path.dirname(path.resolve(configPath));
     result.data.dotenv.path = path.resolve(configDir, result.data.dotenv.path);
+  }
+  // And the origin's files
+  if (result.data.appType === "proxy-wasm" && result.data.origin) {
+    result.data.origin = resolveOrigin(result.data.origin, path.dirname(path.resolve(configPath)));
   }
 
   return result.data;
@@ -136,6 +141,7 @@ export async function runFlow(
     requestBody = "",
     properties = {},
     enforceProductionPropertyRules = true,
+    origin,
   } = options;
 
   // Normalise "built-in" shorthand so pseudo-header derivation works.
@@ -157,14 +163,9 @@ export async function runFlow(
 
   const requestHeaders = { ...pseudoDefaults, ...(options.requestHeaders ?? {}) };
 
-  return runner.callFullFlow(
-    url,
-    method,
-    requestHeaders,
-    requestBody,
-    properties,
-    enforceProductionPropertyRules,
-  );
+  const args = [url, method, requestHeaders, requestBody, properties, enforceProductionPropertyRules] as const;
+  // The origin only when given: the six-argument call stays as it was.
+  return origin ? runner.callFullFlow(...args, undefined, origin) : runner.callFullFlow(...args);
 }
 
 /**

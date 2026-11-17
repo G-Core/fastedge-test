@@ -19,6 +19,7 @@
  */
 
 import { Worker } from "node:worker_threads";
+import type { Origin } from "../schemas/config.js";
 import type {
   IWasmRunner,
   WasmType,
@@ -163,6 +164,7 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
     properties: Record<string, unknown>,
     enforceProductionPropertyRules: boolean,
     context?: RequestContext,
+    origin?: Origin,
   ): Promise<FullFlowResult> {
     return this.call(
       "callFullFlow",
@@ -173,6 +175,7 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
       properties,
       enforceProductionPropertyRules,
       context,
+      origin,
     );
   }
 

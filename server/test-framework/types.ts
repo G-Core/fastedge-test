@@ -1,4 +1,5 @@
 import type { IWasmRunner, RunnerConfig } from "../runner/IWasmRunner.js";
+import type { Origin } from "../schemas/config.js";
 import type { TestStores } from "../stores/testStores.js";
 import type { Resource } from "../runner/resource.js";
 import type { ResourceConfigInput } from "../schemas/config.js";
@@ -95,4 +96,9 @@ export interface FlowOptions {
   properties?: Record<string, unknown>;
   /** Default: true — matches production FastEdge behaviour */
   enforceProductionPropertyRules?: boolean;
+  /**
+   * Where the response comes from instead of `url` (a config's `origin`; loadConfigFile makes
+   * its paths absolute). `url` is then only what the client asked for.
+   */
+  origin?: Origin;
 }

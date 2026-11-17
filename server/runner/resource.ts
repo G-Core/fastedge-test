@@ -7,6 +7,7 @@
  * headers and properties pass from hook to hook (custom properties too, across apps), and every
  * hook starts with fresh memory. See cdnFlow.ts.
  */
+import { existsSync } from "node:fs";
 import { readFile, stat } from "fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -21,7 +22,8 @@ import { PropertyResolver } from "./PropertyResolver.js";
 import { cdnContext, withHeaders, type RequestContext } from "./requestContext.js";
 import { validatePathOrThrow } from "../utils/pathValidator.js";
 import { validateDotenvLeafs } from "../utils/dotenv-loader.js";
-import { BUILTIN_SHORTHAND, BUILTIN_URL, CDN_HOOKS, builtInResponse, fetchOrigin, isBuiltInUrl, runCdnFlow, type CdnHook, type OriginRequest, type OriginResponse } from "./cdnFlow.js";
+import { BUILTIN_SHORTHAND, BUILTIN_URL, CDN_HOOKS, isBuiltInUrl, runCdnFlow, type CdnHook, type OriginRequest, type OriginResponse } from "./cdnFlow.js";
+import { confineTo, originHandler, resolveOrigin } from "./origin.js";
 
 /** Where the debugger looks for a resource when none is named (relative to the workspace). */
 export const DEFAULT_RESOURCE_FILE = ".fastedge-debug/fastedge-cdn-resource.test.json";
@@ -74,6 +76,10 @@ export async function createResource(fileOrObject: string | ResourceConfigInput,
   const raw = file ? JSON.parse(await readFile(file, "utf8")) : fileOrObject;
   const config = ResourceConfigSchema.parse(raw);
   checkReferences(config);
+  // Built-in origins' files: relative to the resource file, inside `root`.
+  const confineOrigin = options.root ? confineTo(options.root) : undefined;
+  config.main.origin = resolveOrigin(config.main.origin, baseDir, confineOrigin);
+  for (const rule of config.rules) if (rule.origin) rule.origin = resolveOrigin(rule.origin, baseDir, confineOrigin);
 
   const context: RequestContext = { client: config.client, edge: config.edge };
   const stores = options.stores ?? config.stores;
@@ -181,22 +187,15 @@ async function runRequest(
     onOrigin: (response) => {
       result.origin = "app" in origin
         ? { kind: "app", app: origin.app, response, ...(originStoreCalls ? { storeCalls: originStoreCalls } : {}) }
-        : { kind: isBuiltInUrl(origin.url) ? "built-in" : "url", response };
+        : { kind: "builtIn" in origin || isBuiltInUrl(origin.url) ? "built-in" : "url", response };
     },
-    origin: async (originRequest: OriginRequest) => {
-      if ("app" in origin) {
-        const answer = await httpAppOrigin(apps.get(origin.app)!, originRequest, context);
-        originStoreCalls = answer.storeCalls;
-        return answer.response;
-      }
-      const log = { log: () => {} };
-      if (isBuiltInUrl(origin.url)) {
-        return builtInResponse(log, originRequest.method, originRequest.headers, originRequest.body, originRequest.properties, originRequest.isBase64);
-      }
-      const forwarded = new URL(originRequest.url);
-      const target = new URL(forwarded.pathname + forwarded.search, origin.url).href;
-      return fetchOrigin(log, target, originRequest.method, originRequest.headers, originRequest.body, { ...originRequest.properties, "request.url": target }, originRequest.isBase64);
-    },
+    origin: "app" in origin
+      ? async (originRequest: OriginRequest) => {
+          const answer = await httpAppOrigin(apps.get(origin.app)!, originRequest, context);
+          originStoreCalls = answer.storeCalls;
+          return answer.response;
+        }
+      : originHandler(origin, { log: () => {} }),
   }, {
     hook: "",
     request: {
@@ -268,7 +267,12 @@ async function resolveApp(name: string, entry: ResourceConfig["apps"][string], b
     if (raw && typeof raw === "object" && "apps" in raw) throw new Error(`app "${name}": ${entry.config} is a resource (resources cannot be nested)`);
     const referenced = TestConfigSchema.parse(raw);
     const dir = path.dirname(file);
-    wasm ??= referenced.wasm && path.resolve(dir, referenced.wasm.path);
+    // As the debugger reads a config: wasm.path is relative to the app's project root, and
+    // "<workspace>" is that root (dotenv.path stays relative to the config file).
+    if (!wasm && referenced.wasm) {
+      const root = projectRoot(dir);
+      wasm = path.resolve(root, referenced.wasm.path.replace(/^<workspace>[\\/]?/, ""));
+    }
     dotenv ??= referenced.dotenv && { ...referenced.dotenv, path: path.resolve(dir, referenced.dotenv.path ?? ".") };
   }
   if (!wasm) throw new Error(`app "${name}": no wasm (set "wasm" or "config")`);
@@ -284,6 +288,14 @@ async function resolveApp(name: string, entry: ResourceConfig["apps"][string], b
     throw new Error(`app "${name}": ${wasm} not found (build ${name} first)`);
   }
   return { wasm, dotenv };
+}
+
+/** The nearest folder at or above `dir` with a Cargo.toml or package.json; else `dir`. */
+function projectRoot(dir: string): string {
+  for (let at = dir; ; at = path.dirname(at)) {
+    if (existsSync(path.join(at, "Cargo.toml")) || existsSync(path.join(at, "package.json"))) return at;
+    if (path.dirname(at) === at) return dir;
+  }
 }
 
 function checkReferences(config: ResourceConfig): void {

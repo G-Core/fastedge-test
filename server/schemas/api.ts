@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RequestConfigSchema, TestConfigSchema, ClientContextSchema, EdgeContextSchema, ResourceConfigSchema } from './config';
+import { RequestConfigSchema, TestConfigSchema, ClientContextSchema, EdgeContextSchema, ResourceConfigSchema, OriginSchema } from './config';
 
 /** Request context fields: when given, they replace the runner's client / edge from then on. */
 const context = { client: ClientContextSchema.optional(), edge: EdgeContextSchema.optional() };
@@ -32,6 +32,8 @@ export const ApiSendBodySchema = z.object({
   url: z.union([z.literal("built-in"), z.string().url()]),
   request: RequestConfigSchema.partial().optional(),
   properties: z.record(z.string(), z.unknown()).optional().default({}),
+  /** Single app: where the response comes from (file paths relative to the workspace, inside it). */
+  origin: OriginSchema.optional(),
   ...context,
 });
 

@@ -64,12 +64,44 @@ const BaseConfigSchema = z.object({
   edge: EdgeContextSchema.optional(),
 });
 
+/**
+ * The built-in responder, declared: a fixed response (`status`, `headers`, and `body` or
+ * `bodyFile`), or a folder served by request path (`files`, 200 or 404). Paths are relative to
+ * the config file. It wins over the request's `x-debugger-*` headers (deprecated).
+ */
+export const BuiltInOriginSchema = z.object({
+  status: z.number().int().min(100).max(599).optional(),
+  headers: z.record(
+    z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/, "not a valid header name"),
+    z.string().regex(/^[^\r\n\0]*$/, "header values cannot hold CR, LF or NUL"),
+  ).optional(),
+  body: z.string().optional(),
+  /** A file whose bytes are the body (binary is fine); its extension gives the content-type. */
+  bodyFile: z.string().optional(),
+  /** A folder: GET /a/b.png answers with <folder>/a/b.png. Dotfiles are never served. */
+  files: z.string().optional(),
+}).strict()
+  .refine((o) => [o.body, o.bodyFile, o.files].filter((v) => v !== undefined).length <= 1, { message: "set at most one of body, bodyFile, files" })
+  .refine((o) => o.files === undefined || o.status === undefined, { message: "files sets the status itself (200, or 404 for a missing file)" });
+
+/** Where a CDN request's response comes from: a URL ("built-in" = the echo responder) or `builtIn`. */
+export const OriginSchema = z.union([
+  z.object({ url: z.string() }).strict(),
+  z.object({ builtIn: BuiltInOriginSchema }).strict(),
+]);
+
 // CDN config: full URL. The upstream response is generated at runtime —
 // either by the built-in responder (url === "built-in") or by a real fetch
 // against the configured URL. There is no fixture-level mock response.
 const CdnConfigSchema = BaseConfigSchema.extend({
   appType: z.literal('proxy-wasm').default('proxy-wasm'),
   request: CdnRequestConfigSchema,
+  /**
+   * Where the response comes from. Unset: the request URL (a real fetch, or the built-in
+   * responder for "built-in"). Set: `request.url` is only what the client asked for, and the
+   * request's path and query go to this origin, as in a resource.
+   */
+  origin: OriginSchema.optional(),
 });
 
 // HTTP config: path only, no mock response
@@ -109,9 +141,10 @@ export const ResourceHooksSchema = z.object({
   onResponseBody: HookAppSchema.optional(),
 }).strict();
 
-/** A URL ("built-in" for the built-in responder) or an HTTP app of the resource. */
+/** A URL ("built-in" for the built-in responder), a declared built-in response, or an HTTP app of the resource. */
 export const ResourceOriginSchema = z.union([
   z.object({ url: z.string() }).strict(),
+  z.object({ builtIn: BuiltInOriginSchema }).strict(),
   z.object({ app: z.string() }).strict(),
 ]);
 
@@ -149,6 +182,8 @@ export type ResourceConfig = z.infer<typeof ResourceConfigSchema>;
 export type ResourceConfigInput = z.input<typeof ResourceConfigSchema>;
 export type ResourceHooks = z.infer<typeof ResourceHooksSchema>;
 export type ResourceOrigin = z.infer<typeof ResourceOriginSchema>;
+export type BuiltInOrigin = z.infer<typeof BuiltInOriginSchema>;
+export type Origin = z.infer<typeof OriginSchema>;
 
 // Backward-compat alias: the old flat RequestConfigSchema is the CDN variant
 export const RequestConfigSchema = CdnRequestConfigSchema;

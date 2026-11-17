@@ -153,6 +153,46 @@
             {
               "type": "object",
               "properties": {
+                "builtIn": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "integer",
+                      "minimum": 100,
+                      "maximum": 599
+                    },
+                    "headers": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+                      },
+                      "additionalProperties": {
+                        "type": "string",
+                        "pattern": "^[^\\r\\n\\0]*$"
+                      }
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "bodyFile": {
+                      "type": "string"
+                    },
+                    "files": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "builtIn"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
                 "app": {
                   "type": "string"
                 }
@@ -288,6 +328,46 @@
                 },
                 "required": [
                   "url"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "builtIn": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "integer",
+                        "minimum": 100,
+                        "maximum": 599
+                      },
+                      "headers": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "pattern": "^[^\\r\\n\\0]*$"
+                        }
+                      },
+                      "body": {
+                        "type": "string"
+                      },
+                      "bodyFile": {
+                        "type": "string"
+                      },
+                      "files": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "builtIn"
                 ],
                 "additionalProperties": false
               },

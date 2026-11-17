@@ -28,6 +28,8 @@ import { resolveDotenvPath, validateDotenvLeafs, DotenvPathError } from "./utils
 import { createResource, DEFAULT_RESOURCE_FILE, type Resource } from "./runner/resource.js";
 import { mountStorageExplorer } from "./storageExplorer.js";
 import { listWorkspaceFiles } from "./utils/workspaceFiles.js";
+import { confineTo, resolveOrigin } from "./runner/origin.js";
+import type { Origin } from "./schemas/config.js";
 import {
   ApiResourceLoadBodySchema,
   ApiResourceSaveBodySchema,
@@ -501,6 +503,12 @@ app.get("/api/resource/config", async (req: Request, res: Response) => {
   }
 });
 
+/** A request's origin with its files resolved against the workspace and confined to it. */
+function workspaceOrigin(origin: Origin): Origin {
+  const root = process.env.WORKSPACE_PATH || process.cwd();
+  return resolveOrigin(origin, root, confineTo(root));
+}
+
 /** Suggestions for the Resource page's path fields: wasm, *.test.json and .env folders in the workspace. */
 app.get("/api/workspace/files", (_req: Request, res: Response) => {
   const root = process.env.WORKSPACE_PATH || process.cwd();
@@ -868,6 +876,18 @@ app.post("/api/send", async (req: Request, res: Response) => {
   }
   const { url, request, properties } = parsed.data;
 
+  if (currentResource && parsed.data.origin) {
+    res.status(400).json({ ok: false, error: "origin: a resource sets its origins in its file (main / rules)" });
+    return;
+  }
+  let origin: Origin | undefined;
+  try {
+    origin = parsed.data.origin && workspaceOrigin(parsed.data.origin);
+  } catch (error) {
+    res.status(400).json({ ok: false, error: (error as Error).message });
+    return;
+  }
+
   if (currentResource) {
     const source = (req.headers["x-source"] as any) || "ui";
     try {
@@ -905,6 +925,7 @@ app.post("/api/send", async (req: Request, res: Response) => {
       properties || {},
       true, // enforceProductionPropertyRules
       requestContextOf(req.body, parsed.data),
+      origin,
     );
 
     // Emit request completed event

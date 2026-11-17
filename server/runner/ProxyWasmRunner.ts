@@ -1,4 +1,6 @@
 import { WASI } from "node:wasi";
+import type { Origin } from "../schemas/config.js";
+import { originHandler } from "./origin.js";
 import { checkEgressAllowed } from "./egressPolicy.js";
 import type { HookCall, HookResult, HeaderMap, HeaderRecord, HeaderTuples, FullFlowResult } from "./types";
 import type {
@@ -297,6 +299,7 @@ export class ProxyWasmRunner implements IWasmRunner {
   async callFullFlowLegacy(
     call: HookCall,
     targetUrl: string,
+    origin?: Origin,
   ): Promise<FullFlowResult> {
     if (!this.module) {
       throw new Error("WASM module not loaded");
@@ -309,6 +312,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       log: (message) => this.logDebug(message),
       events: this.stateManager,
       ownHeaders: (headers) => this.ownHeaders(headers),
+      origin: origin && originHandler(origin, { log: (message) => this.logDebug(message) }),
     }, call, targetUrl);
   }
 
@@ -855,6 +859,7 @@ export class ProxyWasmRunner implements IWasmRunner {
     properties: Record<string, unknown>,
     enforceProductionPropertyRules: boolean,
     context?: RequestContext,
+    origin?: Origin,
   ): Promise<FullFlowResult> {
     const call: HookCall = {
       hook: "", // Not used in fullFlow
@@ -867,7 +872,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       enforceProductionPropertyRules,
     };
 
-    return this.withContext(call, context, (c) => this.flowRequestId.run(randomUUID(), () => this.callFullFlowLegacy(c, url)));
+    return this.withContext(call, context, (c) => this.flowRequestId.run(randomUUID(), () => this.callFullFlowLegacy(c, url, origin)));
   }
 
   /**

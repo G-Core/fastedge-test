@@ -1,5 +1,29 @@
 # Proxy-WASM Runner - Changelog
 
+## November 17, 2026 - Built-in origin declared in the config (fixed response, files)
+
+### Overview
+A resource's origins and a CDN config's new `origin` can declare the built-in responder:
+`{ "builtIn": { status, headers, body | bodyFile } }` or `{ "builtIn": { "files": "<folder>" } }`
+(served by request path). The config wins over the `x-debugger-*` headers, now deprecated. Fix:
+a resource app referenced by config read `wasm.path` against the config's folder, not the project
+root (`<workspace>` failed too).
+
+### 🎯 What Was Completed
+- `server/runner/origin.ts`: `resolveOrigin` (paths, confinement, real paths fixed at load),
+  `originHandler` (URL / echo / fixed / files), hardened `serveFile` (see BUILT_IN_RESPONDER.md)
+- `BuiltInOriginSchema`, `OriginSchema`; CDN config `origin`; resource origins accept `builtIn`
+- `callFullFlow(..., context?, origin?)` (in-process and worker); `runFlow({ origin })`;
+  `loadConfigFile` resolves it; `/api/send` `origin` (workspace-relative, confined; 400 with a
+  resource loaded)
+- `resource.ts`: config-referenced `wasm.path` against the project root
+
+### 🧪 Testing
+- Unit `origin.test.ts` (traversal encodings, dotfiles, symlink escapes, folder swapped after load,
+  size cap, methods, HEAD, schema); integration resource (files, fixed rule, root confinement,
+  single app, config-referenced wasm); server `/api/send` origin confinement. Security review by a
+  second model (Codex), three rounds, findings fixed.
+
 ## November 17, 2026 - Multi-app (CDN resource) toggle, flow grouped by app
 
 ### Overview

@@ -1,7 +1,8 @@
 # Resources (several apps on one request)
 
 A resource runs one request through several apps, as a CDN resource does on the edge: one CDN
-(proxy-wasm) app per hook, and an origin that is a URL, the built-in responder or an HTTP app.
+(proxy-wasm) app per hook, and an origin that is a URL, the built-in responder (echo, or declared with `builtIn`: fixed
+response or a folder of files, see BUILT_IN_RESPONDER.md) or an HTTP app.
 Code: `server/runner/resource.ts` (config, rules, apps), `server/runner/cdnFlow.ts` (the request
 flow, shared with single apps), `server/schemas/config.ts` (`ResourceConfigSchema`).
 
@@ -91,3 +92,8 @@ properties from hook to hook; a flow hook starts with exactly those (none from a
 - **onRequestHeaders after cache** (a separate portal option, run by core-proxy) is not modelled.
 - **Shield:** `execute_on_shield` is not simulated; hooks run as on an edge node.
 - A request body's own `client` / `edge` is not applied to a resource; the resource's are.
+
+- **Apps referenced by config:** a referenced `fastedge-config.test.json`'s `wasm.path` is read as
+  the debugger reads it: relative to the app's project root (nearest folder with a `Cargo.toml` or
+  `package.json`), with `<workspace>` meaning that root; its `dotenv.path` is relative to the
+  config file.

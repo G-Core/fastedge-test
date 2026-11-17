@@ -4,7 +4,7 @@
  * another app; one written in onRequestHeaders never reaches a later hook.
  */
 import path from "node:path";
-import { copyFileSync, mkdtempSync, rmSync, utimesSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -210,6 +210,82 @@ describe("binary bodies", () => {
       expect(Buffer.from(result.finalResponse.body, "base64")).toEqual(Buffer.from(Buffer.from("origin").map((b) => 255 - b)));
     } finally {
       await r.cleanup();
+    }
+  });
+});
+
+describe("built-in origin from the config", () => {
+  const image = Buffer.from(Array.from({ length: 256 }, (_, i) => i)); // not valid UTF-8
+  const inverted = Buffer.from(image.map((b) => 255 - b));
+  let dir: string;
+  beforeAll(() => {
+    dir = mkdtempSync(path.join(tmpdir(), "builtin-origin-"));
+    mkdirSync(path.join(dir, "assets"));
+    writeFileSync(path.join(dir, "assets", "photo.png"), image);
+    writeFileSync(path.join(dir, "assets", ".env"), "SECRET=1");
+    writeFileSync(path.join(dir, "outside.txt"), "outside");
+    copyFileSync(wasm, path.join(dir, "probe.wasm"));
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("a resource serves files from a folder, and a rule answers with a fixed response", async () => {
+    const file = path.join(dir, "resource.json");
+    writeFileSync(file, JSON.stringify({
+      apps: { a: { wasm: "probe.wasm" } },
+      main: { hooks: { onResponseBody: "a" }, origin: { builtIn: { files: "assets" } } },
+      rules: [{ match: "^/gone", origin: { builtIn: { status: 410, body: "gone" } } }],
+    }));
+    const r = await createResource(file, { stores: false, root: dir });
+    try {
+      const served = await r.request({ url: "https://example.com/photo.png", headers: { "x-probe-invert": "1" } });
+      expect(served.origin).toMatchObject({ kind: "built-in", response: { status: 200, contentType: "image/png" } });
+      expect(Buffer.from(served.finalResponse.body, "base64")).toEqual(inverted);
+      expect((await r.request({ url: "https://example.com/.env" })).finalResponse.status).toBe(404);
+      expect((await r.request({ url: "https://example.com/gone" })).origin!.response).toMatchObject({ status: 410, body: "gone" });
+    } finally {
+      await r.cleanup();
+    }
+  });
+
+  it("a resource's origin folder must be inside its root", async () => {
+    const file = path.join(dir, "assets-outside.json");
+    writeFileSync(file, JSON.stringify({ apps: { a: { wasm: "probe.wasm" } }, main: { origin: { builtIn: { files: ".." } } } }));
+    await expect(createResource(file, { stores: false, root: dir })).rejects.toThrow(/outside the workspace/);
+  });
+
+  it("a single app takes the origin too: the request URL is then only the client's", async () => {
+    const runner = await createRunner(wasm, { stores: false });
+    try {
+      const result = await runner.callFullFlow("https://example.com/photo.png", "GET", { "x-probe-invert": "1" }, "", {}, true, undefined, {
+        builtIn: { files: realpathSync(path.join(dir, "assets")) },
+      });
+      expect(result.finalResponse.status).toBe(200);
+      expect(Buffer.from(result.finalResponse.body, "base64")).toEqual(inverted);
+    } finally {
+      await runner.cleanup();
+    }
+  });
+});
+
+describe("an app from its project's config", () => {
+  it("reads wasm.path as the debugger does: relative to the project root, or <workspace>", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "resource-config-"));
+    try {
+      const app = path.join(dir, "my_app");
+      mkdirSync(path.join(app, "target"), { recursive: true });
+      mkdirSync(path.join(app, "fixtures"));
+      writeFileSync(path.join(app, "Cargo.toml"), "[package]\n");
+      copyFileSync(wasm, path.join(app, "target", "app.wasm"));
+      const config = (wasmPath: string) => JSON.stringify({ wasm: { path: wasmPath }, request: { url: "built-in" } });
+      writeFileSync(path.join(app, "fixtures", "relative.test.json"), config("target/app.wasm"));
+      writeFileSync(path.join(app, "fixtures", "workspace.test.json"), config("<workspace>/target/app.wasm"));
+      const r = await createResource({
+        apps: { a: { config: path.join(app, "fixtures", "relative.test.json") }, b: { config: path.join(app, "fixtures", "workspace.test.json") } },
+        main: { hooks: { onRequestHeaders: "a", onResponseHeaders: "b" }, origin: { url: "built-in" } },
+      }, { stores: false });
+      await r.cleanup();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

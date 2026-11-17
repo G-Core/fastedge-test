@@ -39,7 +39,37 @@ After the first send, the UI shows the canonical URL. Subsequent sends use eithe
 
 ---
 
-## Control Headers
+## Declared in the config (`origin.builtIn`)
+
+A config can declare the origin instead of steering the echo with request headers. In a resource
+file it goes on `main.origin` or a rule's `origin`; in a CDN `fastedge-config.test.json` it is the
+top-level `origin` (then `request.url` is only what the client asked for, and its path and query go
+to the origin, as in a resource). `POST /api/send` takes it as `origin` for a single app; the test
+framework's `runFlow` as `origin` (`loadConfigFile` resolves it).
+
+```jsonc
+"origin": { "builtIn": { "status": 404, "headers": { "content-type": "application/json" }, "body": "{}" } }
+"origin": { "builtIn": { "bodyFile": "../assets/photo.png" } }     // the file's bytes; type from its extension
+"origin": { "builtIn": { "files": "../assets" } }                  // GET /a/b.png -> ../assets/a/b.png
+"origin": { "url": "built-in" }                                     // the echo below, unchanged
+```
+
+- One body source at most (`body`, `bodyFile`, `files`); `files` sets the status itself (200 / 404).
+  `headers` apply over the generated ones. HEAD gets the headers without the body.
+- Paths are relative to the config file (`/api/send`: to the workspace) and must be inside the
+  workspace in the debugger (`createResource`: inside `root` when given).
+- **The config wins**: `x-debugger-*` request headers are ignored (with a log line) when
+  `builtIn` is declared. The headers are **deprecated** and will be removed in a later major.
+- **Serving files is hardened** (`server/runner/origin.ts`): the request path is decoded once;
+  dot segments, dotfiles (`.env`, `.git`), backslashes, colons and NUL are refused; the folder and
+  `bodyFile` are fixed to their real paths when the config loads, a requested file's real path must
+  be inside the folder, and the file actually opened (`O_NOFOLLOW`, then its fd path on Linux or
+  its inode elsewhere) must be the one checked; regular files only, at most 32 MiB, read with a
+  hard cap; GET and HEAD only; `x-content-type-options: nosniff`; errors never show paths. Off
+  Linux, a symlink swapped in and back within the open window is not caught (needs write access to
+  the served folder).
+
+## Control Headers (deprecated: prefer `origin.builtIn`)
 
 Two request headers control the built-in responder's behavior. They are read from the modified request headers **after** `onRequestBody` completes (so WASM can set them dynamically). Both are stripped before building the response.
 

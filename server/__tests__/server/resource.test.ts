@@ -95,4 +95,23 @@ describe("debugger server — resources", () => {
     expect(body.dotenvDirs).toEqual(["app/fixtures"]);
     expect(body.truncated).toBe(false);
   });
+
+  it("/api/send takes a single app's origin: workspace-relative files, nothing outside", async () => {
+    mkdirSync(join(server.workspacePath, "site"), { recursive: true });
+    writeFileSync(join(server.workspacePath, "site", "hello.txt"), "hello");
+    const load = await post("/api/load", { wasmPath: join(server.workspacePath, "apps", "probe.wasm") });
+    expect(load.status).toBe(200);
+
+    const send = (origin: unknown) => post("/api/send", { url: "https://example.com/hello.txt", origin });
+    const served = await send({ builtIn: { files: "site" } });
+    expect(served.status).toBe(200);
+    expect((await served.json()).finalResponse.status).toBe(200);
+    expect((await send({ builtIn: { files: ".." } })).status).toBe(400);
+    expect((await send({ builtIn: { bodyFile: "/etc/hostname" } })).status).toBe(400);
+    expect((await send({ builtIn: { files: "site", body: "x" } })).status).toBe(400);
+
+    // A resource sets its origins in its file.
+    expect((await post("/api/resource/load", {})).status).toBe(200);
+    expect((await send({ builtIn: { files: "site" } })).status).toBe(400);
+  });
 });

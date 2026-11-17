@@ -66,6 +66,15 @@ describe('defineTestSuite', () => {
 // ─── runFlow ──────────────────────────────────────────────────────────────────
 
 describe('runFlow', () => {
+  it('passes an origin on after the context argument', async () => {
+    const runner = makeMockRunner();
+    const origin = { builtIn: { status: 204 } };
+    await runFlow(runner, { url: 'https://example.com/', origin });
+    expect(runner.callFullFlow).toHaveBeenLastCalledWith(
+      'https://example.com/', 'GET', expect.anything(), '', {}, true, undefined, origin,
+    );
+  });
+
   it('derives pseudo-headers from url and method', async () => {
     const runner = makeMockRunner();
     await runFlow(runner, { url: 'https://example.com/api/data?q=1', method: 'POST' });
@@ -156,6 +165,23 @@ describe('loadConfigFile', () => {
     );
     const config = await loadConfigFile('./fastedge-config.test.json');
     expect(config.request.url).toBe('https://example.com');
+  });
+
+  it("resolves the origin's files against the config file's folder", async () => {
+    const { mkdtempSync, mkdirSync, realpathSync, rmSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const proj = realpathSync(mkdtempSync(join((await import('node:os')).tmpdir(), 'cfg-')));
+    try {
+      mkdirSync(join(proj, 'assets'));
+      mkdirSync(join(proj, 'fixtures'));
+      mockReadFile.mockResolvedValue(
+        JSON.stringify({ request: { url: 'https://example.com/a.png' }, origin: { builtIn: { files: '../assets' } } })
+      );
+      const config = await loadConfigFile(join(proj, 'fixtures', 'one.test.json'));
+      expect(config.appType === 'proxy-wasm' && config.origin).toEqual({ builtIn: { files: join(proj, 'assets') } });
+    } finally {
+      rmSync(proj, { recursive: true, force: true });
+    }
   });
 
   it('applies schema defaults (method defaults to GET)', async () => {

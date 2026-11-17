@@ -1,4 +1,5 @@
 import type { TestStores } from "../stores/testStores.js";
+import type { Origin } from "../schemas/config.js";
 import type { StoreCall } from "../stores/trace.js";
 import type { ClientContext, EdgeContext, RequestContext } from "./requestContext.js";
 /**
@@ -150,6 +151,8 @@ export interface IWasmRunner {
    * @param properties Shared properties
    * @param enforceProductionPropertyRules Whether to enforce property access rules
    * @param context Client and edge for this flow only; default: the runner's
+   * @param origin Where the response comes from instead of `url` (file paths already absolute;
+   * see resolveOrigin); `url` is then only what the client asked for
    * @returns Full flow execution result
    */
   callFullFlow(
@@ -160,6 +163,7 @@ export interface IWasmRunner {
     properties: Record<string, unknown>,
     enforceProductionPropertyRules: boolean,
     context?: RequestContext,
+    origin?: Origin,
   ): Promise<FullFlowResult>;
 
   /**
