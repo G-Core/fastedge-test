@@ -1,5 +1,5 @@
 [workspace]
-members = ["hello-world", "http-responder", "downstream-fetch", "headers", "variables-and-secrets", "echo-post", "stores"]
+members = ["hello-world", "http-responder", "downstream-fetch", "headers", "variables-and-secrets", "echo-post", "stores", "serve-assets"]
 resolver = "2"
 
 [workspace.dependencies]
