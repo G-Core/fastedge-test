@@ -696,11 +696,16 @@ export type ResourceConfig = {
   [field: string]: unknown;
 };
 export type ResourceLoaded = { configPath?: string | null; apps: { name: string; wasmType: "proxy-wasm" | "http-wasm" }[] };
+type HookState = {
+  request: { headers: Record<string, string | string[]>; body: string; isBase64?: boolean };
+  response: { headers: Record<string, string | string[]>; body: string; isBase64?: boolean };
+  properties?: Record<string, unknown>;
+};
 export type ResourceHookResult = {
   returnCode: number | null;
   logs: { level: number; message: string }[];
-  input: { request: { headers: Record<string, string | string[]>; body: string }; response: { headers: Record<string, string | string[]>; body: string } };
-  output: { request: { headers: Record<string, string | string[]>; body: string }; response: { headers: Record<string, string | string[]>; body: string } };
+  input: HookState;
+  output: HookState;
   storeCalls?: StoreCall[];
   localResponse?: { status: number };
   customProperties?: string[];

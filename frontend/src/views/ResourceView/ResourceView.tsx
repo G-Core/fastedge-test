@@ -4,6 +4,7 @@ import {
   resource,
   type CdnHook,
   type ResourceConfig,
+  type ResourceHookResult,
   type ResourceHooks,
   type ResourceLoaded,
   type ResourceOrigin,
@@ -11,7 +12,10 @@ import {
   type WorkspaceFiles,
 } from "../../api";
 import { useWorkspaceFiles } from "../../hooks/useWorkspaceFiles";
-import { LogsViewer } from "../../components/common/LogsViewer";
+import { LogLevelSelector } from "../../components/common/LogLevelSelector";
+import { HookDetail } from "../../components/proxy-wasm/HookStagesPanel";
+import { useAppStore } from "../../stores";
+import type { HookResult } from "../../types";
 import { JsonDisplay } from "../../components/common/JsonDisplay";
 import { ResponsePanel } from "../../components/common/ResponsePanel";
 import { StoreCallsList } from "../../components/common/StoreCallsList";
@@ -37,6 +41,8 @@ interface ResourceViewProps {
   /** The last request the loaded resource ran. */
   result: ResourceResult | null;
   onResult: (result: ResourceResult) => void;
+  /** The Debugger has an app loaded (loading a resource replaces it). */
+  appLoaded?: boolean;
 }
 
 /**
@@ -44,7 +50,7 @@ interface ResourceViewProps {
  * origin), save it, load it and send requests through it. The file is the source of truth: agents
  * and tests use the same file through the API.
  */
-export function ResourceView({ loaded, result, onResult }: ResourceViewProps) {
+export function ResourceView({ loaded, result, onResult, appLoaded }: ResourceViewProps) {
   const [path, setPath] = useState(DEFAULT_RESOURCE_FILE);
   const [config, setConfig] = useState<ResourceConfig | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -142,7 +148,9 @@ export function ResourceView({ loaded, result, onResult }: ResourceViewProps) {
             ? `Loaded: ${loaded!.apps.map((a) => `${a.name} (${a.wasmType})`).join(", ")}.`
             : loaded
               ? "Another resource is loaded."
-              : "Not loaded."}
+              : appLoaded
+                ? "Not loaded. Loading replaces the Debugger's single app."
+                : "Not loaded."}
         </span>
       </div>
 
@@ -500,23 +508,53 @@ function RequestSection({
 type Step = CdnHook | "origin";
 const STEPS: Step[] = ["onRequestHeaders", "onRequestBody", "origin", "onResponseHeaders", "onResponseBody"];
 
+/** The Debugger's hook result shape, so the resource view reuses its hook detail panel. */
+function asHookResult(r: ResourceHookResult): HookResult {
+  return {
+    logs: r.logs,
+    storeCalls: r.storeCalls,
+    returnValue: r.returnCode ?? undefined,
+    error: r.returnCode === null ? "The hook failed (see the logs)." : undefined,
+    input: r.input,
+    output: r.output,
+  };
+}
+
+type Chip = { step: Step; status: string; kind: "ran" | "error" | "skipped" };
+type Group = { label: string; chips: Chip[] };
+
+/** The flow's steps in order, consecutive steps of one app in one group. */
+function flowGroups(result: ResourceResult): Group[] {
+  const groups: Group[] = [];
+  for (const step of STEPS) {
+    let label: string;
+    let chip: Chip;
+    if (step === "origin") {
+      const o = result.origin;
+      label = o ? `origin: ${o.kind === "app" ? o.app : o.kind}` : "origin";
+      chip = o ? { step, status: String(o.response.status), kind: "ran" } : { step, status: "not reached", kind: "skipped" };
+    } else {
+      const ran = result.hooks[step];
+      label = ran ? ran.app : "not run";
+      const r = ran?.result;
+      chip = !r
+        ? { step, status: "—", kind: "skipped" }
+        : r.returnCode === null
+          ? { step, status: "error", kind: "error" }
+          : r.localResponse
+            ? { step, status: `sent ${r.localResponse.status}`, kind: "ran" }
+            : { step, status: r.returnCode === 1 ? "paused" : "continue", kind: "ran" };
+    }
+    const last = groups[groups.length - 1];
+    if (last && last.label === label && step !== "origin" && last.chips[0].step !== "origin") last.chips.push(chip);
+    else groups.push({ label, chips: [chip] });
+  }
+  return groups;
+}
+
 function ResultSection({ result }: { result: ResourceResult }) {
   const [selected, setSelected] = useState<Step>("onRequestHeaders");
-
-  const chip = (step: Step) => {
-    if (step === "origin") {
-      if (!result.origin) return { app: "—", status: "not reached", kind: "skipped" };
-      const o = result.origin;
-      return { app: o.kind === "app" ? o.app! : o.kind, status: String(o.response.status), kind: "ran" };
-    }
-    const ran = result.hooks[step];
-    if (!ran) return { app: "—", status: "not run", kind: "skipped" };
-    const r = ran.result;
-    if (r.returnCode === null) return { app: ran.app, status: "error", kind: "error" };
-    if (r.localResponse) return { app: ran.app, status: `sent ${r.localResponse.status}`, kind: "ran" };
-    return { app: ran.app, status: r.returnCode === 1 ? "paused" : "continue", kind: "ran" };
-  };
-
+  const { logLevel, setLogLevel } = useAppStore();
   const hook = selected !== "origin" ? result.hooks[selected] : undefined;
 
   return (
@@ -526,25 +564,30 @@ function ResultSection({ result }: { result: ResourceResult }) {
         <span className={panel.note}>
           {result.rule ? `rule ${result.rule.index + 1}${result.rule.name ? ` (${result.rule.name})` : ""}: ${result.rule.match}` : "main"}
         </span>
+        <span className={panel.spacer} />
+        <LogLevelSelector logLevel={logLevel} onLogLevelChange={setLogLevel} />
       </div>
       <div className={styles.flow} role="tablist" aria-label="Flow">
-        {STEPS.map((step) => {
-          const c = chip(step);
-          return (
-            <button
-              key={step}
-              type="button"
-              role="tab"
-              aria-selected={selected === step}
-              className={`${styles.step} ${styles[c.kind]} ${selected === step ? styles.selectedStep : ""}`}
-              onClick={() => setSelected(step)}
-            >
-              <span className={styles.mono}>{step}</span>
-              <span>{c.app}</span>
-              <span className={styles.status}>{c.status}</span>
-            </button>
-          );
-        })}
+        {flowGroups(result).map((group, g) => (
+          <div key={g} className={styles.group} aria-label={group.label}>
+            <span className={`${styles.groupLabel} ${styles.mono}`}>{group.label}</span>
+            <div className={styles.groupChips}>
+              {group.chips.map((c) => (
+                <button
+                  key={c.step}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected === c.step}
+                  className={`${styles.step} ${styles[c.kind]} ${selected === c.step ? styles.selectedStep : ""}`}
+                  onClick={() => setSelected(c.step)}
+                >
+                  <span className={styles.mono}>{c.step}</span>
+                  <span className={styles.status}>{c.status}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className={styles.detail}>
@@ -565,9 +608,7 @@ function ResultSection({ result }: { result: ResourceResult }) {
               App <span className={styles.mono}>{hook.app}</span>
               {hook.result.customProperties?.length ? `; custom properties set so far: ${hook.result.customProperties.join(", ")}` : ""}
             </p>
-            <LogsViewer logs={hook.result.logs} logLevel={0} />
-            <JsonDisplay data={hook.result.output} compareWith={hook.result.input} title="Request and response (changes from before the hook)" />
-            <StoreCallsList calls={hook.result.storeCalls} source="hook" />
+            <HookDetail key={selected} hook={selected} results={{ [selected]: asHookResult(hook.result) }} logLevel={logLevel} />
           </>
         )}
       </div>

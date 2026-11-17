@@ -127,6 +127,26 @@
   margin-bottom: 10px;
 }
 
+/* One app's consecutive steps */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 6px 6px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: #1c1c1c;
+}
+
+.groupLabel {
+  color: #a0a0a0;
+}
+
+.groupChips {
+  display: flex;
+  gap: 6px;
+}
+
 .step {
   display: flex;
   flex-direction: column;
@@ -154,7 +174,14 @@
   color: #707070;
 }
 
-.selectedStep {
+/* Not the global orange button hover */
+.step:hover:not(:disabled) {
+  background: #222;
+  border-color: #555;
+}
+
+.selectedStep,
+.selectedStep:hover:not(:disabled) {
   border-color: #ff6c37;
 }
 

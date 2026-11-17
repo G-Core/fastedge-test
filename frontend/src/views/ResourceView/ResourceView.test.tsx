@@ -120,4 +120,37 @@ describe("ResourceView", () => {
     expect(relativePath("app/fixtures", "app/fixtures")).toBe(".");
     expect(relativePath(".", ".")).toBe(".");
   });
+
+  it("groups the flow's steps by app and shows a hook's detail as in the Debugger", async () => {
+    const state = (h: Record<string, string>) => ({ request: { headers: h, body: "" }, response: { headers: {}, body: "" } });
+    const hookResult = (message: string, level: number) => ({
+      returnCode: 0,
+      logs: [{ level, message }],
+      input: state({}),
+      output: state({ "image-format": "image/avif" }),
+    });
+    const result: api.ResourceResult = {
+      rule: null,
+      hooks: {
+        onRequestHeaders: { app: "reqh", result: hookResult("scheduled", 2) },
+        onResponseHeaders: { app: "resp", result: hookResult("headers set", 2) },
+        onResponseBody: { app: "resp", result: hookResult("trace detail", 0) },
+      },
+      origin: { kind: "url", response: { status: 200, headers: {}, body: "" } },
+      finalResponse: { status: 200, statusText: "OK", headers: {}, body: "", contentType: "image/avif" },
+    };
+    render(<ResourceView loaded={{ configPath: FULL, apps: [] }} result={result} onResult={vi.fn()} />);
+    await screen.findByLabelText("Flow");
+    const groups = [...screen.getByLabelText("Flow").children].map((g) => [g.getAttribute("aria-label"), g.querySelectorAll("[role=tab]").length]);
+    expect(groups).toEqual([["reqh", 1], ["not run", 1], ["origin: url", 1], ["resp", 2]]);
+
+    expect(screen.getByText(/scheduled/)).toBeTruthy();
+    fireEvent.click(screen.getByText("Outputs"));
+    expect(screen.getByText("Request Headers (Modified)")).toBeTruthy();
+
+    // The Debugger's log level applies: a TRACE log is hidden at the default level (INFO).
+    fireEvent.click(screen.getAllByRole("tab", { name: /onResponseBody/ })[0]);
+    expect(screen.queryByText(/trace detail/)).toBeNull();
+    expect(screen.getByText(/No logs at this level/)).toBeTruthy();
+  });
 });

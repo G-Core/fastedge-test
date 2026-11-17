@@ -60,11 +60,14 @@ properties from hook to hook; a flow hook starts with exactly those (none from a
   as written (`config: null` = no file yet); `POST /api/resource/save { configPath?, config }`
   checks it against the schema and writes it as given (no defaults filled in; never through a
   symlink). Both default to the default file and stay inside the workspace.
-- **Resource page** ("CDN Resource" header tab, `views/ResourceView/`): opens the default file (or any path),
+- **Resource page** (`views/ResourceView/`, the Debugger page with the **Multi-app (CDN resource)**
+  toggle on; the toggle is replaced by a note while an HTTP app is loaded, and follows websocket
+  loads: a resource load turns it on, an app load off): opens the default file (or any path),
   edits apps (config / wasm / dotenv), main and rules (an app or off per hook, interrupt on error,
   origin), saves and loads it, and sends requests. The result shows the matched rule and a flow
-  strip (each hook's app and outcome, the origin) with the selected hook's logs, request /
-  response changes and storage calls. Fields the page does not edit (properties, client, edge,
+  strip of the steps in order, consecutive steps of one app grouped under its name, and for the
+  selected hook the Debugger's own hook detail (`HookDetail`: logs at the Debugger's log level,
+  storage calls, inputs, outputs with properties). Fields the page does not edit (properties, client, edge,
   request…) are kept. Loading a resource clears the Debugger's app and loading an app unloads
   the resource (the server holds one or the other). It follows websocket events, so a resource an
   agent loads or runs through the API shows there too. Path fields (resource file, config, wasm,

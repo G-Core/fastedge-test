@@ -30,6 +30,44 @@ export function HookStagesPanel({
   onLogLevelChange,
 }: HookStagesPanelProps) {
   const [activeHook, setActiveHook] = useState<string>("onRequestHeaders");
+
+  return (
+    <div className={styles.hookStagesPanel}>
+      <CollapsiblePanel title="Logging" defaultExpanded={false}>
+        <div className={styles.stagesHeader}>
+          <Tabs
+            className={styles.tabs}
+            tabs={HOOKS.map((hook) => ({ id: hook, label: hook }))}
+            active={activeHook}
+            onChange={setActiveHook}
+          />
+
+          <LogLevelSelector
+            logLevel={logLevel}
+            onLogLevelChange={onLogLevelChange}
+          />
+        </div>
+
+        <HookDetail hook={activeHook} results={results} hookCall={hookCall} logLevel={logLevel} />
+      </CollapsiblePanel>
+    </div>
+  );
+}
+
+interface HookDetailProps {
+  hook: string;
+  /** Results by hook name; only `hook`'s is shown. */
+  results: Partial<Record<string, HookResult>>;
+  /** The request before the hooks ran, shown as a hook's inputs until it has run. */
+  hookCall?: HookCall;
+  logLevel: number;
+}
+
+/**
+ * One hook's result: logs (at or above `logLevel`), storage calls, inputs and outputs. Used by
+ * the Debugger's Logging panel and by the CDN resource flow view.
+ */
+export function HookDetail({ hook: activeHook, results, hookCall, logLevel }: HookDetailProps) {
   const [activeSubView, setActiveSubView] = useState<SubView>("logs");
 
   /**
@@ -104,6 +142,7 @@ export function HookStagesPanel({
     }
 
     // Fallback to hookCall data (before execution)
+    if (!hookCall) return { metadata: "This hook did not run." };
     switch (hook) {
       case "onRequestHeaders":
         return {
@@ -381,22 +420,7 @@ export function HookStagesPanel({
   const storageCount = results[activeHook]?.storeCalls?.length;
 
   return (
-    <div className={styles.hookStagesPanel}>
-      <CollapsiblePanel title="Logging" defaultExpanded={false}>
-        <div className={styles.stagesHeader}>
-          <Tabs
-            className={styles.tabs}
-            tabs={HOOKS.map((hook) => ({ id: hook, label: hook }))}
-            active={activeHook}
-            onChange={setActiveHook}
-          />
-
-          <LogLevelSelector
-            logLevel={logLevel}
-            onLogLevelChange={onLogLevelChange}
-          />
-        </div>
-
+    <>
         <Tabs
           className={styles.subViewTabs}
           variant="sub"
@@ -416,7 +440,6 @@ export function HookStagesPanel({
           {activeSubView === "inputs" && renderInputs(activeHook)}
           {activeSubView === "outputs" && renderOutputs(activeHook)}
         </div>
-      </CollapsiblePanel>
-    </div>
+    </>
   );
 }

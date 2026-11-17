@@ -12,6 +12,7 @@ import { ProxyWasmView } from "./views/ProxyWasmView";
 import { StorageExplorerView } from "./views/StorageExplorerView";
 import { ResourceView } from "./views/ResourceView";
 import { Tabs } from "./components/common/Tabs";
+import { Toggle } from "./components/common/Toggle";
 import { STORES_CHANGED } from "./components/common/StoresPanel/StoresPanel";
 import { getEnvironment, type EnvironmentInfo, type ResourceLoaded, type ResourceResult } from "./api";
 import "./App.css";
@@ -19,10 +20,11 @@ import "./App.css";
 function App() {
   // Environment detection state
   const [_environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
-  // Page: the app debugger, the Resource page or the Storage Explorer (the debugger and Resource
-  // page stay mounted, hidden).
-  type Page = "debugger" | "resource" | "storage";
+  // Page: the Debugger or the Storage Explorer. With multi-app on, the Debugger page shows the CDN
+  // resource editor instead of the single-app debugger (both stay mounted, one hidden).
+  type Page = "debugger" | "storage";
   const [page, setPage] = useState<Page>("debugger");
+  const [multiApp, setMultiApp] = useState(false);
   // The loaded resource (several apps) and its last request; a resource replaces the loaded app.
   const [resourceLoaded, setResourceLoaded] = useState<ResourceLoaded | null>(null);
   const [resourceResult, setResourceResult] = useState<ResourceResult | null>(null);
@@ -174,6 +176,7 @@ function App() {
         // An app replaces a loaded resource.
         setResourceLoaded(null);
         setResourceResult(null);
+        setMultiApp(false);
         // Store runner port so ResponsePanel can build the live preview URL
         setHttpRunnerPort(event.data.runnerPort ?? null);
         // Sync store when loaded externally (e.g. VSCode extension) so the
@@ -272,6 +275,7 @@ function App() {
         // A resource replaces the loaded app.
         clearWasm();
         setResourceLoaded(event.data);
+        setMultiApp(true);
         setResourceResult(null);
         break;
 
@@ -353,26 +357,32 @@ function App() {
           </h1>
           <ConnectionStatus status={wsStatus} />
         </header>
-        <Tabs
-          tabs={[
-            { id: "debugger", label: "Debugger" },
-            { id: "resource", label: "CDN Resource" },
-            { id: "storage", label: "Storage Explorer" },
-          ]}
-          active={page}
-          onChange={showPage}
-          className="page-tabs"
-        />
+        <div className="page-tabs">
+          <Tabs
+            tabs={[
+              { id: "debugger", label: "Debugger" },
+              { id: "storage", label: "Storage Explorer" },
+            ]}
+            active={page}
+            onChange={showPage}
+          />
+          {page === "debugger" &&
+            (wasmType === "http-wasm" && wasmPath && !multiApp ? (
+              <span className="multi-app-note">Multi-app (CDN resource) runs several CDN apps on one resource: unload this HTTP app to use it.</span>
+            ) : (
+              <Toggle label="Multi-app (CDN resource)" checked={multiApp} onChange={setMultiApp} compact />
+            ))}
+        </div>
 
         {wsStatus.error?.startsWith("Missing session token") && (
           <div className="error">{wsStatus.error}</div>
         )}
         {page === "storage" && <StorageExplorerView />}
-        <div hidden={page !== "resource"}>
-          <ResourceView loaded={resourceLoaded} result={resourceResult} onResult={setResourceResult} />
+        <div hidden={page !== "debugger" || !multiApp}>
+          <ResourceView loaded={resourceLoaded} result={resourceResult} onResult={setResourceResult} appLoaded={!!wasmPath} />
         </div>
 
-        <div hidden={page !== "debugger"}>
+        <div hidden={page !== "debugger" || multiApp}>
         {error && <div className="error">{error}</div>}
 
         <WasmLoader
@@ -397,6 +407,7 @@ function App() {
         {!loading && !wasmPath && (
           <div className="empty-state">
             <p>👆 Load a WASM binary to get started</p>
+            {resourceLoaded && <p>A multi-app resource is loaded: loading an app here unloads it.</p>}
           </div>
         )}
 

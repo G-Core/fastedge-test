@@ -1,5 +1,24 @@
 # Proxy-WASM Runner - Changelog
 
+## November 17, 2026 - Multi-app (CDN resource) toggle, flow grouped by app
+
+### Overview
+The CDN Resource tab is gone: the Debugger page has a **Multi-app (CDN resource)** toggle at the
+right of the tab line that swaps the single-app debugger for the resource editor (a note replaces
+it while an HTTP app is loaded). The result's flow strip groups consecutive steps by app, and the
+selected hook shows the Debugger's own hook detail instead of a simpler copy.
+
+### 🎯 What Was Completed
+- `App.tsx`: pages Debugger / Storage Explorer; `multiApp` toggle (on with `resource_loaded`, off
+  with `wasm_loaded`); notes: HTTP app loaded, resource loaded while the single-app view shows
+- `HookStagesPanel.tsx`: `HookDetail` (logs with level filter, storage, inputs, outputs) split out
+  and exported; `ResourceView` result uses it with the Debugger's log level
+- `ResourceHookResult` input / output typed with `isBase64` and `properties`
+
+### 🧪 Testing
+- Frontend `ResourceView.test.tsx` (grouping, hook detail, log level); browser-checked on the
+  convert-images resource (toggle, grouped flow, AVIF preview, HTTP note)
+
 ## November 17, 2026 - CDN Resource page: path suggestions, dotenv folder
 
 ### Overview
