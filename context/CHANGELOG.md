@@ -14,10 +14,14 @@ selected hook shows the Debugger's own hook detail instead of a simpler copy.
 - `HookStagesPanel.tsx`: `HookDetail` (logs with level filter, storage, inputs, outputs) split out
   and exported; `ResourceView` result uses it with the Debugger's log level
 - `ResourceHookResult` input / output typed with `isBase64` and `properties`
+- `JsonDisplay` (all hook inputs / outputs, Debugger and resource): content over 40 lines or 4000
+  characters starts as a short preview with "Show all (N lines, size)" / "Show less"
+- Hook detail labels a binary body "binary, N bytes (shown as base64)"
 
 ### 🧪 Testing
 - Frontend `ResourceView.test.tsx` (grouping, hook detail, log level); browser-checked on the
-  convert-images resource (toggle, grouped flow, AVIF preview, HTTP note)
+  convert-images resource (toggle, grouped flow, AVIF preview, HTTP note, collapsed
+  binary body); `JsonDisplay.test.tsx`
 
 ## November 17, 2026 - CDN Resource page: path suggestions, dotenv folder
 

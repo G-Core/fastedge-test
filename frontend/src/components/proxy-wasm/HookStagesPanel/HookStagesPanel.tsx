@@ -14,6 +14,13 @@ interface HookStagesPanelProps {
   onLogLevelChange: (level: number) => void;
 }
 
+/** A binary body arrives as base64: say so, with its real size. */
+function bodyTitle(title: string, body: string, isBase64?: boolean): string {
+  if (!isBase64) return title;
+  const bytes = Math.floor((body.length * 3) / 4) - (body.endsWith("==") ? 2 : body.endsWith("=") ? 1 : 0);
+  return `${title}: binary, ${bytes.toLocaleString()} bytes (shown as base64)`;
+}
+
 const HOOKS = [
   "onRequestHeaders",
   "onRequestBody",
@@ -117,6 +124,7 @@ export function HookDetail({ hook: activeHook, results, hookCall, logLevel }: Ho
         case "onRequestBody":
           return {
             body: result.input.request.body,
+            isBase64: result.input.request.isBase64,
             headers: result.input.request.headers,
             metadata:
               "Request body and headers as received by this hook on the server (BEFORE modification)",
@@ -131,6 +139,7 @@ export function HookDetail({ hook: activeHook, results, hookCall, logLevel }: Ho
         case "onResponseBody":
           return {
             body: result.input.response.body,
+            isBase64: result.input.response.isBase64,
             headers: result.input.response.headers,
             requestHeaders: result.input.request.headers,
             metadata:
@@ -205,9 +214,11 @@ export function HookDetail({ hook: activeHook, results, hookCall, logLevel }: Ho
           <div className={styles.section}>
             <JsonDisplay
               data={parseBodyIfJson(inputs.body, inputs.headers || {})}
-              title={
-                hook.includes("Response") ? "Response Body" : "Request Body"
-              }
+              title={bodyTitle(
+                hook.includes("Response") ? "Response Body" : "Request Body",
+                inputs.body,
+                "isBase64" in inputs && inputs.isBase64,
+              )}
             />
           </div>
         )}
@@ -268,7 +279,7 @@ export function HookDetail({ hook: activeHook, results, hookCall, logLevel }: Ho
                   ? parseBodyIfJson(inputs.request.body, inputs.request.headers)
                   : undefined
               }
-              title="Request Body (Modified)"
+              title={bodyTitle("Request Body (Modified)", outputs.request.body, outputs.request.isBase64)}
             />
           </div>
         )}
@@ -298,7 +309,7 @@ export function HookDetail({ hook: activeHook, results, hookCall, logLevel }: Ho
                         )
                       : undefined
                   }
-                  title="Response Body (Modified)"
+                  title={bodyTitle("Response Body (Modified)", outputs.response.body, outputs.response.isBase64)}
                 />
               </div>
             )}

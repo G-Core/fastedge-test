@@ -134,7 +134,10 @@ describe("ResourceView", () => {
       hooks: {
         onRequestHeaders: { app: "reqh", result: hookResult("scheduled", 2) },
         onResponseHeaders: { app: "resp", result: hookResult("headers set", 2) },
-        onResponseBody: { app: "resp", result: hookResult("trace detail", 0) },
+        onResponseBody: {
+          app: "resp",
+          result: { ...hookResult("trace detail", 0), output: { request: { headers: {}, body: "" }, response: { headers: {}, body: "AAEC", isBase64: true } } },
+        },
       },
       origin: { kind: "url", response: { status: 200, headers: {}, body: "" } },
       finalResponse: { status: 200, statusText: "OK", headers: {}, body: "", contentType: "image/avif" },
@@ -152,5 +155,7 @@ describe("ResourceView", () => {
     fireEvent.click(screen.getAllByRole("tab", { name: /onResponseBody/ })[0]);
     expect(screen.queryByText(/trace detail/)).toBeNull();
     expect(screen.getByText(/No logs at this level/)).toBeTruthy();
+    fireEvent.click(screen.getByText("Outputs"));
+    expect(screen.getByText("Response Body (Modified): binary, 3 bytes (shown as base64)")).toBeTruthy();
   });
 });

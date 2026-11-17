@@ -42,10 +42,12 @@ export interface HookResult {
     request: {
       headers: Record<string, string | string[]>;
       body: string;
+      isBase64?: boolean;
     };
     response: {
       headers: Record<string, string | string[]>;
       body: string;
+      isBase64?: boolean;
     };
     properties?: Record<string, unknown>;
   };
@@ -53,10 +55,12 @@ export interface HookResult {
     request: {
       headers: Record<string, string | string[]>;
       body: string;
+      isBase64?: boolean;
     };
     response: {
       headers: Record<string, string | string[]>;
       body: string;
+      isBase64?: boolean;
     };
     properties?: Record<string, unknown>;
   };

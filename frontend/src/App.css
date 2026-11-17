@@ -169,6 +169,7 @@ pre {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  padding-right: 16px;
 }
 
 .multi-app-note {
