@@ -45,7 +45,8 @@ export class HostFunctions {
   private pendingHttpCall: {
     tokenId: number;
     upstream: string;
-    headers: HeaderMap;
+    // Tuples, so repeated header names the app sends all reach the upstream.
+    headers: HeaderTuples;
     body: Uint8Array | null;
     timeoutMs: number;
   } | null = null;
@@ -136,7 +137,7 @@ export class HostFunctions {
     return this.pendingHttpCall !== null;
   }
 
-  takePendingHttpCall(): { tokenId: number; upstream: string; headers: HeaderMap; body: Uint8Array | null; timeoutMs: number } | null {
+  takePendingHttpCall(): { tokenId: number; upstream: string; headers: HeaderTuples; body: Uint8Array | null; timeoutMs: number } | null {
     const call = this.pendingHttpCall;
     this.pendingHttpCall = null;
     return call;
@@ -661,7 +662,7 @@ export class HostFunctions {
         this.setLastHostCall(`proxy_http_call upstreamLen=${upstreamLen}`);
         const upstream = this.memory.readString(upstreamPtr, upstreamLen);
         const headerBytes = this.memory.readBytes(headerPairsPtr, headerPairsLen);
-        const headers = HeaderManager.deserializeBinary(headerBytes);
+        const headers = HeaderManager.deserializeBinaryToTuples(headerBytes);
         const body = bodyLen > 0 ? this.memory.readBytes(bodyPtr, bodyLen) : null;
         const tokenId = this.nextTokenId++;
         this.pendingHttpCall = { tokenId, upstream, headers, body, timeoutMs };

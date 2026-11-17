@@ -424,6 +424,8 @@ them. Off unless `dotenv.enabled` is true. Config shape:
   The [egress policy](#url-origins-real-fetch) applies; other hosts are allowed **[D7]**.
 - **Failure** (timeout, network, egress refusal): the callback gets `numHeaders = 0`,
   `bodySize = 0`, and a `[host] http_call failed for <url>` Warn log is added to the app's logs.
+- Request headers the app repeats are all sent; Node's `fetch` joins them onto one line
+  (`, `, or `; ` for `cookie`).
 - The response headers keep duplicates (every `Set-Cookie`); they are read-only. Trailers:
   `num_trailers` is always 0 and the trailer map is `Unimplemented`, as on the edge.
 - Calls are sequential: one pending call per hook invocation.

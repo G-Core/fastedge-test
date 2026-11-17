@@ -23,6 +23,7 @@ export interface RunnerConfig {
      *  e.g. test fixture directories or non-standard project layouts. */
     path?: string;
   };
+  /** @deprecated Ignored: the production property rules always apply. Will be removed in the next major version. */
   enforceProductionPropertyRules?: boolean;
   /** Override automatic WASM type detection. Use when detection produces wrong results. */
   runnerType?: WasmType;
@@ -149,7 +150,8 @@ export interface IWasmRunner {
    * @param headers Request headers
    * @param body Request body
    * @param properties Shared properties
-   * @param enforceProductionPropertyRules Whether to enforce property access rules
+   * @param enforceProductionPropertyRules Ignored: the production property rules always apply
+   *   (kept so existing callers compile; removed in the next major version)
    * @param context Client and edge for this flow only; default: the runner's
    * @param origin Where the response comes from instead of `url` (file paths already absolute;
    * see resolveOrigin); `url` is then only what the client asked for

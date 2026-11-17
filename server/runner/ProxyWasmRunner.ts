@@ -480,17 +480,16 @@ export class ProxyWasmRunner implements IWasmRunner {
       const pending = this.hostFunctions.takePendingHttpCall()!;
 
       // Build URL from pseudo-headers (matching Rust runtime make_request logic)
-      const authority = pending.headers[':authority'] || pending.upstream;
-      const scheme    = pending.headers[':scheme']    || 'https';
-      const path      = pending.headers[':path']      || '/';
-      const method    = pending.headers[':method']    || 'GET';
+      const pseudo = (name: string) => pending.headers.find(([k]) => k === name)?.[1];
+      const authority = pseudo(':authority') || pending.upstream;
+      const scheme    = pseudo(':scheme')    || 'https';
+      const path      = pseudo(':path')      || '/';
+      const method    = pseudo(':method')    || 'GET';
       const url = `${scheme}://${authority}${path}`;
 
-      // Strip pseudo-headers; pass only regular headers to fetch
-      const fetchHeaders: Record<string, string> = {};
-      for (const [k, v] of Object.entries(pending.headers)) {
-        if (!k.startsWith(':')) fetchHeaders[k] = v;
-      }
+      // Strip pseudo-headers; keep repeated names (the edge sends every pair). fetch puts the
+      // repeats of one name on one line, joined with ", " (with "; " for cookie).
+      const fetchHeaders = pending.headers.filter(([k]) => !k.startsWith(':'));
 
       // Collect tuples so duplicate Set-Cookie entries survive through to the WASM-visible
       // HttpCallResponseHeaders map (RFC 6265 §3 — Set-Cookie is not comma-combinable).

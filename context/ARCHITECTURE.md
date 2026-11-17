@@ -95,7 +95,7 @@ else the start directory (CLI: `--project-dir` / `-C`, else the first argument, 
 
 | Output | Built by | Contents / notes |
 |---|---|---|
-| `dist/server.js` | `esbuild/bundle-server.js` | One CJS file, all dependencies bundled (no `node_modules` needed at runtime). `import.meta.url` is shimmed. Copies `schemas/` → `dist/schemas/` and `fastedge-run/` → `dist/fastedge-cli/`. |
+| `dist/server.js` | `esbuild/bundle-server.js` | One CJS file, all dependencies bundled (no `node_modules` needed at runtime). `import.meta.url` is shimmed. Copies `schemas/` → `dist/schemas/` and `fastedge-run/` → `dist/fastedge-cli/`. The npm package ships only `schemas/`, so `/api/schema/:name` falls back to `../schemas/`. |
 | `dist/frontend/` | Vite (`frontend/vite.config.ts`) | Served statically by the server, with a SPA fallback to `index.html`. |
 | `dist/lib/` | `esbuild/bundle-lib.js` | ESM + CJS + `.d.ts` for `.` and `./test`; ESM only for `./vitest`. `node:*` imports stay external. |
 
@@ -176,7 +176,8 @@ the UI uses it to tell its own actions from others' (section 13).
 
 ### Shutdown
 
-SIGINT / SIGTERM: clean up the current runner, release the stores lease (so an unused service
+SIGINT / SIGTERM: clean up the current runner and resource (stopping their `fastedge-run`
+processes), release the stores lease (so an unused service
 exits without waiting for its TTL), close WebSockets, delete the port file, close the HTTP server.
 
 ---

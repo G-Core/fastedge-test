@@ -78,7 +78,9 @@ let currentResource: Resource | null = null;
 // We scan the directory when it's present; if it's missing (e.g. the VSCode
 // extension packaging stripped it), the set is empty and every schema request
 // returns 404 — safe, since no file can be served without being allowlisted.
-const schemasDir = path.join(__dirname, "schemas");
+// The build copies them to dist/schemas/; the npm package ships only the top-level schemas/.
+const schemasDir = [path.join(__dirname, "schemas"), path.join(__dirname, "..", "schemas")]
+  .find((dir) => existsSync(dir)) ?? path.join(__dirname, "schemas");
 let knownSchemas: Set<string>;
 try {
   knownSchemas = new Set(
@@ -1305,12 +1307,11 @@ process.on("exit", () => {
   deletePortFile();
 });
 
-// Graceful shutdown
-process.on("SIGTERM", async () => {
-  console.log("SIGTERM received, closing server...");
-  if (currentRunner) {
-    await currentRunner.cleanup();
-  }
+// Graceful shutdown: stop every runner (a resource's HTTP apps are fastedge-run processes).
+async function shutdown(signal: string): Promise<void> {
+  console.log(`${signal} received, closing server...`);
+  await currentRunner?.cleanup();
+  await currentResource?.cleanup();
   await releaseStores();
   wsManager.close();
   deletePortFile();
@@ -1318,18 +1319,6 @@ process.on("SIGTERM", async () => {
     console.log("Server closed");
     process.exit(0);
   });
-});
-
-process.on("SIGINT", async () => {
-  console.log("SIGINT received, closing server...");
-  if (currentRunner) {
-    await currentRunner.cleanup();
-  }
-  await releaseStores();
-  wsManager.close();
-  deletePortFile();
-  httpServer.close(() => {
-    console.log("Server closed");
-    process.exit(0);
-  });
-});
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));

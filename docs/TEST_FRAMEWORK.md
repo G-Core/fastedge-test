@@ -176,7 +176,7 @@ interface FlowOptions {
 | `requestHeaders`                 | `{}`    | Additional request headers; pseudo-headers here override derived values     |
 | `requestBody`                    | `""`    | Request body string                                                         |
 | `properties`                     | `{}`    | Proxy-wasm properties to inject                                             |
-| `enforceProductionPropertyRules` | `true`  | When true, denies access to properties not available in production FastEdge |
+| `enforceProductionPropertyRules` | `true`  | Deprecated and ignored: the production property rules always apply |
 
 The upstream response is generated at runtime by a real fetch against `url`, or by the built-in responder when `url === "built-in"`. See the [Origin Mocking](#origin-mocking) section for controlling responses in tests.
 
@@ -335,7 +335,7 @@ interface RunnerConfig {
 | -------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `dotenv.enabled`                 | `boolean`                     | Enable dotenv loading                                                                                                                        |
 | `dotenv.path`                    | `string`                      | Directory to load dotenv files from; defaults to process CWD when omitted                                                                    |
-| `enforceProductionPropertyRules` | `boolean`                     | Override production property enforcement for the runner; default `true`                                                                      |
+| `enforceProductionPropertyRules` | `boolean`                     | Deprecated and ignored: the production property rules always apply |
 | `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                                                                                       |
 | `httpPort`                       | `number`                      | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use)                                                                    |
 | `stores`                         | `boolean \| TestStores`       | Local cache and Edge KV. Default `true`. `false` makes CDN apps' cache and KV calls return `InternalFailure`. A `TestStores` instance isolates |

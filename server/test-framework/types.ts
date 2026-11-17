@@ -94,7 +94,7 @@ export interface FlowOptions {
   requestHeaders?: Record<string, string>;
   requestBody?: string;
   properties?: Record<string, unknown>;
-  /** Default: true — matches production FastEdge behaviour */
+  /** @deprecated Ignored: the production property rules always apply. Will be removed in the next major version. */
   enforceProductionPropertyRules?: boolean;
   /**
    * Where the response comes from instead of `url` (a config's `origin`; loadConfigFile makes

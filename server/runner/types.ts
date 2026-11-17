@@ -38,7 +38,8 @@ export type HookCall = {
     statusText?: string;
   };
   properties: Record<string, unknown>;
-  enforceProductionPropertyRules?: boolean; // Default: true - Enforce property access control rules
+  /** @deprecated Ignored: the production property rules always apply. Will be removed in the next major version. */
+  enforceProductionPropertyRules?: boolean;
   /**
    * Custom properties an earlier hook of this request wrote (and later hooks may read), when the
    * hooks run on different apps: on the edge custom properties belong to the request, not the app.

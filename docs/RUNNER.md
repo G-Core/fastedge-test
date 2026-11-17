@@ -263,7 +263,7 @@ callFullFlow(
 | `headers`                        | `Record<string, string>`  | Request headers                                         |
 | `body`                           | `string`                  | Request body                                            |
 | `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                   |
-| `enforceProductionPropertyRules` | `boolean`                 | Enforce production property access rules                |
+| `enforceProductionPropertyRules` | `boolean`                 | Deprecated and ignored: the production property rules always apply |
 | `context?`                       | `RequestContext`          | Client and edge for this flow only                      |
 
 The upstream response is generated at runtime — either by a real HTTP fetch against `url`, or by the built-in responder when `url === "built-in"` (`BUILTIN_SHORTHAND`). There is no caller-provided mock response. The origin fetch does not follow redirects; a 3xx origin response is passed to the response hooks as-is.
@@ -714,7 +714,7 @@ interface RunnerConfig {
 | -------------------------------- | ----------------------- | --------------- | -------------------------------------------------------------- |
 | `dotenv.enabled`                 | `boolean`               | `false`         | Load dotenv files                                              |
 | `dotenv.path`                    | `string`                | `undefined`     | Directory to load dotenv files from                            |
-| `enforceProductionPropertyRules` | `boolean`               | `undefined`     | Declared on the type; not read by `load()`                     |
+| `enforceProductionPropertyRules` | `boolean`               | `undefined`     | Deprecated and ignored: the production property rules always apply |
 | `runnerType`                     | `WasmType`              | *auto-detected* | Overrides WASM type detection                                  |
 | `httpPort`                       | `number`                | `undefined`     | HTTP-WASM only: pins the `fastedge-run` port                   |
 | `stores`                         | `boolean \| TestStores` | `true`          | Storage service for cache and Edge KV, or isolated test stores |
@@ -724,7 +724,7 @@ interface RunnerConfig {
 
 - `dotenv.enabled` defaults to `false` when the runner is created through `createRunner` or `createRunnerFromBuffer`.
 - `dotenv.path`: when omitted, `fastedge-run` (HTTP-WASM) uses the process CWD, which is correct for npm package users whose `.env` files live at the project root. Set it only when dotenv files are in a non-standard location, such as a test fixture directory.
-- `enforceProductionPropertyRules`: the runner's `load()` does not consume this field. Pass the rule explicitly to `callFullFlow()` or `callHook()`.
+- `enforceProductionPropertyRules`: deprecated and ignored: the production property rules always apply; it will be removed in the next major version.
 - `httpPort`: see [load](#load) for the failure behavior when the port is busy.
 - `stores`: the factory functions connect each runner to a storage service shared by every runner in the same stores root. The stores root is the nearest git root, resolved from `WORKSPACE_PATH` or the current working directory; the `FASTEDGE_STORES_ROOT` environment variable overrides it. Set `stores: false` to disable it; cache and Edge KV calls from CDN apps then return `InternalFailure`. Pass a `TestStores` instance (from `createStores()`) to use isolated in-memory stores instead; runners given the same instance share them, and the runner does not own or release the instance.
 - `dc`: runners that use the same `dc` value share cache entries. When omitted, the value is the `dc` of `edge` if set, otherwise the `dc` of the supplied `TestStores` instance, otherwise `"local"`.
@@ -843,7 +843,7 @@ type HookCall = {
 | `request`                        | Request state passed to the hook                                                         |
 | `response`                       | Seed state for response hooks via `callHook()`                                           |
 | `properties`                     | Shared properties                                                                        |
-| `enforceProductionPropertyRules` | Defaults to `true`                                                                       |
+| `enforceProductionPropertyRules` | Deprecated and ignored: the production property rules always apply |
 | `customProperties`               | Names of custom properties written by earlier hooks of the request, for cross-app flows |
 | `requestId`                      | Request id shared by the hooks of a flow driven from outside the runner                  |
 
@@ -851,7 +851,7 @@ type HookCall = {
 - `context`: when omitted, the runner's context is used. See [Request Context](#request-context).
 - `response`: not consumed by `callFullFlow()` or by request hooks. The full-flow path generates the upstream response at runtime.
 - `properties`: for example `request.path`, `vm_config`, `plugin_config`.
-- `enforceProductionPropertyRules`: set to `false` to allow property access that the production CDN blocks.
+- `enforceProductionPropertyRules`: deprecated and ignored: the production property rules always apply; it will be removed in the next major version.
 - `customProperties` and `requestId`: set by [Resources](#resources) when hooks of one request run on different apps. Calls made directly with `callHook()` do not need them.
 
 `HeaderRecord` is `Record<string, string | string[]>` — multi-valued headers (for example multiple `Set-Cookie`) are represented as `string[]`.
@@ -1132,7 +1132,6 @@ async function testCdnApp() {
       properties: {
         'request.host': 'example.com',
       },
-      enforceProductionPropertyRules: false,
     });
 
     console.log('Hook output headers:', hookResult.output.request.headers);
