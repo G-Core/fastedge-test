@@ -94,9 +94,9 @@ process.on("exit", () => {
 
 The `exit` event fires for normal exits and unhandled exceptions on all platforms. It does **not** fire after a hard `TerminateProcess` — that is acceptable since the VSCode extension validates port file health on startup.
 
-**WORKSPACE_PATH default (April 2026)**: `getPortFilePath()` defaults `WORKSPACE_PATH` to `process.cwd()`, so CLI users get port files and config resolution too (previously only set by the VSCode extension).
+**WORKSPACE_PATH default**: `getPortFilePath()` defaults `WORKSPACE_PATH` to `process.cwd()`, so CLI users get port files and config resolution too.
 
-**Port auto-increment (April 2026)**: `startServer()` probes ports 5179-5228 via HTTP `/health` check before binding (50 slots, expanded from 10 on 2026-04-22 for Codespaces / multi-session workflows). If a port is busy, tries the next one. This logic was moved from the VSCode extension's `DebuggerServerManager.resolvePort()` into the server itself.
+**Port auto-increment**: `startServer()` probes ports 5179-5228 via HTTP `/health` check before binding (50 slots, for Codespaces / multi-session workflows). If a port is busy, it tries the next one. The server owns this logic, not the VS Code extension.
 
 ---
 

@@ -1,4 +1,4 @@
-# Proxy-WASM Test Runner - Project Overview
+# fastedge-test - Project Overview
 
 **📖 For detailed information, see [PROJECT_DETAILS.md](./PROJECT_DETAILS.md)**
 
@@ -6,172 +6,64 @@
 
 ## Project Goal
 
-Build a Postman-like test runner for debugging WASM binaries that run on FastEdge. The runner features an **adaptive UI** that provides specialized interfaces for both **Proxy-WASM (CDN apps)** and **HTTP WASM (component model)**:
+fastedge-test is a local replica of the FastEdge edge for debugging and testing wasm apps before deploying them. It ships as a Postman-like debugger UI (also embedded in the VSCode extension) and as the npm package `@gcoredev/fastedge-test` with a programmatic runner and test framework. An app that works here must work on the edge, and fail the same way.
 
-**HTTP WASM Interface:**
-- Simple Postman-like UI for HTTP request/response testing
-- Configure method, URL, headers, and body
-- View response with body, headers, and execution logs
-- Real-time execution with status indicators
+The UI adapts to the loaded binary:
 
-**Proxy-WASM Interface:**
-- Hook-based execution with full lifecycle control
-- Test all four hooks (onRequestHeaders, onRequestBody, onResponseHeaders, onResponseBody)
-- Property system with runtime calculation
-- Server-side configuration and state management
+**CDN apps (proxy-wasm):**
+- Hook-based execution: onRequestHeaders, onRequestBody, onResponseHeaders, onResponseBody, with a real or built-in origin in between
+- Property system with runtime-calculated properties
+- FastEdge host functions: secrets, dictionary (dotenv), `proxy_http_call`, `send_http_response`
+- Origin: a URL, or a declared built-in origin (echo, fixed response, or a served folder)
 
-**Common Features:**
-- Load WASM binaries with hybrid loading (path-based or buffer-based)
-- Tab-based loader UI with environment-aware defaults
-- Real-time WebSocket synchronization across clients
-- Debug output and comprehensive logging
-- Configuration save/load (Proxy-WASM)
-- Test binaries locally before deploying to production
-- **VSCode Integration**: Auto-loads workspace WASM and supports F5 rebuild auto-reload
+**HTTP apps (wasi-http / component model):**
+- Postman-like request/response, run through the `fastedge-run` CLI from FastEdge-lib
+- SPA preview with a Live mode pointing at the running app
+
+**Multi-app CDN resources:**
+- The **Multi-app (CDN resource)** toggle on the Debugger page swaps in the resource view: several CDN apps on one request (one per hook, per rule) and an HTTP app as origin, as on a CDN resource on the edge
+
+**Cache & Edge KV stores:**
+- Local cache and Edge KV stores with edge semantics, shared between apps and runs
+- The **Storage Explorer** page browses and edits their contents
+
+**Request context:**
+- Client and edge context (country, city, ASN, geo, POP...) from presets or explicit values; drives the matching properties and headers
+
+**Common:**
+- Automatic WASM type detection (override with `runnerType`)
+- Path-based or buffer-based loading; VSCode auto-loads the workspace WASM and reloads on rebuild
+- Real-time WebSocket sync across clients (UI, VSCode, agents calling the REST API)
+- Log capture with level filtering
+- Config save/load (`fastedge-config.test.json`), dotenv toggle
+
+Known differences from the edge are listed in each feature doc in `context/features/`.
 
 ---
 
 ## Production Context
 
-- **Production Environment**: nginx + custom wasmtime host
-- **SDK**: G-Core's proxy-wasm AssemblyScript SDK (https://github.com/G-Core/proxy-wasm-sdk-as)
-- **ABI**: Standard proxy-wasm ABI with specific format requirements for the G-Core SDK
-- **CDN Use Case**: Binaries run on FastEdge CDN for request/response manipulation
+- **CDN apps**: run on the edge inside nginx (onRequestHeaders) and core-proxy (the other hooks), on a wasmtime host
+- **HTTP apps**: run on the FastEdge-lib runtime (`fastedge-run` locally)
+- **SDKs**: Gcore proxy-wasm AssemblyScript SDK (https://github.com/G-Core/proxy-wasm-sdk-as), Rust SDK, JS SDK
+- **ABI**: Standard proxy-wasm ABI with the FastEdge-specific header format and host functions
 
 ---
 
 ## Tech Stack
 
-- **Backend**: Node.js + Express + TypeScript 5.4.5
-- **Frontend**: React 19.2.3 + Vite 7.3.1 + TypeScript 5.4.5 + Zustand 5.0.11
-- **WASM Runtime**: Node's WebAssembly API with WASI preview1
-- **WebSocket**: ws 8.19.0 for real-time communication
-- **State Management**: Zustand 5.0.11 with Immer middleware and auto-save
-- **Port**: 5179 (configurable via PORT env var)
-
----
-
-## Current Status
-
-### ✅ Core Features Working
-
-**Proxy-WASM (CDN Apps):**
-- Load WASM binaries and execute all proxy-wasm hooks
-- Isolated hook execution (each hook gets fresh WASM instance)
-- Real HTTP requests with WASM-modified headers, body, and properties
-- Header serialization in G-Core SDK format
-- Complete property system with runtime calculation
-- FastEdge host functions (secrets, dictionaries, dotenv support)
-- **HTTP callouts (proxy_http_call)**: Full PAUSE/resume loop with real `fetch()` ✅
-- **Local response (send_http_response)**: Short-circuit origin fetch from any request-phase hook ✅ NEW
-
-**HTTP WASM (Component Model):**
-- Process-based runner using FastEdge-run CLI
-- Simple request/response execution (no hooks)
-- Port management (8100-8199 range)
-- Log capture from stdout/stderr
-- Dotenv support via FastEdge-run --dotenv flag
-- **Postman-like UI** with dedicated HTTP WASM view ✨ NEW
-
-**Adaptive User Interface:** ✨ NEW
-- **Automatic Type Detection**: Server inspects WASM binary exports to determine type
-  - No manual selection needed - just upload and go!
-  - Handles TypeScript HTTP WASM (Component Model)
-  - Handles Rust HTTP WASM (Traditional Module with http-handler)
-  - Handles Proxy-WASM (Traditional Module with proxy_* functions)
-- **Dual Views**: Automatic UI switching based on detected WASM type
-  - **HttpWasmView**: Simple request/response interface (Postman-like)
-  - **ProxyWasmView**: Full hook execution interface with properties
-- **Component Architecture**: Domain-based organization
-  - `components/common/`: Shared components (9 components)
-  - `components/http-wasm/`: HTTP WASM-specific UI (2 components)
-  - `components/proxy-wasm/`: Proxy-WASM-specific UI (6 components)
-  - `views/`: Main view containers (2 views)
-- **LoadingSpinner**: Orange-themed spinner shown during WASM detection
-- **LogsViewer**: Reusable component with filtering and color-coding
-
-**Shared Features:**
-- Automatic WASM type detection via WebAssembly module inspection
-- Log capture with client-side filtering (Trace/Debug/Info/Warn/Error/Critical)
-- WebSocket real-time synchronization across clients
-- Configuration save/load system (Proxy-WASM only)
-- Dark theme UI with CSS Modules
-- Zustand state management with Immer middleware
-- Component reuse (ResponseViewer, DictionaryInput, RequestBar)
-
-**Integration Testing:**
-- **96 Integration Tests Total**: Comprehensive end-to-end WASM execution testing
-
-**Property Access Control (35 tests)**:
-- **100% Property Coverage**: All 17 built-in FastEdge properties tested
-  - 11/11 ReadOnly properties (method, scheme, country, city, asn, geo.lat, geo.long, region, continent, country.name, extension)
-  - 4/4 ReadWrite properties (path, url, host, query)
-  - 1/1 Response properties (status)
-  - 1/1 WriteOnly properties (nginx.log_field1)
-- **Production Parity**: Tests validate actual FastEdge CDN access rules
-- **Comprehensive Coverage**: Read tests, write denial tests, value preservation tests
-
-**Full-Flow Testing (7 tests)**:
-- **Complete Request/Response Cycle**: All 4 hooks tested with downstream HTTP services
-  - onRequestHeaders → onRequestBody → HTTP fetch → onResponseHeaders → onResponseBody
-- **Header Injection & Preservation**: Validates headers flow through entire lifecycle
-- **Body Modification**: Request and response JSON field injection
-- **Production Parity**: Real HTTP communication with downstream services
-- **UI Output Validation**: Final response structure matches UI output exactly
-
-**send_http_response / Short-Circuit Testing (5 tests)**:
-- **Local Response**: CDN app returns 302 redirect without origin fetch
-- **Short-Circuit Verification**: Only onRequestHeaders runs; no downstream hooks execute
-- **Test Framework Dogfooding**: Uses `runFlow()` + `assertFinalStatus/Header/ReturnCode` instead of raw vitest assertions
-
-**Test Infrastructure**:
-- **374 Unit Tests**: Runner logic, PropertyResolver, test framework, standalone runner
-- **14+ Test Applications**: Compiled WASM binaries for different test scenarios
-- **Downstream Service Testing**: Spawn HTTP WASM apps as downstream targets
-- See [INTEGRATION_TESTING.md](./development/INTEGRATION_TESTING.md) for details
-
-### ⚠️ Known Issues
-
-- **Initialization hooks**: `proxy_on_vm_start` and `proxy_on_configure` fail silently
-  - **Status**: Suppressed (error messages filtered)
-  - **Cause**: G-Core SDK expects host environment configuration
-  - **Impact**: None - hooks execute successfully, only initialization phase affected
-
-### ⚠️ Known Limitations
-
-- **Response streaming not implemented**: Responses are fetched completely before processing
-  - Hooks receive complete body in single call with `end_of_stream=true`
-  - Cannot test streaming scenarios or incremental processing
-  - Works correctly for final state testing and total body modifications
-
-### 🚧 Not Yet Implemented
-
-- Shared data/queue operations (stubs return NotFound/Ok; not functional)
-- Metrics support
-- Full property path coverage (only common paths implemented)
-- Request/response trailers: not supported on the edge either. Trailer and gRPC map calls return `Unimplemented` (12), matching production
-
----
-
-## npm Package Plan — @gcoredev/fastedge-test
-
-The debugger is being evolved into `@gcoredev/fastedge-test` on npm (alongside the existing ZIP/VSCode release).
-
-| Phase | Name | Status |
-|-------|------|--------|
-| 1 | JSON Schema Contract (Zod validation, generated schemas) | ✅ Complete |
-| 2 | Runner Isolation (headless runner API, no server coupling) | 🔲 Next |
-| 3 | Package + Build Pipeline (exports map, lib build) | 🔲 Planned |
-| 4 | Test Framework Layer (`./test` entry for agent TDD) | 🔲 Planned |
-| 5 | GitHub Actions npm Publish | 🔲 Planned |
-
-**See [NPM_PACKAGE_PLAN.md](./features/NPM_PACKAGE_PLAN.md) for the full implementation plan.**
+- **Backend**: Node.js + Express + TypeScript
+- **Frontend**: React 19 + Vite 7 + TypeScript + Zustand 5 (Immer middleware, auto-save)
+- **WASM Runtime**: Node's WebAssembly API with WASI preview1 (CDN apps); `fastedge-run` process (HTTP apps)
+- **Stores**: `node:sqlite`
+- **WebSocket**: ws 8
+- **Port**: 5179, auto-increments through 5179-5228 if busy (configurable via PORT env var)
 
 ---
 
 ## Philosophy
 
-- **Production Parity**: Test runner must match FastEdge CDN behavior exactly
+- **Production Parity**: Test runner must match FastEdge edge behavior exactly
 - **No Over-Engineering**: Simple solutions over complex abstractions
 - **Type Safety**: TypeScript throughout (frontend + backend)
 - **Modular Architecture**: Clean separation of concerns
@@ -202,16 +94,20 @@ PROXY_RUNNER_DEBUG=1 pnpm start
 ## Key Documentation
 
 **Architecture:**
-- [BACKEND_ARCHITECTURE.md](./architecture/BACKEND_ARCHITECTURE.md) - Server structure and modules
-- [FRONTEND_ARCHITECTURE.md](./architecture/FRONTEND_ARCHITECTURE.md) - React components and state
+- [BACKEND_ARCHITECTURE.md](./architecture/BACKEND_ARCHITECTURE.md) - Server structure, runners, npm package
+- [FRONTEND_ARCHITECTURE.md](./architecture/FRONTEND_ARCHITECTURE.md) - Pages, React components
 - [STATE_MANAGEMENT.md](./architecture/STATE_MANAGEMENT.md) - Zustand patterns
 
 **Features:**
-- [HTTP_CALL_IMPLEMENTATION.md](./features/HTTP_CALL_IMPLEMENTATION.md) - proxy_http_call PAUSE/resume loop (NEW)
+- [RESOURCES.md](./features/RESOURCES.md) - Multi-app CDN resources
+- [STORES.md](./features/STORES.md) - Cache and Edge KV, Storage Explorer
+- [BUILT_IN_RESPONDER.md](./features/BUILT_IN_RESPONDER.md) - Built-in origin
+- [REQUEST_CONTEXT.md](./features/REQUEST_CONTEXT.md) - Client / edge context
+- [HTTP_CALL_IMPLEMENTATION.md](./features/HTTP_CALL_IMPLEMENTATION.md) - proxy_http_call PAUSE/resume loop
 - [HTTP_WASM_IMPLEMENTATION.md](./features/HTTP_WASM_IMPLEMENTATION.md) - HTTP WASM runner
 - [WEBSOCKET_IMPLEMENTATION.md](./features/WEBSOCKET_IMPLEMENTATION.md) - Real-time sync
 - [FASTEDGE_IMPLEMENTATION.md](./features/FASTEDGE_IMPLEMENTATION.md) - FastEdge integration
-- [PROPERTY_IMPLEMENTATION_COMPLETE.md](./features/PROPERTY_IMPLEMENTATION_COMPLETE.md) - Property system
+- [PROPERTIES.md](./features/PROPERTIES.md) - Property system
 
 **Development:**
 - [IMPLEMENTATION_GUIDE.md](./development/IMPLEMENTATION_GUIDE.md) - Coding patterns
@@ -223,12 +119,7 @@ PROXY_RUNNER_DEBUG=1 pnpm start
 
 ## References
 
-- [G-Core Proxy-WASM AssemblyScript SDK](https://github.com/G-Core/proxy-wasm-sdk-as)
+- [Gcore Proxy-WASM AssemblyScript SDK](https://github.com/G-Core/proxy-wasm-sdk-as)
 - [Proxy-WASM Spec](https://github.com/proxy-wasm/spec)
 - [WebAssembly JavaScript API](https://developer.mozilla.org/en-US/docs/WebAssembly)
 - [WASI Preview1](https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs.md)
-
----
-
-**Last Updated**: March 2026
-**Status**: Production-ready with complete feature set. proxy_http_call + send_http_response supported. npm package plan complete (Phases 1-4).

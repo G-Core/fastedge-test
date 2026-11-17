@@ -60,7 +60,7 @@ const testRequest = {
 
 ### Location
 
-`/home/gdoco/dev/playground/proxy-runner/fastedge-config.test.json`
+`<project root>/fastedge-config.test.json`
 
 ### Structure
 

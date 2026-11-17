@@ -2,52 +2,67 @@
 
 ## Overview
 
-The backend is a Node.js + Express + TypeScript server that orchestrates WASM execution for proxy-wasm testing. It loads WASM binaries, executes hooks, performs HTTP requests, and returns detailed execution results.
+The backend is a Node.js + Express + TypeScript server that orchestrates WASM execution for CDN (proxy-wasm) and HTTP apps. It loads WASM binaries, executes hooks, runs the origin, and returns detailed execution results. The same runners are published headless in the npm package (see [npm Package](#npm-package)).
 
-**✅ Real-Time Synchronization**: WebSocket integration (January 2026) enables real-time event broadcasting to all connected clients. See [WEBSOCKET_IMPLEMENTATION.md](../features/WEBSOCKET_IMPLEMENTATION.md) for details.
+**Real-Time Synchronization**: every run is broadcast over WebSocket to all connected clients. See [WEBSOCKET_IMPLEMENTATION.md](../features/WEBSOCKET_IMPLEMENTATION.md).
 
 ## Technology Stack
 
-- **Node.js 20.x**: Runtime environment
+- **Node.js >= 22.13**: Runtime (`node:sqlite` for the stores)
 - **Express 4.x**: Web server framework
-- **TypeScript 5.4.5**: Type safety
-- **WebAssembly API**: WASM execution (Node.js native)
-- **WASI**: WebAssembly System Interface support
-- **ws 8.19.0**: WebSocket server for real-time updates
+- **TypeScript**: Type safety
+- **WebAssembly API + WASI preview1**: CDN app execution (Node.js native)
+- **fastedge-run** (FastEdge-lib): HTTP app execution, as a child process
+- **ws 8**: WebSocket server for real-time updates
+- **Zod 4**: Config and API body validation, JSON schema generation
 
 ## Project Structure
 
 ```
 server/
-├── server.ts              # Express app, API endpoints, WebSocket setup
-├── tsconfig.json         # TypeScript configuration
+├── server.ts              # Express app, API endpoints, WebSocket setup, startServer()
+├── storageExplorer.ts     # Storage Explorer API (/api/storage/*)
+├── embedded.ts            # Worker / service code embedded as strings (replaced in bundles)
 ├── runner/
-│   ├── ProxyWasmRunner.ts    # Main WASM orchestration + event emission
+│   ├── ProxyWasmRunner.ts    # CDN runner: instantiation, hooks, PAUSE loop, event emission
 │   ├── WorkerProxyWasmRunner.ts # Runs ProxyWasmRunner in a worker thread (factory/createRunner use this)
 │   ├── cdn-worker.ts         # Worker side: hosts ProxyWasmRunner, forwards events, proxies fetch
-│   ├── HostFunctions.ts      # WASM host function implementations
+│   ├── cdnFlow.ts            # The CDN request flow (hooks + origin), shared by single apps and resources
+│   ├── origin.ts             # Declared origins: URL, built-in echo, fixed response, served folder
+│   ├── resource.ts           # Multi-app CDN resources
+│   ├── requestContext.ts     # Client / edge context presets
+│   ├── HttpWasmRunner.ts     # HTTP app runner (spawns fastedge-run)
+│   ├── HostFunctions.ts      # Proxy-wasm host function implementations
+│   ├── StoresHost.ts         # Cache / Edge KV host functions
+│   ├── storesBridge.ts       # Synchronous store calls from the worker
 │   ├── MemoryManager.ts      # WASM memory management
 │   ├── HeaderManager.ts      # HTTP header serialization
 │   ├── PropertyResolver.ts   # Property/metadata resolution
+│   ├── PropertyAccessControl.ts # Per-hook property read/write rules
+│   ├── egressPolicy.ts       # Outbound fetch checks
+│   ├── standalone.ts         # createRunner / createRunnerFromBuffer
+│   ├── index.ts              # Public runner API (package ".")
 │   └── types.ts              # Shared type definitions
-├── websocket/            # Real-time synchronization (Jan 2026)
-│   ├── WebSocketManager.ts   # Connection management (314 lines)
-│   ├── StateManager.ts       # Event coordination (153 lines)
+├── stores/               # Storage service: cache + Edge KV on node:sqlite
+├── schemas/              # Zod schemas (config, API bodies)
+├── test-framework/       # Package "./test" and "./vitest"
+├── websocket/            # Real-time synchronization
+│   ├── WebSocketManager.ts   # Connection management
+│   ├── StateManager.ts       # Event coordination
 │   ├── types.ts              # Event type definitions
 │   └── index.ts              # Module exports
-├── fastedge-host/        # FastEdge-specific host functions (Feb 2026)
+├── fastedge-host/        # FastEdge-specific host functions
 │   ├── types.ts              # FastEdge type definitions (FastEdgeConfig, ISecretStore, IDictionary)
 │   ├── SecretStore.ts        # Time-based secret rotation with effectiveAt support
 │   ├── Dictionary.ts         # Key-value configuration store
 │   ├── hostFunctions.ts      # Factory for FastEdge WASM host functions
 │   └── index.ts              # Module exports
-└── utils/                # Utility modules (Feb 2026)
-    └── dotenv-loader.ts      # Dotenv file parser and loader
+└── utils/                # dotenv loader, fastedge-cli discovery, WASM type detection, paths
 ```
 
 ## Core Components
 
-### WASM Initialization (February 2026)
+### WASM Initialization
 
 **Initialization Lifecycle:**
 
@@ -61,7 +76,7 @@ The proxy-wasm spec defines initialization hooks called when the VM and plugin s
 **Test Runner Behavior:**
 
 - **Configuration**: Provides default `{"test_mode": true}` for VM and plugin configs
-- **Error Suppression**: G-Core SDK initialization hooks fail in test environment (expected)
+- **Error Suppression**: SDK initialization hooks can fail in test environment (expected)
   - Abort messages containing "abort:" filtered during initialization
   - proc_exit(255) calls suppressed during initialization phase
   - Errors logged at DEBUG level with "(expected in test mode)" notation
@@ -75,11 +90,11 @@ The proxy-wasm spec defines initialization hooks called when the VM and plugin s
 - `ProxyWasmRunner.ensureInitialized()` wraps initialization in try/catch blocks
 - `MemoryManager.setInitializing()` tracks initialization state for filtering
 - `isInitializing` flag prevents abort/proc_exit messages during init phase
-- Initialization only runs once per WASM load, subsequent hooks reuse context
+- Initialization runs in every fresh instance (one per hook, see Hook Execution Model)
+
+**WASI environment is never empty:** the WASI env is the dictionary. When the dictionary is empty (no dotenv, no variables) the runner seeds it with `{ __FASTEDGE_RUNNER__: "1" }` (`ProxyWasmRunner.createImports()`). Node's WASI `environ_get` returns `INVAL` for an empty env table; in an AssemblyScript app that aborts `_start` mid-init, and the first `process.env` read then traps. The edge always provides an env, so `getEnv()` must return `""` there, not trap.
 
 ### PropertyResolver.ts (Property Path Resolution)
-
-**✅ COMPLETED (February 5, 2026)**: Full property integration with runtime URL extraction, chaining, and request reconstruction.
 
 The PropertyResolver resolves property paths for `get_property` and `set_property` calls.
 
@@ -91,7 +106,7 @@ The PropertyResolver resolves property paths for `get_property` and `set_propert
    - URL parsing with error handling and fallback values
 
 2. **Property Merge Strategy:**
-   - User-provided properties (from ServerPropertiesPanel or API) take precedence
+   - User-provided properties (from the UI or API) take precedence
    - Runtime-calculated properties used as fallback
    - Allows overriding any calculated property with custom values
    - `getAllProperties()` returns merged view with proper priority
@@ -99,148 +114,29 @@ The PropertyResolver resolves property paths for `get_property` and `set_propert
 3. **Property Chaining:**
    - Properties modified in one hook flow to subsequent hooks
    - Captured in input/output states for UI visibility
-   - Modifications affect actual HTTP requests via URL reconstruction
 
 4. **SDK Integration:**
    - `get_property` in HostFunctions.ts retrieves values via PropertyResolver
    - `set_property` in HostFunctions.ts updates PropertyResolver (allows WASM to set custom properties)
-   - Full compatibility with G-Core proxy-wasm AssemblyScript SDK
+   - Works with the Gcore proxy-wasm AssemblyScript SDK and the Rust SDK
 
-5. **Request Reconstruction:**
-   - Modified properties (`request.scheme`, `request.host`, `request.path`, `request.query`) reconstruct target URL
-   - HTTP fetch uses reconstructed URL instead of original
-   - Enables WASM to redirect requests, switch backends, rewrite paths
+5. **Routing:**
+   - `request.url` is the only property that changes the origin fetch target, as on the edge
+   - Writes to `request.path`, `request.host`, `request.scheme` or `request.query` return Ok but do not re-route; an app that re-routes must rewrite `request.url`
 
 ### server.ts (Express Server)
 
-Main HTTP server with five endpoints:
+The REST API is documented in `docs/API.md` (the canonical reference; update it when endpoints change). Design points:
 
-#### POST /api/load
+- **Logs**: `/api/call` and `/api/send` always capture every log (trace level); the frontend filters by level client-side, so changing the level needs no re-run.
+- **dotenv**: `/api/load` recreates the runner with the `dotenv` settings; toggling dotenv reloads the WASM. See [DOTENV.md](../features/DOTENV.md).
+- **`/api/send`** returns `hookResults`, `finalResponse` and `calculatedProperties` (the URL-derived `request.*` values), and broadcasts the run over WebSocket.
+- **Config**: `GET /api/config` returns `{ ok, config, valid, validationErrors }` so agents can detect an invalid `fastedge-config.test.json`; `GET /api/schema/:name` serves the generated JSON schemas. Request bodies are validated with Zod and rejected with structured 400 errors.
+- Further groups: `/api/resource/*` (multi-app resources), `/api/stores/*` (the loaded app's stores), `/api/storage/*` (Storage Explorer, `storageExplorer.ts`), `/api/request-context/presets`, `/api/workspace-wasm`, `/health`.
 
-Loads WASM binary into memory and recreates runner with dotenv settings:
+**Startup:** `dist/server.js` calls `startServer()` unconditionally when it is loaded. A `require.main === module` guard does not work: it fails when the CJS bundle is loaded through dynamic `import()` (as `bin/fastedge-debug.js` does). The VSCode extension `fork()`s the same file. Library consumers use `dist/lib/`, which never starts a server. Startup messages go to stderr (`console.error`) so they don't corrupt an MCP stdio transport when the server is started by an MCP server. `startServer()` probes ports 5179-5228 via `/health` and writes the chosen port to `{WORKSPACE_PATH || cwd()}/.fastedge-debug/.debug-port`.
 
-```typescript
-app.post("/api/load", async (req, res) => {
-  const { wasmBase64, dotenv } = req.body;
-
-  // Recreate runner with dotenv.enabled setting
-  runner = new ProxyWasmRunner(undefined, dotenv?.enabled ?? true);
-  runner.setStateManager(stateManager);
-
-  const buffer = Buffer.from(wasmBase64, "base64");
-  await runner.load(buffer);
-
-  // Emit WASM loaded event
-  stateManager.emitWasmLoaded("binary.wasm", buffer.length, source);
-
-  res.json({ ok: true });
-});
-```
-
-**Parameters:**
-- `wasmBase64` (required): Base64-encoded WASM binary
-- `dotenv.enabled` (optional, default: `true`): Enable/disable dotenv file loading
-- `dotenv.path` (optional): Directory to load `.env*` files from (defaults to CWD)
-
-**Behavior:**
-- Creates new `ProxyWasmRunner` instance with `dotenv.enabled` flag
-- When `dotenv.enabled=true`, loads secrets/dictionary from `.env*` files
-- When `dotenv.enabled=false`, uses only programmatically-provided FastEdge config
-- WASM reload required when toggling dotenv flag
-
-#### POST /api/call
-
-Executes a single hook (for manual testing):
-
-```typescript
-app.post("/api/call", async (req, res) => {
-  const { hook, request, response, properties } = req.body;
-  // Note: logLevel is ignored - server always returns all logs (trace level)
-  // Frontend filters logs client-side based on user selection
-  const result = await runner.callHook({
-    hook,
-    request: request ?? { headers: {}, body: "" },
-    response: response ?? { headers: {}, body: "" },
-    properties: properties ?? {},
-    logLevel: 0, // Always capture all logs (Trace)
-  });
-  res.json({ ok: true, result });
-});
-```
-
-#### POST /api/send
-
-Executes full flow (all hooks + HTTP fetch):
-
-```typescript
-app.post("/api/send", async (req, res) => {
-  const { url, request, response, properties } = req.body;
-  // Note: logLevel is ignored - server always returns all logs (trace level)
-  // Frontend filters logs client-side based on user selection
-  const fullFlowResult = await runner.callFullFlow(
-    {
-      hook: "",
-      request: request ?? { headers: {}, body: "", method: "GET" },
-      response: response ?? { headers: {}, body: "" },
-      properties: properties ?? {},
-      logLevel: 0, // Always capture all logs (Trace)
-    },
-    url,
-  );
-
-  // Emit request completed event
-  stateManager.emitRequestCompleted(
-    fullFlowResult.hookResults,
-    fullFlowResult.finalResponse,
-    fullFlowResult.calculatedProperties,
-    source,
-  );
-
-  res.json({ ok: true, ...fullFlowResult });
-});
-```
-
-**Response includes:**
-- `hookResults`: Results from all four hooks (onRequestHeaders, onRequestBody, onResponseHeaders, onResponseBody)
-- `finalResponse`: Final HTTP response after WASM modifications
-- `calculatedProperties`: Runtime-calculated properties (request.url, request.host, request.path, etc.)
-
-#### GET /api/config (February 2026)
-
-Reads test configuration from `fastedge-config.test.json`:
-
-```typescript
-app.get("/api/config", async (req, res) => {
-  const configPath = path.join(__dirname, "..", ".fastedge-debug", "fastedge-config.test.json");
-  const configData = await fs.readFile(configPath, "utf-8");
-  const config = JSON.parse(configData);
-  res.json({ ok: true, config });
-});
-```
-
-**Purpose**: Allows AI agents to read developer's test configuration
-
-#### POST /api/config (February 2026)
-
-Saves test configuration to `fastedge-config.test.json`:
-
-```typescript
-app.post("/api/config", async (req, res) => {
-  const { config } = req.body;
-  const configPath = path.join(__dirname, "..", ".fastedge-debug", "fastedge-config.test.json");
-  await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
-
-  // Emit properties updated event if properties changed
-  if (config.properties) {
-    const source = (req.headers["x-source"] as any) || "ui";
-    stateManager.emitPropertiesUpdated(config.properties, source);
-  }
-
-  res.json({ ok: true });
-});
-```
-
-### WorkerProxyWasmRunner.ts (CDN runner in a worker thread, November 2026)
+### WorkerProxyWasmRunner.ts (CDN runner in a worker thread)
 
 `WasmRunnerFactory` (debugger server) and `createRunner` / `createRunnerFromBuffer`
 (npm package, test framework) create a `WorkerProxyWasmRunner`, not a `ProxyWasmRunner`.
@@ -257,6 +153,9 @@ calls (the storage service) by blocking the worker only.
   undici dispatcher therefore applies (`mockOrigins()` installs a MockAgent there).
   The egress check still runs in the worker before the fetch. Aborts (http_call timeouts)
   are forwarded.
+- **Fetch errors cross the boundary as structured clones:** the error's message is kept,
+  its `cause` is lost. Error text built from `error.cause` (see Error Handling below) is
+  therefore only present in-process.
 - **Lifecycle:** the worker is `unref`'d while idle and `ref`'d while a call is in flight,
   so a runner that is never cleaned up does not keep Node alive. `cleanup()` terminates
   the worker; later calls reject.
@@ -285,14 +184,14 @@ constructor(fastEdgeConfig?: FastEdgeConfig, dotenvEnabled: boolean = true)
 - Recreates `SecretStore` and `Dictionary` with merged configuration
 - See [DOTENV.md](../features/DOTENV.md) for complete details
 
-**Architecture (February 2026):** Each hook executes in a completely isolated WASM instance to simulate production behavior:
+Each hook executes in a completely isolated WASM instance to simulate production behavior:
 
 - **Compilation**: Happens once in `load()`, stored as `WebAssembly.Module`
 - **Instantiation**: Fresh instance created for each hook call
 - **Isolation**: No state sharing between hooks (matches production nginx + wasmtime)
 - **Performance**: Compilation is expensive (once), instantiation is cheap (per hook)
 
-**Production Parity Headers (February 2026):**
+**Production Parity Headers:**
 
 - **Host Header Auto-Injection**: Before hooks execute, automatically injects `Host` header from target URL if not present
   - Format: `hostname` for standard ports, `hostname:port` for non-standard ports
@@ -325,64 +224,17 @@ constructor(fastEdgeConfig?: FastEdgeConfig, dotenvEnabled: boolean = true)
   3. **Phase 3**: Response hooks (onResponseHeaders → onResponseBody)
 - Returns hook results and final response
 
-**Flow with Input/Output and Property Tracking (February 5, 2026):**
+The flow itself lives in `cdnFlow.ts` (shared by a single app and a resource):
 
-```typescript
-// Phase 1: Request Hooks
-results.onRequestHeaders = await this.callHook({ hook: "onRequestHeaders", ... });
-
-// Chain modified headers AND properties to next hook
-const headersAfterRequestHeaders = results.onRequestHeaders.output.request.headers;
-const propertiesAfterRequestHeaders = results.onRequestHeaders.properties;
-
-results.onRequestBody = await this.callHook({
-  hook: "onRequestBody",
-  request: { headers: headersAfterRequestHeaders, ... },
-  properties: propertiesAfterRequestHeaders,  // ✅ Properties chain
-});
-
-// Phase 2: HTTP Fetch with URL Reconstruction
-const modifiedRequestHeaders = results.onRequestBody.output.request.headers;
-const modifiedRequestBody = results.onRequestBody.output.request.body;
-const propertiesAfterRequestBody = results.onRequestBody.properties;
-
-// Reconstruct URL from modified properties
-const modifiedScheme = propertiesAfterRequestBody["request.scheme"] || "https";
-const modifiedHost = propertiesAfterRequestBody["request.host"] || "localhost";
-const modifiedPath = propertiesAfterRequestBody["request.path"] || "/";
-const modifiedQuery = propertiesAfterRequestBody["request.query"] || "";
-const actualTargetUrl = `${modifiedScheme}://${modifiedHost}${modifiedPath}${modifiedQuery ? "?" + modifiedQuery : ""}`;
-
-// Fetch uses reconstructed URL (WASM can redirect requests!)
-const response = await fetch(actualTargetUrl, {
-  method: requestMethod,
-  headers: modifiedRequestHeaders,
-  body: modifiedRequestBody,
-});
-
-// Read complete response (streaming not implemented)
-// Note: Waits for entire response before processing
-const responseBody = await response.text();  // or arrayBuffer() for binary
-
-// Phase 3: Response Hooks (with modified request context)
-results.onResponseHeaders = await this.callHook({
-  hook: "onResponseHeaders",
-  request: { headers: modifiedRequestHeaders, body: modifiedRequestBody },
-  response: { headers: responseHeaders, body: responseBody }
-});
-
-const headersAfterResponseHeaders = results.onResponseHeaders.output.response.headers;
-
-results.onResponseBody = await this.callHook({
-  hook: "onResponseBody",
-  request: { headers: modifiedRequestHeaders, body: modifiedRequestBody },
-  response: { headers: headersAfterResponseHeaders, body: responseBody }
-});
-```
+- Headers, bodies and properties chain from hook to hook by explicit data passing; each hook gets a fresh instance.
+- Custom properties written in `onRequestBody` or later are readable by later hooks; those written in `onRequestHeaders` are not (nginx does not keep them).
+- The origin is the built-in responder, a declared `builtIn` origin, a resource's HTTP app, or a real `fetch()` (`fetchOrigin`) to `request.url`.
+- **Outbound fetch headers:** HTTP/2 pseudo-headers (`:method`, `:path`, `:authority`, `:scheme`) are removed from the origin fetch. Hooks still read them; Node's fetch rejects them as invalid header names, and the edge does not forward them. `proxy_http_call` does the same. The `host` header is also sent as `x-forwarded-host`, and `x-forwarded-proto` / `x-forwarded-port` are derived from the effective URL.
+- The response is read completely before the response hooks run (see below).
 
 **⚠️ Streaming Limitation:**
 
-The current implementation does not support streaming responses. It uses `await response.text()` or `await response.arrayBuffer()` which waits for the entire response to complete before processing.
+Responses are not streamed. The runner uses `await response.text()` or `await response.arrayBuffer()` which waits for the entire response to complete before processing.
 
 **Differences from Production:**
 
@@ -409,12 +261,6 @@ The current implementation does not support streaming responses. It uses `await 
 - ❌ Backpressure handling
 - ❌ Behavior when `end_of_stream=false`
 
-**Potential solutions for future:**
-
-1. **Chunk-based processing**: Use `response.body.getReader()` to read stream incrementally
-2. **Configurable chunk size**: Split complete responses into artificial chunks for testing
-3. **Hybrid mode**: Add a flag to enable streaming vs. complete response testing
-
 **callHook(call: HookCall): Promise<HookResult>**
 
 - **Creates fresh WASM instance** from compiled module (isolated context)
@@ -427,7 +273,7 @@ The current implementation does not support streaming responses. It uses `await 
 - **Cleans up instance** (ready for next hook)
 - Returns both input and output along with logs and properties
 
-**Input/Output Capture (February 5, 2026):**
+**Input/Output Capture:**
 
 ```typescript
 // Before hook execution - capture all state including properties
@@ -513,7 +359,7 @@ Implements proxy-wasm ABI host functions that WASM code calls:
 - `proxy_set_buffer_bytes`: Modify request/response bodies
 - `proxy_get_property`: Read properties (metadata, headers, etc.)
 
-**FastEdge Extensions (February 2026):**
+**FastEdge Extensions:**
 
 - `proxy_get_secret(key_ptr, key_len, value_ptr_ptr, value_len_ptr)`: Retrieve secrets
 - `proxy_get_effective_at_secret(key_ptr, key_len, timestamp, value_ptr_ptr, value_len_ptr)`: Time-based secret retrieval
@@ -536,7 +382,7 @@ Implements proxy-wasm ABI host functions that WASM code calls:
 - Uses SecretStore for time-based secret rotation
 - Uses Dictionary for configuration key-value pairs
 - Supports dotenv file loading (see [DOTENV.md](../features/DOTENV.md))
-- Production parity with G-Core FastEdge CDN runtime
+- Production parity with the FastEdge edge runtime
 
 ### MemoryManager.ts
 
@@ -551,14 +397,13 @@ Manages WASM linear memory:
 
 **Key Methods:**
 
-- `allocateString(str: string): number` - Write string to memory, return pointer
-- `readString(ptr: number, len: number): string` - Read string from memory
-- `allocateBytes(data: Uint8Array): number` - Write bytes to memory
-- `deallocate(ptr: number)` - Free memory (currently a no-op)
+- `readBytes(ptr, len)` / `readString(ptr, len)` - Read from WASM memory
+- `writeToWasm(bytes): number` - Allocate in the guest and write bytes, return pointer
+- `writeStringResult(...)` / `writeBytesResult(...)` - Pointer-to-pointer results for host functions
 
 ### HeaderManager.ts
 
-Handles G-Core SDK header serialization format:
+Handles the proxy-wasm header serialization format:
 
 **Format:**
 
@@ -568,9 +413,10 @@ Handles G-Core SDK header serialization format:
 
 **Methods:**
 
-- `serialize(headers: Record<string, string>): Uint8Array` - Convert to binary format
-- `deserialize(data: Uint8Array): Record<string, string>` - Parse binary to object
-- `normalize(headers: Record<string, string>)` - Lowercase keys, trim values
+- `serializeTuples(tuples)` / `deserializeBinaryToTuples(bytes)` - Binary format, lossless (duplicates kept)
+- `recordToTuples` / `tuplesToRecord` - Convert between `HeaderRecord` and `HeaderTuples`
+- `normalize(headers)` - Lowercase keys
+- `flattenToMap(headers)` - Comma-join multi-values for `fetch()` (request headers only)
 
 ### PropertyResolver.ts
 
@@ -591,9 +437,9 @@ propertyResolver.getProperty("request.headers.content-type");
 // Returns: "application/json"
 ```
 
-### FastEdge Host Functions (February 2026)
+### FastEdge Host Functions
 
-**Purpose:** Extends proxy-wasm ABI with G-Core FastEdge production runtime functions for secrets management and configuration.
+**Purpose:** Extends the proxy-wasm ABI with the FastEdge runtime functions for secrets management and configuration.
 
 **Location:** `server/fastedge-host/`
 
@@ -643,7 +489,7 @@ const dictionary = new Dictionary({
 });
 ```
 
-### Dotenv Loader (February 2026)
+### Dotenv Loader
 
 **Location:** `server/utils/dotenv-loader.ts`
 
@@ -659,7 +505,7 @@ Parses and loads environment variables from `.env*` files for FastEdge configura
 
 **Supported Files:**
 
-1. `.env` - G-Core FastEdge format with prefixes:
+1. `.env` - FastEdge format with prefixes:
    - `FASTEDGE_VAR_SECRET_*` → secrets
    - `FASTEDGE_VAR_ENV_*` → dictionary
 2. `.env.secrets` - Secrets without prefix
@@ -733,9 +579,9 @@ return {
 };
 ```
 
-#### Dotenv Support (February 2026)
+#### Dotenv Support
 
-**✅ COMPLETED**: Full dotenv integration with toggle support. See [DOTENV.md](../features/DOTENV.md) for complete documentation.
+Dotenv integration with toggle support. See [DOTENV.md](../features/DOTENV.md) for complete documentation.
 
 **Implementation:**
 
@@ -856,7 +702,7 @@ export interface HttpResponse {
 }
 ```
 
-**Calculated Properties (February 2026):**
+**Calculated Properties:**
 
 The `calculatedProperties` field contains runtime-extracted properties from the target URL:
 - `request.url`: Full URL
@@ -866,7 +712,7 @@ The `calculatedProperties` field contains runtime-extracted properties from the 
 - `request.scheme`: Protocol (http/https)
 - `request.extension`: File extension from path
 
-These are extracted by `PropertyResolver.extractRuntimePropertiesFromUrl()` before hook execution and returned to the frontend for display in the properties panel.
+These are extracted by `PropertyResolver.extractRuntimePropertiesFromUrl()` before hook execution and returned to the frontend, which keeps them in a separate `calculatedProperties` field for display (never merged into the editable properties).
 
 **Enums:**
 
@@ -896,7 +742,7 @@ export enum ProxyStatus {
 
 Used by FastEdge host functions (`proxy_get_secret`, `proxy_dictionary_get`, etc.) to indicate operation success/failure.
 
-## Hook Execution Model (February 2026)
+## Hook Execution Model
 
 ### Isolated Instance per Hook
 
@@ -919,7 +765,7 @@ Each hook call creates a completely fresh WASM instance:
 
 - **Production parity**: Matches nginx + wasmtime behavior where each hook has isolated state
 - **No state leakage**: Internal WASM variables don't persist between hooks
-- **Future-ready**: Enables loading different WASM modules for different hooks
+- **Resources**: different apps can run different hooks of one request
 - **Proper testing**: Catches bugs related to assumed fresh state
 
 **State Chaining:**
@@ -998,9 +844,8 @@ const isBinary =
 
 **Log Filtering:**
 
-- Set via `logLevel` parameter
-- Filters logs before returning to frontend
-- Only logs >= specified level are included
+- The server returns every log (trace level)
+- The frontend filters by the selected level, without re-running
 
 **Debug Mode:**
 
@@ -1013,26 +858,50 @@ const isBinary =
 **Build:**
 
 ```bash
-pnpm run build:backend  # Compile TypeScript to dist/
+pnpm run build:backend  # esbuild bundle → dist/server.js (+ dist/fastedge-cli/)
 ```
 
 **Dev Mode:**
 
 ```bash
-pnpm run dev:backend    # Watch mode with tsx
+pnpm run dev:backend    # esbuild watch + server
 ```
 
 **Production:**
 
 ```bash
-pnpm start              # Run compiled dist/server.js
+pnpm start              # node bin/fastedge-debug.js → dist/server.js
 ```
 
 ## Port Configuration
 
-- Default: `5179`
+- Default: `5179`, probing up to 5228 if busy
 - Override: `PORT=3000 pnpm start`
-- Frontend proxies `/api/*` to backend port
+- Frontend dev server proxies `/api/*` to the backend port
+
+## npm Package
+
+Published as `@gcoredev/fastedge-test` (`package.json`). Exports:
+
+| Export | File | What it is |
+|---|---|---|
+| `.` | `dist/lib/index.{js,cjs,d.ts}` | Headless runner API (`server/runner/index.ts`): `createRunner`, `createRunnerFromBuffer`, `createResource`, `createStores`, runner classes, request-context presets, types |
+| `./server` | `dist/server.js` | The debugger server; starts when loaded |
+| `./test` | `dist/lib/test-framework/index.{js,cjs,d.ts}` | Test framework (`server/test-framework/`): `defineTestSuite`, `runTestSuite`, `runAndExit`, `runFlow`, `runHttpRequest`, `loadConfigFile`, `mockOrigins`, assertion helpers |
+| `./vitest` | `dist/lib/test-framework/vitest.{js,d.ts}` | A vitest `test` with `runner` / `stores` fixtures (ESM only; `vitest >= 3` is an optional peer dependency) |
+| `./schemas` | `schemas/` | Generated JSON schemas |
+
+- **bin**: `fastedge-debug` (`bin/fastedge-debug.js`, imports `dist/server.js`)
+- **Published files**: `bin/`, `dist/lib/`, `dist/server.js`, `dist/frontend/`, `dist/fastedge-cli/`, `schemas/`, `docs/`, `llms.txt`
+- **Builds**: `build:lib` (`esbuild/bundle-lib.js`, ESM + CJS + `.d.ts`; `tsconfig.lib.json` keeps `server/runner/` free of server/WebSocket imports), `build:backend` (`dist/server.js`), `build:frontend` (`dist/frontend/`), `build:schemas`
+- **Headless runners** have no state manager (`IStateManager | null`, or the exported no-op `NullStateManager`); the server sets its WebSocket-backed `StateManager`.
+- **Release**: `.github/workflows/npm-release.yml` runs semantic-release on the release branches; versions and release notes come from conventional commits.
+
+**Schemas** (`scripts/generate-schemas.ts`, output checked into `schemas/`):
+
+- Config and API bodies come from the Zod schemas in `server/schemas/` via `toJSONSchema({ io: "input" })`: they describe what people and agents write, so a field with a default is optional. Objects that are not `.strict()` (for example `dotenv`, `request`) allow unknown keys in the schema; Zod drops them when the server parses.
+- Runner result types (`HookResult`, `FullFlowResult`, `HookCall`, `ResourceResult`, `HttpRequest`, `HttpResponse`) come from the TypeScript types via `ts-json-schema-generator`.
+- `fastedge-config.test.json` can point `$schema` at `schemas/fastedge-config.test.schema.json` for editor autocomplete.
 
 ## Notes
 
@@ -1043,4 +912,3 @@ pnpm start              # Run compiled dist/server.js
 - Host header preserved via `x-forwarded-host`
 - Input/output capture enables complete execution visibility
 
-Last Updated: February 6, 2026

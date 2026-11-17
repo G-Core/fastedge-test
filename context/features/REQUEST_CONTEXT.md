@@ -33,7 +33,7 @@ from. Code: `server/runner/requestContext.ts`; UI: `frontend/src/components/comm
 
 ## Presets
 
-Prod captures (2026-11-13): edge DE = Frankfurt `fr5` (dictionary inferred), NL = Amsterdam `am3`,
+Captured on the edge: edge DE = Frankfurt `fr5` (dictionary inferred), NL = Amsterdam `am3`,
 US = San Jose `sv5` (`pop-*` coordinates approximate). Client DE / NL / US from `geoip-*`
 captures; client IPs are RFC 5737 documentation addresses. Dictionary names differ from header
 names on the edge (`Netherlands` vs `The Netherlands`), and the presets keep that difference.

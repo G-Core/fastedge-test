@@ -1,9 +1,7 @@
 # WebSocket Real-Time Synchronization
 
-## Status: ✅ IMPLEMENTED AND OPERATIONAL
-
-**Last Updated**: January 31, 2026
-**Connection Performance**: Instant (<100ms) when accessing via http://127.0.0.1:5179
+Connection is instant (<100ms) when the UI is opened via http://127.0.0.1:5179 (see
+Troubleshooting: localhost may try IPv6 first).
 
 ## Overview
 
@@ -69,7 +67,7 @@ interface BaseEvent {
 
 **Why**: The frontend WebSocket hook is configured to use `127.0.0.1` for the WebSocket connection to avoid IPv6 resolution delays. Both HTTP and WebSocket use IPv4 directly, resulting in instant connection (<100ms).
 
-**Development Mode (February 2026)**: Vite dev server (port 5173) proxies WebSocket connections to backend (port 5179):
+**Development Mode**: Vite dev server (port 5173) proxies WebSocket connections to backend (port 5179):
 
 ```typescript
 // vite.config.ts
@@ -362,12 +360,11 @@ For this use case (local development tool), 10-50 clients is more than sufficien
 
 ### Current Implementation
 
-- ❌ No authentication (localhost only)
-- ❌ No message encryption (use HTTPS for production)
-- ❌ No rate limiting
-- ✅ CORS handled by Express
-- ✅ Message validation
-- ✅ Connection timeouts
+- Session token required: a `fastedge-token.<token>` subprotocol (preferred, kept out of proxy
+  logs) or the `?token=` query parameter; compared in constant time
+- Origin check: browser origins must be localhost / 127.0.0.1 or a VS Code webview; clients that
+  send no origin (tests, CLI) are allowed
+- No message encryption or rate limiting (local tool)
 
 ### For Production (if needed)
 
@@ -394,35 +391,6 @@ process.on("SIGTERM", () => {
 ```
 
 Clients automatically attempt reconnection when server restarts.
-
-## Future Enhancements
-
-### Potential Features
-
-1. **Command support via WebSocket**
-   - Currently: Clients only receive events
-   - Future: Send commands from UI via WebSocket
-   - Benefit: Truly bidirectional communication
-
-2. **Event history**
-   - Currently: New clients miss previous events
-   - Future: Send recent events on connection
-   - Benefit: UI shows full context immediately
-
-3. **Selective subscriptions**
-   - Currently: All clients receive all events
-   - Future: Subscribe to specific event types
-   - Benefit: Reduce bandwidth for specialized clients
-
-4. **Event replay**
-   - Currently: No event storage
-   - Future: Store events, allow replay
-   - Benefit: Time-travel debugging
-
-5. **Multiple WASM instances**
-   - Currently: Single global runner
-   - Future: Multiple concurrent runners with session IDs
-   - Benefit: Isolate different test scenarios
 
 ## Testing
 
@@ -537,21 +505,6 @@ Should show <100ms when accessing via 127.0.0.1
 2. Large event payloads (check event data size)
 3. Memory leak (restart server)
 
-## Migration from HTTP-Only
-
-The WebSocket implementation is **fully backward compatible**:
-
-- ✅ All existing HTTP endpoints still work
-- ✅ UI functionality unchanged
-- ✅ No breaking changes to API
-- ✅ WebSocket is **additive only**
-
-To use the new WebSocket features:
-
-- Frontend: Automatically connects on page load
-- Backend: No changes needed
-- AI Agents: Optional `X-Source` header for identification
-
 ## Summary
 
 The WebSocket implementation provides:
@@ -562,25 +515,6 @@ The WebSocket implementation provides:
 ✅ **Visual feedback** - Connection status in UI
 ✅ **AI agent support** - API requests visible in UI with source identification
 ✅ **Multi-client** - Multiple users can observe simultaneously
-✅ **Backward compatible** - No breaking changes to existing HTTP API
 ✅ **Production-ready** - Proper error handling, graceful shutdown, heartbeat monitoring
 ✅ **Optimized performance** - Instant connections via IPv4 (127.0.0.1)
 ✅ **Debug support** - Comprehensive logging with PROXY_RUNNER_DEBUG=1
-
-## Current Status (January 31, 2026)
-
-**Operational**: System is fully functional and tested
-
-- Backend: WebSocket server running on port 5179 at /ws path
-- Frontend: Auto-connects with visual status indicator
-- Performance: <100ms connection time when accessed via 127.0.0.1
-- Testing: Verified with both UI interactions and AI agent API calls
-- Events: request_started, hook_executed, request_completed, request_failed all working
-
-**Known Optimizations**:
-
-- WebSocket URL uses 127.0.0.1 to avoid IPv6 timeout
-- Exponential backoff prevents connection storms
-- Connection timing logged for debugging
-
-Last Updated: January 31, 2026

@@ -2,12 +2,13 @@
 
 ## Overview
 
-FastEdge-debugger now supports **two modes** for loading WASM binaries:
+fastedge-test supports **two modes** for loading WASM binaries:
 
-1. **Path-based loading** (new, optimized) - Provide a file path
-2. **Buffer-based loading** (legacy, backward compatible) - Provide binary data
+1. **Path-based loading** - Provide a file path
+2. **Buffer-based loading** - Provide binary data
 
-This hybrid approach provides **significant performance improvements** for local development while maintaining compatibility with remote/browser scenarios.
+Path mode is much faster for large binaries in local development; buffer mode covers remote and
+browser scenarios where the server cannot see the file.
 
 ---
 
@@ -44,7 +45,7 @@ Network → Validate path → Spawn process
 
 ### POST /api/load
 
-#### New Parameters
+#### Parameters
 
 ```typescript
 interface LoadRequest {
@@ -258,54 +259,24 @@ validatePath('./target/wasm32-wasi/app.wasm'); // Relative path
 
 ---
 
-## VSCode Extension Integration
+## UI
 
-### Detection Logic
+### Upload
 
-```typescript
-// Detect if running in VSCode
-const isVSCodeExtension = window.vscodeApi !== undefined;
+`uploadWasm()` in `frontend/src/api/index.ts` tries path mode first when the environment has
+filesystem access and the `File` carries a path, and falls back to buffer mode if the path load
+fails.
 
-export async function uploadWasm(
-  file: File,
-  dotenvEnabled: boolean = true,
-): Promise<{ path: string; wasmType: WasmType }> {
+### Debugger "File path"
 
-  // Use path-based loading in VSCode
-  if (isVSCodeExtension && file.path) {
-    return await fetch(`${API_BASE}/load`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        wasmPath: file.path,
-        dotenv: { enabled: dotenvEnabled }
-      }),
-    }).then(r => r.json());
-  }
+The WasmLoader's path tab (`WASM file path`) sends the text as `wasmPath`. A relative path
+resolves against the **server's working directory**, not the workspace (`resolve()` in
+`server/utils/pathValidator.ts`), so the suggestions list workspace `.wasm` files as full paths.
 
-  // Fallback to buffer-based loading
-  const buffer = await file.arrayBuffer();
-  const base64 = btoa(
-    new Uint8Array(buffer).reduce(
-      (data, byte) => data + String.fromCharCode(byte),
-      '',
-    ),
-  );
+### Drag and drop
 
-  return await fetch(`${API_BASE}/load`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wasmBase64: base64, dotenv: { enabled: dotenvEnabled } }),
-  }).then(r => r.json());
-}
-```
-
-### No File Access Limitations
-
-- VSCode extension runs in Node.js environment
-- Full filesystem access to workspace
-- Cross-platform path handling (Windows/Unix)
-- Symlinks handled automatically
+Dropping `.wasm` or config files works in a standalone browser. It does not work inside the VS Code
+panel: VS Code intercepts file drags into webviews. There, use the explorer context-menu commands.
 
 ---
 
@@ -399,45 +370,6 @@ pnpm test
 
 ---
 
-## Migration Guide
-
-### Frontend Changes
-
-**Before**:
-```typescript
-const buffer = await file.arrayBuffer();
-const base64 = btoa(/* ... */);
-
-await fetch('/api/load', {
-  body: JSON.stringify({ wasmBase64: base64 })
-});
-```
-
-**After (with path support)**:
-```typescript
-// Try path first (if available)
-if (file.path) {
-  await fetch('/api/load', {
-    body: JSON.stringify({ wasmPath: file.path })
-  });
-} else {
-  // Fallback to buffer
-  const buffer = await file.arrayBuffer();
-  const base64 = btoa(/* ... */);
-  await fetch('/api/load', {
-    body: JSON.stringify({ wasmBase64: base64 })
-  });
-}
-```
-
-### Backend Changes
-
-**No changes required!** Backward compatible.
-
-Existing code using `runner.load(buffer)` continues to work.
-
----
-
 ## Troubleshooting
 
 ### "File not found" Error
@@ -475,72 +407,3 @@ const absolutePath = path.resolve('./app.wasm');
 '/workspace/app.wasm'  // ✅ Good
 '/etc/passwd'          // ❌ Bad
 ```
-
----
-
-## Future Enhancements
-
-### Phase 2: Frontend Path Detection
-- [ ] Detect VSCode extension context
-- [ ] Extract file path from File object
-- [ ] Auto-select path vs buffer mode
-- [ ] Update UI to show loading mode
-
-### Phase 3: Monitoring
-- [ ] Add telemetry for path vs buffer usage
-- [ ] Track startup time metrics
-- [ ] Measure memory usage
-- [ ] Analyze error rates
-
-### Phase 4: File Watching
-- [ ] Watch WASM file for changes
-- [ ] Auto-reload on file modification
-- [ ] Hot-reload during development
-- [ ] WebSocket notification to clients
-
----
-
-## Changelog
-
-### 2026-02-11 - Phase 1: Hybrid Loading (Backward Compatible)
-
-**Added**:
-- Path validation utility (`utils/pathValidator.ts`)
-- `wasmPath` parameter to `/api/load` endpoint
-- Support for `Buffer | string` in runner `load()` methods
-- Security checks for path traversal and dangerous paths
-- Comprehensive test suite (37 tests)
-
-**Changed**:
-- `IWasmRunner.load()` signature to accept `Buffer | string`
-- HTTP WASM runner skips temp file when path provided
-- Proxy WASM runner reads from path when provided
-- WASM type detector accepts `Buffer | string`
-
-**Performance**:
-- 70-95% faster startup for large WASMs
-- 75-80% less memory usage
-- 99.999% less network bandwidth
-
-**Backward Compatibility**:
-- ✅ All existing code continues to work
-- ✅ Buffer-based loading fully supported
-- ✅ No breaking changes to API
-
----
-
-## Summary
-
-The hybrid loading approach provides:
-
-✅ **Massive performance improvements** for local development
-✅ **Full backward compatibility** with existing code
-✅ **Robust security** with path validation
-✅ **Flexibility** to choose the right mode for each scenario
-✅ **Future-proof** architecture for enhancements
-
-**When to use**:
-- **Path mode**: VSCode, Codespaces, local dev, CLI tools (99% of cases)
-- **Buffer mode**: Web UI, remote debugging, in-memory WASM (1% of cases)
-
-**Result**: Faster, more efficient debugger that scales to large WASM binaries!

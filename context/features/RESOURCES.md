@@ -100,8 +100,12 @@ properties from hook to hook; a flow hook starts with exactly those (none from a
 - **onRequestHeaders after cache** (a separate portal option, run by core-proxy) is not modelled.
 - **Shield:** `execute_on_shield` is not simulated; hooks run as on an edge node.
 - A request body's own `client` / `edge` is not applied to a resource; the resource's are.
+- **Binary request body to an HTTP-app origin:** when the origin is an HTTP app, a request body a
+  hook made binary reaches it as base64 text (`execute()` takes text; `httpAppOrigin()` in
+  `server/runner/resource.ts`). CDN hooks, URL origins and the built-in responder get the raw bytes.
 
 - **Apps referenced by config:** a referenced `fastedge-config.test.json`'s `wasm.path` is read as
   the debugger reads it: relative to the app's project root (nearest folder with a `Cargo.toml` or
   `package.json`), with `<workspace>` meaning that root; its `dotenv.path` is relative to the
   config file.
+- An empty origin `files` / `bodyFile` is refused (use `"."` for the config's own folder).

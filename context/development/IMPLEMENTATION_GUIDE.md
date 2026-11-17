@@ -96,9 +96,9 @@ React UI
   ↓ Display in HookStagesPanel for that specific hook
 ```
 
-## WASM Instance Lifecycle (February 2026)
+## WASM Instance Lifecycle
 
-**Key Architecture Change:** Each hook executes in a completely isolated WASM instance.
+Each hook executes in a completely isolated WASM instance.
 
 ### Compilation vs Instantiation
 
@@ -278,7 +278,7 @@ When WASM wants a result:
 ### Header Serialization Details
 
 **Why the specific format?**
-The G-Core SDK's `deserializeHeaders()` function expects:
+The SDK's `deserializeHeaders()` function expects:
 
 1. First u32 tells it how many pairs to expect
 2. Size array lets it pre-calculate offsets
@@ -509,74 +509,16 @@ Show message, hide Body tab, only show Headers tab.
 
 ## Hook State Chaining
 
-**Critical Implementation Detail (Fixed Jan 29, 2026)**
+Each hook receives the accumulated modifications from the previous hooks, not the original input. The flow in `server/runner/cdnFlow.ts` passes them explicitly (every hook runs in a fresh instance, so nothing carries over in memory):
 
-Each hook must receive the accumulated modifications from previous hooks, not the original input state.
+- `onRequestHeaders` output headers (and properties) → `onRequestBody` input
+- `onRequestBody` output headers and body → the origin request
+- origin response → `onResponseHeaders`; its output headers → `onResponseBody` input
+- the request side seen by the response hooks is the modified request
 
-**Before (Broken):**
+**Why it matters:** an app that adds a header in `onRequestHeaders` (authentication, routing) must see it in `onRequestBody`, and the origin must receive it. Without chaining, WASM modifications are silently lost. A hook with no app (in a resource) passes the state through unchanged.
 
-```typescript
-results.onRequestHeaders = await this.callHook({
-  ...call,
-  hook: "onRequestHeaders",
-});
-results.onRequestBody = await this.callHook({ ...call, hook: "onRequestBody" });
-// ❌ Both hooks receive original headers - modifications lost!
-```
-
-**After (Fixed):**
-
-```typescript
-results.onRequestHeaders = await this.callHook({
-  ...call,
-  hook: "onRequestHeaders",
-});
-
-// Pass modified headers to next hook
-const headersAfterRequestHeaders = results.onRequestHeaders.request.headers;
-
-results.onRequestBody = await this.callHook({
-  ...call,
-  request: {
-    ...call.request,
-    headers: headersAfterRequestHeaders, // ✅ Use modified headers
-  },
-  hook: "onRequestBody",
-});
-
-// Final state includes all modifications
-const modifiedRequestHeaders = results.onRequestBody.request.headers;
-const modifiedRequestBody = results.onRequestBody.request.body;
-```
-
-**Why This Matters:**
-
-- WASM modifies headers in `onRequestHeaders` (e.g., adds authentication, custom headers)
-- Those modifications must be visible to `onRequestBody`
-- Final modifications must be applied to the actual HTTP fetch
-- Without chaining, WASM modifications are ignored
-
-**Same Pattern for Response Hooks:**
-
-```typescript
-results.onResponseHeaders = await this.callHook({
-  ...responseCall,
-  hook: "onResponseHeaders",
-});
-
-const headersAfterResponseHeaders = results.onResponseHeaders.response.headers;
-
-results.onResponseBody = await this.callHook({
-  ...responseCall,
-  response: {
-    ...responseCall.response,
-    headers: headersAfterResponseHeaders,
-  },
-  hook: "onResponseBody",
-});
-```
-
-## Environment Variables and Configuration (February 2026)
+## Environment Variables and Configuration
 
 ### DotEnv Integration
 
@@ -598,12 +540,11 @@ The runner supports loading secrets and dictionary values from `.env` files:
 - Dictionary: `proxy_dictionary_get("KEY_NAME")` host function
 
 **Default Behavior:**
-- Dotenv loading is enabled by default when loading WASM
-- Can be disabled via `POST /api/load` with `{"dotenvEnabled": false}`
+- Dotenv loading is off unless enabled: `POST /api/load` with `{"dotenv": {"enabled": true, "path": "..."}}` (the UI toggle sends this)
 - Missing files are silently ignored (no errors)
 - Values merge with any programmatically configured FastEdge config
 
-See [DOTENV.md](./DOTENV.md) for complete usage guide.
+See [DOTENV.md](../features/DOTENV.md) for complete usage guide.
 
 ## Module Dependencies
 
@@ -836,27 +777,33 @@ Would need:
 
 ### Response headers not modified by WASM
 
-- Fixed Jan 29, 2026: MapType enum had wrong values
 - Ensure MapType.ResponseHeaders = 2 (not 1)
 - Check debug logs for `proxy_add_header_map_value map=2`
 - Verify headers appear in `onResponseHeaders` hook results
 
+### Memory errors
+
+- Check available memory
+- Verify allocations aren't too large
+- Look for pointer arithmetic errors
+- Ensure proper little-endian byte order
+
 ## Type System and Enums
 
-### MapType Enum (Fixed Jan 29, 2026)
+### MapType Enum
 
-**Critical Bug Fix**: The MapType enum values must match the proxy-wasm specification exactly.
+The MapType enum values must match the proxy-wasm specification exactly.
 
 ```typescript
 export enum MapType {
   RequestHeaders = 0,
   RequestTrailers = 1,
-  ResponseHeaders = 2, // Was incorrectly 1 before fix
-  ResponseTrailers = 3, // Added in fix
+  ResponseHeaders = 2,
+  ResponseTrailers = 3,
 }
 ```
 
-**Bug Impact**: Before the fix, when WASM called `proxy_add_header_map_value` with `mapType=2` (response headers), our code treated it as request headers because `ResponseHeaders = 1`. This caused all response header modifications to be lost.
+**Why it matters**: if `ResponseHeaders` were not 2, a `proxy_add_header_map_value` with `mapType=2` would land in the request headers and every response header modification would be lost.
 
 **Usage in Host Functions:**
 
@@ -887,8 +834,8 @@ export enum ProxyStatus {
   Ok = 0,
   NotFound = 1,
   BadArgument = 2,
-  SerializationFailure = 7,
   InternalFailure = 10,
+  Unimplemented = 12,
 }
 ```
 
@@ -896,88 +843,13 @@ export enum ProxyStatus {
 
 ```typescript
 export enum BufferType {
-  HttpRequestBody = 0,
-  HttpResponseBody = 1,
-  VmConfiguration = 2,
-  PluginConfiguration = 3,
+  RequestBody = 0,
+  ResponseBody = 1,
+  HttpCallResponseBody = 4,
+  VmConfiguration = 6,
+  PluginConfiguration = 7,
 }
 ```
-
-## Hook State Chaining
-
-**Critical Implementation Detail (Fixed Jan 29, 2026)**
-
-Each hook must receive the accumulated modifications from previous hooks, not the original input state.
-
-**Before (Broken):**
-
-```typescript
-results.onRequestHeaders = await this.callHook({
-  ...call,
-  hook: "onRequestHeaders",
-});
-results.onRequestBody = await this.callHook({ ...call, hook: "onRequestBody" });
-// ❌ Both hooks receive original headers - modifications lost!
-```
-
-**After (Fixed):**
-
-```typescript
-results.onRequestHeaders = await this.callHook({
-  ...call,
-  hook: "onRequestHeaders",
-});
-
-// Pass modified headers to next hook
-const headersAfterRequestHeaders = results.onRequestHeaders.request.headers;
-
-results.onRequestBody = await this.callHook({
-  ...call,
-  request: {
-    ...call.request,
-    headers: headersAfterRequestHeaders, // ✅ Use modified headers
-  },
-  hook: "onRequestBody",
-});
-
-// Final state includes all modifications
-const modifiedRequestHeaders = results.onRequestBody.request.headers;
-const modifiedRequestBody = results.onRequestBody.request.body;
-```
-
-**Why This Matters:**
-
-- WASM modifies headers in `onRequestHeaders` (e.g., adds authentication, custom headers)
-- Those modifications must be visible to `onRequestBody`
-- Final modifications must be applied to the actual HTTP fetch
-- Without chaining, WASM modifications are ignored
-
-**Same Pattern for Response Hooks:**
-
-```typescript
-results.onResponseHeaders = await this.callHook({
-  ...responseCall,
-  hook: "onResponseHeaders",
-});
-
-const headersAfterResponseHeaders = results.onResponseHeaders.response.headers;
-
-results.onResponseBody = await this.callHook({
-  ...responseCall,
-  response: {
-    ...responseCall.response,
-    headers: headersAfterResponseHeaders,
-  },
-  hook: "onResponseBody",
-});
-```
-
-### Memory errors
-
-- Check available memory
-- Verify allocations aren't too large
-- Look for pointer arithmetic errors
-- Ensure proper little-endian byte order
 
 ## Testing
 
@@ -1060,9 +932,6 @@ Tests should be written for:
 
 - **Patterns and Examples**: See [TEST_PATTERNS.md](./TEST_PATTERNS.md)
 - **Running Tests**: See [TESTING_GUIDE.md](./TESTING_GUIDE.md)
-- **Current Test Suite**: 388 tests across backend and frontend
-  - Backend: 198 tests (dotenv-loader, HeaderManager, PropertyResolver)
-  - Frontend: 190 tests (components, hooks, utilities)
 
 ## Extension Points
 
@@ -1074,15 +943,15 @@ If you need a different header format:
 2. Ensure it matches your SDK's `deserializeHeaders()`
 3. Test with real binaries
 
-**Note**: The G-Core SDK uses the same format as the previous Kong SDK, so no changes are needed for G-Core binaries.
+**Note**: The Gcore SDKs use the standard proxy-wasm header map format.
 
 ### Additional Hooks
 
 To support more hooks:
 
-1. Add case in `buildHookInvocation()`
-2. Add button in UI (index.html)
-3. Add handler in app.js
+1. Add the case in `ProxyWasmRunner.buildHookInvocation()`
+2. Add the hook to the flow in `cdnFlow.ts` (`CDN_HOOKS`)
+3. Show it in `HookStagesPanel`
 
 ### Custom Properties
 
@@ -1100,4 +969,3 @@ To load properties from external sources:
 2. Call during initialization in ProxyWasmRunner
 3. Cache results for performance
 
-Last Updated: February 6, 2026

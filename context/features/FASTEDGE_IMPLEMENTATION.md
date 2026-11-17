@@ -2,9 +2,7 @@
 
 ## Overview
 
-**Completion Date:** February 5, 2026
-
-This document describes the FastEdge-specific host function extensions added to the proxy-wasm test runner. These extensions provide production parity with G-Core's FastEdge CDN runtime, enabling testing of WASM binaries that use secrets and configuration management.
+This document describes the FastEdge-specific host function extensions in fastedge-test's proxy-wasm runner. These extensions provide production parity with G-Core's FastEdge CDN runtime, enabling testing of WASM binaries that use secrets and configuration management.
 
 ## Background
 
@@ -17,7 +15,7 @@ This document describes the FastEdge-specific host function extensions added to 
 
 ### FastEdge Functions in Production
 
-Based on Rust implementation in `rust_host/proxywasm/host/`:
+Based on Rust implementation in `rust_host/proxywasm/src/host/`:
 
 1. **Secrets** (`secret.rs`):
    - `proxy_get_secret(key_ptr, key_len, value_ptr_ptr, value_len_ptr)` → ProxyStatus
@@ -27,15 +25,13 @@ Based on Rust implementation in `rust_host/proxywasm/host/`:
 2. **Dictionary** (`dictionary.rs`):
    - `proxy_dictionary_get(key_ptr, key_len, value_ptr_ptr, value_len_ptr)` → ProxyStatus
 
-3. **Key-Value Store** (`key_value.rs`):
-   - Not yet implemented in test runner
+3. **Key-Value Store and cache** (`key_value.rs`):
+   - `proxy_kv_store_*` and `proxy_cache_*`, implemented in `server/runner/StoresHost.ts`
+     (see [STORES.md](STORES.md))
 
-4. **Statistics** (`stats.rs`):
-   - Not yet implemented in test runner
+4. **Statistics** (`stats.rs`): not implemented in the runner
 
-5. **Proxy Extensions** (`proxy.rs`):
-   - Additional proxy-wasm extensions
-   - Not yet implemented in test runner
+5. **Proxy Extensions** (`proxy.rs`): additional proxy-wasm extensions, not implemented in the runner
 
 ## Architecture
 
@@ -347,84 +343,11 @@ LOG_LEVEL=debug
 FEATURE_FLAG_NEW_UI=true
 ```
 
-### Dotenv Loading (Future Implementation)
+### Dotenv Loading
 
-**Planned Steps:**
-
-1. **Add dotenv library:**
-
-   ```bash
-   pnpm add dotenv
-   ```
-
-2. **Parse dotenv files:**
-
-   ```typescript
-   import dotenv from "dotenv";
-   import fs from "fs";
-   import path from "path";
-
-   function loadDotenvFiles(dotenvPath: string): FastEdgeConfig {
-     const secrets: Record<string, string> = {};
-     const dictionary: Record<string, string> = {};
-
-     // Load .env with prefixes
-     const envPath = path.join(dotenvPath, ".env");
-     if (fs.existsSync(envPath)) {
-       const parsed = dotenv.parse(fs.readFileSync(envPath));
-       for (const [key, value] of Object.entries(parsed)) {
-         if (key.startsWith("FASTEDGE_VAR_SECRET_")) {
-           secrets[key.replace("FASTEDGE_VAR_SECRET_", "")] = value;
-         } else if (key.startsWith("FASTEDGE_VAR_ENV_")) {
-           dictionary[key.replace("FASTEDGE_VAR_ENV_", "")] = value;
-         }
-       }
-     }
-
-     // Load .env.secrets (no prefix)
-     const secretsPath = path.join(dotenvPath, ".env.secrets");
-     if (fs.existsSync(secretsPath)) {
-       const parsed = dotenv.parse(fs.readFileSync(secretsPath));
-       Object.assign(secrets, parsed);
-     }
-
-     // Load .env.variables (no prefix)
-     const variablesPath = path.join(dotenvPath, ".env.variables");
-     if (fs.existsSync(variablesPath)) {
-       const parsed = dotenv.parse(fs.readFileSync(variablesPath));
-       Object.assign(dictionary, parsed);
-     }
-
-     return { secrets, dictionary };
-   }
-   ```
-
-3. **CLI flag support:**
-
-   ```typescript
-   // In server.ts or CLI handler
-   const dotenvPath = process.env.DOTENV_PATH || ".";
-   const fastEdgeConfig = loadDotenvFiles(dotenvPath);
-   const runner = new ProxyWasmRunner(fastEdgeConfig);
-   ```
-
-4. **API endpoint integration:**
-
-   ```typescript
-   app.post("/api/load", async (req, res) => {
-     const { wasmBase64, dotenv } = req.body;
-
-     let fastEdgeConfig: FastEdgeConfig | undefined;
-     if (dotenv?.path) {
-       fastEdgeConfig = loadDotenvFiles(dotenv.path);
-     }
-
-     const runner = new ProxyWasmRunner(fastEdgeConfig);
-     await runner.load(Buffer.from(wasmBase64, "base64"));
-
-     res.json({ ok: true });
-   });
-   ```
+Implemented in `server/utils/dotenv-loader.ts` and enabled per load with
+`dotenv: { enabled, path }`. See [DOTENV.md](DOTENV.md) for behaviour, the UI toggle and path
+resolution.
 
 ## WASM Usage Examples
 
@@ -459,7 +382,7 @@ match self.get_property(vec!["dictionary", "API_URL"]) {
 }
 ```
 
-### JavaScript (wasi-http future support)
+### JavaScript (HTTP apps, wasi-http)
 
 Using the FastEdge SDK:
 
@@ -526,57 +449,10 @@ addEventListener("fetch", (event) => {
 [Trace] proxy_dictionary_get: API_URL -> https://api.example.com
 ```
 
-### Automated Testing (Future)
+### Automated Testing
 
-Create integration tests that:
-
-1. Initialize runner with test secrets/dictionary
-2. Load test WASM binary
-3. Execute hooks that access secrets/dictionary
-4. Verify correct values returned
-5. Test NotFound scenarios
-6. Test time-based secret rotation
-
-## Future Enhancements
-
-### Phase 1: Core Completion (Current)
-
-- ✅ SecretStore implementation
-- ✅ Dictionary implementation
-- ✅ Host function factory
-- ✅ Integration with HostFunctions.ts
-- ✅ Integration with ProxyWasmRunner.ts
-- ✅ Type definitions
-- ✅ Documentation
-
-### Phase 2: Dotenv Integration (Next)
-
-- [ ] Dotenv parsing library integration
-- [ ] CLI `--dotenv` flag support
-- [ ] API endpoint updates for dotenv path
-- [ ] File loading and validation
-- [ ] Error handling for malformed .env files
-
-### Phase 3: UI Integration
-
-- [ ] Frontend panel for secrets configuration
-- [ ] Frontend panel for dictionary configuration
-- [ ] Dotenv file path input
-- [ ] Visual indication when dotenv loaded
-- [ ] Reload functionality
-
-### Phase 4: Additional Functions
-
-- [ ] Key-Value store (`key_value.rs`)
-- [ ] Statistics functions (`stats.rs`)
-- [ ] Proxy extensions (`proxy.rs`)
-
-### Phase 5: wasi-http Support
-
-- [ ] Component model support
-- [ ] FastEdge HTTP WASM applications
-- [ ] Full FastEdge SDK compatibility
-- [ ] Streaming response support
+`server/__tests__/integration/cdn-apps/variables-and-secrets/` covers env, dictionary and secret
+reads from dotenv fixtures (see [CDN_VARIABLES_AND_SECRETS.md](CDN_VARIABLES_AND_SECRETS.md)).
 
 ## Security Considerations
 
@@ -604,42 +480,9 @@ Create integration tests that:
 
 ## References
 
-- **Rust Implementation:** `rust_host/proxywasm/host/` (secret.rs, dictionary.rs, key_value.rs, stats.rs, proxy.rs)
+- **Rust Implementation:** `rust_host/proxywasm/src/host/` (secret.rs, dictionary.rs, key_value.rs, stats.rs, proxy.rs)
 - **FastEdge VSCode Extension:** [DOTENV.md](https://github.com/G-Core/FastEdge-vscode/blob/main/DOTENV.md)
 - **FastEdge SDK Rust:** https://github.com/G-Core/FastEdge-sdk-rust
 - **FastEdge SDK JS:** https://github.com/G-Core/FastEdge-sdk-js
 - **FastEdge Runtime:** https://github.com/G-Core/FastEdge-lib
 - **Proxy-WASM Spec:** https://github.com/proxy-wasm/spec
-
-## Change Log
-
-### February 5, 2026
-
-- ✅ Initial implementation complete
-- ✅ SecretStore with time-based rotation
-- ✅ Dictionary for configuration
-- ✅ Host function factory
-- ✅ Integration with HostFunctions.ts and ProxyWasmRunner.ts
-- ✅ Type definitions and interfaces
-- ✅ Documentation (DOTENV.md, FASTEDGE_IMPLEMENTATION.md)
-- ✅ Example .env files created
-
-### Future
-
-- Dotenv file parsing and loading
-- CLI flag support
-- Frontend UI integration
-- Additional FastEdge functions (KV, stats, proxy extensions)
-
----
-
-**Status:** Core implementation complete, ready for dotenv integration and testing.
-
-**Next Steps:**
-
-1. Add dotenv parsing library
-2. Implement file loading logic
-3. Create test WASM binaries that use secrets/dictionary
-4. Verify production parity
-
-Last Updated: February 5, 2026

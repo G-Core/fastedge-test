@@ -4,17 +4,18 @@
 
 This index helps you discover relevant documentation without reading thousands of lines upfront. Use the decision tree below to find what you need.
 
+`context/` describes **current behaviour and design decisions**. History is `git log` (conventional commits; release notes are generated from them). Open work is tracked outside this repo.
+
 ---
 
 ## Quick Start
 
-**Project**: Proxy-WASM Test Runner for FastEdge CDN binaries
-**Purpose**: Postman-like test runner for debugging proxy-wasm binaries locally
+**Project**: fastedge-test, a local debugger and test runner for FastEdge wasm apps (CDN proxy-wasm apps and HTTP apps)
+**Purpose**: Postman-like debugger plus a programmatic test framework, with production parity
 **Tech Stack**: Node.js + Express + TypeScript (backend) | React + Vite + TypeScript + Zustand (frontend)
-**WASM Runtime**: Node WebAssembly API with WASI preview1
+**WASM Runtime**: Node WebAssembly API with WASI preview1 (CDN apps); `fastedge-run` process (HTTP apps)
 **Port**: 5179 (auto-increments through 5179-5228 if busy)
 
-**Current Branch**: See git status
 **Philosophy**: Production parity, no over-engineering, type safety, modular architecture
 
 ---
@@ -25,67 +26,53 @@ This index helps you discover relevant documentation without reading thousands o
 
 **When to read**: Adding modules, refactoring, structural changes, understanding system design
 
-- `architecture/BACKEND_ARCHITECTURE.md` (994 lines) - Server architecture, file organization, module responsibilities
-- `architecture/FRONTEND_ARCHITECTURE.md` (1,500 lines) - React components, state management, UI organization
-- `architecture/STATE_MANAGEMENT.md` (1,969 lines) - Zustand implementation, state sync, persistence
-- `architecture/ZUSTAND_ARCHITECTURE.md` (1,300 lines) - Zustand design document, slices pattern, architecture decisions
+- `architecture/BACKEND_ARCHITECTURE.md` - Server architecture, runners, module responsibilities, npm package layout
+- `architecture/FRONTEND_ARCHITECTURE.md` - Pages, React components, UI organization
+- `architecture/STATE_MANAGEMENT.md` - Zustand store, slices, state sync, persistence
 
 ### ✨ Features (read when working on specific features)
 
-**When to read**: Implementing, debugging, or modifying a specific feature
+**When to read**: Implementing, debugging, or modifying a specific feature. Each doc holds the behaviour, the design decisions and any known divergence from the edge.
 
-- `features/CROSS_PLATFORM.md` (~100 lines) - ⚠️ **READ BEFORE writing any process, path, signal, or shell code** — platform rules for linux-x64 / darwin-arm64 / win32, what's already handled, known limitations
-- `features/HTTP_CALL_IMPLEMENTATION.md` (~200 lines) - ✅ proxy_http_call PAUSE/resume loop, binary header format, Rust SDK init order (NEW)
-- `features/STORES.md` (~100 lines) - 🚧 Local storage service (cache + Edge KV on node:sqlite): API, edge semantics, known differences, fixtures. Core done, not wired into the runners yet (Nov 2026)
-- `features/REQUEST_CONTEXT.md` (~50 lines) - ✅ Client / edge / origin: presets DE/NL/US, how they expand per app type, explicit-wins rules, the Request Context panel (Nov 2026)
-- `features/RESOURCES.md` (~75 lines) - ✅ Resources: several apps on one request (one per hook, rules, HTTP-app origin), measured edge behaviour, test and debugger API, known differences (Nov 2026)
-- `features/NPM_PACKAGE_PLAN.md` (~250 lines) - ✅ Full 5-phase plan for @gcoredev/fastedge-test npm package (Phases 1-4 complete)
-- `features/HTTP_WASM_IMPLEMENTATION.md` (~400 lines) - ✅ HTTP WASM runner support, FastEdge-run CLI integration, process management; detection + `runnerType` override + legacy sync detection sections are current (Mar 2026); API section is outdated
-- `features/HTTP_WASM_UI.md` (~1,200 lines) - ✅ Postman-like UI for HTTP WASM, adaptive UI architecture, component organization (NEW - Feb 10, 2026)
-- `features/HTTP_WASM_PREVIEW.md` (~120 lines) - ✅ SPA preview: Live toggle (srcDoc vs src iframe), Open in Browser button, runner port via WebSocket, preview sizing fix, active tab hover fix (Mar 2026)
-- `WEBSOCKET_IMPLEMENTATION.md` (586 lines) - Real-time sync between clients, event broadcasting
-- `FASTEDGE_IMPLEMENTATION.md` (645 lines) - FastEdge CDN integration, secrets, env vars
-- `PROPERTY_IMPLEMENTATION_COMPLETE.md` (495 lines) - Property system, runtime calculation
-- `PRODUCTION_PARITY_HEADERS.md` (421 lines) - Header serialization, G-Core SDK format
-- `MULTI_VALUE_HEADERS.md` (~230 lines) - Multi-value header support: three type layers (HeaderMap/HeaderTuples/HeaderRecord), lossless tuplesToRecord projection, Set-Cookie / RFC 6265 §3 correctness end-to-end, AS validation app ported in-repo (Apr 2026), cdn-headers + http-responder integration tests across all variants
-- `CONFIG_SHARING.md` (281 lines) - fastedge-config.test.json sharing system
-- `DOTENV.md` (~210 lines) - Environment variable system, dotenvPath support (CDN + HTTP)
-- `CDN_VARIABLES_AND_SECRETS.md` (~120 lines) - ✅ CDN env var/secret integration test (7 tests); requires proxy-wasm-sdk-as@^1.2.2
-- `SEND_HTTP_RESPONSE.md` (~100 lines) - ✅ send_http_response local response short-circuit: runner impl, cdn-redirect test app, 5 integration tests (dogfoods test framework)
-- `BUILT_IN_RESPONDER.md` (~120 lines) - ✅ Built-in origin responder: `targetUrl === "built-in"` skips fetch, `x-debugger-status`/`x-debugger-content` control headers, 3 modes (full echo, body-only, status-only), 8 tests
-- `DOTENV_TOGGLE_IMPLEMENTATION.md` (294 lines) - UI toggle for .env variables
-- `LOG_FILTERING.md` (147 lines) - Log filtering and display
-- `HYBRID_LOADING.md` (~550 lines) - WASM path vs buffer loading: performance benchmarks, Runner internals, temp file handling, migration guide
-- `PROPERTY_TESTING.md` (285 lines) - Property system testing patterns
+- `features/CROSS_PLATFORM.md` - ⚠️ **READ BEFORE writing any process, path, signal, or shell code**: platform rules for linux-x64 / darwin-arm64 / win32
+- `features/HTTP_CALL_IMPLEMENTATION.md` - proxy_http_call PAUSE/resume loop, binary header format, Rust SDK init order
+- `features/STORES.md` - Cache and Edge KV stores (node:sqlite): API, edge semantics, known differences, fixtures, Storage Explorer
+- `features/REQUEST_CONTEXT.md` - Client / edge / origin context: presets, per-app-type expansion, explicit-wins rules, Request Context panel
+- `features/RESOURCES.md` - Multi-app CDN resources: several apps on one request (one per hook, rules, HTTP-app origin), test and debugger API
+- `features/BUILT_IN_RESPONDER.md` - Built-in origin: echo, fixed response, served folder; `x-debugger-status` / `x-debugger-content` control headers
+- `features/HTTP_WASM_IMPLEMENTATION.md` - HTTP WASM runner, `fastedge-run` integration, process management, detection, `runnerType` override, UI
+- `features/HTTP_WASM_PREVIEW.md` - SPA preview: Live toggle, Open in Browser, runner port via WebSocket, real-time log streaming
+- `features/WEBSOCKET_IMPLEMENTATION.md` - Real-time sync between clients, event broadcasting
+- `features/FASTEDGE_IMPLEMENTATION.md` - FastEdge CDN integration, secrets, env vars
+- `features/PROPERTIES.md` - Property system, runtime calculation, property testing
+- `features/PRODUCTION_PARITY_HEADERS.md` - Header serialization, SDK format
+- `features/MULTI_VALUE_HEADERS.md` - Multi-value headers: HeaderMap/HeaderTuples/HeaderRecord, Set-Cookie correctness
+- `features/CONFIG_SHARING.md` - `fastedge-config.test.json` sharing
+- `features/CONFIG_EDITOR.md` - Config editor modal
+- `features/DOTENV.md` - Environment variables, dotenv toggle, `dotenvPath` (CDN + HTTP)
+- `features/CDN_VARIABLES_AND_SECRETS.md` - CDN env var/secret integration test
+- `features/SEND_HTTP_RESPONSE.md` - send_http_response local response short-circuit
+- `features/LOG_FILTERING.md` - Log filtering and display
+- `features/HYBRID_LOADING.md` - WASM path vs buffer loading, temp file handling
+- `features/WORKSPACE_WASM_AUTOLOAD.md` - Auto-loading the workspace wasm
 
 ### 🧪 Development (read when implementing/testing)
 
 **When to read**: Writing code, following patterns, testing changes
 
-- `IMPLEMENTATION_GUIDE.md` (1,102 lines) - Coding patterns, conventions, best practices
-- `TESTING_GUIDE.md` (350 lines) - How to test your changes
-- `development/INTEGRATION_TESTING.md` (~500 lines) - ✅ Integration testing with compiled WASM applications (JS + Rust basic + Rust wasi), parameterized multi-variant testing, HTTP test framework dogfooding
-- `TEST_PATTERNS.md` (825 lines) - Testing patterns and examples
-- `AI_AGENT_API_GUIDE.md` - Agent-specific notes (X-Source header, log filtering, TDD pointer); links to `docs/API.md` for full reference
-- `COMPONENT_STYLING_PATTERN.md` (355 lines) - React component UI patterns
+- `development/IMPLEMENTATION_GUIDE.md` - Coding patterns, conventions, best practices
+- `development/TESTING_GUIDE.md` - How to test your changes
+- `development/INTEGRATION_TESTING.md` - Integration testing with compiled WASM apps, multi-variant tests, dogfooding the test framework
+- `development/TEST_PATTERNS.md` - Testing patterns and examples
+- `development/AI_AGENT_API_GUIDE.md` - Agent-specific notes (X-Source header, log filtering); links to `docs/API.md`
+- `development/COMPONENT_STYLING_PATTERN.md` - React component UI patterns
 
-### 📖 Reference (search on-demand, don't read linearly)
+### 📖 Overview
 
-**When to read**: Debugging, understanding past decisions, historical context
-
-- `CHANGELOG.md` (~4,287 lines, Feb 2026+) - **Use grep to search**, don't read all
-- `legacy/CHANGELOG_ARCHIVE.md` (~1,371 lines, Jan 2026 and earlier) - archived entries
-- `PROJECT_OVERVIEW.md` (100 lines) - Lightweight project essentials
-- `PROJECT_DETAILS.md` (400 lines) - Deep dive into project details
-
-### 🔧 WASM/Technical (read when working with WASM)
-
-**When to read**: Debugging WASM, implementing host functions, understanding proxy-wasm ABI
-
-- `wasm/wasm-host-functions.md` (58 lines) - Host function implementations
-- `wasm/wasm-properties-code.md` (81 lines) - Property system WASM details
-- `wasm/wasm-change-header-code.md` (218 lines) - Header modification in WASM
-- `wasm/wasm-print-debugger.md` (132 lines) - Debug tools for WASM
+- `PROJECT_OVERVIEW.md` - Lightweight project essentials
+- `PROJECT_DETAILS.md` - Deep dive into project details
+- `DIRECTORY_STRUCTURE.md` - Repo layout
+- `VSCODE_BUNDLING.md` - Server bundling for the VSCode extension, auto-start, port auto-increment
 
 ### 📦 User-Facing Documentation (read when updating public API or docs)
 
@@ -95,25 +82,12 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 
 - `docs/INDEX.md` — Navigation hub, package exports, quick links to all docs
 - `docs/quickstart.md` — Getting started: install, interactive debugger, programmatic tests, low-level runner
-- `docs/API.md` — Full REST API reference (11 consumer-facing endpoints)
-- `docs/WEBSOCKET.md` — WebSocket protocol, 9 event types, connection lifecycle
+- `docs/API.md` — Full REST API reference
+- `docs/WEBSOCKET.md` — WebSocket protocol, event types, connection lifecycle
 - `docs/TEST_FRAMEWORK.md` — Test framework API: suites, assertions, CI integration
 - `docs/RUNNER.md` — Low-level runner API: factory functions, IWasmRunner interface, type definitions
 - `docs/TEST_CONFIG.md` — `fastedge-config.test.json` schema, dotenv, CDN and HTTP-WASM examples
 - `docs/DEBUGGER.md` — Debugger server CLI, programmatic startup, port config, health check
-- `VSCODE_BUNDLING.md` — Server bundling for VSCode extension, auto-start architecture, port auto-increment
-
-### 🚀 Future Enhancements (read when looking for "what's next")
-
-**When to read**: Planning new work, answering "what should we build next?", or picking up a new feature
-
-- `FUTURE_ENHANCEMENTS.md` (~50 lines) - Planned improvements and feature ideas (CLI config runner, batch mode, etc.)
-
-### 🗄️ Legacy/Archived (rarely needed)
-
-- `legacy/starter.md` (20 lines) - Old starter documentation
-- `legacy/backend-server.md` (27 lines) - Old backend notes
-- `legacy/CHANGELOG_ARCHIVE.md` (~1,371 lines) - Jan 2026 and earlier changelog entries
 
 ---
 
@@ -121,45 +95,43 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 
 ### Adding a New Feature
 
-1. Read `IMPLEMENTATION_GUIDE.md` (patterns and conventions)
+1. Read `development/IMPLEMENTATION_GUIDE.md` (patterns and conventions)
 2. Read relevant architecture doc section (`BACKEND_ARCHITECTURE.md` or `FRONTEND_ARCHITECTURE.md`)
-3. Grep `CHANGELOG.md` for similar past features
+3. Grep `context/features/` for similar features
 4. Read related feature docs if building on existing features
 
 ### Fixing a Bug
 
-1. Read feature-specific doc for the broken feature
-2. Grep `CHANGELOG.md` for the feature name or bug keywords
-3. Read `TESTING_GUIDE.md` if you need to add tests
+1. Read feature-specific doc for the broken feature (including its known differences from the edge)
+2. `git log --oneline --grep=<term>` for related changes
+3. Read `development/TESTING_GUIDE.md` if you need to add tests
 4. Check relevant architecture doc section if the bug involves system structure
 
 ### Refactoring Code
 
 1. Read relevant architecture doc (`BACKEND_ARCHITECTURE.md` or `FRONTEND_ARCHITECTURE.md`)
-2. Read `IMPLEMENTATION_GUIDE.md` for current patterns
-3. If refactoring UI components: Read `COMPONENT_STYLING_PATTERN.md`
-4. Grep `CHANGELOG.md` to understand past refactoring decisions
+2. Read `development/IMPLEMENTATION_GUIDE.md` for current patterns
+3. If refactoring UI components: Read `development/COMPONENT_STYLING_PATTERN.md`
+4. Design decisions behind the current shape are in the feature and architecture docs; `git log -S<code>` shows when code changed
 
 ### Understanding the System (New to Codebase)
 
-1. Read `PROJECT_OVERVIEW.md` (lightweight, 100 lines)
+1. Read `PROJECT_OVERVIEW.md`
 2. Read `BACKEND_ARCHITECTURE.md` and `FRONTEND_ARCHITECTURE.md` (skim structure, read relevant sections)
-3. Read `IMPLEMENTATION_GUIDE.md` (patterns you'll follow)
+3. Read `development/IMPLEMENTATION_GUIDE.md` (patterns you'll follow)
 4. Optionally read `PROJECT_DETAILS.md` for deep dive
 
 ### Working with WebSocket/Real-time Features
 
-1. Read `WEBSOCKET_IMPLEMENTATION.md`
-2. Read `STATE_MANAGEMENT.md` (state sync patterns)
-3. Grep `CHANGELOG.md` for "websocket" or "sync"
+1. Read `features/WEBSOCKET_IMPLEMENTATION.md`
+2. Read `architecture/STATE_MANAGEMENT.md` (state sync patterns)
 
 ### Working with WASM/Proxy-WASM
 
-1. Read relevant `wasm/*.md` file for your specific task
-2. Read `FASTEDGE_IMPLEMENTATION.md` (FastEdge context)
-3. Read `PRODUCTION_PARITY_HEADERS.md` if dealing with header display/injection
-4. Read `MULTI_VALUE_HEADERS.md` if dealing with host functions (add/replace/remove/get)
-5. Grep for examples in codebase
+1. Read `features/FASTEDGE_IMPLEMENTATION.md` (FastEdge context)
+2. Read `features/PRODUCTION_PARITY_HEADERS.md` if dealing with header display/injection
+3. Read `features/MULTI_VALUE_HEADERS.md` if dealing with host functions (add/replace/remove/get)
+4. Host functions live in `server/runner/HostFunctions.ts`; grep the codebase for examples
 
 ### Working with proxy_http_call / HTTP Callouts
 
@@ -170,9 +142,9 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 
 ### Working with HTTP WASM (Component Model)
 
-1. Read `features/HTTP_WASM_IMPLEMENTATION.md` (HTTP WASM runner architecture — note: API section is outdated, detection + legacy sync sections are current)
+1. Read `features/HTTP_WASM_IMPLEMENTATION.md` (HTTP WASM runner architecture)
 2. Read `BACKEND_ARCHITECTURE.md` (runner architecture section)
-3. Read `TESTING_GUIDE.md` if adding tests
+3. Read `development/TESTING_GUIDE.md` if adding tests
 
 ### Adding / Modifying Rust Test Applications
 
@@ -184,9 +156,9 @@ Generated from source code via `fastedge-plugin-source/generate-docs.sh`. Increm
 
 ### Working with HTTP WASM Preview / Live Mode / Logging
 
-1. Read `features/HTTP_WASM_PREVIEW.md` — full design rationale, data flow, files changed
+1. Read `features/HTTP_WASM_PREVIEW.md` — design rationale and data flow
 2. Key facts: runner port flows via `wasm_loaded` WS event → Zustand `httpRunnerPort`; live iframe points directly at `fastedge-run` (no proxy); `fastedge-run` stays alive between requests
-3. **Logging**: All `fastedge-run` stdout/stderr is streamed in real-time via `http_wasm_log` WebSocket events and appended to the log panel — covering both explicit Send requests and live mode asset requests. See "Real-Time Log Streaming" section in `HTTP_WASM_PREVIEW.md`.
+3. **Logging**: All `fastedge-run` stdout/stderr is streamed in real-time via `http_wasm_log` WebSocket events and appended to the log panel — covering both explicit Send requests and live mode asset requests.
 4. Run tests:
    - `pnpm run test:integration` - All tests (CDN + HTTP in parallel)
    - `pnpm run test:integration:http` - Only HTTP WASM tests (sequential)
@@ -199,7 +171,6 @@ Applies when: tests fail because HTTP apps are run as proxy-wasm (or vice versa)
 1. **Detection lives in**: `server/utils/wasmTypeDetector.ts` — uses `WebAssembly.compile()` failure for component-model binaries, plus export inspection (`incoming-handler`, `process`) and import inspection (`wasi:http/`, `wasi:io/`) for core-module HTTP binaries. Tests in `server/__tests__/unit/utils/wasmTypeDetector.test.ts`. Do not add detection logic elsewhere.
 2. **Override via `RunnerConfig`**: Add `runnerType: 'http-wasm'` or `runnerType: 'proxy-wasm'` to bypass detection entirely.
 3. **Two runner types**: `"http-wasm"` spawns `fastedge-run http` process; `"proxy-wasm"` uses Node WebAssembly API directly.
-4. Grep `CHANGELOG.md` for `"WASM Type Detection"` for full fix history (March 5, 2026).
 
 ### Writing Process, Path, Signal, or Shell Code
 
@@ -210,32 +181,32 @@ Applies when: tests fail because HTTP apps are run as proxy-wasm (or vice versa)
 
 ### Server Startup, Port Selection, and `bin/fastedge-debug.js`
 
-**Architecture (April 2026)**: `dist/server.js` unconditionally calls `startServer()` on load. This works for both the CLI (`bin/fastedge-debug.js` does `import("../dist/server.js")`) and VSCode extension (`fork()`). Library consumers use `dist/lib/` entry points which do not auto-start.
+`dist/server.js` unconditionally calls `startServer()` on load. This works for both the CLI (`bin/fastedge-debug.js` does `import("../dist/server.js")`) and the VSCode extension (`fork()`). Library consumers use `dist/lib/` entry points, which do not auto-start.
 
-1. `startServer()` probes ports 5179-5228 via HTTP `/health` check (50 slots, expanded from 10 in April 2026 for Codespaces / multi-session workflows); first available port wins
-2. Port file written to `{WORKSPACE_PATH || cwd()}/.fastedge-debug/.debug-port` (WORKSPACE_PATH defaults to `process.cwd()` so CLI users get port files too)
-3. Startup messages go to stderr (`console.error()`) so MCP stdio transport is not corrupted
-4. **Old pattern removed**: `require.main === module` guard was deleted because it fails in bundled CJS loaded via dynamic `import()`
+1. `startServer()` probes ports 5179-5228 via HTTP `/health` check (50 slots, enough for Codespaces / multi-session workflows); first available port wins
+2. Port file written to `{WORKSPACE_PATH || cwd()}/.fastedge-debug/.debug-port`
+3. Startup messages go to stderr (`console.error()`) so an MCP stdio transport is not corrupted
+4. No `require.main === module` guard: it fails when the bundled CJS is loaded via dynamic `import()`
 
-Key files: `server/server.ts` (startServer, port probing, port file), `bin/fastedge-debug.js` (CLI entry)
+Key files: `server/server.ts` (startServer, port probing, port file), `bin/fastedge-debug.js` (CLI entry). See `BACKEND_ARCHITECTURE.md` → "npm Package".
 
 ### Testing Changes
 
-1. Read `TESTING_GUIDE.md` (how to test)
-2. Read `TEST_PATTERNS.md` (testing patterns and examples)
+1. Read `development/TESTING_GUIDE.md` (how to test)
+2. Read `development/TEST_PATTERNS.md` (testing patterns and examples)
 3. Read feature-specific doc for the feature you're testing
 
 ### Working with Integration Tests
 
 1. Read `development/INTEGRATION_TESTING.md` (comprehensive integration testing guide)
    - **⚠️ MANDATORY**: Read the "Dogfood the Test Framework" section — all integration tests (CDN and HTTP) must use framework helpers (`runFlow`/`runHttpRequest` + assertion helpers from `server/test-framework/`), not raw `expect()` calls
-2. Read `TESTING_GUIDE.md` (overall testing approach)
-3. Read `TEST_PATTERNS.md` (testing patterns and conventions)
-4. Read relevant feature doc for what you're testing (e.g., `PROPERTY_IMPLEMENTATION_COMPLETE.md`)
+2. Read `development/TESTING_GUIDE.md` (overall testing approach)
+3. Read `development/TEST_PATTERNS.md` (testing patterns and conventions)
+4. Read relevant feature doc for what you're testing (e.g., `features/PROPERTIES.md`)
 
 ### CDN Variables and Secrets Integration Test
 
-✅ Complete — 14 tests passing (7 per variant: AS + Rust). Parameterized via `shared/variants.ts`.
+Parameterized via `shared/variants.ts` (AS + Rust).
 
 Test file: `server/__tests__/integration/cdn-apps/variables-and-secrets/variables-and-secrets.test.ts`
 WASM apps: `test-applications/cdn-apps/as/cdn-variables-and-secrets/` + `test-applications/cdn-apps/rust/cdn-variables-and-secrets/`
@@ -243,121 +214,76 @@ Variant system: `server/__tests__/integration/cdn-apps/shared/variants.ts`
 
 ### Writing CDN Integration Tests (choosing origin strategy)
 
-1. **Default**: Use `"built-in"` as targetUrl — no port allocation, no process spawning, ~160x faster
+1. **Default**: Use `"built-in"` as targetUrl — no port allocation, no process spawning, much faster
 2. Read `features/BUILT_IN_RESPONDER.md` for control headers (`x-debugger-status`, `x-debugger-content`)
 3. **Only use http-responder** when you need to validate real HTTP fetch behavior (network headers, connection handling)
 4. **Only use a real URL** when testing against a specific external service
 
 ### Working with send_http_response / Local Response Short-Circuit
 
-1. Read `features/SEND_HTTP_RESPONSE.md` — full design, runner implementation, test app, integration tests
-2. See `server/runner/ProxyWasmRunner.ts:279` for the short-circuit check after `onRequestHeaders`
-3. See `server/runner/HostFunctions.ts:58` for `localResponse` state and `proxy_send_local_response` host function
+1. Read `features/SEND_HTTP_RESPONSE.md` — design, runner implementation, test app, integration tests
+2. Short-circuit check after `onRequestHeaders` is in `server/runner/ProxyWasmRunner.ts`
+3. `localResponse` state and `proxy_send_local_response` are in `server/runner/HostFunctions.ts`
 4. Test app: `test-applications/cdn-apps/as/cdn-redirect/` — redirect example
 5. Integration tests: `server/__tests__/integration/cdn-apps/redirect/cdn-redirect.test.ts`
 
-### Planning New Work / "What's Next?"
-
-1. Read `FUTURE_ENHANCEMENTS.md` — prioritized list of planned features
-2. Grep `CHANGELOG.md` for related prior work
-3. Read relevant feature docs for context on existing implementation
-
 ### Working with Properties System
 
-1. Read `PROPERTY_IMPLEMENTATION_COMPLETE.md`
-2. Read `PROPERTY_TESTING.md` if testing
-3. Read `wasm/wasm-properties-code.md` for WASM details
+1. Read `features/PROPERTIES.md`
+2. Host side: `server/runner/PropertyResolver.ts`, `server/runner/HostFunctions.ts`
 
 ### API Changes or New Endpoints
 
 1. Read `docs/API.md` (canonical API reference — update this when endpoints change)
 2. Read `BACKEND_ARCHITECTURE.md` (API layer architecture)
-3. Grep `CHANGELOG.md` for similar API changes
 
 ### Working on the npm Package (@gcoredev/fastedge-test)
 
-1. **Always read first**: `features/NPM_PACKAGE_PLAN.md` (full 5-phase plan, current status, all specs)
-2. Read `BACKEND_ARCHITECTURE.md` (runner section) for Phase 2 (runner isolation)
-3. Read `docs/API.md` for Phase 3 (exports map aligns with API surface)
-4. Grep `CHANGELOG.md` for "npm" or "Phase" for history of what's been done
-5. Read `docs/TEST_FRAMEWORK.md` for the user-facing API surface (test framework + runner)
+1. Read `BACKEND_ARCHITECTURE.md` → "npm Package" (exports, build outputs, what is published)
+2. Read `docs/API.md` (exports map aligns with API surface)
+3. Read `docs/TEST_FRAMEWORK.md` for the user-facing API surface (test framework + runner)
 
 ---
 
 ## 🔍 Search Tips
 
-### Don't Read CHANGELOG.md Linearly
-
-It's ~4,287 lines (Feb 2026+)! Use grep instead. For Jan 2026 and earlier, grep `legacy/CHANGELOG_ARCHIVE.md`:
-
-```bash
-# Find when feature was implemented
-grep -i "feature-name" context/CHANGELOG.md
-
-# Find bug fixes
-grep -i "fix.*bug-keyword" context/CHANGELOG.md
-
-# Find recent changes to a file
-grep -i "filename" context/CHANGELOG.md
-```
-
-### Search Across Feature Docs
+### Behaviour and Decisions: grep the docs
 
 ```bash
 # Find all docs mentioning a topic
-grep -r "websocket" context/*.md
+grep -ril "websocket" context/
 
-# Find implementation patterns
-grep -r "pattern-name" context/IMPLEMENTATION_GUIDE.md
+# Behaviour and design decisions for a feature
+grep -rn "dotenv" context/features/
+
+# Find a section in a large doc
+grep -n "^## " context/development/IMPLEMENTATION_GUIDE.md
 ```
 
-### Use Section Headers in Large Docs
-
-Large docs like `IMPLEMENTATION_GUIDE.md` and architecture docs have clear section headers. Use grep to find the section you need:
+### History: git log
 
 ```bash
-# Find specific section
-grep -n "## Section Name" context/IMPLEMENTATION_GUIDE.md
+# Commits mentioning a term
+git log --oneline --grep=<term>
+
+# Commits that added or removed a piece of code
+git log --oneline -S<code>
+
+# History of one file
+git log --oneline -- server/runner/ProxyWasmRunner.ts
 ```
+
+See `SEARCH_GUIDE.md` for more patterns.
 
 ---
 
 ## 📊 Documentation Size Reference
 
-**Tiny** (read in full when needed):
+**Small** (read in full when needed): `PROJECT_OVERVIEW.md`, `DIRECTORY_STRUCTURE.md`, most `features/*.md`, `development/AI_AGENT_API_GUIDE.md`
 
-- PROJECT_OVERVIEW.md: ~100 lines
-- wasm-host-functions.md: ~58 lines
+**Medium** (read sections as needed): `development/TESTING_GUIDE.md`, `development/COMPONENT_STYLING_PATTERN.md`, `development/INTEGRATION_TESTING.md`, `PROJECT_DETAILS.md`
 
-**Small** (quick read):
-
-- DOTENV.md: ~169 lines
-- LOG_FILTERING.md: ~147 lines
-- CONFIG_SHARING.md: ~281 lines
-
-**Medium** (read sections as needed):
-
-- TESTING_GUIDE.md: ~350 lines
-- COMPONENT_STYLING_PATTERN.md: ~355 lines
-- PRODUCTION_PARITY_HEADERS.md: ~421 lines
-- development/INTEGRATION_TESTING.md: ~450 lines
-- PROPERTY_IMPLEMENTATION_COMPLETE.md: ~495 lines
-- WEBSOCKET_IMPLEMENTATION.md: ~586 lines
-- AI_AGENT_API_GUIDE.md: ~601 lines
-- FASTEDGE_IMPLEMENTATION.md: ~645 lines
-
-**Large** (search or read specific sections):
-
-- TEST_PATTERNS.md: ~825 lines
-- BACKEND_ARCHITECTURE.md: ~994 lines
-- IMPLEMENTATION_GUIDE.md: ~1,102 lines
-- ZUSTAND_ARCHITECTURE.md: ~1,300 lines
-- FRONTEND_ARCHITECTURE.md: ~1,500 lines
-- STATE_MANAGEMENT.md: ~1,969 lines
-
-**Very Large** (use grep, never read linearly):
-
-- CHANGELOG.md: ~4,287 lines (Feb 2026+; Jan 2026 and earlier in `legacy/CHANGELOG_ARCHIVE.md`)
+**Large** (search or read specific sections): `development/TEST_PATTERNS.md`, `development/IMPLEMENTATION_GUIDE.md`, `architecture/*.md`
 
 ---
 
@@ -367,26 +293,19 @@ grep -n "## Section Name" context/IMPLEMENTATION_GUIDE.md
 
 ```
 Read: IMPLEMENTATION_GUIDE.md + relevant architecture doc section + feature doc
-Grep: CHANGELOG.md for similar features
-Time: 5-10 minutes of reading vs. 20-30 minutes reading everything
+Grep: context/features/ for similar features
 ```
 
 **Pattern 2: Bug Fix**
 
 ```
 Read: Feature doc for broken feature + TESTING_GUIDE.md
-Grep: CHANGELOG.md for feature history
-Time: 3-5 minutes of reading
+Search: git log --oneline --grep=<feature>
 ```
 
 **Pattern 3: WASM Work**
 
 ```
-Read: Relevant wasm/*.md file + FASTEDGE_IMPLEMENTATION.md sections
-Grep: Codebase for examples
-Time: 5-7 minutes of reading
+Read: FASTEDGE_IMPLEMENTATION.md sections + relevant feature doc
+Grep: codebase for examples
 ```
-
----
-
-**Last Updated**: April 22, 2026

@@ -1,6 +1,5 @@
 # HTTP WASM Preview — Live Mode & Open in Browser
 
-**Status**: ✅ Complete (March 2026)
 **Affects**: `ResponsePanel`, `HttpWasmRunner`, `StateManager`, `httpWasmSlice`, `App.tsx`
 
 ---
@@ -84,23 +83,6 @@ timing dependency. The WebSocket approach is zero-cost and architecturally consi
 
 ---
 
-## Files Changed
-
-| File | Change |
-|------|--------|
-| `server/runner/HttpWasmRunner.ts` | Added `getPort(): number \| null` public getter |
-| `server/websocket/types.ts` | Added `runnerPort?: number \| null` to `WasmLoadedEvent` |
-| `server/websocket/StateManager.ts` | Added `runnerPort` param to `emitWasmLoaded()` |
-| `server/server.ts` | Passes `runnerPort` to `emitWasmLoaded()` on load; imports `HttpWasmRunner` |
-| `frontend/src/hooks/websocket-types.ts` | Mirrored `runnerPort` in frontend `WasmLoadedEvent` |
-| `frontend/src/stores/types.ts` | Added `httpRunnerPort: number \| null` to `HttpWasmState` + `setHttpRunnerPort` action |
-| `frontend/src/stores/slices/httpWasmSlice.ts` | Default value + `setHttpRunnerPort` action |
-| `frontend/src/App.tsx` | Wires `setHttpRunnerPort` from `wasm_loaded` event handler |
-| `frontend/src/components/common/ResponsePanel/ResponsePanel.tsx` | Live toggle + Open in Browser toolbar; `src` vs `srcDoc` switching |
-| `frontend/src/components/common/ResponsePanel/ResponsePanel.module.css` | Toolbar styles; preview height fix (600px, scrollable) |
-
----
-
 ## Preview Panel Sizing
 
 The `.htmlPreview` iframe uses `height: 600px` (not `height: 100%`). Using `height: 100%`
@@ -110,28 +92,7 @@ reveal the full page.
 
 ---
 
-## Active Tab Hover — Consistent Fix (Same Session)
-
-While working in this area, a global tab styling bug was also fixed: across all tab components,
-hovering an active tab showed the brand orange background with white/orange text — unreadable.
-
-**Fix applied to all 5 tab CSS files:**
-```css
-.tab.active:hover {
-  color: #1a1a1a;
-  background: rgba(255, 108, 55, 0.85);
-}
-```
-
-Files fixed: `ResponsePanel.module.css`, `HookStagesPanel.module.css`,
-`RequestInfoTabs.module.css`, `WasmLoader.module.css` (uses `.tabActive`),
-`ConfigEditorModal.module.css` (uses `.activeTab`).
-
----
-
----
-
-## Real-Time Log Streaming (March 2026)
+## Real-Time Log Streaming
 
 ### The Problem
 
@@ -194,28 +155,12 @@ no logs. The logs have already arrived (or are still arriving) via `http_wasm_lo
 `this.logs[]` is never used to drive the UI. The UI is driven exclusively by `http_wasm_log`
 WebSocket events.
 
-### Files Changed
-
-| File | Change |
-|------|--------|
-| `server/runner/HttpWasmRunner.ts` | `setupLogCapture()` calls `stateManager?.emitHttpWasmLog(log)` for every log line |
-| `server/runner/IStateManager.ts` | Added `emitHttpWasmLog()`; removed `logs` param from `emitHttpWasmRequestCompleted()` |
-| `server/runner/NullStateManager.ts` | Added `emitHttpWasmLog(): void {}` stub |
-| `server/websocket/types.ts` | Added `HttpWasmLogEvent`; removed `logs` from `HttpWasmRequestCompletedEvent` |
-| `server/websocket/StateManager.ts` | Added `emitHttpWasmLog()`; `emitHttpWasmRequestCompleted()` no longer includes logs in event payload |
-| `server/server.ts` | Removed `result.logs` from `emitHttpWasmRequestCompleted()` call |
-| `frontend/src/hooks/websocket-types.ts` | Mirrored server-side type changes; added `HttpWasmLogEvent` |
-| `frontend/src/stores/types.ts` | Added `appendHttpLogs()` to `HttpWasmActions` |
-| `frontend/src/stores/slices/httpWasmSlice.ts` | Added `appendHttpLogs` action; `executeHttpRequest` clears `httpLogs` at start |
-| `frontend/src/App.tsx` | Handles `http_wasm_log` via `appendHttpLogs`; `http_wasm_request_completed` updates response only |
-
----
-
-## Key Invariants for Future Work
+## Key Invariants
 
 - **`fastedge-run` stays alive** between requests. It only exits on `SIGINT`/`SIGTERM` from
   `HttpWasmRunner.cleanup()`. The live iframe relies on this — do not add single-shot logic.
-- **Runner port is dynamic** (8100–8199, allocated by `PortManager`). Never hardcode a port.
+- **Runner port is dynamic** (8100–8199, allocated by `PortManager`, unless pinned with
+  `httpPort`). Never hardcode a port.
   Always read `httpRunnerPort` from the Zustand store.
 - **Live mode resets to false** when a new WASM is loaded (local state in `ResponsePanel`).
   This is intentional: each new WASM load should default back to the safe static preview.

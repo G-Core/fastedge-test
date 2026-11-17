@@ -1,11 +1,6 @@
 # Workspace WASM Loading (VSCode Integration)
 
-**Status:** ✅ Implemented
-**Date:** February 12, 2026
-**Last Updated:** March 11, 2026
 **Feature:** WASM loading and UI state sync when running inside VSCode
-
----
 
 ## Overview
 

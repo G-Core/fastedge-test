@@ -120,92 +120,43 @@ await runner.load(wasmPath, {
 
 ---
 
-## Implementation Status
+## Behaviour
 
-### ✅ Completed (February 2026) — ProxyWasmRunner (CDN apps)
+### CDN apps (ProxyWasmRunner)
 
-- FastEdge host function implementation (`proxy_get_secret`, `proxy_dictionary_get`)
-- SecretStore with time-based rotation support
-- Dictionary for configuration values
-- Type-safe TypeScript interfaces
-- Integration into `HostFunctions.ts`
-- Dotenv file parsing and loading (`server/utils/dotenv-loader.ts`)
-- API endpoint updates (`/api/load` with `dotenvEnabled` parameter)
-- Frontend UI for dotenv toggle (`ServerPropertiesPanel` component)
-- Support for `.env`, `.env.secrets`, and `.env.variables` files
+- `loadDotenvIfEnabled()` reads `.env`, `.env.secrets` and `.env.variables` from `dotenv.path`
+  (CWD if unset) via `server/utils/dotenv-loader.ts`, and merges the values into the runner's
+  secret store and dictionary (dotenv wins over values already configured).
+- Apps read them with `proxy_get_secret` / `proxy_dictionary_get`.
+- The parser handles `#` comments, quoted values and empty values, and strips the
+  `FASTEDGE_VAR_SECRET_` / `FASTEDGE_VAR_ENV_` prefixes.
 
-### ✅ Completed (March 2026) — HttpWasmRunner (HTTP apps)
+### HTTP apps (HttpWasmRunner)
 
-- `dotenvPath?: string` added to `RunnerConfig`
-- `HttpWasmRunner` passes `--dotenv <path>` when `dotenvPath` is set, `--dotenv` (CWD) when just enabled
-- `createHttpWasmRunnerWithDotenv()` test helper added
-- Integration test coverage: `sdk-variables-and-secrets` suite (6 tests)
-- Test fixtures at `server/__tests__/integration/http-apps/sdk-variables-and-secrets/fixtures/.env`
+- The runner passes `--dotenv <path>` to `fastedge-run` (bare `--dotenv` = CWD); the binary reads
+  the files itself. A change takes effect when the process restarts (`applyDotenv()` restarts it).
 
-### ✅ Completed (March 2026) — ProxyWasmRunner `dotenvPath` support
+### API
 
-- `ProxyWasmRunner.load()` now reads `config.dotenvPath` and stores it as `this.dotenvPath`
-- `loadDotenvIfEnabled()` now uses `this.dotenvPath` instead of the hardcoded `"."`
-- `createTestRunnerWithDotenv()` helper added to `server/__tests__/integration/utils/test-helpers.ts`
+- `POST /api/load` takes `dotenv: { enabled, path }`. `enabled` defaults to `false` when omitted
+  (opt-in), and the server hands `{ enabled, path }` on to `runner.load()`.
+- `PATCH /api/dotenv` changes the setting for the loaded app (`runner.applyDotenv()`) without
+  re-uploading the WASM.
+- Path precedence on the server: client value → `WORKSPACE_PATH` (VS Code) → CWD. A relative path
+  is resolved before use (`resolveDotenvPath()`).
 
-### 🚧 In Progress — CDN variables-and-secrets integration test
+### UI: `DotenvPanel`
 
-All scaffold is in place but blocked on `proxy-wasm-sdk-as` publishing `getEnv()`:
-- Test app: `test-applications/cdn-apps/cdn-variables-and-secrets/`
-- Integration test: `server/__tests__/integration/cdn-apps/variables-and-secrets/`
-- See `context/features/CDN_VARIABLES_AND_SECRETS.md` for full status and how to complete
-
-### ✅ Completed (March 2026) — `dotenvPath` UI in `ServerPropertiesPanel`
-
-- `dotenvPath` promoted from programmatic-only to a first-class UI setting
-- New `.env directory` row below the dotenv notice, visible when dotenvEnabled is true
-- VSCode: Browse button → `openFolderPicker` postMessage → extension `showOpenDialog({ canSelectFolders: true })` → absolute path returned via `folderPickerResult`
-- Standalone browser: text input (browser APIs cannot return absolute paths from a folder picker)
-- `dotenvPath` added to `ConfigState`, `configSlice`, `TestConfig`, all API call sites, and all JSON schemas
-- `wasmSlice.loadWasm` reads `dotenvPath` from store via `get()` — no signature change to `loadWasm`
-- Path change fires `applyDotenv` immediately when WASM loaded; toggle change continues to do a full reload
-
-### ✅ Completed (March 18, 2026) — DotenvPanel standalone component + bug fixes
-
-- Dotenv UI extracted from `ServerPropertiesPanel` into `frontend/src/components/common/DotenvPanel/`
-- Used by both `ProxyWasmView` (CDN) and `HttpWasmView` (HTTP) — HTTP was previously missing server sync entirely
-- `setDotenvEnabled` and `setDotenvPath` made async in `configSlice`: call `applyDotenv` internally when `wasmPath !== null`
-- Views now pass store actions directly — no more duplicated inline wrappers
-- Fixed VSCode Browse button: `openFolderPicker` and `folderPickerResult` were missing from the webview wrapper script in `DebuggerWebviewProvider.ts`
-- Description text updated to `"Load runtime variables from dotenv path when enabled:"` (generic — covers all `.env*` file formats)
-- Dead state removed: `autoSave`, `isDirty`, `lastSaved`, `markDirty`, `markClean` (unbuilt save-config feature scaffolding)
-- Server precedence: client value → `WORKSPACE_PATH` → CWD
-
-### ✅ Completed (March 2026) — `DotenvPanel` shared component (refactor)
-
-- Dotenv toggle and path UI extracted from `ServerPropertiesPanel` into a new top-level `DotenvPanel` component
-- `DotenvPanel` is shared — sits below the `Request` panel in **both CDN and HTTP debugger views**
-- CDN (`ProxyWasmView`): `DotenvPanel` → `ServerPropertiesPanel` → `HookStagesPanel`
-- HTTP (`HttpWasmView`): `DotenvPanel` → Logging panel → Response panel
-- Toggle in `DotenvPanel` header (right-aligned); expanding the panel reveals the path selector
-- Panel always starts collapsed regardless of persisted `enabled` value
-- **Only user interactions change expand state**: clicking the header bar toggles expand/collapse; toggling the switch ON expands, toggling OFF collapses
-- Config loads (`loadFromConfig`) update the toggle visual state but do NOT expand or collapse the panel
-- `ServerPropertiesPanel` is now properties-only (toggle and path UI fully removed)
-- HTTP view now has full dotenv support — previously absent; uses simple store setters (dotenv is a CLI arg to `fastedge-run`, takes effect on next process start)
-- Component lives at `frontend/src/components/common/DotenvPanel/` following the standard folder pattern
-
-### ✅ Completed (March 18, 2026) — DotenvPanel: show resolved app root as default path label
-
-- Default display was showing hardcoded `"workspace root (default)"` — misleading, since the real default is the app root (nearest `.fastedge-debug/` directory, or `package.json`/`Cargo.toml`)
-- `DotenvPanel` now sends a `getAppRoot` message to the extension on mount and stores the response as `resolvedRoot`
-- When `path` is null, displays `resolvedRoot` (dimmed via `.defaultPath` style), falling back to `"app root (default)"` until the response arrives
-- All `"workspace root"` references updated to `"app root"` (display text, tooltips, non-VSCode placeholder)
-- Fixed vertical alignment issue: `.pathRow` changed from `align-items: center` to `align-items: baseline`
-- Added `.defaultPath` CSS class (color `#707070`) to distinguish default from user-set path
-
-### 📝 Notes
-
-- `dotenvEnabled` is the UI/API toggle — it's what the user controls
-- `dotenvPath` is now both a UI setting and a programmatic override
-- The two fields are intentionally separate: `dotenvEnabled` can be `true` without a path (defaults to CWD)
-- For `HttpWasmRunner`, dotenv loading happens inside `fastedge-run` (Rust), not Node.js
-- For `ProxyWasmRunner`, dotenv loading happens in Node.js via `dotenv-loader.ts`
+- `frontend/src/components/common/DotenvPanel/`, shared by the CDN and HTTP views.
+- The toggle sits in the panel header; the UI default is off. Switching it on expands the panel,
+  off collapses it; loading a config updates the toggle without expanding or collapsing.
+- `setDotenvEnabled` / `setDotenvPath` (config slice) call `applyDotenv` when a WASM is loaded.
+- `.env directory` row: in VS Code a Browse button opens a native folder dialog
+  (`openFolderPicker` → `folderPickerResult`); in a standalone browser it is a text input, since
+  browsers cannot return absolute paths from a folder picker.
+- When no path is set the panel shows the resolved app root (asked from the extension with
+  `getAppRoot`), falling back to "app root (default)".
+- `enabled` and `path` are separate on purpose: dotenv can be on without a path (CWD).
 
 ---
 
@@ -236,7 +187,7 @@ let api_url = self.get_property(vec!["dictionary", "API_URL"]);
 
 ---
 
-## Relative Path Resolution (April 2026)
+## Relative Path Resolution
 
 Config files can specify `dotenv.path` as a relative path (e.g., `"./fixtures"`). Relative paths are resolved **against the config file's directory**, not the server's CWD. This ensures the same config file works identically across all loading flows.
 
@@ -288,17 +239,17 @@ For both runner types, CLI args/direct config takes priority over dotenv files:
 
 ## Architecture Reference
 
-- `server/runner/IWasmRunner.ts` — `RunnerConfig` interface with `dotenvEnabled` and `dotenvPath`
+- `server/runner/IWasmRunner.ts` — `RunnerConfig` interface with `dotenv: { enabled, path }`
 - `server/runner/HttpWasmRunner.ts` — builds `--dotenv [path]` args, `dotenvPath` field
-- `server/runner/ProxyWasmRunner.ts` — `loadDotenvIfEnabled()` uses `this.dotenvPath`
+- `server/runner/ProxyWasmRunner.ts` — `loadDotenvIfEnabled()`
 - `server/utils/dotenv-loader.ts` — Node.js dotenv parser (ProxyWasmRunner only)
-- `server/schemas/api.ts` — `dotenvPath` in `ApiLoadBodySchema`
-- `server/schemas/config.ts` — `dotenvPath` in `TestConfigSchema`
+- `server/schemas/api.ts` — `dotenv` in the `/api/load` and `/api/dotenv` body schemas
+- `server/schemas/config.ts` — `dotenv` in `TestConfigSchema`
 - `server/server.ts` — precedence logic: client → `WORKSPACE_PATH` → CWD; `resolveDotenvPath()` resolves relative paths to absolute; `GET /api/config` resolves dotenv.path against config directory before returning
-- `frontend/src/stores/types.ts` — `dotenvPath` in `ConfigState`, `ConfigActions`, `TestConfig`
+- `frontend/src/stores/types.ts` — `dotenv` state in `ConfigState`, `ConfigActions`, `TestConfig`
 - `frontend/src/stores/slices/configSlice.ts` — `setDotenvPath`, restore/export
-- `frontend/src/stores/slices/wasmSlice.ts` — reads `dotenvPath` from store via `get()`
-- `frontend/src/api/index.ts` — `dotenvPath` forwarded in all relevant API calls
+- `frontend/src/stores/slices/wasmSlice.ts` — reads the dotenv path from the store via `get()`
+- `frontend/src/api/index.ts` — dotenv enabled/path forwarded in the load and dotenv API calls
 - `frontend/src/components/common/DotenvPanel/` — shared toggle + path selector (VSCode browse / browser text input); used in both CDN and HTTP views
 - `server/test-framework/suite-runner.ts` — `loadConfigFile()` resolves relative dotenv.path against config file directory
 - `FastEdge-vscode/src/debugger/DebuggerWebviewProvider.ts` — `openFolderPicker` / `folderPickerResult` handler; `getAppRoot` / `appRootResult` handler for default path display; sends `configDir` in `filePickerResult` message for relative path resolution

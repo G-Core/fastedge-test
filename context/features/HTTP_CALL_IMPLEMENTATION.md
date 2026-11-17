@@ -1,10 +1,5 @@
 # HTTP Callout (proxy_http_call) Implementation
 
-**Status**: ✅ Complete
-**Last Updated**: April 1, 2026
-
----
-
 ## Overview
 
 `proxy_http_call` is the proxy-wasm HTTP callout ABI. It lets a WASM binary dispatch an async HTTP request from within a hook (e.g. `onRequestHeaders`) and resume execution once the response arrives. This is the core mechanism for "side-car" patterns where CDN edge code calls a backend API during request processing.

@@ -56,38 +56,14 @@ dist/
 
 ## Runtime Path Resolution
 
-### server/utils/fastedge-cli.ts
+`findFastEdgeRunCli()` in `server/utils/fastedge-cli.ts` resolves the binary in this order (first that exists wins):
 
-```typescript
-function getBundledCliPath(): string {
-  // __dirname points to dist/ (location of server.js)
-  const cliBinDir = join(__dirname, "fastedge-cli");
-  // Result: dist/fastedge-cli/
+1. `FASTEDGE_RUN_PATH` environment variable (an error if set but missing)
+2. Bundled binary, anchored on the `@gcoredev/fastedge-test` package root: `dist/fastedge-cli/<binary>` (published npm layout), then `fastedge-run/<binary>` (source tree)
+3. Fallback relative to the server bundle: `fastedge-cli/` next to or one level above it. This covers the VSCode extension, which copies `dist/server.js` and `dist/fastedge-cli/` into its own tree without this package's `package.json`
+4. `PATH` (`which` / `where fastedge-run`)
 
-  // Then select platform-specific binary
-  return join(cliBinDir, "fastedge-run-linux-x64"); // Example for Linux
-}
-```
-
-**Path resolution**:
-- Running: `node dist/server.js`
-- `__dirname` = `/absolute/path/to/dist/`
-- `cliBinDir` = `/absolute/path/to/dist/fastedge-cli/`
-- Binary = `/absolute/path/to/dist/fastedge-cli/fastedge-run-linux-x64`
-
----
-
-## Why Not Keep as `fastedge-run/`?
-
-**Historical reasons**:
-- Original design expected directory named `fastedge-cli/`
-- Multiple codebases reference this name
-- Changing would require updates across multiple repos
-
-**Current approach**:
-- Source directory can be named anything
-- Always copied to `dist/fastedge-cli/` during build
-- Runtime always looks in `dist/fastedge-cli/`
+The runtime looks for `fastedge-cli/` (a generic name that the VSCode extension also expects); the source directory is `fastedge-run/`, and the build copies it across.
 
 ---
 
@@ -98,7 +74,7 @@ function getBundledCliPath(): string {
 ```bash
 # Download binaries from FastEdge-lib releases
 cd fastedge-run/
-curl -L -O https://github.com/G-Core/FastEdge-lib/releases/download/v2.5.0/...
+curl -L -O https://github.com/G-Core/FastEdge-lib/releases/download/<version>/...
 
 # Make executable (Unix)
 chmod +x fastedge-run-linux-x64
@@ -128,4 +104,4 @@ The GitHub Actions workflow automatically downloads all platform binaries:
 | `/fastedge-run/` | Source binaries | All platform binaries | Manually added or CI download |
 | `/dist/fastedge-cli/` | Runtime binaries | All platform binaries | Created during build |
 
-**Key Point**: Runtime always looks for `dist/fastedge-cli/`, so the build process must copy binaries there.
+**Key Point**: The published package and the VSCode extension find the binary in `dist/fastedge-cli/`, so the build must copy it there.

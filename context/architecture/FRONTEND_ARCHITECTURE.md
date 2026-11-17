@@ -2,306 +2,126 @@
 
 ## Overview
 
-The frontend is a React 19 + TypeScript application built with Vite. It provides a modern, type-safe interface with **adaptive UI** that supports both HTTP WASM and Proxy-WASM testing workflows.
+The frontend is a React 19 + TypeScript application built with Vite. Its UI adapts to the loaded binary: a CDN (proxy-wasm) view or an HTTP app view. See [HTTP_WASM_IMPLEMENTATION.md](../features/HTTP_WASM_IMPLEMENTATION.md) for the HTTP side.
 
-**✅ Adaptive UI** (February 10, 2026): Dual-view architecture with automatic switching between HTTP WASM and Proxy-WASM interfaces based on selected type. See [HTTP_WASM_UI.md](../features/HTTP_WASM_UI.md) for details.
-
-**✅ Real-Time Updates**: WebSocket integration (January 2026) provides instant synchronization with server state. All activity from UI interactions and AI agent API calls appears in real-time. See [WEBSOCKET_IMPLEMENTATION.md](../features/WEBSOCKET_IMPLEMENTATION.md) for details.
-
-**✅ Configuration Sharing** (February 2026): Load/save test configurations to share between UI and AI agents. See [CONFIG_SHARING.md](../features/CONFIG_SHARING.md) for details.
-
-**✅ Client-Side Log Filtering** (February 2026): Server returns all logs at Trace level. UI filters dynamically - change log level without re-running requests.
+- **Real-Time Updates**: WebSocket sync with the server; activity from the UI, VSCode and agents calling the REST API appears in every client. See [WEBSOCKET_IMPLEMENTATION.md](../features/WEBSOCKET_IMPLEMENTATION.md).
+- **Configuration Sharing**: Load/save `fastedge-config.test.json` to share with agents. See [CONFIG_SHARING.md](../features/CONFIG_SHARING.md).
+- **Client-Side Log Filtering**: the server returns all logs at Trace level; the UI filters, so changing the level needs no re-run.
 
 ## Technology Stack
 
-- **React 19.2.3**: UI framework with hooks
-- **TypeScript 5.4.5**: Type safety
-- **Vite 7.3.1**: Build tool and dev server
-- **Zustand 5.0.3**: State management with Immer middleware (migrated February 6, 2026)
-- **CSS Modules**: Component-scoped styling (migrated February 6, 2026)
-- **WebSocket**: Real-time server communication (ws protocol)
-- **Vitest**: Unit testing framework with 176 store tests
+- **React 19**: UI framework with hooks
+- **TypeScript**: Type safety
+- **Vite 7**: Build tool and dev server
+- **Zustand 5**: State management with Immer, persist and devtools middleware
+- **CSS Modules**: Component-scoped styling
+- **WebSocket**: Real-time server communication
+- **Vitest**: Unit tests (stores, utils, components, views)
+
+## Page Structure
+
+`App.tsx` has two pages, chosen with tabs at the top:
+
+- **Debugger**: the WASM loader, config buttons, and the view for the loaded app type:
+  - `views/ProxyWasmView` for a CDN app, `views/HttpWasmView` for an HTTP app, an empty state when nothing is loaded.
+  - The **Multi-app (CDN resource)** toggle (next to the page tabs) swaps the single-app debugger for `views/ResourceView`: several CDN apps on one request, with rules and an origin. Both stay mounted (one hidden), so switching keeps their state. With an HTTP app loaded the toggle is replaced by a note, since a resource takes CDN apps. See [RESOURCES.md](../features/RESOURCES.md).
+- **Storage Explorer**: `views/StorageExplorerView`, browsing and editing the local cache and Edge KV with no app loaded. See [STORES.md](../features/STORES.md).
+
+The whole page is wrapped in `DragDropZone` (drop a `.wasm` to load it, or a config file to apply it).
 
 ## Project Structure
 
 ```
 frontend/
 ├── src/
-│   ├── components/          # React components (domain-based organization)
-│   │   ├── common/          # Shared by both views (8 components)
-│   │   │   ├── WasmLoader/
-│   │   │   │   ├── WasmLoader.tsx       # File upload with type selector
-│   │   │   │   ├── WasmLoader.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── DictionaryInput/
-│   │   │   │   ├── DictionaryInput.tsx  # Postman-style key-value editor
-│   │   │   │   ├── DictionaryInput.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── RequestBar/
-│   │   │   │   ├── RequestBar.tsx       # Method + URL input
-│   │   │   │   ├── RequestBar.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── ResponseViewer/
-│   │   │   │   ├── ResponseViewer.tsx   # Smart response display
-│   │   │   │   ├── ResponseViewer.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── CollapsiblePanel/
-│   │   │   │   ├── CollapsiblePanel.tsx # Reusable collapsible wrapper
-│   │   │   │   ├── CollapsiblePanel.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── ConnectionStatus/
-│   │   │   │   ├── ConnectionStatus.tsx # WebSocket connection indicator
-│   │   │   │   ├── ConnectionStatus.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── JsonDisplay/
-│   │   │   │   ├── JsonDisplay.tsx      # Smart JSON renderer with diff
-│   │   │   │   ├── JsonDisplay.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── Toggle/
-│   │   │   │   ├── Toggle.tsx           # Reusable toggle switch
-│   │   │   │   ├── Toggle.module.css
-│   │   │   │   └── index.tsx
-│   │   │   └── LogsViewer/             # NEW (Feb 10, 2026)
-│   │   │       ├── LogsViewer.tsx       # Reusable logs viewer with filtering
-│   │   │       ├── LogsViewer.module.css
-│   │   │       └── index.tsx
-│   │   │
-│   │   ├── proxy-wasm/      # Proxy-WASM specific (6 components)
-│   │   │   ├── HeadersEditor/
-│   │   │   │   ├── HeadersEditor.tsx    # Headers editor wrapper
-│   │   │   │   ├── HeadersEditor.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── PropertiesEditor/
-│   │   │   │   ├── PropertiesEditor.tsx # Properties with country presets
-│   │   │   │   ├── PropertiesEditor.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── ServerPropertiesPanel/
-│   │   │   │   ├── ServerPropertiesPanel.tsx # Properties panel
-│   │   │   │   ├── ServerPropertiesPanel.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── RequestTabs/
-│   │   │   │   ├── RequestTabs.tsx      # Request config tabs
-│   │   │   │   ├── RequestTabs.module.css
-│   │   │   │   └── index.tsx
-│   │   │   ├── ResponseTabs/
-│   │   │   │   ├── ResponseTabs.tsx     # Response tabs (unused)
-│   │   │   │   ├── ResponseTabs.module.css
-│   │   │   │   └── index.tsx
-│   │   │   └── HookStagesPanel/
-│   │   │       ├── HookStagesPanel.tsx  # Hook execution viewer
-│   │   │       ├── HookStagesPanel.module.css
-│   │   │       └── index.tsx
-│   │   │
-│   │   └── http-wasm/       # HTTP WASM specific (2 components) - NEW
-│   │       ├── HttpRequestPanel/
-│   │       │   ├── HttpRequestPanel.tsx  # HTTP request configuration
-│   │       │   ├── HttpRequestPanel.module.css
-│   │       │   └── index.tsx
-│   │       └── HttpResponsePanel/
-│   │           ├── HttpResponsePanel.tsx # HTTP response display
-│   │           ├── HttpResponsePanel.module.css
-│   │           └── index.tsx
-│   │
-│   ├── views/               # Main view containers - NEW (Feb 10, 2026)
-│   │   ├── HttpWasmView/
-│   │   │   ├── HttpWasmView.tsx         # HTTP WASM main container
-│   │   │   ├── HttpWasmView.module.css
-│   │   │   └── index.tsx
-│   │   └── ProxyWasmView/
-│   │       ├── ProxyWasmView.tsx        # Proxy-WASM main container
-│   │       ├── ProxyWasmView.module.css
-│   │       └── index.tsx
-│   │
-│   ├── stores/              # Zustand state management
-│   │   ├── index.ts         # Main store with middleware stack
-│   │   └── slices/
-│   │       ├── requestSlice.ts   # Proxy-WASM request state (persisted)
-│   │       ├── wasmSlice.ts      # WASM loading + type tracking
-│   │       ├── resultsSlice.ts   # Proxy-WASM hook results (ephemeral)
-│   │       ├── configSlice.ts    # Proxy-WASM config (persisted)
-│   │       ├── uiSlice.ts        # UI state & tabs (partial persist)
-│   │       └── httpWasmSlice.ts  # HTTP WASM state - NEW (Feb 10, 2026)
-│   ├── hooks/
-│   │   ├── useWebSocket.ts  # WebSocket connection with auto-reconnect (314 lines)
-│   │   └── websocket-types.ts # Event type definitions
-│   ├── api/
-│   │   └── index.ts         # Backend API client
-│   ├── utils/
-│   │   ├── contentType.ts   # Auto content-type detection utility
-│   │   └── diff.ts          # JSON diff algorithms and utilities
-│   ├── types/
-│   │   └── index.ts         # TypeScript interfaces
-│   ├── App.tsx              # Main application component + WebSocket event handling
-│   ├── App.css              # Global styles + connection status styles
-│   └── main.tsx             # React entry point (StrictMode disabled for WebSocket stability)
-├── public/                  # Static assets (empty currently)
-├── index.html               # HTML entry point
-├── vite.config.ts           # Vite configuration
-├── tsconfig.json            # TypeScript config (extends ../tsconfig.json)
-├── tsconfig.node.json       # TypeScript config for Vite
-└── package.json             # type: "module"
+│   ├── components/
+│   │   ├── common/              # Shared by the views
+│   │   │   ├── CollapsiblePanel/    # Collapsible section wrapper
+│   │   │   ├── ConfigButtons/       # Load / save / edit config
+│   │   │   ├── ConnectionStatus/    # WebSocket connection indicator
+│   │   │   ├── DictionaryInput/     # Postman-style key-value editor
+│   │   │   ├── DotenvPanel/         # dotenv toggle and path
+│   │   │   ├── DragDropZone/        # Drop a .wasm or config file
+│   │   │   ├── JsonDisplay/         # JSON renderer with diff
+│   │   │   ├── LoadingSpinner/      # Shown during WASM type detection
+│   │   │   ├── LogLevelSelector/    # Log level dropdown
+│   │   │   ├── LogsViewer/          # Logs with level filtering
+│   │   │   ├── RequestContextPanel/ # Client / edge context (presets + overrides)
+│   │   │   ├── RequestPanel/        # RequestBar (method, URL, Send) + RequestInfoTabs (headers, body)
+│   │   │   ├── ResponsePanel/       # Final response: Body / Preview / Headers
+│   │   │   ├── StoreCallsList/      # Cache / Edge KV calls of a hook or request
+│   │   │   ├── StoresPanel/         # Stores of the loaded app
+│   │   │   ├── Tabs/                # Tab strip
+│   │   │   ├── Toggle/              # Toggle switch
+│   │   │   └── WasmLoader/          # Load by path or upload
+│   │   ├── proxy-wasm/          # CDN-only
+│   │   │   ├── HookStagesPanel/     # Per-hook Logs / Inputs / Outputs
+│   │   │   ├── OriginEditor/        # Origin picker: URL, echo, fixed response, served folder, app
+│   │   │   └── OriginSection/       # Origin section of the request context panel
+│   │   └── ConfigEditorModal/   # Config editor
+│   ├── views/
+│   │   ├── HttpWasmView/        # HTTP app: RequestPanel, DotenvPanel, RequestContextPanel, logs, ResponsePanel
+│   │   ├── ProxyWasmView/       # CDN app: RequestPanel, DotenvPanel, RequestContextPanel (origin, properties), HookStagesPanel, StoresPanel, ResponsePanel
+│   │   ├── ResourceView/        # Multi-app CDN resource
+│   │   └── StorageExplorerView/ # Storage Explorer page
+│   ├── stores/                  # Zustand store
+│   │   ├── index.ts             # Store with middleware stack
+│   │   └── slices/              # request, wasm, results, config, ui, httpWasm
+│   ├── hooks/                   # useWasm, useWebSocket, useWorkspaceFiles, websocket-types
+│   ├── api/index.ts             # Backend API client
+│   ├── utils/                   # contentType, diff, environment, filePath, token
+│   ├── types/                   # Shared TypeScript types
+│   ├── App.tsx                  # Pages, view switching, WebSocket event handling
+│   ├── App.css                  # Global styles
+│   └── main.tsx                 # React entry point (StrictMode disabled for WebSocket stability)
+├── index.html
+├── vite.config.ts
+├── tsconfig.json                # Extends ../tsconfig.json
+└── package.json                 # type: "module"
 ```
 
 ## Component Architecture
 
-**Domain-Based Organization** (February 10, 2026): Components reorganized by domain for clear separation and reusability:
-
 ### Component Organization
 
-**common/ - Shared Components (8)**:
-1. **WasmLoader** - File upload with type selector (HTTP WASM vs Proxy-WASM)
-2. **DictionaryInput** - Postman-style key-value editor
-3. **RequestBar** - Method + URL input
-4. **ResponseViewer** - Smart response display (JSON, HTML, images, etc.)
-5. **CollapsiblePanel** - Reusable collapsible wrapper
-6. **ConnectionStatus** - WebSocket status indicator
-7. **JsonDisplay** - JSON renderer with diff support
-8. **Toggle** - Reusable toggle switch
-9. **LogsViewer** - Logs viewer with filtering (NEW - Feb 10, 2026)
+Components are organized by domain:
 
-**proxy-wasm/ - Proxy-WASM Specific (6)**:
-1. **HeadersEditor** - Headers editing wrapper
-2. **PropertiesEditor** - Server properties with country presets
-3. **ServerPropertiesPanel** - Collapsible properties panel
-4. **RequestTabs** - Request configuration tabs (Headers/Body)
-5. **ResponseTabs** - Response display tabs (unused currently)
-6. **HookStagesPanel** - Hook execution viewer (Logs/Inputs/Outputs)
-
-**http-wasm/ - HTTP WASM Specific (2)** - NEW (Feb 10, 2026):
-1. **HttpRequestPanel** - HTTP request configuration (method, URL, headers, body)
-2. **HttpResponsePanel** - HTTP response display (body, headers, logs)
-
-**views/ - Main Containers (2)** - NEW (Feb 10, 2026):
-1. **HttpWasmView** - HTTP WASM main container (Postman-like interface)
-2. **ProxyWasmView** - Proxy-WASM main container (hook execution interface)
+- **common/**: shared by more than one view (HTTP, CDN, resource, Storage Explorer)
+- **proxy-wasm/**: CDN-only (hooks, origin)
+- **views/**: one container per view; the views compose components and talk to the store
 
 **Design Principles**:
-- ✅ Clear ownership - components belong to specific domains
-- ✅ Prevents coupling - domain-specific components can't accidentally depend on each other
-- ✅ Component reuse - common/ components shared by both views
-- ✅ Scalability - easy to add new WASM types
-- ✅ Maintainability - clear separation of concerns
+- Clear ownership: components belong to specific domains
+- Domain-specific components don't depend on each other
+- common/ components are reused by all views
 
 **CSS Modules**: All components use CSS modules with consistent structure:
 - Each component in its own folder: `ComponentName/ComponentName.tsx`
 - Scoped styles: `ComponentName.module.css`
 - Clean exports: `index.tsx` re-exports the component
-- No global style pollution, improved maintainability
+- No global style pollution
 
-### App.tsx (Main Router) - REFACTORED (Feb 10, 2026)
+### App.tsx
 
-**New Role**: Adaptive UI router that switches between views based on WASM type.
-
-**Routing Logic**:
+**Routing Logic** (Debugger page, single app):
 ```tsx
-{!wasmPath && <EmptyState />}
+{!loading && !wasmPath && <EmptyState />}
 {wasmPath && wasmType === 'http-wasm' && <HttpWasmView />}
 {wasmPath && wasmType === 'proxy-wasm' && <ProxyWasmView />}
 ```
 
 **Responsibilities**:
-- WebSocket connection management
-- Event routing to correct state slice
+- Page tabs (Debugger / Storage Explorer) and the Multi-app toggle
+- WebSocket connection management and event routing to the store
 - Dynamic title based on WASM type
-- Empty state when no WASM loaded
-- Load/Save Config (Proxy-WASM only)
+- Loader, config buttons, empty state
 
-**Production Parity Headers (February 2026):**
+### ProxyWasmView (CDN app)
 
-- **Browser Default Headers**: Opt-in defaults for user-agent, accept, accept-language, accept-encoding
-  - Disabled by default, developers enable as needed for testing
-  - Realistic browser values matching Firefox 147.0 on Linux
-- **Host Header**: Auto-calculated from target URL, shown as `<Calculated from URL>` placeholder
-  - Test-specific headers (x-inject-req-body, x-inject-res-body) removed from defaults
-  - Now only come from fastedge-config.test.json when needed for specific tests
-- See [PRODUCTION_PARITY_HEADERS.md](../features/PRODUCTION_PARITY_HEADERS.md) for details
+Top to bottom: `RequestPanel` (method, URL, Send; headers and body tabs, with opt-in browser default headers and `host` / `content-type` calculated placeholders), `DotenvPanel`, `RequestContextPanel` (client and edge context, the origin via `OriginSection`, and editable properties), `HookStagesPanel`, `StoresPanel`, `ResponsePanel`.
 
-```typescript
-const App = () => {
-  // Zustand store - all state centralized
-  const {
-    // Request state
-    method, url, requestHeaders, requestBody,
-    responseHeaders, responseBody,
-    setMethod, setUrl, setRequestHeaders, setRequestBody,
-
-    // WASM state
-    wasmPath, wasmFile, loading, error,
-    loadWasm, reloadWasm,
-
-    // Results state
-    hookResults, finalResponse,
-    setHookResults, setFinalResponse,
-
-    // Config state
-    properties, dotenv, logLevel,
-    setProperties, setDotenvEnabled, setLogLevel,
-    loadFromConfig, exportConfig,
-
-    // UI state
-    wsStatus, setWsStatus,
-  } = useAppStore();
-
-  // WebSocket connection
-  const { status } = useWebSocket({...});
-
-  return (
-    <div className="container">
-      <WasmLoader onFileLoad={(file) => loadWasm(file, dotenv.enabled)} />
-      <RequestBar
-        method={method}
-        url={url}
-        wasmLoaded={wasmPath !== null}
-        onMethodChange={setMethod}
-        onUrlChange={setUrl}
-        onSend={async () => {
-          // Apply auto content-type detection (Postman-like behavior)
-          const finalHeaders = applyDefaultContentType(requestHeaders, requestBody);
-
-          // Calls sendFullFlow API - executes all hooks + real HTTP fetch
-          const { hookResults, finalResponse } = await sendFullFlow(
-            url,
-            method,
-            { ...hookCall, request_headers: finalHeaders, logLevel }
-          );
-          setHookResults(hookResults);
-          setFinalResponse(finalResponse);
-        }}
-      />
-      <RequestTabs
-        headers={requestHeaders}
-        body={requestBody}
-        onHeadersChange={setRequestHeaders}
-        onBodyChange={setRequestBody}
-        defaultHeaders={{
-          host: "example.com",
-          "content-type": {
-            value: "",
-            enabled: false,
-            placeholder: "<Calculated at runtime>",
-          },
-          Authorization: {
-            value: "",
-            enabled: false,
-            placeholder: "Bearer <token>",
-          },
-        }}
-      />
-      <ServerPropertiesPanel
-        properties={properties}
-        onPropertiesChange={setProperties}
-      />
-      <HookStagesPanel
-        results={hookResults}
-        hookCall={hookCall}
-        logLevel={logLevel}
-        onLogLevelChange={setLogLevel}
-      />
-      <ResponseViewer response={finalResponse} />
-    </div>
-  );
-};
-```
+- **Production parity headers**: browser defaults (user-agent, accept, accept-language, accept-encoding) are offered disabled; `host` is calculated from the URL. See [PRODUCTION_PARITY_HEADERS.md](../features/PRODUCTION_PARITY_HEADERS.md).
+- **Properties**: explicit properties win over the client settings. Calculated `request.*` values from a run are kept in the store's separate `calculatedProperties` field (`setCalculatedProperties`) and shown in each hook's Inputs; they are never merged into the editable properties, so there is no stale feedback loop.
 
 ### CollapsiblePanel.tsx (Reusable Component)
 
@@ -338,13 +158,13 @@ export function CollapsiblePanel({
 }
 ```
 
-**Used by**: RequestTabs, HookStagesPanel, ResponseViewer
+**Used by**: RequestPanel, RequestContextPanel, HookStagesPanel, StoresPanel, ResponsePanel, HttpWasmView
 
 **Features**:
 
 - Consistent expand/collapse behavior across all panels
 - Rotating arrow indicator
-- Optional extra header content (used by ResponseViewer for status badges)
+- Optional extra header content (used by ResponsePanel for status badges)
 - Configurable initial state
 
 ### WasmLoader.tsx
@@ -386,7 +206,7 @@ export type DefaultValue =
       value: string;
       enabled?: boolean;
       placeholder?: string;
-      readOnly?: boolean; // NEW: Make row non-editable (Jan 31, 2026)
+      readOnly?: boolean; // Make row non-editable
     };
 
 interface DictionaryInputProps {
@@ -417,7 +237,7 @@ interface DictionaryInputProps {
   }
 }
 
-// Read-only (NEW: Jan 31, 2026)
+// Read-only
 {
   "request.url": {
     value: "",
@@ -498,7 +318,7 @@ When `disableDelete={true}`:
 - Delete buttons hidden (CSS: `.dictionary-row.no-delete` with 3-column grid)
 - No empty row at bottom
 - No auto-adding rows when typing
-- Used by PropertiesEditor for fixed property set
+- For fixed key sets
 
 **CSS Classes:**
 
@@ -510,10 +330,10 @@ When `disableDelete={true}`:
 - `.dictionary-key`, `.dictionary-value`: Input fields
 - `.dictionary-delete`: Delete button (✕)
 
-**Key Improvements (Jan 30, 2026):**
+**Design points:**
 
-1. **Removed crypto.randomUUID**: Simple counter-based IDs (`row-${++rowIdCounter}`)
-2. **Removed useEffect dependencies**: No longer reacts to `value` or `defaultValues` changes
+1. **Counter-based row IDs** (`row-${++rowIdCounter}`)
+2. **No `value` / `defaultValues` effect dependencies**: rows initialize once
 3. **Default values are ephemeral**: Used only for initial state, can be deleted
 4. **Smart delete button**: Prevents deleting last empty row
 5. **Checkbox requires only key**: Can enable rows with empty values
@@ -528,198 +348,23 @@ When `disableDelete={true}`:
 - `.dictionary-key`, `.dictionary-value`: Input fields
 - `.dictionary-delete`: Delete button (✕)
 
-**Bug Fix History:**
+**Why rows initialize once:** a `useEffect([value])` would re-initialize rows on every parent update and lose the enabled state. Rows come from a lazy `useState` initializer on mount, and `value` is not an effect dependency.
 
-Previously had a critical bug where `useEffect([value])` would re-initialize rows on every parent update, losing the enabled state. Fixed by:
+### RequestPanel
 
-1. Removing `value` from dependencies
-2. Using lazy initializer in `useState`
-3. Only initializing once on mount
+`common/RequestPanel`: `RequestBar` (method dropdown with GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS; URL or path; Send, disabled until a WASM is loaded) and `RequestInfoTabs` (Headers via `DictionaryInput` with default-header suggestions, Body textarea). Used by both the CDN and HTTP views.
 
-### HeadersEditor.tsx (Reusable)
+### RequestContextPanel
 
-Simplified wrapper around DictionaryInput with default headers support:
+`common/RequestContextPanel`: client and edge context (preset `de` / `nl` / `us` plus field overrides). Fields apply on blur / Enter. In the CDN view it also holds `OriginSection` and the properties editor. See [REQUEST_CONTEXT.md](../features/REQUEST_CONTEXT.md).
 
-```typescript
-interface HeadersEditorProps {
-  value: Record<string, string>;
-  onChange: (value: Record<string, string>) => void;
-  defaultHeaders?: Record<string, DefaultValue>;
-}
+### OriginSection / OriginEditor
 
-export const HeadersEditor = ({ value, onChange, defaultHeaders }: Props) => (
-  <DictionaryInput
-    value={value}
-    onChange={onChange}
-    keyPlaceholder="Header name"
-    valuePlaceholder="Header value"
-    defaultValues={defaultHeaders}
-  />
-);
-```
+`proxy-wasm/OriginSection` and `proxy-wasm/OriginEditor`: the request's origin, either the request URL (unset) or a declared origin: built-in echo, built-in fixed response (status, headers, text or file body), built-in served folder, a URL, or in a resource an HTTP app. See [BUILT_IN_RESPONDER.md](../features/BUILT_IN_RESPONDER.md).
 
-Previously was a text area for `key: value` format. Now uses DictionaryInput for Postman-style editing.
+### DotenvPanel / StoresPanel
 
-### RequestForm.tsx
-
-Configure request data:
-
-- Request headers (HeadersEditor → DictionaryInput)
-- Request body (textarea)
-- Request trailers (HeadersEditor → DictionaryInput)
-
-### ResponseForm.tsx
-
-Configure response data:
-
-- Response headers (HeadersEditor → DictionaryInput)
-- Response body (textarea)
-- Response trailers (HeadersEditor → DictionaryInput)
-
-### PropertiesEditor.tsx
-
-Proxy-WASM properties editor with country presets:
-
-**Purpose:**
-
-- Edit proxy-wasm property values for testing (request.path, request.country, etc.)
-- Provide country-specific presets for geo-location properties
-- Use DictionaryInput for consistent UX with headers editor
-
-**Features:**
-
-- **Country selector**: Radio buttons with flag emojis (🇱🇺 Luxembourg, 🇩🇪 Germany)
-- **Country presets**: Pre-populated geo data (coordinates, region, continent)
-- **Property list**: Based on Rust constants from proxy-wasm implementation
-- **Enabled/disabled states**: Calculated properties start unchecked
-- **Fixed property set**: Uses `disableDelete={true}` to prevent adding/removing properties
-
-**Available Properties (from Rust):**
-
-```typescript
-// Enabled by default (country-specific values)
-"request.country": "LU" / "DE"
-"request.city": "Luxembourg" / "Frankfurt"
-"request.geo.lat": "49.6116" / "50.1109"
-"request.geo.long": "6.1319" / "8.6821"
-"request.region": "Luxembourg" / "Hesse"
-"request.continent": "Europe"
-"request.country.name": "Luxembourg" / "Germany"
-
-// Disabled by default (calculated at runtime)
-"request.url": "<Calculated>"
-"request.host": "<Calculated>"
-"request.path": "<Calculated>"
-"request.scheme": "<Calculated>"
-"request.extension": "<Calculated>"
-"request.query": "<Calculated>"
-"request.x_real_ip": "<Calculated>"
-"request.asn": "<Calculated>"
-"request.var": "<Calculated>"
-```
-
-**Country Presets Structure:**
-
-```typescript
-type CountryPreset = {
-  code: string;
-  name: string;
-  city: string;
-  geoLat: string;
-  geoLong: string;
-  region: string;
-  continent: string;
-  flag: string;
-};
-
-const countryPresets: Record<string, CountryPreset> = {
-  luxembourg: { code: "LU", name: "Luxembourg", city: "Luxembourg", ... },
-  germany: { code: "DE", name: "Germany", city: "Frankfurt", ... },
-};
-```
-
-**Behavior:**
-
-- Switching countries updates all country-specific property values
-- Calculated properties (request.url, request.host, etc.) are read-only and enabled
-- User can edit geo-location properties (country, city, coordinates)
-- Properties are ordered with user-editable ones first, calculated ones at bottom
-- All interactions go through DictionaryInput component with `disableDelete={true}`
-
-### ServerPropertiesPanel.tsx (Collapsible)
-
-Dedicated panel for server-side proxy-wasm properties, positioned between Request and Hooks panels:
-
-**Purpose:**
-
-- Separate server properties from request configuration
-- Provide clear visual hierarchy
-- Start collapsed to reduce UI clutter
-
-**Features:**
-
-- **Title**: "Server Properties"
-- **Default state**: Collapsed (`defaultExpanded={false}`)
-- **Position**: Between RequestTabs and HookStagesPanel
-- **Content**: PropertiesEditor with country presets
-
-**Component:**
-
-```typescript
-interface ServerPropertiesPanelProps {
-  properties: Record<string, string>;
-  onPropertiesChange: (properties: Record<string, string>) => void;
-}
-
-export function ServerPropertiesPanel({
-  properties,
-  onPropertiesChange,
-}: ServerPropertiesPanelProps) {
-  return (
-    <CollapsiblePanel title="Server Properties" defaultExpanded={false}>
-      <PropertiesEditor value={properties} onChange={onPropertiesChange} />
-    </CollapsiblePanel>
-  );
-}
-```
-
-**Rationale for Separation:**
-
-- Properties are server-side concerns (geo-location, ASN, etc.), not part of HTTP request
-- Request panel focused purely on HTTP data (headers, body)
-- Better organization and discoverability
-- Reduces cognitive load with collapsed-by-default state
-
-### RequestTabs.tsx (Collapsible)
-
-Configure request data with tabbed interface wrapped in CollapsiblePanel:
-
-- **Tabs**: Headers, Body (Properties moved to ServerPropertiesPanel)
-- **Headers tab**: HeadersEditor for key:value input with default headers support
-- **Body tab**: Textarea for request body (JSON, XML, etc.)
-- **Collapsible**: Uses CollapsiblePanel with title "Request", defaultExpanded={true}
-- **Default headers**: Can pass `defaultHeaders` prop to provide preset suggestions
-
-**Default Headers Example:**
-
-````typescript
-<RequestTabs
-  headers={headers}
-  onHeadersChange={setHeaders}
-  defaultHeaders={{
-    host: "example.com",
-    "content-type": {
-      value: "",
-      enabled: false,
-      placeholder: "<Calculated at runtime>",
-    },
-    Authorization: {
-      value: "",
-      enabled: false,
-      placeholder: "Bearer <token>",
-    },
-  }}
-/>
+`DotenvPanel` toggles dotenv loading and sets its path (toggling reloads the WASM; see [DOTENV.md](../features/DOTENV.md)). `StoresPanel` shows the loaded app's cache and Edge KV after each run.
 
 ### HookStagesPanel.tsx (Collapsible)
 
@@ -733,7 +378,7 @@ Three-tab interface for comprehensive hook execution inspection, wrapped in Coll
 - **Log level selector**: Filter logs by severity (Trace, Debug, Info, Warn, Error, Critical)
 - **Collapsible**: Uses CollapsiblePanel with title "Logging", defaultExpanded={false}
 
-**Input/Output Separation (Updated February 5, 2026):**
+**Input/Output Separation:**
 
 The panel displays true server-side state for both inputs and outputs, including properties:
 
@@ -870,103 +515,32 @@ interface JsonDisplayProps {
 }
 ```
 
-**Used by**: HookStagesPanel (all tabs), ResponseViewer (JSON bodies)
+**Used by**: HookStagesPanel (all tabs), ResponsePanel (JSON bodies)
 
-### ResponseViewer.tsx (Collapsible)
+### ResponsePanel (Collapsible)
 
-Displays final HTTP response after all WASM processing, wrapped in CollapsiblePanel:
+`common/ResponsePanel` displays the final HTTP response after all WASM processing:
 
-- **Body tab**: Formatted text display
-  - JSON: Pretty-printed with 2-space indent
-  - HTML: Formatted with proper indentation
-  - XML: Formatted with proper indentation
-  - Plain text: As-is
-  - Hidden for binary content
-- **Preview tab**: Visual rendering
-  - HTML: Rendered in sandboxed iframe
-  - Images: Displayed with proper base64 decoding
-  - Other: "Preview not available" message
-  - Hidden for non-visual content (JSON, plain text, etc.)
-- **Headers tab**: Final response headers as key-value pairs
-- **Status display**: Color-coded HTTP status and content-type in header
-- **Smart defaults**: Auto-selects appropriate tab based on content type
-- **Collapsible**: Uses CollapsiblePanel with title "Response", status/contentType in headerExtra, defaultExpanded={true}
-
-### RequestBar.tsx
-
-Top navigation bar with integrated styling:
-
-- HTTP method dropdown (GET, POST) - integrated with URL input
-- URL input field - shares focus border with method selector
-- **"Send" button**: Triggers full flow execution (all hooks + HTTP fetch)
-- Disabled when WASM not loaded
-- Custom styling removes orange focus borders
+- **Body tab**: Formatted text (JSON pretty-printed, HTML/XML indented, plain text as-is); hidden for binary content
+- **Preview tab**: HTML in a sandboxed iframe, images decoded from base64; hidden for non-visual content
+- **Headers tab**: Final response headers
+- **Status display**: Color-coded HTTP status and content-type in the panel header
+- **Smart defaults**: Auto-selects the tab based on content type
 
 ## Custom Hooks
 
 ### useWasm.ts
 
-WASM functionality is now integrated into the Zustand WASM store slice.
+WASM loading lives in the Zustand WASM slice (`stores/slices/wasmSlice.ts`); `hooks/useWasm.ts` is a thin wrapper.
 
-Located at: `frontend/src/stores/slices/wasmSlice.ts`
-
-```typescript
-export const createWasmSlice: StateCreator<AppStore, [['zustand/immer', never]], [], WasmSlice> =
-  (set, get) => ({
-    wasmPath: null,
-    wasmBuffer: null,
-    wasmFile: null,
-    loading: false,
-    error: null,
-
-    loadWasm: async (file: File, dotenvEnabled: boolean = true) => {
-      set(state => { state.loading = true; state.error = null; });
-      try {
-        await uploadWasm(file, dotenvEnabled);
-        const buffer = await file.arrayBuffer();
-        set(state => {
-          state.wasmPath = file.name;
-          state.wasmBuffer = buffer;
-          state.wasmFile = file;
-          state.loading = false;
-        });
-      } catch (err) {
-        set(state => {
-          state.error = err instanceof Error ? err.message : "Failed to load WASM";
-          state.loading = false;
-        });
-      }
-    },
-
-    reloadWasm: async (dotenvEnabled: boolean = true) => {
-      const { wasmFile } = get();
-      if (!wasmFile) {
-        set(state => { state.error = "No WASM file loaded to reload"; });
-        return;
-      }
-      await get().loadWasm(wasmFile, dotenvEnabled);
-    },
-
-    clearWasm: () => set(state => {
-      state.wasmPath = null;
-      state.wasmBuffer = null;
-      state.wasmFile = null;
-      state.loading = false;
-      state.error = null;
-    }),
-  });
-```
-
-**Key Features:**
-- Stores original file for reloading
-- `reloadWasm()` function to re-upload without file picker
-- Support for dotenv toggle (environment variable injection)
-- Error handling and loading states
-- Integrated into centralized Zustand store
+- `loadWasm(fileOrPath, dotenvEnabled, dotenvPath?)`: a `File` is uploaded (buffer), a string is sent as a path (see [HYBRID_LOADING.md](../features/HYBRID_LOADING.md)); the server detects the type
+- `reloadWasm(dotenvEnabled, dotenvPath?)`: reload the same WASM (dotenv toggle, edge dc change) without the file picker
+- `setWasmLoaded(...)`: set the state when another client loaded the WASM (WebSocket `wasm_loaded`)
+- Loading, error and load-timing state for the loader
 
 ### useWebSocket.ts
 
-WebSocket connection management with auto-reconnect (314 lines). See [WEBSOCKET_IMPLEMENTATION.md](../features/WEBSOCKET_IMPLEMENTATION.md) for details.
+WebSocket connection management with auto-reconnect. See [WEBSOCKET_IMPLEMENTATION.md](../features/WEBSOCKET_IMPLEMENTATION.md) for details.
 
 ## State Management
 
@@ -974,12 +548,13 @@ State is managed using **Zustand** with a modular slices pattern:
 
 ### Architecture
 
-**5 Store Slices:**
+**Store Slices:**
 1. **Request Slice** - HTTP request/response configuration (persisted)
 2. **WASM Slice** - Binary loading and state (ephemeral)
 3. **Results Slice** - Hook execution results (ephemeral)
-4. **Config Slice** - Properties, settings, auto-save (persisted)
+4. **Config Slice** - Properties, calculated properties, settings (persisted, except calculated properties)
 5. **UI Slice** - UI state, tabs, panels (partially persisted)
+6. **HTTP WASM Slice** - HTTP app request and response
 
 **Store Location:** `frontend/src/stores/`
 
@@ -1014,11 +589,7 @@ const store = useAppStore();
 
 ### Testing
 
-Store logic is fully tested with 176 tests:
-- All actions validated
-- Persistence behavior verified
-- Async operations tested
-- 90%+ coverage on all slices
+Store logic is tested per slice (`stores/slices/*.test.ts`): actions, persistence behaviour, async operations.
 
 See [STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md) for complete documentation.
 
@@ -1026,13 +597,12 @@ See [STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md) for complete documentation.
 
 - [STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md) - Complete Zustand implementation guide
 - [TEST_PATTERNS.md](../development/TEST_PATTERNS.md) - Testing patterns including store tests
-- [CHANGELOG.md](../CHANGELOG.md) - Full migration details (Feb 6, 2026 entry)
 
 ## API Layer
 
 ### API Client (`api/index.ts`)
 
-Two main functions:
+Main functions (the client also covers config, stores, resources, the Storage Explorer and HTTP apps):
 
 #### uploadWasm(file: File): Promise<string>
 
@@ -1459,9 +1029,9 @@ await sendFullFlow(url, method, { ...hookCall, request_headers: finalHeaders });
 
 ## Styling
 
-**CSS Modules Migration Complete** (February 6, 2026):
+**CSS Modules**:
 
-- All 14 components migrated from global CSS to CSS modules
+- Every component uses a CSS module
 - Component-scoped styling with `.module.css` files
 - No naming conflicts or global pollution
 - Consistent folder structure across all components
@@ -1511,56 +1081,16 @@ pnpm start
 # Serves frontend from dist/frontend/
 ```
 
-## Key Differences from Old Vanilla JS Frontend
-
-### Before (Vanilla JS)
-
-- Single `app.js` file (~180 lines)
-- Manual DOM manipulation
-- String-based templates
-- No type safety
-- Global event listeners
-- Direct fetch calls throughout
-
-### After (React + TypeScript)
-
-- Component-based architecture
-- Declarative UI
-- JSX templates
-- Full type safety
-- Component-scoped logic
-- Centralized API layer
-- Reusable components (HeadersEditor)
-- Better state management
-- Development server with HMR
-
-## Future Enhancements
-
-### Potential Improvements
-
-1. ~~**State Management**: Add Zustand for complex state~~ ✅ **COMPLETED** (Feb 6, 2026)
-2. ~~**Testing**: Add Vitest for unit tests~~ ✅ **COMPLETED** (Feb 6, 2026)
-3. ~~**Persistence**: Save test configurations to localStorage~~ ✅ **COMPLETED** (Feb 6, 2026)
-4. **Styling**: Consider Tailwind CSS or styled-components
-5. **Validation**: Add Zod for runtime type validation
-6. **Error Handling**: Add React Error Boundaries
-7. **Import/Export**: Save/load test scenarios as JSON
-8. **Code Splitting**: Lazy load components
-9. **Accessibility**: Improve ARIA labels and keyboard navigation
-10. **Dark Mode**: Add theme toggle
-
 ## Notes
 
-- Vite requires Node.js 20.19+ or 22.12+ (currently warns about 20.12.2)
 - Frontend package.json has `"type": "module"` for ESM support
 - No `node_modules` in frontend/ - uses parent's via pnpm
 - Build output goes to parent directory for easier deployment
 - Backend serves both API and static frontend (single server deployment)
-- **G-Core SDK quirk**: Returns empty string `""` for missing headers, not `null`
+- **SDK quirk**: Returns empty string `""` for missing headers, not `null`
 - Content-type detection runs only when header not explicitly set by user
 - Default headers support three formats: string, {value, enabled}, {value, enabled, placeholder}
 - **Input/Output tracking**: Backend captures state before and after each hook execution
 - **JSON prettification**: Automatic formatting for JSON bodies based on content-type header
 - **Three-tab interface**: Logs (execution output), Inputs (before WASM), Outputs (after WASM)
 
-Last Updated: February 6, 2026 (Zustand state management implemented)

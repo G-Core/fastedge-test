@@ -1,6 +1,6 @@
 # Test Patterns and Best Practices
 
-This document outlines testing patterns, conventions, and best practices for the proxy-runner project.
+This document outlines testing patterns, conventions, and best practices for the fastedge-test project.
 
 ## Table of Contents
 

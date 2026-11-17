@@ -1,13 +1,10 @@
 # Integration Testing
 
-**Status**: ✅ Complete - Full Property Coverage (17/17 Properties Tested) + HTTP WASM Suite (JS + Rust basic + Rust wasi, dogfooding test framework) + send_http_response Short-Circuit
-**Last Updated**: March 31, 2026
-
 ---
 
 ## Overview
 
-The proxy-runner uses compiled WASM test applications for integration testing to ensure production parity with FastEdge CDN behavior. Integration tests verify the complete flow from WASM execution through property access control, header manipulation, request/response handling, and env var/secret injection.
+fastedge-test uses compiled WASM test applications for integration testing to ensure production parity with FastEdge CDN behavior. Integration tests verify the complete flow from WASM execution through property access control, header manipulation, request/response handling, and env var/secret injection.
 
 HTTP WASM tests run against **three language variants** (JS, Rust basic, Rust wasi) using parameterized test execution. Each variant produces identical behavior — the same assertions run against all available WASM binaries.
 
@@ -512,4 +509,4 @@ import {
 - `context/features/HTTP_WASM_IMPLEMENTATION.md` — HttpWasmRunner architecture
 - `context/development/TESTING_GUIDE.md` — Unit testing patterns
 - `context/development/TEST_PATTERNS.md` — Testing conventions
-- `context/features/PROPERTY_IMPLEMENTATION_COMPLETE.md` — Property access control details
+- `context/features/PROPERTIES.md` — Property access control details

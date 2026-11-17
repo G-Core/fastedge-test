@@ -1,10 +1,5 @@
 # send_http_response (Local Response Short-Circuit)
 
-**Status**: ✅ Complete — Runner support + additionalHeaders merge + CDN redirect test app + 5 integration tests
-**Last Updated**: May 18, 2026
-
----
-
 ## Overview
 
 `send_http_response` allows a CDN proxy-wasm app to return a response directly from a hook (e.g., `onRequestHeaders`) without contacting the origin server. The runner short-circuits the normal flow — no origin fetch, no subsequent hooks.
@@ -109,4 +104,4 @@ assertReturnCode(result.hookResults.onRequestHeaders, 1);
 
 This validates both the `send_http_response` feature AND the test framework API surface.
 
-> **Note (May 18, 2026):** `cdn-redirect` was updated so the `Location` header is passed via `additionalHeaders` (4th arg of `send_http_response`) rather than via `stream_context.headers.response.add()`. The `assertFinalHeader(result, 'location', ...)` assertion therefore directly covers the additionalHeaders merge path — not just the stream_context path.
+> **Note:** `cdn-redirect` passes the `Location` header via `additionalHeaders` (4th arg of `send_http_response`) rather than via `stream_context.headers.response.add()`. The `assertFinalHeader(result, 'location', ...)` assertion therefore directly covers the additionalHeaders merge path — not just the stream_context path.

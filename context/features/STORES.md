@@ -1,10 +1,5 @@
 # Stores: the local storage service (cache and Edge KV)
 
-**Status (November 2026):** core, HTTP API, service manager and the CDN host functions are
-in place; CDN and HTTP apps use the stores by default. Not yet done
-(`proxy_cache_*`, `proxy_kv_store_*`), and pointing fastedge-run at it. Until then nothing
-in the runner uses it.
-
 ## What it is
 
 One process per workspace holds the edge cache and Edge KV in SQLite (`node:sqlite`, so
@@ -65,7 +60,8 @@ cache is shared per account per POP by HTTP and CDN apps.
 - Crash: the next renewal restarts it on the **same port and token** (from the stale
   `service.json`), so fastedge-run processes pointed at it keep working. A call in flight
   during the crash fails; nothing is retried.
-- Calls use node:http, not fetch: `mockOrigins()` replaces the global fetch dispatcher.
+- Calls use node:http, not fetch: `mockOrigins()` replaces the global fetch dispatcher. The client
+  uses `agent: false`, so no pooled keep-alive socket keeps a process open.
 - A different protocol version already running for the root is a clear error, not a restart.
 
 ## API (protocol 1)
@@ -156,7 +152,7 @@ creating or deleting a store sets `detail.storeList`, and a loaded HTTP app then
 user goes back to the Debugger page. Tests:
 `createStores().pauseClock()`.
 
-**Importing a portal store (agents; shapes checked on preprod 2026-11-16):** list the store with
+**Importing a portal store (agents; response shapes as returned by the FastEdge API):** list the store with
 the FastEdge API, `GET /fastedge/v1/kv/{store_id}/data` (`limit` ≤ 200, `offset`) →
 `{ count, entries: [{ key, datatype, payload? }] }`, and map each entry by `datatype`:
 - `kv`: `payload: { value, encoding }` → `strings[key]` = `value` (`{ base64: value }` when
@@ -172,13 +168,13 @@ or `POST /api/storage/import` the same data.
 
 ## Edge semantics matched
 
-Measured on preprod (2026-11-05) and read from the FastEdge cache backend:
+As measured on the edge and read from the FastEdge cache backend:
 - default TTL = max TTL = 4 days; a larger TTL is clamped; `expire` with a negative TTL gets
   the default; `expire` on a missing key is `false`;
 - `incr` takes canonical decimal i64 only; an existing key keeps its TTL;
 - a stored empty value reads back empty, not missing;
 - `purge` clears the whole `dc` bucket; `purge-prefix` is a literal prefix (no glob);
-- KV `scan` uses the edge's glob (measured 2026-11-13, P7): `*`, `?`, `[..]`, `[^..]` (`!` is a
+- KV `scan` uses the edge's glob: `*`, `?`, `[..]`, `[^..]` (`!` is a
   literal), ranges (reversed too), `\` escapes; translated to SQLite `GLOB`. The edge rejects
   (error, not a match) a `]` outside a set, a `[` inside one (even escaped), an unclosed set,
   `[x-]` and a trailing `\`; `[]` matches nothing;
@@ -221,14 +217,14 @@ bounded log (5,000 calls, values not recorded, only sizes) and answers
 
 ## Known differences from the edge
 
-- **`incr` on a missing key** gets the default TTL and is purgeable. On the edge it currently
-  gets no TTL and escapes `purge` until a server restart (engine bug, being reported).
+- **`incr` on a missing key** gets the default TTL and is purgeable. On the edge it gets no
+  TTL and escapes `purge` until a server restart (an edge engine bug).
 - **Bloom filters are exact sets:** no false positives.
 - **Restart on another port:** a crashed service restarts on its old port; if another process
   took that port meanwhile, it listens on a new one. CDN runners follow; a running fastedge-run
   keeps the old address until its runner reloads.
 - **Cache keys** are scoped by `dc` only, not by account (one service = one account).
-- A KV store is attached when it has a fixture; there is no app-level store configuration yet.
+- A KV store is attached when it has a fixture; there is no app-level store configuration.
 
 ## Fixtures
 
@@ -246,7 +242,7 @@ name the file and field.
 
 ## Tests
 
-`server/__tests__/unit/stores/`: conformance cases from the preprod probes (P2–P6), Redis KV
+`server/__tests__/unit/stores/`: edge-conformance cases (probes P2–P6), Redis KV
 semantics, glob translation checked in SQLite, fixtures, the HTTP checks (token, `Host`,
 bad requests), and the manager (real service processes).
 `server/__tests__/integration/cdn-apps/stores/`: the Rust CDN app

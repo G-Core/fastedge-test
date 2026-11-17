@@ -2,55 +2,25 @@
 
 ## Overview
 
-Added log level filtering to the Proxy-WASM Runner to handle the G-Core SDK's use of WASI logging. The G-Core SDK uses `wasiLog()` instead of `proxy_log()`, which writes all logs to stdout via `fd_write`, bypassing traditional proxy-wasm log filtering.
+Log level filtering in the Proxy-WASM runner exists to handle the G-Core SDK's use of WASI logging. The G-Core SDK uses `wasiLog()` instead of `proxy_log()`, which writes all logs to stdout via `fd_write`, bypassing traditional proxy-wasm log filtering.
 
-## Changes Made
+## How it works
 
-### 1. Backend Changes
+### Capture (server)
 
-#### HostFunctions.ts
+- `HostFunctions.ts`: `LogLevel` enum Trace(0) … Critical(5). `proxy_get_log_level` /
+  `proxy_set_log_level` are implemented; the host level defaults to Trace, so the server keeps
+  every log line.
+- `MemoryManager.captureFdWrite()`: WASI stdout/stderr lines are captured as logs. A leading
+  `[TRACE]` / `[DEBUG]` / `[INFO]` / `[WARN]` / `[ERROR]` / `[CRITICAL]` marker sets the level;
+  without one the line is Debug (1).
+- The server does not filter: every log goes to the client with its level.
 
-- Added `LogLevel` enum with levels: Trace(0), Debug(1), Info(2), Warn(3), Error(4), Critical(5)
-- Added `currentLogLevel` tracking (defaults to Trace to show all logs)
-- Implemented `proxy_get_log_level` host function
-- Implemented `proxy_set_log_level` host function
-- Added `shouldLog(level)` method for filtering
-- Modified `proxy_log` to filter based on current log level
+### Filter (UI)
 
-#### MemoryManager.ts
-
-- Updated `captureFdWrite()` to attempt parsing log level from WASI output
-- Supports format: `[LEVEL] message` where LEVEL is TRACE, DEBUG, INFO, WARN, ERROR, or CRITICAL
-- Falls back to level 1 (debug) if no level marker found
-
-#### ProxyWasmRunner.ts
-
-- Modified `callHook()` to accept `logLevel` parameter
-- Sets log level before hook execution
-- Filters logs before returning results
-
-#### types.ts
-
-- Added `logLevel?: number` to `HookCall` type
-
-#### server.ts
-
-- Updated `/api/call` endpoint to accept and pass `logLevel` from request body
-- Defaults to level 2 (Info) if not specified
-
-### 2. Frontend Changes
-
-#### index.html
-
-- Added log level selector dropdown in Hooks section
-- Options: Trace, Debug, Info (default), Warn, Error, Critical
-- Added explanatory text: "Only logs at or above this level will be shown"
-
-#### app.js
-
-- Added `logLevel` DOM reference
-- Updated both "Run All Hooks" and individual hook handlers to include `logLevel` in payload
-- Updated log display to include "critical" level
+- `LogLevelSelector` sets `logLevel` in the config slice (default Info, 2); it is saved in and
+  restored from config files.
+- `LogsViewer` shows only entries with `level >= logLevel`, color-coded by level.
 
 ## Log Levels
 
@@ -65,39 +35,8 @@ Added log level filtering to the Proxy-WASM Runner to handle the G-Core SDK's us
 
 ## Usage
 
-### From UI
-
-1. Select desired log level from dropdown (defaults to "Info")
-2. Run hooks as normal
-3. Only logs at or above the selected level will be displayed
-
-### From API
-
-```javascript
-POST /api/call
-{
-  "hook": "onRequestHeaders",
-  "request": { ... },
-  "response": { ... },
-  "properties": { ... },
-  "logLevel": 2  // 0=trace, 1=debug, 2=info, 3=warn, 4=error, 5=critical
-}
-```
-
-### From WASM (G-Core SDK)
-
-The SDK automatically uses `wasiLog()` which the runner now captures and parses. If your WASM code uses:
-
-```typescript
-log(LogLevelValues.info, "onRequestHeaders >> info");
-```
-
-The runner will:
-
-1. Capture the stdout output
-2. Attempt to parse log level (if marked as `[INFO]` or similar)
-3. Filter based on the current `logLevel` setting
-4. Display only if level ≥ current filter level
+Select the level in the logs panel; only logs at or above it are shown. Changing it re-filters the
+logs already received, without re-running the request.
 
 ## Example
 
@@ -118,9 +57,8 @@ Would only show Info, Warn, Error, and Critical logs.
 
 1. **WASI Logging**: The G-Core SDK uses WASI `fd_write` for logging instead of `proxy_log`, so we capture and parse stdout
 2. **Format Detection**: We attempt to detect log level markers like `[INFO]`, `[DEBUG]`, etc. in the output
-3. **Default Level**: Set to Info (2) to hide verbose trace/debug output by default
-4. **Backwards Compatible**: If no `logLevel` is specified, defaults to Info (2)
-5. **Host Functions**: Both `proxy_get_log_level` and `proxy_set_log_level` are now implemented
+3. **Default Level**: The UI starts at Info (2) to hide verbose trace/debug output
+4. **Host Functions**: `proxy_get_log_level` and `proxy_set_log_level` are implemented
 
 ## Testing
 
@@ -137,11 +75,3 @@ Expected results:
 - **Info**: See 5 messages (info, warn, error, critical, header print)
 - **Warn**: See 4 messages (warn, error, critical, header print)
 - **Error**: See 3 messages (error, critical, header print)
-
-## Future Enhancements
-
-1. Add color coding for different log levels in the UI
-2. Add per-hook log level override
-3. Save log level preference to localStorage
-4. Add regex filtering for log content
-5. Add export logs functionality

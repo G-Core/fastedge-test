@@ -1,8 +1,5 @@
 # Multi-Value Header Support
 
-**Status:** ✅ Implemented
-**Landmark changes:** 2026-04-01 (internal tuple storage) + 2026-04-22 (lossless wire projection, Set-Cookie correctness, AS app ported in-repo)
-
 ## Overview
 
 Multi-valued HTTP headers — where the same header name appears multiple times (e.g. `Set-Cookie`, or the Proxy-WASM ABI's `add_header("x-foo", a)` + `add_header("x-foo", b)`) — are preserved end-to-end through the test runner without lossy joining or last-wins truncation. `Set-Cookie` specifically is surfaced as a `string[]`, matching Node's `IncomingHttpHeaders` and RFC 6265 §3.
@@ -11,15 +8,10 @@ Multi-valued HTTP headers — where the same header name appears multiple times 
 
 Two requirements converge here:
 
-1. **Proxy-WASM ABI compliance.** The Rust FastEdge SDK's `cdn/headers` example exercises every header host function (`add`, `replace`, `remove`, `get_headers`, `get_header`) and validates their behaviour against the real FastEdge CDN (nginx-based proxy-wasm runtime). Against the original runner this exposed three bugs:
-   - Multi-value `add_header` comma-joined values into one entry
-   - `remove_header` deleted entries outright instead of setting them empty (nginx semantics)
-   - `remove` on a non-existent header created a phantom empty entry
-
-   **Superseded 2026-11:** the edge changed since (FastEdge v0.8.5: empty or missing value → `NotFound`; v0.9.11: header reads answered from a FastEdge-side cache where remove deletes). The runner now matches the measured edge: `remove` deletes, missing or empty `get` → `None`. See "Key implementation details".
+1. **Proxy-WASM ABI compliance.** The Rust FastEdge SDK's `cdn/headers` example exercises every header host function (`add`, `replace`, `remove`, `get_headers`, `get_header`) and validates their behaviour against the FastEdge CDN (nginx-based proxy-wasm runtime): multi-value `add_header` keeps separate entries (no comma-joining), `remove` deletes every entry for the key, and `get` on a missing or empty header reads `None` (FastEdge v0.8.5+: empty or missing value → `NotFound`; v0.9.11+: header reads answered from a FastEdge-side cache where remove deletes). See "Key implementation details".
 2. **RFC 6265 §3 `Set-Cookie` correctness.** `Set-Cookie` is the canonical exception to HTTP's "combine duplicates with commas" rule. Browsers and every ecosystem tool (Node `http`, undici, supertest, axios, fetch's `Headers.getSetCookie()`) model it as an array. Collapsing multiple Set-Cookies to one string silently drops cookies — tests on a handler that sets `sid=…` plus `theme=…` would see only the last one.
 
-Both requirements are now satisfied in the same pipeline.
+Both requirements are satisfied in the same pipeline.
 
 ## Type layers
 
@@ -172,7 +164,7 @@ Both strict-validation variants:
 
 The Rust app additionally exercises `_bytes` API variants (the AS SDK has no byte APIs).
 
-**Historical note (April 2026):** The AS strict-validation app was previously built from the cross-repo sibling `proxy-wasm-sdk-as/examples/headers/` and hand-copied to `wasm/cdn-apps/as/headers/headers.wasm` — it wasn't tracked in git and wasn't wired into any in-repo build. Ported into `fastedge-test` in the 2026-04-22 change so the repo is genuinely self-contained. The port dropped a latent AS-only bug in the sibling's `hostHeader && hostHeader === ""` 551 check: AS strings are object references and always truthy, so the check would fire on valid empty-host inputs; the SDK's `get()` returns a non-nullable `string` anyway, so missing and empty can't be distinguished — the Rust version's `is_none()` on an `Option` does the job, but AS has no equivalent.
+The AS strict-validation app lives in this repo (`test-applications/cdn-apps/as/cdn-headers/`). It omits the Rust app's 551 empty-host check: AS strings are always truthy and the AS SDK's `get()` returns a non-nullable `string`, so missing and empty cannot be distinguished.
 
 ### HTTP-WASM
 
@@ -209,7 +201,7 @@ Rust-only `_bytes` variant assertions stay behind the `hasBytesVariants` flag be
 
 ### `remove` behaviour
 
-`proxy_remove_header_map_value` deletes every entry for the key; a later `get` reads `None` and `get_headers` does not list it, in both phases. This is what the guest sees on the edge (measured 2026-11, preprod and prod).
+`proxy_remove_header_map_value` deletes every entry for the key; a later `get` reads `None` and `get_headers` does not list it, in both phases. This is what the guest sees on the edge.
 
 ### Missing or empty `get`
 
@@ -223,38 +215,28 @@ On the real FastEdge CDN, response headers are accessible during `onRequestHeade
 
 The `onResponseHeaders` test fixtures pass `host: "example.com"`. The Rust app returns 551 if the response `host` reads `None`, and an empty value now reads `None`.
 
-## Files touched (historical summary)
+### Request-phase response headers merged with the origin's
 
-**2026-04-01 — Internal tuple storage:**
-- `server/runner/types.ts` — added `HeaderTuples`
-- `server/runner/HeaderManager.ts` — tuple API methods
-- `server/runner/HostFunctions.ts` — tuple-based internal storage, all `proxy_*` header fns rewritten
-- `test-applications/cdn-apps/rust/cdn-headers/src/lib.rs` — strict validation app, added to workspace
-- `server/__tests__/integration/cdn-apps/headers/multi-value-headers.test.ts` — new integration test
-- `server/__tests__/unit/runner/HeaderManager.test.ts` — tuple method unit tests
+Response headers a hook adds in the request phase are append-merged with the origin's
+(`HeaderManager.appendMerge` in `cdnFlow.ts`): a name on both sides becomes a `string[]`, the
+request-phase value first. Why: the runner only sees cumulative header state after each hook, so
+it cannot tell `add_http_response_header` from `replace_http_response_header`. Append is right for
+`add_` (the documented pattern) and lossy only for `replace_`. The inner merge of the
+`onRequestHeaders` and `onRequestBody` outputs is a plain overwrite, since both are cumulative
+snapshots of the same app.
 
-**2026-04-22 — Lossless wire projection, Set-Cookie correctness, AS app ported:**
-- `server/runner/types.ts` — added `HeaderRecord`; widened hook types
-- `server/runner/HeaderManager.ts` — `tuplesToRecord` lossless; added `firstValue`, `flattenToMap`; widened `normalize` / `recordToTuples`
-- `server/runner/HttpWasmRunner.ts` — extracted pure `parseFetchHeaders`; uses `getSetCookie()`
-- `server/runner/IWasmRunner.ts` — `HttpResponse.headers: IncomingHttpHeaders`
-- `server/runner/ProxyWasmRunner.ts` — three fetch sites fixed (two `callFullFlow` + one `proxy_http_call`); `buildHookInvocation` header count matches tuple count
-- `server/runner/HostFunctions.ts` — `httpCallResponse.headers: HeaderTuples`; `setHttpCallResponse` accepts all three shapes
-- `server/runner/PropertyResolver.ts` — widened to `HeaderRecord`, uses `firstValue` at property reads
-- `server/runner/IStateManager.ts`, `server/websocket/StateManager.ts`, `server/websocket/types.ts` — wire-format widened
-- `server/test-framework/assertions.ts` — `string | string[]` expected; `.includes()` / exact-array semantics
-- `frontend/src/hooks/websocket-types.ts`, `frontend/src/types/index.ts`, `frontend/src/stores/types.ts`, `frontend/src/api/index.ts` — frontend wire types mirrored
-- `frontend/src/components/common/ResponsePanel/ResponsePanel.tsx` — one row per multi-valued header value
-- `frontend/src/components/proxy-wasm/HookStagesPanel/HookStagesPanel.tsx`, `frontend/src/App.tsx` — first-value coercion at display boundaries
-- `test-applications/cdn-apps/rust/cdn-headers/src/lib.rs` — two `add_http_response_header("set-cookie", ...)` in `onResponseHeaders`
-- `test-applications/cdn-apps/as/cdn-headers/assembly/headers.ts` — **new, ported from sibling**; two `stream_context.headers.response.add("set-cookie", …)` in `onResponseHeaders`
-- `test-applications/cdn-apps/as/cdn-headers/package.json` — `build:headers` + `copy:headers` scripts
-- `test-applications/http-apps/{js,rust/basic,rust/wasi}/http-responder/` — `x-set-cookies` branch emits two Set-Cookie headers
-- `server/__tests__/unit/runner/HttpWasmRunner.test.ts` — new file
-- `server/__tests__/integration/http-apps/http-responder/http-responder.test.ts` — Set-Cookie test added to all 3 variants
-- `server/__tests__/integration/cdn-apps/headers/multi-value-headers.test.ts` — Set-Cookie + `new-header-03` string[] assertions (no variant gate)
-- `schemas/*.schema.json` — regenerated; `http-response.schema.json` now references Node's `IncomingHttpHeaders`
-- `docs/RUNNER.md`, `docs/TEST_FRAMEWORK.md`, `docs/WEBSOCKET.md`, `docs/API.md` — updated
+### Trailers
+
+The edge never calls `proxy_on_request_trailers` / `proxy_on_response_trailers`, and neither does
+the runner. Trailer (and gRPC) header maps return `Unimplemented`; the Rust SDK panics on that, as
+on the edge, which with `interrupt_on_error` ends the request with 531.
+
+### Known divergences (deliberately not copied)
+
+- On the edge, after a rejected header write, reads return the written value. The runner leaves
+  the headers unchanged (`unsupportedMapStatus()` in `HostFunctions.ts`).
+- On the edge, in body hooks, reading a missing response header returns `BadArgument` (Rust SDK
+  getters panic). The runner returns `NotFound`.
 
 ## Testing
 
@@ -281,4 +263,4 @@ pnpm test
 | 555 | Response header count wrong | Unexpected number of response headers |
 | 556 | Response header value wrong | Specific header name/value validation failed |
 
-The AS port deliberately omits the 551 check — the AS SDK's `get()` returns non-nullable `string` with no way to distinguish missing from empty, and the sibling's JS-style truthiness check was always broken under AS string semantics. Rust keeps the check because `Option::is_none()` discriminates correctly.
+The AS app deliberately omits the 551 check — the AS SDK's `get()` returns non-nullable `string` with no way to distinguish missing from empty. Rust keeps the check because `Option::is_none()` discriminates correctly.

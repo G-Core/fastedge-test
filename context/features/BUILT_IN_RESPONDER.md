@@ -1,17 +1,12 @@
 # Built-In Responder
 
-**Status**: Complete
-**Last Updated**: April 1, 2026
-
----
-
 ## Overview
 
 The built-in responder generates a local origin response inside the CDN proxy-wasm runner, eliminating the need to spawn an external HTTP service (like `http-responder`) for tests that only care about WASM hook behavior.
 
 **Trigger**: Pass `"built-in"` (shorthand) or `"http://fastedge-builtin.debug"` (canonical URL) as the target URL.
 
-The shorthand `"built-in"` is normalised to `http://fastedge-builtin.debug` early in the runner so all downstream code (URL parsing, pseudo-header derivation, property extraction) works with a valid URL. The canonical URL is defined as `BUILTIN_URL` and the shorthand as `BUILTIN_SHORTHAND` in `server/runner/ProxyWasmRunner.ts`, re-exported from `server/runner/index.ts`.
+The shorthand `"built-in"` is normalised to `http://fastedge-builtin.debug` early in the runner so all downstream code (URL parsing, pseudo-header derivation, property extraction) works with a valid URL. The canonical URL is defined as `BUILTIN_URL` and the shorthand as `BUILTIN_SHORTHAND` in `server/runner/cdnFlow.ts`, re-exported from `server/runner/index.ts`.
 
 ---
 
@@ -22,7 +17,7 @@ Developer types "built-in"
         ↓
 API schema (Zod) accepts z.union([z.literal("built-in"), z.string().url()])
         ↓
-callFullFlowLegacy() substitutes → "http://fastedge-builtin.debug"
+runCdnFlow() (cdnFlow.ts) substitutes → "http://fastedge-builtin.debug"
         ↓
 extractRuntimePropertiesFromUrl() parses valid URL (host=fastedge-builtin.debug, path=/)
         ↓
@@ -35,7 +30,9 @@ WebSocket "request_started" event sends canonical URL back to UI
 UI URL bar updates to "http://fastedge-builtin.debug" (server is single source of truth)
 ```
 
-After the first send, the UI shows the canonical URL. Subsequent sends use either form — both trigger the built-in responder.
+After the first send, the UI shows the canonical URL: the server sends it back in `request_started` and the URL bar follows it. Subsequent sends use either form — both trigger the built-in responder.
+
+A URL is built-in if it is the shorthand, equals `http://fastedge-builtin.debug`, or starts with it followed by `?` or `/` (`isBuiltInUrl()` in `cdnFlow.ts`), so a path or query on the built-in URL still reaches the responder.
 
 ---
 
@@ -139,11 +136,11 @@ The built-in responder replaces only the origin fetch (between `onRequestBody` a
 
 ## Key Implementation Details
 
-- **Constants**: `BUILTIN_URL = "http://fastedge-builtin.debug"` and `BUILTIN_SHORTHAND = "built-in"` in `ProxyWasmRunner.ts`
-- **Detection**: `isBuiltIn` flag matches both the shorthand and canonical URL
+- **Constants**: `BUILTIN_URL = "http://fastedge-builtin.debug"` and `BUILTIN_SHORTHAND = "built-in"` in `cdnFlow.ts`
+- **Detection**: `isBuiltInUrl()` — the shorthand, the canonical URL, or the canonical URL followed by `?` or `/`
 - **API validation**: `server/schemas/api.ts` — `ApiSendBodySchema` uses `z.union([z.literal("built-in"), z.string().url()])` to accept the shorthand
 - **Test framework**: `server/test-framework/suite-runner.ts` — `runFlow()` normalises the shorthand before pseudo-header derivation, with a clear error message for invalid URLs
-- **UI defaults**: `x-debugger-status` and `x-debugger-content` appear as unchecked default headers in the proxy-wasm request panel
+- **UI**: the CDN view's Origin section edits `x-debugger-status` / `x-debugger-content` (see [REQUEST_CONTEXT.md](REQUEST_CONTEXT.md)); they are not default request headers
 
 ---
 

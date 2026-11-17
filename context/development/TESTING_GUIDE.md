@@ -48,7 +48,7 @@ All CDN integration tests **must** use the test framework API from `server/test-
 All backend tests are co-located under `server/__tests__/`, split into `unit/` and `integration/` subdirectories. This mirrors the source structure but keeps tests separate from implementation files.
 
 ```
-proxy-runner/
+fastedge-test/
 ├── server/
 │   └── __tests__/              # All backend tests live here
 │       ├── unit/               # Unit tests (vitest.config.ts: include server/__tests__/unit/**/*.test.ts)
@@ -363,13 +363,6 @@ cp configs/scenario-1-body-injection.json fastedge-config.test.json
 
 > "Test the WASM with these edge cases: empty body, very large body (10KB JSON), body with special characters, body with nested arrays. Report which cases work correctly."
 
-## Next Steps
-
-1. **Try the default config**: Load config → Send request → Verify results
-2. **Modify and save**: Change headers/body → Save config → Reload to verify
-3. **Test with AI**: Give AI a testing task using the config system
-4. **Create test scenarios**: Build a library of test configs for different use cases
-
 ## Getting Help
 
 If something isn't working:
@@ -379,5 +372,3 @@ If something isn't working:
 3. Verify WebSocket connection status
 4. Use log level 0 (Trace) to see all debug output
 5. Check the Response Panel for actual vs expected results
-
-Last Updated: February 26, 2026

@@ -235,12 +235,9 @@ Real-time validation checks:
 **Issue:** File System Access API not supported
 **Impact:** Users must type file path in prompt
 **Workaround:** Use Chrome/Edge for testing, or accept prompt UX
-**Future:** Could build custom file browser UI
 
-### 2. Form Editor Tab Not Implemented
-**Issue:** Only JSON editor tab is functional
-**Impact:** Users must edit raw JSON (no visual form)
-**Future:** Will reuse existing components (PropertiesEditor, RequestPanel, etc.)
+### 2. JSON Only
+The modal has a JSON editor tab only; there is no form editor.
 
 ---
 
@@ -257,45 +254,6 @@ Real-time validation checks:
 
 ---
 
-## Future Enhancements
-
-### Form Editor Tab
-Reuse existing components in controlled mode:
-```tsx
-<FormEditorTab config={config} onChange={setConfig}>
-  <PropertiesEditorControlled
-    value={config.properties}
-    onChange={(p) => setConfig({...config, properties: p})}
-  />
-  <RequestPanelControlled ... />
-  <LogLevelSelectorControlled ... />
-</FormEditorTab>
-```
-
-**Benefits:**
-- Familiar UI (same as main app)
-- Visual editing (no JSON knowledge needed)
-- Sync with JSON tab
-
-**Requirements:**
-- Extract logic into hooks (`usePropertiesLogic`, etc.)
-- Create controlled versions of components
-- Implement bi-directional sync between tabs
-
----
-
-### Custom File Browser (Universal Solution)
-Build HTML/CSS/JS file tree component:
-- Backend API: `GET /api/filesystem/list?path=...`
-- Frontend: Tree navigation + filename input
-- Works in all browsers
-- Consistent UX
-
-**Pros:** Universal, no browser dependencies
-**Cons:** 1-2 hours work, security considerations for directory listing
-
----
-
 ## Debug Logging
 
 Console logs help diagnose save issues:
@@ -307,23 +265,6 @@ Console logs help diagnose save issues:
 [ConfigEditor] Dialog closed, handle: ...
 ```
 
-**Can be removed for production** or gated behind debug flag.
-
----
-
-## Files Modified
-
-**Created:**
-- `frontend/src/components/ConfigEditorModal/ConfigEditorModal.tsx`
-- `frontend/src/components/ConfigEditorModal/ConfigEditorModal.module.css`
-- `frontend/src/components/ConfigEditorModal/JsonEditorTab.tsx`
-- `frontend/src/components/ConfigEditorModal/JsonEditorTab.module.css`
-- `frontend/src/components/ConfigEditorModal/index.tsx`
-
-**Modified:**
-- `frontend/src/App.tsx` - Modal integration, load/save handlers
-- `frontend/src/api/index.ts` - Added `showSaveDialog()`, `saveConfigAs()`
-- `server/server.ts` - Added dialog and save-as endpoints
 
 ---
 
@@ -347,6 +288,3 @@ Respects existing environment logic:
 - `getEnvironment()` API returns `'vscode' | 'node'`
 - Determines default behavior and available features
 
----
-
-**Last Updated:** March 2026

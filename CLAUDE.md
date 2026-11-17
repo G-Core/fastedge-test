@@ -58,31 +58,30 @@ Use the decision tree in CONTEXT_INDEX.md to determine what to read. **Only read
 
 **Examples:**
 
-**Task: "Add login feature"**
+**Task: "Add a feature"**
 - Read: `context/development/IMPLEMENTATION_GUIDE.md` (patterns)
 - Read: `context/architecture/FRONTEND_ARCHITECTURE.md` (relevant sections)
-- Grep: `context/CHANGELOG.md` for similar past features
+- Grep: `context/features/` for related behaviour; `git log --oneline --grep=<term>` for how similar work was done
 
 **Task: "Fix WebSocket bug"**
 - Read: `context/features/WEBSOCKET_IMPLEMENTATION.md`
-- Grep: `context/CHANGELOG.md` for "websocket" or "fix"
+- History of the code you touch: `git log --oneline -- <file>` / `git log -S<symbol>`
 - Read: `context/development/TESTING_GUIDE.md` if adding tests
 
 **Task: "Understand property system"**
 - Read: `context/PROJECT_OVERVIEW.md` (lightweight overview)
-- Read: `context/features/PROPERTY_IMPLEMENTATION_COMPLETE.md`
-- Read: `context/wasm/wasm-properties-code.md` if working with WASM
+- Read: `context/features/PROPERTIES.md`
 
 **Task: "Refactor components"**
 - Read: `context/development/COMPONENT_STYLING_PATTERN.md`
 - Read: `context/architecture/FRONTEND_ARCHITECTURE.md` (relevant sections)
-- Grep: `context/CHANGELOG.md` for "refactor" or "component"
 
 ### Step 3: Search, Don't Read Everything
 
 **Use grep and search tools** instead of reading large docs linearly:
 
-- **CHANGELOG.md** (~4,287 lines, Feb 2026+): **NEVER read linearly** - use grep to search for keywords; Jan 2026 and earlier entries are in `context/legacy/CHANGELOG_ARCHIVE.md`
+- **Behaviour and design decisions** live in `context/features/` — grep there first
+- **History** (what changed, when, why) is `git log`: commits are conventional (`feat:` / `fix:`) and descriptive, and release notes are generated from them
 - **Architecture docs** (1,000-2,000 lines): Read specific sections, not entire file
 - **Feature docs**: Only read the feature you're working on
 
@@ -96,30 +95,31 @@ See `context/SEARCH_GUIDE.md` for search patterns and examples.
 
 | Task Type | What to Read |
 |-----------|-------------|
-| **Adding a feature** | IMPLEMENTATION_GUIDE + relevant architecture doc section + grep CHANGELOG |
-| **Fixing a bug** | Feature-specific doc + grep CHANGELOG for history |
+| **Adding a feature** | IMPLEMENTATION_GUIDE + relevant architecture doc section + grep `context/features/` |
+| **Fixing a bug** | Feature-specific doc + `git log` of the files involved |
 | **Refactoring** | Architecture doc sections + IMPLEMENTATION_GUIDE + COMPONENT_STYLING_PATTERN (if UI) |
 | **Understanding system** | PROJECT_OVERVIEW + architecture docs (skim structure) |
 | **WebSocket/real-time** | WEBSOCKET_IMPLEMENTATION + STATE_MANAGEMENT (sections) |
-| **WASM/proxy-wasm** | Relevant wasm/*.md file + FASTEDGE_IMPLEMENTATION (sections) |
+| **WASM/proxy-wasm** | FASTEDGE_IMPLEMENTATION (sections) + PRODUCTION_PARITY_HEADERS / MULTI_VALUE_HEADERS |
 | **proxy_http_call / HTTP callouts** | HTTP_CALL_IMPLEMENTATION (always read first) |
 | **Testing** | TESTING_GUIDE + TEST_PATTERNS |
-| **Properties** | PROPERTY_IMPLEMENTATION_COMPLETE + wasm/wasm-properties-code.md |
+| **Properties** | PROPERTIES |
 | **API changes** | AI_AGENT_API_GUIDE + BACKEND_ARCHITECTURE (API section) |
-| **npm package / @gcoredev/fastedge-test** | NPM_PACKAGE_PLAN (always read first) + BACKEND_ARCHITECTURE (runner section) |
+| **npm package / @gcoredev/fastedge-test** | BACKEND_ARCHITECTURE (npm package and runner sections) |
+| **Multi-app CDN resources** | RESOURCES + BUILT_IN_RESPONDER (declared origins) |
+| **Cache / Edge KV** | STORES |
 
 ---
 
 ## 🚫 Anti-Patterns (What NOT to Do)
 
 ❌ **Don't**: Read all 4 "core" docs upfront (old pattern - wastes 6,000+ lines of tokens)
-❌ **Don't**: Read CHANGELOG.md linearly (~4,287 lines - use grep instead)
 ❌ **Don't**: Read both BACKEND & FRONTEND architecture for simple single-file changes
 ❌ **Don't**: Read feature docs you're not working on
 ❌ **Don't**: Read entire docs when you need specific sections
 
 ✅ **Do**: Read CONTEXT_INDEX.md first
-✅ **Do**: Use grep to search CHANGELOG and large docs for keywords
+✅ **Do**: Use grep to search large docs for keywords, and `git log` for history
 ✅ **Do**: Read only sections relevant to current task
 ✅ **Do**: Read documentation just-in-time when you need specific information
 ✅ **Do**: Follow links in docs to discover related information
@@ -173,52 +173,28 @@ When tasks are **independent** (different files, different components, no depend
 
 ### When to Update Context Files
 
-**After completing major features:**
-- Update `context/CHANGELOG.md` - Add detailed entry at the TOP (reverse chronological)
-- Update `context/PROJECT_OVERVIEW.md` - Update status sections
-- Update or create feature-specific doc in `context/features/`
+`context/` describes **how things work now and why** — not history, not plans. There is no
+changelog file: history is `git log`, and release notes are generated from conventional commits.
+
+**After completing a feature:**
+- Update or create the feature doc in `context/features/` (behaviour, design decisions, and any
+  known difference from the edge)
+- Update `context/PROJECT_OVERVIEW.md` if the feature list changes
 
 **After architectural changes:**
-- Update relevant architecture doc in `context/architecture/`
-- Update `context/CHANGELOG.md`
-- Update `context/PROJECT_OVERVIEW.md` (architecture section)
+- Update the relevant architecture doc in `context/architecture/`
 
-**After significant bug fixes:**
-- Update `context/CHANGELOG.md` with the fix
-- Update feature doc's Known Issues section if applicable
+**After a bug fix that changes behaviour:**
+- Correct the feature doc so it states the right behaviour
 
-**What NOT to document:**
-- Trivial typo fixes
-- Code formatting changes
-- Comment updates
-- Routine dependency updates (unless they change functionality)
+**Commit messages carry the history:** conventional (`feat:` / `fix:` / `docs:` …), with a body
+that says what changed and why. That is what `git log --grep` and the release notes show.
 
-### Changelog Entry Format
-
-```markdown
-## [Date] - [Feature Name]
-
-### Overview
-Brief description of what was accomplished
-
-### 🎯 What Was Completed
-
-#### 1. [Component/Feature Name]
-- Detail 1
-- Detail 2
-
-**Files Modified:**
-- path/to/file.ts - What changed
-
-**Files Created:**
-- path/to/file.ts - Purpose
-
-### 🧪 Testing
-How to test the changes
-
-### 📝 Notes
-Any important context, decisions, or gotchas
-```
+**What NOT to put in `context/`:**
+- History ("added X in March", "Files Modified", test-run results) — that is `git log`
+- Plans, backlogs, "Future Enhancements", known bugs to fix later — open work is tracked outside
+  this repo
+- Dated status lines ("✅ Completed …", "Last Updated")
 
 ---
 
@@ -231,7 +207,6 @@ context/
 ├── CONTEXT_INDEX.md          # Read this first (100 lines)
 ├── PROJECT_OVERVIEW.md       # Lightweight overview (138 lines)
 ├── PROJECT_DETAILS.md        # Deep dive (400 lines, optional)
-├── CHANGELOG.md              # Search, don't read (~4,287 lines, Feb 2026+)
 ├── SEARCH_GUIDE.md           # How to search effectively
 │
 ├── architecture/             # Read when modifying structure
@@ -242,7 +217,9 @@ context/
 ├── features/                 # Read specific feature when needed
 │   ├── WEBSOCKET_IMPLEMENTATION.md
 │   ├── FASTEDGE_IMPLEMENTATION.md
-│   ├── PROPERTY_IMPLEMENTATION_COMPLETE.md
+│   ├── PROPERTIES.md
+│   ├── RESOURCES.md
+│   ├── STORES.md
 │   ├── CONFIG_SHARING.md
 │   ├── DOTENV.md
 │   └── ... (other features)
@@ -254,23 +231,19 @@ context/
 │   ├── AI_AGENT_API_GUIDE.md
 │   └── COMPONENT_STYLING_PATTERN.md
 │
-├── wasm/                     # Read when working with WASM
-│   ├── wasm-host-functions.md
-│   ├── wasm-properties-code.md
-│   └── ... (other WASM docs)
-│
-└── legacy/                   # Rarely needed
-    └── ... (archived docs)
+└── (top level)               # CONTEXT_INDEX, PROJECT_OVERVIEW/DETAILS, SEARCH_GUIDE,
+                              # DIRECTORY_STRUCTURE, VSCODE_BUNDLING
 ```
 
 ---
 
 ## 🔍 Search Tips
 
-**Instead of reading CHANGELOG.md (~4,287 lines, Feb 2026+):**
+**History of a feature or fix:**
 ```bash
-grep -i "websocket" context/CHANGELOG.md
-grep -i "fix.*bug" context/CHANGELOG.md
+git log --oneline --grep="websocket"
+git log --oneline -- server/runner/cdnFlow.ts
+git log -S"isBuiltInUrl" --oneline
 ```
 
 **Find feature documentation:**
@@ -302,13 +275,13 @@ grep -r "keyword" context/
 - Backend: Node.js + Express + TypeScript
 - Frontend: React + Vite + TypeScript + Zustand
 - WASM: Node WebAssembly API with WASI preview1
-- Port: 5179 (auto-increments through 5179-5188 if busy)
+- Port: 5179 (auto-increments through 5179-5228 if busy)
 
 **Common Commands:**
 ```bash
 pnpm install
 pnpm run build          # Build both backend and frontend
-pnpm start              # Start server (port 5179-5188, auto-increments)
+pnpm start              # Start server (port 5179-5228, auto-increments)
 pnpm run dev:backend    # Backend watch mode
 pnpm run dev:frontend   # Vite dev server (port 5173)
 ```
@@ -320,7 +293,7 @@ pnpm run dev:frontend   # Vite dev server (port 5173)
 1. **Read `context/CONTEXT_INDEX.md` first** (~100 lines, ~250 tokens)
 2. **Use the decision tree** to identify what docs are relevant
 3. **Read only what you need** for your current task (~500-4,000 tokens)
-4. **Use grep to search** CHANGELOG and large docs instead of reading linearly
+4. **Use grep to search** large docs, and `git log` for history, instead of reading linearly
 5. **Follow links** in documentation to discover related information
 6. **Create task checklists** for non-trivial tasks
 7. **Use parallel agents** when tasks are independent
@@ -329,7 +302,3 @@ pnpm run dev:frontend   # Vite dev server (port 5173)
 **Token Savings**: 75-80% reduction vs. reading all "core" docs upfront
 
 **Result**: Faster agent startup, better focus, scalable documentation system
-
----
-
-**Last Updated**: April 2026

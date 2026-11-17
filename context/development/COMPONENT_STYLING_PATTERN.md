@@ -1,10 +1,8 @@
 # Component Styling and Structure Pattern
 
-## Date: February 5, 2026
-
 ## Overview
 
-This document describes the established component structure pattern for the proxy-runner project. All components should follow this folder-per-component approach with CSS Modules.
+This document describes the established component structure pattern for the fastedge-test frontend. All components should follow this folder-per-component approach with CSS Modules.
 
 ## Component Folder Structure
 
@@ -150,41 +148,20 @@ export function Toggle({
 }
 ```
 
-## Components To Refactor
-
-The following components currently use inline styles and should be refactored to follow the new pattern:
-
-### Current Component List (as of Feb 6, 2026)
-
-- ✅ **Toggle** - COMPLETED (reference implementation)
-- ✅ **CollapsiblePanel** - COMPLETED (Feb 6, 2026)
-- ✅ **ConnectionStatus** - COMPLETED (Feb 6, 2026)
-- ✅ **DictionaryInput** - COMPLETED (Feb 6, 2026)
-- ✅ **HeadersEditor** - COMPLETED (Feb 6, 2026)
-- ✅ **HookStagesPanel** - COMPLETED (Feb 6, 2026)
-- ✅ **JsonDisplay** - COMPLETED (Feb 6, 2026)
-- ✅ **PropertiesEditor** - COMPLETED (Feb 6, 2026)
-- ✅ **RequestBar** - COMPLETED (Feb 6, 2026)
-- ✅ **RequestTabs** - COMPLETED (Feb 6, 2026)
-- ✅ **ResponseTabs** - COMPLETED (Feb 6, 2026)
-- ✅ **ResponseViewer** - COMPLETED (Feb 6, 2026)
-- ✅ **ServerPropertiesPanel** - COMPLETED (Feb 6, 2026)
-- ✅ **WasmLoader** - COMPLETED (Feb 6, 2026)
-
-## Refactoring Guidelines
+## Creating or Converting a Component
 
 ### Step-by-Step Process
 
 1. **Create component folder**
 
    ```bash
-   mkdir -p frontend/src/components/ComponentName
+   mkdir -p frontend/src/components/common/ComponentName   # or proxy-wasm/
    ```
 
 2. **Move component file**
 
    ```bash
-   mv frontend/src/components/ComponentName.tsx frontend/src/components/ComponentName/ComponentName.tsx
+   mv ComponentName.tsx frontend/src/components/common/ComponentName/ComponentName.tsx
    ```
 
 3. **Extract inline styles to CSS Module**
@@ -280,58 +257,22 @@ const className = `${styles.base} ${disabled ? styles.disabled : ""} ${checked ?
 6. **Developer Experience** - IntelliSense for CSS class names
 7. **Consistency** - Standardized pattern across the codebase
 
-## Migration Status Tracking
+## Why This Pattern
 
-When refactoring components, update this section:
-
-```
-Last Updated: February 6, 2026
-Completed: 14/14 components
-Status: ALL COMPONENTS MIGRATED ✅
-```
-
-All components have been successfully migrated to CSS modules!
-
-## Related Changes Made Today
-
-### 1. Dotenv Implementation
-
-- Created `server/utils/dotenv-loader.ts` for parsing .env files
-- Added `dotenvEnabled` parameter to ProxyWasmRunner
-- Added toggle UI in ServerPropertiesPanel (uses new Toggle component)
-- See: `DOTENV.md` and `CONFIG_SHARING.md` for details
-
-### 2. Toggle Component Creation
-
-- Built as reference implementation of new pattern
-- Features: sliding switch animation, accessibility, disabled state
-- Used in ServerPropertiesPanel for dotenv toggle
-
-### 3. Architecture Decision
-
-- Evaluated options: inline styles, CSS Modules, folder structure
-- Chose CSS Modules with folder-per-component
-- Rationale: Built-in Vite support, clean separation, scalability
-
-## Future Considerations
-
-- Consider adding TypeScript definitions for CSS Modules (`.d.ts` files)
-- Could add Storybook for component documentation
-- May want to establish a design system for colors, spacing, etc.
-- Consider adding unit tests in component folders (e.g., `ComponentName.test.tsx`)
+CSS Modules with folder-per-component were chosen over inline styles and global CSS: built-in Vite support, clean separation, and room for a component's tests (`ComponentName.test.tsx`) next to it.
 
 ## Tools and Commands
 
 ### Creating new component with this pattern
 
 ```bash
-# Create folder
-mkdir -p frontend/src/components/NewComponent
+# Create folder (common/ if shared by views, proxy-wasm/ if CDN-only)
+mkdir -p frontend/src/components/common/NewComponent
 
 # Create files (can use templates or copy from Toggle)
-touch frontend/src/components/NewComponent/NewComponent.tsx
-touch frontend/src/components/NewComponent/NewComponent.module.css
-touch frontend/src/components/NewComponent/index.tsx
+touch frontend/src/components/common/NewComponent/NewComponent.tsx
+touch frontend/src/components/common/NewComponent/NewComponent.module.css
+touch frontend/src/components/common/NewComponent/index.tsx
 ```
 
 ### Searching for inline styles
@@ -344,12 +285,11 @@ grep -r "style={{" frontend/src/components/
 ### Building and testing
 
 ```bash
-# Development
-cd /home/gdoco/dev/playground/proxy-runner
+# Development (from the repo root)
 pnpm install
-pnpm dev
+pnpm run dev            # backend + Vite dev server
 
-# Type checking
-cd frontend
-pnpm run type-check
+# Frontend tests and build
+pnpm run test:frontend
+pnpm run build:frontend
 ```
