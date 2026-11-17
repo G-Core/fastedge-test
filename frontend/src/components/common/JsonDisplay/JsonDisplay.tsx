@@ -43,18 +43,12 @@ export function JsonDisplay({
     ...style,
   };
 
-  const size = useMemo(() => {
-    const lines = diffLines ? diffLines.length : formattedData.split("\n").length;
-    const chars = diffLines ? diffLines.reduce((n, l) => n + l.content.length, 0) : formattedData.length;
-    return { lines, chars, large: lines > LARGE_LINES || chars > LARGE_CHARS };
-  }, [diffLines, formattedData]);
-  const [expanded, setExpanded] = useState(false);
-  const collapsed = size.large && !expanded;
-  const preClass = `${styles.container} ${collapsed ? styles.collapsed : ""}`;
-  const toggle = size.large && (
-    <button type="button" className={styles.toggle} onClick={() => setExpanded(!expanded)}>
-      {expanded ? "Show less" : `Show all (${size.lines.toLocaleString()} lines, ${formatChars(size.chars)})`}
-    </button>
+  const size = useMemo(
+    () =>
+      diffLines
+        ? { lines: diffLines.length, chars: diffLines.reduce((n, l) => n + l.content.length, 0) }
+        : textSize(formattedData),
+    [diffLines, formattedData],
   );
 
   // If we have diff lines, render diff view
@@ -62,7 +56,7 @@ export function JsonDisplay({
     return (
       <div>
         {title && <h4 className={styles.title}>{title}</h4>}
-        <pre className={preClass} style={containerStyle}>
+        <CollapsiblePre size={size} className={styles.container} style={containerStyle}>
           {diffLines.map((line, idx) => {
             let lineClass = styles.diffLine;
             let prefix = " ";
@@ -82,8 +76,7 @@ export function JsonDisplay({
               </div>
             );
           })}
-        </pre>
-        {toggle}
+        </CollapsiblePre>
       </div>
     );
   }
@@ -92,11 +85,45 @@ export function JsonDisplay({
   return (
     <div>
       {title && <h4 className={styles.title}>{title}</h4>}
-      <pre className={preClass} style={containerStyle}>
+      <CollapsiblePre size={size} className={styles.container} style={containerStyle}>
         {formattedData}
-      </pre>
-      {toggle}
+      </CollapsiblePre>
     </div>
+  );
+}
+
+export function textSize(text: string): { lines: number; chars: number } {
+  return { lines: text.split("\n").length, chars: text.length };
+}
+
+/**
+ * A `<pre>` that starts as a short preview when its content is large, with "Show all" / "Show
+ * less". `size` is the content's lines and characters (`textSize` for plain text).
+ */
+export function CollapsiblePre({
+  size,
+  className,
+  style,
+  children,
+}: {
+  size: { lines: number; chars: number };
+  className?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const large = size.lines > LARGE_LINES || size.chars > LARGE_CHARS;
+  return (
+    <>
+      <pre className={`${className ?? ""} ${large && !expanded ? styles.collapsed : ""}`} style={style}>
+        {children}
+      </pre>
+      {large && (
+        <button type="button" className={styles.toggle} onClick={() => setExpanded(!expanded)}>
+          {expanded ? "Show less" : `Show all (${size.lines.toLocaleString()} lines, ${formatChars(size.chars)})`}
+        </button>
+      )}
+    </>
   );
 }
 

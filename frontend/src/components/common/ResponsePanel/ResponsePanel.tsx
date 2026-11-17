@@ -1,7 +1,7 @@
 import { Tabs } from "../Tabs";
 import { useState, useEffect } from "react";
 import { CollapsiblePanel } from "../CollapsiblePanel";
-import { JsonDisplay } from "../JsonDisplay";
+import { JsonDisplay, CollapsiblePre, textSize } from "../JsonDisplay";
 import { useAppStore } from "../../../stores";
 import styles from "./ResponsePanel.module.css";
 
@@ -182,21 +182,15 @@ export function ResponsePanel({ response }: ResponsePanelProps) {
         const parsed = JSON.parse(response.body);
         return <JsonDisplay data={parsed} style={{ margin: 0 }} />;
       } catch {
-        return <pre style={{ margin: 0 }}>{response.body}</pre>;
+        // not JSON after all: shown as text below
       }
     }
-
-    if (isHtml) {
-      const formatted = formatHtml(response.body);
-      return <pre style={{ margin: 0 }}>{formatted}</pre>;
-    }
-
-    if (isXml) {
-      const formatted = formatXml(response.body);
-      return <pre style={{ margin: 0 }}>{formatted}</pre>;
-    }
-
-    return <pre style={{ margin: 0 }}>{response.body}</pre>;
+    const text = isHtml ? formatHtml(response.body) : isXml ? formatXml(response.body) : response.body;
+    return (
+      <CollapsiblePre size={textSize(text)} style={{ margin: 0 }}>
+        {text}
+      </CollapsiblePre>
+    );
   };
 
   const renderPreview = () => {

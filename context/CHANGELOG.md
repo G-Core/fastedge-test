@@ -17,11 +17,13 @@ selected hook shows the Debugger's own hook detail instead of a simpler copy.
 - `JsonDisplay` (all hook inputs / outputs, Debugger and resource): content over 40 lines or 4000
   characters starts as a short preview with "Show all (N lines, size)" / "Show less"
 - Hook detail labels a binary body "binary, N bytes (shown as base64)"
+- Response panel Body tab: text, HTML and XML bodies collapse the same way (`CollapsiblePre`,
+  shared with `JsonDisplay`); the image / HTML Preview tab is unchanged
 
 ### 🧪 Testing
 - Frontend `ResourceView.test.tsx` (grouping, hook detail, log level); browser-checked on the
   convert-images resource (toggle, grouped flow, AVIF preview, HTTP note, collapsed
-  binary body); `JsonDisplay.test.tsx`
+  binary body, AVIF preview still decodes); `JsonDisplay.test.tsx`, `ResponsePanel.test.tsx`
 
 ## November 17, 2026 - CDN Resource page: path suggestions, dotenv folder
 
