@@ -14,6 +14,9 @@ file an agent or editor changed.
 - `ResourceView`: conflict prompt (and before overwriting another existing file), `prepare` before
   Send, sticky toolbar, Ctrl/Cmd+S, reload / warn on `resource_saved`; rule cards remount per open
 - `api.resource.save` returns `{ path, version }`; `ResourceConflictError`
+- Save / Save and load / Send are disabled (with a "Fix first: …" tooltip) while an origin is
+  incomplete; panel buttons get a disabled look and not-allowed cursor; the sticky file bar is a
+  full-width card header
 - An empty origin folder / body file is refused (schema `min(1)`, a red hint in the editor, Save /
   Send say what is missing): it used to resolve to the config's own folder and answer 404
 

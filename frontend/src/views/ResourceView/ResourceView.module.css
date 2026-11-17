@@ -194,12 +194,18 @@
 }
 
 /* The file bar stays in reach while the page scrolls */
+/* The file bar: the page card's header, pinned while the page scrolls. It spans the card's full
+   width (over its padding) so nothing shows around it. */
 .sticky {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: #1a1a1a;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  margin: -16px -16px 16px;
+  padding: 10px 16px;
+  background: #252525;
+  border-bottom: 1px solid #3d3d3d;
+  border-radius: 6px 6px 0 0;
+  box-shadow: 0 4px 8px -4px rgba(0, 0, 0, 0.6);
 }
 
 .unsaved {

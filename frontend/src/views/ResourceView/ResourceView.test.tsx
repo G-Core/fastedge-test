@@ -222,8 +222,12 @@ describe("ResourceView", () => {
     await screen.findByLabelText("sso config");
     fireEvent.change(screen.getByLabelText("main origin"), { target: { value: "files" } });
     expect(screen.getByText("Origin: choose the folder to serve.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save, load and send" }));
-    expect(await screen.findByText("Not saved: main origin: choose the folder to serve.")).toBeTruthy();
+    const send = screen.getByRole("button", { name: "Save, load and send" }) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    expect(send.title).toBe("Fix first: main origin: choose the folder to serve");
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
+    // Ctrl/Cmd+S still says why.
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
     expect(r.save).not.toHaveBeenCalled();
     expect(r.send).not.toHaveBeenCalled();
   });

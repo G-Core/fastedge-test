@@ -119,11 +119,8 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved }: Res
    * Ask before overwriting. Another existing file than the opened one? Ask too.
    */
   const writeFile = async (): Promise<string> => {
-    // Say what is missing in the page's words (the server would refuse it too).
-    const problems = [["main", config!.main.origin] as const, ...(config!.rules ?? []).map((r, i) => [`rule ${i + 1}`, r.origin] as const)]
-      .map(([where, origin]) => originProblem(origin) && `${where} origin: ${originProblem(origin)}`)
-      .filter(Boolean);
-    if (problems.length) throw new Error(`Not saved: ${problems.join("; ")}.`);
+    // The buttons are disabled then; Ctrl/Cmd+S still gets here.
+    if (problem) throw new Error(`Not saved: ${problem}.`);
     let expectedVersion = version.current;
     if (path !== openedAs.current) {
       const target = await resource.read(path);
@@ -193,6 +190,14 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved }: Res
   }, [saved]);
 
   const isLoaded = !!loaded && !!loaded.configPath && loaded.configPath === opened.current;
+  // What must be filled in before the file can be saved (the server would refuse it too).
+  const problem = config
+    ? [["main", config.main.origin] as const, ...(config.rules ?? []).map((r, i) => [`rule ${i + 1}`, r.origin] as const)]
+        .map(([where, origin]) => originProblem(origin) && `${where} origin: ${originProblem(origin)}`)
+        .filter(Boolean)
+        .join("; ") || null
+    : null;
+  const blocked = problem ? `Fix first: ${problem}` : undefined;
   const sendLabel = dirty ? "Save, load and send" : isLoaded ? "Send" : "Load and send";
   const apps = Object.keys(config?.apps ?? {});
 
@@ -213,10 +218,16 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved }: Res
           <button type="button" className={panel.button} disabled={busy} onClick={() => void open(path)}>
             Open
           </button>
-          <button type="button" className={panel.button} disabled={busy || !config} onClick={() => void save()}>
+          <button type="button" className={panel.button} disabled={busy || !config || !!problem} title={blocked} onClick={() => void save()}>
             Save
           </button>
-          <button type="button" className={`${panel.button} ${explorer.primary}`} disabled={busy || !config} onClick={() => void saveAndLoad()}>
+          <button
+            type="button"
+            className={`${panel.button} ${explorer.primary}`}
+            disabled={busy || !config || (dirty && !!problem)}
+            title={dirty ? blocked : undefined}
+            onClick={() => void saveAndLoad()}
+          >
             {dirty ? "Save and load" : "Load"}
           </button>
         </div>
@@ -292,7 +303,16 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved }: Res
               />
             ))}
           </section>
-          <RequestSection key={openCount} config={config} label={sendLabel} disabled={busy} prepare={prepare} onResult={onResult} setMessage={setMessage} />
+          <RequestSection
+            key={openCount}
+            config={config}
+            label={sendLabel}
+            disabled={busy || (dirty && !!problem)}
+            disabledReason={dirty ? blocked : undefined}
+            prepare={prepare}
+            onResult={onResult}
+            setMessage={setMessage}
+          />
           {result && isLoaded && <ResultSection result={result} />}
         </>
       )}
@@ -529,6 +549,7 @@ function RequestSection({
   config,
   label,
   disabled,
+  disabledReason,
   prepare,
   onResult,
   setMessage,
@@ -537,6 +558,8 @@ function RequestSection({
   /** "Send", or what else Send does first: "Save, load and send" / "Load and send". */
   label: string;
   disabled: boolean;
+  /** Shown on the disabled button: what to fix first. */
+  disabledReason?: string;
   /** Saves and loads the page's edits first, when needed. */
   prepare: () => Promise<void>;
   onResult: (result: ResourceResult) => void;
@@ -579,7 +602,7 @@ function RequestSection({
           ))}
         </select>
         <input className={styles.url} aria-label="URL" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !disabled && !sending && void send()} />
-        <button type="button" className={`${panel.button} ${explorer.primary}`} disabled={disabled || sending} onClick={() => void send()}>
+        <button type="button" className={`${panel.button} ${explorer.primary}`} disabled={disabled || sending} title={disabledReason} onClick={() => void send()}>
           {label}
         </button>
       </div>
