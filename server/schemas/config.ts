@@ -77,9 +77,9 @@ export const BuiltInOriginSchema = z.object({
   ).optional(),
   body: z.string().optional(),
   /** A file whose bytes are the body (binary is fine); its extension gives the content-type. */
-  bodyFile: z.string().optional(),
+  bodyFile: z.string().min(1, "bodyFile: name the file").optional(),
   /** A folder: GET /a/b.png answers with <folder>/a/b.png. Dotfiles are never served. */
-  files: z.string().optional(),
+  files: z.string().min(1, "files: name the folder to serve (\".\" = the config's own folder)").optional(),
 }).strict()
   .refine((o) => [o.body, o.bodyFile, o.files].filter((v) => v !== undefined).length <= 1, { message: "set at most one of body, bodyFile, files" })
   .refine((o) => o.files === undefined || o.status === undefined, { message: "files sets the status itself (200, or 404 for a missing file)" });

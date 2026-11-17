@@ -216,4 +216,15 @@ describe("ResourceView", () => {
     expect(await screen.findByText(/saved elsewhere while you have unsaved edits/)).toBeTruthy();
     expect(r.read).toHaveBeenCalledTimes(2);
   });
+
+  it("will not save or send an origin folder that is empty", async () => {
+    render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
+    await screen.findByLabelText("sso config");
+    fireEvent.change(screen.getByLabelText("main origin"), { target: { value: "files" } });
+    expect(screen.getByText("Origin: choose the folder to serve.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save, load and send" }));
+    expect(await screen.findByText("Not saved: main origin: choose the folder to serve.")).toBeTruthy();
+    expect(r.save).not.toHaveBeenCalled();
+    expect(r.send).not.toHaveBeenCalled();
+  });
 });

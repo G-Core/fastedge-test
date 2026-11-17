@@ -14,6 +14,8 @@ file an agent or editor changed.
 - `ResourceView`: conflict prompt (and before overwriting another existing file), `prepare` before
   Send, sticky toolbar, Ctrl/Cmd+S, reload / warn on `resource_saved`; rule cards remount per open
 - `api.resource.save` returns `{ path, version }`; `ResourceConflictError`
+- An empty origin folder / body file is refused (schema `min(1)`, a red hint in the editor, Save /
+  Send say what is missing): it used to resolve to the config's own folder and answer 404
 
 ### 🧪 Testing
 - Server `resource.test.ts` (409, force, no check); `ResourceView.test.tsx` (send order, conflict

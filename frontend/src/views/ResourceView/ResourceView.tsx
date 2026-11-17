@@ -15,7 +15,7 @@ import {
 import { useWorkspaceFiles } from "../../hooks/useWorkspaceFiles";
 import { LogLevelSelector } from "../../components/common/LogLevelSelector";
 import { HookDetail } from "../../components/proxy-wasm/HookStagesPanel";
-import { OriginEditor } from "../../components/proxy-wasm/OriginEditor";
+import { OriginEditor, originProblem } from "../../components/proxy-wasm/OriginEditor";
 import { useAppStore } from "../../stores";
 import type { HookResult } from "../../types";
 import { JsonDisplay } from "../../components/common/JsonDisplay";
@@ -119,6 +119,11 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved }: Res
    * Ask before overwriting. Another existing file than the opened one? Ask too.
    */
   const writeFile = async (): Promise<string> => {
+    // Say what is missing in the page's words (the server would refuse it too).
+    const problems = [["main", config!.main.origin] as const, ...(config!.rules ?? []).map((r, i) => [`rule ${i + 1}`, r.origin] as const)]
+      .map(([where, origin]) => originProblem(origin) && `${where} origin: ${originProblem(origin)}`)
+      .filter(Boolean);
+    if (problems.length) throw new Error(`Not saved: ${problems.join("; ")}.`);
     let expectedVersion = version.current;
     if (path !== openedAs.current) {
       const target = await resource.read(path);

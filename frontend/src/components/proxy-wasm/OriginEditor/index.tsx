@@ -1,1 +1,1 @@
-export { OriginEditor } from "./OriginEditor";
+export { OriginEditor, originProblem } from "./OriginEditor";

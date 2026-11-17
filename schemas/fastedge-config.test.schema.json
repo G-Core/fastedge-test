@@ -413,10 +413,12 @@
                       "type": "string"
                     },
                     "bodyFile": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     },
                     "files": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     }
                   },
                   "additionalProperties": false

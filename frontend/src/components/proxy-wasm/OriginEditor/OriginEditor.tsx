@@ -23,6 +23,17 @@ interface OriginEditorProps {
   showLabel?: boolean;
 }
 
+/** What is missing from an origin before it can run, or null. */
+export function originProblem(origin: ResourceOrigin | undefined): string | null {
+  if (!origin) return null;
+  if ("url" in origin && !/^(built-in|https?:\/\/[^/]+)/.test(origin.url)) return "enter the origin URL (https://…)";
+  if ("builtIn" in origin) {
+    if (origin.builtIn.files !== undefined && !origin.builtIn.files.trim()) return "choose the folder to serve";
+    if (origin.builtIn.bodyFile !== undefined && !origin.builtIn.bodyFile.trim()) return "choose the body file";
+  }
+  return null;
+}
+
 function modeOf(origin: ResourceOrigin | undefined): Mode {
   if (!origin) return "unset";
   if ("app" in origin) return `app:${origin.app}`;
@@ -134,6 +145,8 @@ export function OriginEditor({ label, value, onChange, unsetLabel, apps = [], ec
         )}
         {mode === "files" && pathInput("files", files?.folders ?? [], "folder, e.g. ../assets")}
       </div>
+
+      {originProblem(value) && <p className={styles.problem}>Origin: {originProblem(value)}.</p>}
 
       {mode === "echo" && echoControls}
 

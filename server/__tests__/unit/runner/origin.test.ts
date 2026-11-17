@@ -141,6 +141,8 @@ describe("built-in origin: fixed responses and config", () => {
     expect(BuiltInOriginSchema.safeParse({ headers: { "bad name": "1" } }).success).toBe(false);
     expect(BuiltInOriginSchema.safeParse({ status: 99 }).success).toBe(false);
     expect(BuiltInOriginSchema.safeParse({ unknown: 1 }).success).toBe(false);
+    expect(BuiltInOriginSchema.safeParse({ files: "" }).success).toBe(false);
+    expect(BuiltInOriginSchema.safeParse({ bodyFile: "" }).success).toBe(false);
     expect(OriginSchema.safeParse({ builtIn: { status: 201, body: "ok" } }).success).toBe(true);
   });
 });
