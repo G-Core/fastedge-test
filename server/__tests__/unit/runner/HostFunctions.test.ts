@@ -60,7 +60,7 @@ describe("HostFunctions header maps", () => {
     expect(get("x-added")).toBe(ProxyStatus.NotFound);
   });
 
-  // Edge-measured (preprod, 2026-11-04): trailer and gRPC maps are not served
+  // Measured on the edge: trailer and gRPC maps are not served
   // in any phase, and an unknown map type is BadArgument.
   it.each([
     [MapType.RequestTrailers, ProxyStatus.Unimplemented],
@@ -86,7 +86,7 @@ describe("HostFunctions header maps", () => {
     expect(host.getResponseHeaders()).toEqual({ "x-res": "s" });
   });
 
-  // Edge-measured (preprod, 2026-11-04): which header writes each hook accepts.
+  // Measured on the edge: which header writes each hook accepts.
   const R = MapType.RequestHeaders;
   const S = MapType.ResponseHeaders;
   it.each([

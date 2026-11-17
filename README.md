@@ -46,7 +46,7 @@ If port 5179 is already in use, the server automatically tries the next port seq
 PORT=8080 npx @gcoredev/fastedge-test
 ```
 
-See **[Local Debugger Server](docs/LOCAL_SERVER.md)** for the full guide including programmatic usage, REST API access, and WebSocket log streaming.
+See **[Local Debugger Server](docs/DEBUGGER.md)** for the full guide including programmatic usage, REST API access, and WebSocket log streaming.
 
 ---
 
@@ -437,10 +437,9 @@ await runAndExit(defineTestSuite({
 
 ## Documentation
 
-- **[Local Debugger Server](docs/LOCAL_SERVER.md)** — running the visual debugger UI, npx usage, programmatic `startServer()`, REST API quickstart
+- **[Local Debugger Server](docs/DEBUGGER.md)** — running the visual debugger UI, npx usage, programmatic `startServer()`, REST API quickstart
 - **[Test Framework Guide](docs/TEST_FRAMEWORK.md)** — full API reference, all assertion helpers, examples
 - **[REST API Reference](docs/API.md)** — HTTP endpoints for server-based testing (UI / WebSocket)
-- **[WASM Loading Guide](docs/HYBRID_LOADING.md)** — path vs buffer tradeoffs and performance data
 - **[Repository](https://github.com/G-Core/fastedge-debugger)** — source code, issues, contributing
 
 ---

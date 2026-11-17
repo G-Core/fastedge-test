@@ -10,7 +10,7 @@
  * | client | `request.*` properties, `GeoIP-*` and `X-Real-IP` headers | `geoip-*` and `x-real-ip` headers |
  * | edge | dictionary `dc`, `region`, `country`, `city`, `hostname`; `X-ID` header | `dc` and `pop-*` headers |
  *
- * Both: the edge `dc` is the cache bucket. Values come from prod captures (2026-11).
+ * Both: the edge `dc` is the cache bucket. Values are captured from the edge.
  */
 
 export const PRESETS = ["de", "nl", "us"] as const;

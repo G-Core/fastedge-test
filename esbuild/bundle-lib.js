@@ -154,8 +154,7 @@ async function buildLib() {
     // dist/lib/runner/index.d.ts. Without this shim, `import { createRunner }
     // from "@gcoredev/fastedge-test"` resolves the JS bundle but not types —
     // the ./test subpath works only because its source path happens to match
-    // its bundle output path. See context/features/MULTI_VALUE_HEADERS.md-
-    // adjacent notes in package.json exports.
+    // its bundle output path.
     fs.writeFileSync(
       path.join(distLibDir, "index.d.ts"),
       'export * from "./runner/index.js";\n',

@@ -113,7 +113,7 @@ function requestContext({ client, edge }: RequestContext = {}) {
   return { client: client ?? {}, edge: edge ?? {} };
 }
 
-/** Client and edge presets (prod captures), from the server. */
+/** Client and edge presets (captured from the edge), from the server. */
 export async function getRequestContextPresets(): Promise<{
   client: Record<Preset, Required<Omit<ClientContext, "preset">>>;
   edge: Record<Preset, Required<Omit<EdgeContext, "preset">>>;

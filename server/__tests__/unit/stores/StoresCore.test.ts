@@ -1,6 +1,6 @@
 /**
  * Conformance: the storage core against the edge's measured behaviour
- * (preprod probes P2–P6, 2026-11-05) and Redis KV semantics.
+ * (live probes) and Redis KV semantics.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';

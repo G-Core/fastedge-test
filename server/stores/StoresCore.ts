@@ -6,7 +6,7 @@
  * (`/v1/cache`, `/v1/kv`): binary values are base64, i64/u64 travel as decimal strings
  * (numbers are accepted too), replies are `{ ok: true, value }` or `{ ok: false, error }`.
  *
- * Edge behaviour matched (measured on preprod 2026-11-05, FastEdge cache-backend redis.rs):
+ * Edge behaviour matched (measured on the edge):
  * - default TTL = max TTL (4 days); a larger TTL is clamped; `set` with a negative TTL is
  *   a bad argument; `expire` with a negative TTL gets the default (u64 wrap on the edge);
  * - `incr`: decimal i64 only, overflow and non-integers are internal errors; a key that

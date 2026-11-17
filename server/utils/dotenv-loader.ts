@@ -178,7 +178,7 @@ export function validateDotenvLeafs(dotenvPath: string): void {
   let realBase: string;
   try { realBase = realpathSync(dotenvPath); } catch { return; } // directory absent — nothing to load
 
-  // Full set consumed by fastedge-run (see FastEdge/fastedge-lib/src/dotenv.rs)
+  // Full set consumed by fastedge-run (its dotenv loader)
   for (const name of [".env", ".env.secrets", ".env.variables", ".env.req_headers", ".env.rsp_headers", ".env.kv_stores"]) {
     const filePath = path.join(dotenvPath, name);
     try {
