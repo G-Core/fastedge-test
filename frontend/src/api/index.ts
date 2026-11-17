@@ -727,6 +727,15 @@ async function resourceCall(path: string, body?: unknown): Promise<any> {
   return result;
 }
 
+/** Suggestions for the Resource page's path fields; paths are relative to `root` (the workspace). */
+export interface WorkspaceFiles {
+  root: string;
+  wasm: string[];
+  configs: string[];
+  dotenvDirs: string[];
+  truncated: boolean;
+}
+
 export const resource = {
   /** The file as written (null = no file yet) and its full path. */
   read: async (configPath: string): Promise<{ path: string; config: ResourceConfig | null }> =>
@@ -737,4 +746,5 @@ export const resource = {
   load: async (configPath: string): Promise<ResourceLoaded> => resourceCall("/resource/load", { configPath }),
   send: async (request: { url: string; method: string; headers: Record<string, string>; body: string }): Promise<ResourceResult> =>
     resourceCall("/send", { url: request.url, request: { method: request.method, headers: request.headers, body: request.body } }),
+  files: async (): Promise<WorkspaceFiles> => resourceCall("/workspace/files"),
 };

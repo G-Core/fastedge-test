@@ -1,5 +1,23 @@
 # Proxy-WASM Runner - Changelog
 
+## November 17, 2026 - CDN Resource page: path suggestions, dotenv folder
+
+### Overview
+The Resource tab is now "CDN Resource". Its path fields suggest workspace files, written relative
+to the resource file, and each app's dotenv folder can be set (it was always the resource file's
+folder). The browser's file picker gives contents, not paths, so the server lists the files.
+
+### 🎯 What Was Completed
+- `GET /api/workspace/files` (`server/utils/workspaceFiles.ts`): `.wasm`, `*.test.json` and `.env`
+  folders, workspace-relative; skips `node_modules`, `.git`, cargo `deps`/`build`; no symlinks
+- `ResourceView`: `<datalist>` suggestions on the resource file, config, wasm and dotenv fields
+  (refetched on focus); dotenv path field next to the checkbox; `api.resource.files()`
+
+### 🧪 Testing
+- Server `resource.test.ts` (listing, skips, symlink); frontend `ResourceView.test.tsx`
+  (relative suggestions, dotenv path saved, `relativePath`); checked in a browser on a three-app
+  resource
+
 ## November 16, 2026 - Fix: CDN hooks get bodies as raw bytes
 
 ### Overview

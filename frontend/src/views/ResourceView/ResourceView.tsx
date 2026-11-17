@@ -8,6 +8,7 @@ import {
   type ResourceLoaded,
   type ResourceOrigin,
   type ResourceResult,
+  type WorkspaceFiles,
 } from "../../api";
 import { LogsViewer } from "../../components/common/LogsViewer";
 import { JsonDisplay } from "../../components/common/JsonDisplay";
@@ -19,6 +20,15 @@ import styles from "./ResourceView.module.css";
 
 export const DEFAULT_RESOURCE_FILE = ".fastedge-debug/fastedge-cdn-resource.test.json";
 const NEW_CONFIG: ResourceConfig = { apps: {}, main: { hooks: {}, origin: { url: "built-in" } } };
+
+/** `to` relative to the folder `from`; both workspace-relative and "/"-separated. */
+export function relativePath(from: string, to: string): string {
+  const a = from.split("/").filter((s) => s && s !== ".");
+  const b = to.split("/").filter((s) => s && s !== ".");
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return [...a.slice(i).map(() => ".."), ...b.slice(i)].join("/") || ".";
+}
 
 interface ResourceViewProps {
   /** What the server has loaded (from any source: this page, an agent, the API), or null. */
@@ -40,6 +50,14 @@ export function ResourceView({ loaded, result, onResult }: ResourceViewProps) {
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const opened = useRef<string | null>(null);
+  const [files, setFiles] = useState<WorkspaceFiles | null>(null);
+  const filesAt = useRef(0);
+  // Fetched when a path field gets focus, so new builds show up; at most every 2 s.
+  const refreshFiles = () => {
+    if (Date.now() - filesAt.current < 2000) return;
+    filesAt.current = Date.now();
+    resource.files().then(setFiles, () => {});
+  };
 
   const run = async (work: () => Promise<string | void>) => {
     setBusy(true);
@@ -109,6 +127,8 @@ export function ResourceView({ loaded, result, onResult }: ResourceViewProps) {
             className={styles.path}
             aria-label="Resource file"
             value={path}
+            list="rv-resource-files"
+            onFocus={refreshFiles}
             onChange={(e) => setPath(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && void open(path)}
           />
@@ -133,6 +153,7 @@ export function ResourceView({ loaded, result, onResult }: ResourceViewProps) {
       </div>
 
       {message && <p className={message.error ? panel.error : panel.note}>{message.text}</p>}
+      <Suggestions files={files} resourcePath={path} />
 
       {!config ? (
         <div className={explorer.content}>
@@ -142,7 +163,7 @@ export function ResourceView({ loaded, result, onResult }: ResourceViewProps) {
         </div>
       ) : (
         <>
-          <AppsSection config={config} edit={edit} />
+          <AppsSection config={config} edit={edit} onFocusPath={refreshFiles} />
           <section className={styles.section}>
             <div className={explorer.sectionHeader}>
               <h4 className={explorer.sectionTitle}>Rules</h4>
@@ -192,7 +213,29 @@ export function ResourceView({ loaded, result, onResult }: ResourceViewProps) {
   );
 }
 
-function AppsSection({ config, edit }: { config: ResourceConfig; edit: (change: (draft: ResourceConfig) => void) => void }) {
+/** The path fields' dropdowns: workspace files, written relative to the resource file. */
+function Suggestions({ files, resourcePath }: { files: WorkspaceFiles | null; resourcePath: string }) {
+  if (!files) return null;
+  const fromRoot = resourcePath.startsWith(`${files.root}/`) ? resourcePath.slice(files.root.length + 1) : resourcePath;
+  const dir = fromRoot.includes("/") ? fromRoot.slice(0, fromRoot.lastIndexOf("/")) : "";
+  const list = (id: string, paths: string[], relative: boolean) => (
+    <datalist id={id}>
+      {paths.map((p) => (
+        <option key={p} value={relative ? relativePath(dir, p) : p} />
+      ))}
+    </datalist>
+  );
+  return (
+    <>
+      {list("rv-resource-files", files.configs, false)}
+      {list("rv-configs", files.configs, true)}
+      {list("rv-wasm", files.wasm, true)}
+      {list("rv-dotenv", files.dotenvDirs, true)}
+    </>
+  );
+}
+
+function AppsSection({ config, edit, onFocusPath }: { config: ResourceConfig; edit: (change: (draft: ResourceConfig) => void) => void; onFocusPath: () => void }) {
   const [name, setName] = useState("");
   const add = () => {
     if (!name || config.apps[name]) return;
@@ -218,7 +261,7 @@ function AppsSection({ config, edit }: { config: ResourceConfig; edit: (change: 
     <section className={styles.section}>
       <div className={explorer.sectionHeader}>
         <h4 className={explorer.sectionTitle}>Apps</h4>
-        <span className={panel.note}>Paths are relative to the resource file. A config is an app's fastedge-config.test.json (its wasm and dotenv); a wasm overrides it.</span>
+        <span className={panel.note}>Paths are relative to the resource file; the fields suggest workspace files. A config is an app's fastedge-config.test.json (its wasm and dotenv); a wasm overrides it.</span>
       </div>
       <table className={styles.table}>
         <thead>
@@ -235,24 +278,35 @@ function AppsSection({ config, edit }: { config: ResourceConfig; edit: (change: 
             <tr key={app}>
               <td className={styles.mono}>{app}</td>
               <td>
-                <input aria-label={`${app} config`} value={entry.config ?? ""} placeholder="../app/fastedge-config.test.json" onChange={(e) => set(app, "config", e.target.value)} />
+                <input aria-label={`${app} config`} title={entry.config} list="rv-configs" onFocus={onFocusPath} value={entry.config ?? ""} placeholder="../app/fastedge-config.test.json" onChange={(e) => set(app, "config", e.target.value)} />
               </td>
               <td>
-                <input aria-label={`${app} wasm`} value={entry.wasm ?? ""} placeholder="(from the config)" onChange={(e) => set(app, "wasm", e.target.value)} />
+                <input aria-label={`${app} wasm`} title={entry.wasm} list="rv-wasm" onFocus={onFocusPath} value={entry.wasm ?? ""} placeholder="(from the config)" onChange={(e) => set(app, "wasm", e.target.value)} />
               </td>
               <td>
-                <input
-                  type="checkbox"
-                  aria-label={`${app} dotenv`}
-                  title="Override the config's dotenv: load .env files from the resource file's folder"
-                  checked={entry.dotenv?.enabled ?? false}
-                  onChange={(e) =>
-                    edit((c) => {
-                      if (e.target.checked) c.apps[app].dotenv = { enabled: true };
-                      else delete c.apps[app].dotenv;
-                    })
-                  }
-                />
+                <div className={styles.dotenv}>
+                  <input
+                    type="checkbox"
+                    aria-label={`${app} dotenv`}
+                    title="Override the config's dotenv: load .env files from this folder"
+                    checked={entry.dotenv?.enabled ?? false}
+                    onChange={(e) =>
+                      edit((c) => {
+                        if (e.target.checked) c.apps[app].dotenv = { enabled: true };
+                        else delete c.apps[app].dotenv;
+                      })
+                    }
+                  />
+                  <input
+                    aria-label={`${app} dotenv path`}
+                    list="rv-dotenv"
+                    onFocus={onFocusPath}
+                    disabled={!entry.dotenv?.enabled}
+                    value={entry.dotenv?.path ?? ""}
+                    placeholder="(the resource file's folder)"
+                    onChange={(e) => edit((c) => void (c.apps[app].dotenv = e.target.value ? { enabled: true, path: e.target.value } : { enabled: true }))}
+                  />
+                </div>
               </td>
               <td>
                 <button type="button" className={panel.button} onClick={() => remove(app)}>

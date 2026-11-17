@@ -73,4 +73,26 @@ describe("debugger server — resources", () => {
     symlinkSync("/tmp/fastedge-test-dangling-target.json", join(server.workspacePath, "new", "link.json"));
     expect((await post("/api/resource/save", { configPath: "new/link.json", config })).status).toBe(400);
   });
+
+  it("lists workspace wasm, test configs and .env folders for the page's suggestions", async () => {
+    const ws = server.workspacePath;
+    mkdirSync(join(ws, "app", "target", "wasm32-wasip1", "release", "deps"), { recursive: true });
+    mkdirSync(join(ws, "app", "fixtures"), { recursive: true });
+    mkdirSync(join(ws, "node_modules", "x"), { recursive: true });
+    writeFileSync(join(ws, "app", "target", "wasm32-wasip1", "release", "app.wasm"), "");
+    writeFileSync(join(ws, "app", "target", "wasm32-wasip1", "release", "deps", "app.wasm"), "");
+    writeFileSync(join(ws, "node_modules", "x", "x.wasm"), "");
+    writeFileSync(join(ws, "app", "fixtures", "one.test.json"), "{}");
+    writeFileSync(join(ws, "app", "fixtures", ".env"), "");
+    symlinkSync(join(ws, "app"), join(ws, "link"));
+
+    const res = await authedFetch(server.base, server.token, "/api/workspace/files", {});
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.root).toBe(ws);
+    expect(body.wasm).toEqual(["app/target/wasm32-wasip1/release/app.wasm", "apps/probe.wasm"]);
+    expect(body.configs).toEqual([".fastedge-debug/fastedge-cdn-resource.test.json", "app/fixtures/one.test.json"]);
+    expect(body.dotenvDirs).toEqual(["app/fixtures"]);
+    expect(body.truncated).toBe(false);
+  });
 });

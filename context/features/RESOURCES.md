@@ -60,14 +60,18 @@ properties from hook to hook; a flow hook starts with exactly those (none from a
   as written (`config: null` = no file yet); `POST /api/resource/save { configPath?, config }`
   checks it against the schema and writes it as given (no defaults filled in; never through a
   symlink). Both default to the default file and stay inside the workspace.
-- **Resource page** (header tab, `views/ResourceView/`): opens the default file (or any path),
+- **Resource page** ("CDN Resource" header tab, `views/ResourceView/`): opens the default file (or any path),
   edits apps (config / wasm / dotenv), main and rules (an app or off per hook, interrupt on error,
   origin), saves and loads it, and sends requests. The result shows the matched rule and a flow
   strip (each hook's app and outcome, the origin) with the selected hook's logs, request /
   response changes and storage calls. Fields the page does not edit (properties, client, edge,
   request…) are kept. Loading a resource clears the Debugger's app and loading an app unloads
   the resource (the server holds one or the other). It follows websocket events, so a resource an
-  agent loads or runs through the API shows there too.
+  agent loads or runs through the API shows there too. Path fields (resource file, config, wasm,
+  dotenv folder) offer the workspace's `.wasm` files, `*.test.json` files and `.env` folders as a
+  dropdown, written relative to the resource file (`GET /api/workspace/files`: workspace-relative
+  lists, `node_modules`, `.git` and cargo's `deps`/`build` skipped, symlinks not followed, 500 per
+  list). The browser's own file picker cannot be used: it gives a file's contents, never its path.
 - **Workspace bound:** in the debugger every file a resource reads (its config, each wasm,
   referenced config and dotenv folder) must be inside the workspace. A resource spanning several
   projects is debugged from a folder holding them all (a monorepo). `createResource` takes the same

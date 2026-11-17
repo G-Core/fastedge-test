@@ -356,7 +356,7 @@ function App() {
         <Tabs
           tabs={[
             { id: "debugger", label: "Debugger" },
-            { id: "resource", label: "Resource" },
+            { id: "resource", label: "CDN Resource" },
             { id: "storage", label: "Storage Explorer" },
           ]}
           active={page}

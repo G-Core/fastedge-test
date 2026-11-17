@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { ResourceView, DEFAULT_RESOURCE_FILE } from "./ResourceView";
+import { ResourceView, DEFAULT_RESOURCE_FILE, relativePath } from "./ResourceView";
 import * as api from "../../api";
 
 vi.mock("../../api", async (original) => ({
   ...(await original<typeof import("../../api")>()),
-  resource: { read: vi.fn(), save: vi.fn(), load: vi.fn(), send: vi.fn() },
+  resource: { read: vi.fn(), save: vi.fn(), load: vi.fn(), send: vi.fn(), files: vi.fn() },
 }));
 
 const r = vi.mocked(api.resource);
@@ -23,6 +23,13 @@ describe("ResourceView", () => {
     r.read.mockResolvedValue({ path: FULL, config: config() });
     r.save.mockResolvedValue(FULL);
     r.load.mockResolvedValue({ configPath: FULL, apps: [] });
+    r.files.mockResolvedValue({
+      root: "/ws",
+      wasm: ["apps/edge/target/wasm32-wasip1/release/edge.wasm"],
+      configs: [DEFAULT_RESOURCE_FILE, "apps/edge/fixtures/one.test.json"],
+      dotenvDirs: ["apps/edge/fixtures"],
+      truncated: false,
+    });
   });
 
   it("opens the default file and saves hook edits, keeping fields it does not edit", async () => {
@@ -86,5 +93,31 @@ describe("ResourceView", () => {
     expect(screen.getByText("sent 401")).toBeTruthy();
     expect(screen.getByText("not reached")).toBeTruthy();
     expect(screen.getByText(/asking for a code/)).toBeTruthy();
+  });
+
+  it("suggests workspace files relative to the resource file, and saves a dotenv path", async () => {
+    render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
+    const wasm = await screen.findByLabelText("totp wasm");
+    fireEvent.focus(wasm);
+    await waitFor(() => expect(document.querySelector("#rv-wasm option")).toBeTruthy());
+    const values = (id: string) => [...document.querySelectorAll(`#${id} option`)].map((o) => o.getAttribute("value"));
+    expect(wasm.getAttribute("list")).toBe("rv-wasm");
+    expect(values("rv-wasm")).toEqual(["../apps/edge/target/wasm32-wasip1/release/edge.wasm"]);
+    expect(values("rv-configs")).toEqual(["fastedge-cdn-resource.test.json", "../apps/edge/fixtures/one.test.json"]);
+    expect(values("rv-resource-files")).toEqual([DEFAULT_RESOURCE_FILE, "apps/edge/fixtures/one.test.json"]);
+
+    fireEvent.click(screen.getByLabelText("totp dotenv"));
+    fireEvent.change(screen.getByLabelText("totp dotenv path"), { target: { value: "../apps/edge/fixtures" } });
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(r.save).toHaveBeenCalled());
+    expect(r.save.mock.calls[0][1].apps.totp).toEqual({ wasm: "../totp.wasm", dotenv: { enabled: true, path: "../apps/edge/fixtures" } });
+  });
+
+  it("relativePath walks up and down from the resource file's folder", () => {
+    expect(relativePath(".fastedge-debug", "app/x.wasm")).toBe("../app/x.wasm");
+    expect(relativePath("", "app/x.wasm")).toBe("app/x.wasm");
+    expect(relativePath("a/b", "a/c/d")).toBe("../c/d");
+    expect(relativePath("app/fixtures", "app/fixtures")).toBe(".");
+    expect(relativePath(".", ".")).toBe(".");
   });
 });

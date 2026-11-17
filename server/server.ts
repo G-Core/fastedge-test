@@ -27,6 +27,7 @@ import { validatePath, validatePathOrThrow } from "./utils/pathValidator.js";
 import { resolveDotenvPath, validateDotenvLeafs, DotenvPathError } from "./utils/dotenv-loader.js";
 import { createResource, DEFAULT_RESOURCE_FILE, type Resource } from "./runner/resource.js";
 import { mountStorageExplorer } from "./storageExplorer.js";
+import { listWorkspaceFiles } from "./utils/workspaceFiles.js";
 import {
   ApiResourceLoadBodySchema,
   ApiResourceSaveBodySchema,
@@ -498,6 +499,12 @@ app.get("/api/resource/config", async (req: Request, res: Response) => {
   } catch (error) {
     res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
+});
+
+/** Suggestions for the Resource page's path fields: wasm, *.test.json and .env folders in the workspace. */
+app.get("/api/workspace/files", (_req: Request, res: Response) => {
+  const root = process.env.WORKSPACE_PATH || process.cwd();
+  res.json({ ok: true, root, ...listWorkspaceFiles(root) });
 });
 
 /** Writes a resource file (checked against the resource schema first). Does not load it. */

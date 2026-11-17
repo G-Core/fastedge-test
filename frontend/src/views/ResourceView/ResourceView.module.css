@@ -61,6 +61,12 @@
   box-sizing: border-box;
 }
 
+.dotenv {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* main or one rule */
 .card {
   margin: 10px 0;
