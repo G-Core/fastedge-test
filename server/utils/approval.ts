@@ -102,13 +102,19 @@ export class NotApproved extends Error {
   }
 }
 
-/** Runs `work`; when it needs an allowed folder approved, asks the user, then runs it again. */
+/**
+ * Runs `work`; when it needs an allowed folder approved, asks the user, then runs it again (once per
+ * folder it needs: a resource may use many). Ends because each pass approves a new folder or stops; a
+ * folder needed again after its approval is a bug, not a reason to ask again.
+ */
 export async function withApproval<T>(work: () => Promise<T>): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
+  const asked = new Set<string>();
+  for (;;) {
     try {
       return await work();
     } catch (error) {
-      if (!(error instanceof ApprovalNeeded) || attempt >= 8) throw error;
+      if (!(error instanceof ApprovalNeeded) || asked.has(error.folder)) throw error;
+      asked.add(error.folder);
       const approval = await requestApproval(error.folder);
       if (!approval.approved) throw new NotApproved(error.folder, approval);
     }
@@ -117,9 +123,11 @@ export async function withApproval<T>(work: () => Promise<T>): Promise<T> {
 
 /** `validatePath` for a read that may come from an approved allowed folder, asking the user first. */
 export async function validateRead(input: string, options: PathValidationOptions): Promise<PathValidationResult> {
-  for (let attempt = 0; ; attempt++) {
+  const asked = new Set<string>();
+  for (;;) {
     const result = validatePath(input, { ...options, allowedFolders: true });
-    if (!result.approvalNeeded || attempt >= 8) return result;
+    if (!result.approvalNeeded || asked.has(result.approvalNeeded)) return result;
+    asked.add(result.approvalNeeded);
     const approval = await requestApproval(result.approvalNeeded);
     if (!approval.approved) return { valid: false, error: new NotApproved(result.approvalNeeded, approval).message };
   }
