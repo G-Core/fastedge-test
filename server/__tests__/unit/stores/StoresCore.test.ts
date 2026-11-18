@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StoresCore, edgeGlob } from '../../../stores/StoresCore';
@@ -267,6 +267,15 @@ describe('fixtures', () => {
     expect(cache('get', { key: 'greeting' }, 'ams').value).toBe(b64('hi'));
     expect(ttlOf('greeting', 'ams')).toBe(1000);
     expect(ttlOf('raw', 'ams')).toBe(MAX);
+  });
+
+  it('refuses a fixture that is a symlink out of the stores root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'stores-'));
+    const outside = mkdtempSync(join(tmpdir(), 'outside-'));
+    writeFileSync(join(outside, 'creds.json'), JSON.stringify({ strings: { token: 'secret' } }));
+    mkdirSync(join(root, 'fixtures/stores/kv'), { recursive: true });
+    symlinkSync(join(outside, 'creds.json'), join(root, 'fixtures/stores/kv/creds.json'));
+    expect(() => loadFixtures(core, root)).toThrow('fixtures/stores/kv/creds.json is a link out of');
   });
 
   it('names the file and field of a bad fixture', () => {

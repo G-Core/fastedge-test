@@ -1,5 +1,5 @@
 import { resolve, normalize, relative, isAbsolute, sep } from "path";
-import { existsSync, statSync, realpathSync } from "fs";
+import { existsSync, statSync, realpathSync, lstatSync } from "fs";
 
 /**
  * Options for path validation
@@ -118,6 +118,14 @@ export function validatePath(
       const realRoot = realpathSync(resolvedWorkspaceRoot);
       let probe = absolutePath;
       while (!existsSync(probe)) {
+        // A dangling symlink "does not exist", but writing it creates its target, wherever it is.
+        if (lstatSync(probe, { throwIfNoEntry: false })?.isSymbolicLink()) {
+          return {
+            valid: false,
+            error:
+              "Path is outside the workspace root: move it inside, or start the debugger for a folder that contains it.",
+          };
+        }
         const parent = resolve(probe, "..");
         if (parent === probe) break;
         probe = parent;

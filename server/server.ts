@@ -981,6 +981,16 @@ function resolveConfigDir(): string {
   return path.join(root, ".fastedge-debug");
 }
 
+/** The default config file, checked like every other path: a repo can plant it as a symlink. */
+function configFile(): string {
+  const root = process.env.WORKSPACE_PATH || process.cwd();
+  return validatePathOrThrow(path.join(resolveConfigDir(), "fastedge-config.test.json"), {
+    workspaceRoot: root,
+    requireWasmExtension: false,
+    checkExists: false,
+  });
+}
+
 /** Resolve a potentially relative dotenv path using the same base as resolveConfigDir(). */
 function resolveDotenvPathFromWorkspace(dotenvPath: string | undefined): string | undefined {
   const base = process.env.WORKSPACE_PATH || process.cwd();
@@ -991,7 +1001,7 @@ function resolveDotenvPathFromWorkspace(dotenvPath: string | undefined): string 
 app.get("/api/config", async (req: Request, res: Response) => {
   try {
     const configDir = resolveConfigDir();
-    const configPath = path.join(configDir, "fastedge-config.test.json");
+    const configPath = configFile();
     const configData = await fs.readFile(configPath, "utf-8");
     const config = JSON.parse(configData);
 
@@ -1032,7 +1042,7 @@ app.post("/api/config", async (req: Request, res: Response) => {
   try {
     const configDir = resolveConfigDir();
     mkdirSync(configDir, { recursive: true });
-    const configPath = path.join(configDir, "fastedge-config.test.json");
+    const configPath = configFile();
     await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
 
     // Emit properties updated event if properties changed

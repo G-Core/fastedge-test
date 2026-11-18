@@ -10,16 +10,16 @@
  * (with a fresh TTL from load) and leave other cached entries alone.
  */
 
-import { readdirSync, readFileSync, existsSync } from "node:fs";
-import { join, basename } from "node:path";
+import { readdirSync, readFileSync, existsSync, realpathSync } from "node:fs";
+import { join, basename, relative, sep } from "node:path";
 import type { KvSeed, StoresCore } from "./StoresCore.js";
 
 export function loadFixtures(core: StoresCore, root: string): void {
   const dir = join(root, "fixtures", "stores");
   const kv: Record<string, KvSeed> = Object.create(null);
-  for (const [name, data] of jsonFiles(join(dir, "kv"))) kv[name] = kvSeed(data, `fixtures/stores/kv/${name}.json`);
+  for (const [name, data] of jsonFiles(join(dir, "kv"), root)) kv[name] = kvSeed(data, `fixtures/stores/kv/${name}.json`);
   core.seedKv(kv);
-  for (const [dc, data] of jsonFiles(join(dir, "cache"))) core.seedCache(dc, cacheSeed(data, `fixtures/stores/cache/${dc}.json`));
+  for (const [dc, data] of jsonFiles(join(dir, "cache"), root)) core.seedCache(dc, cacheSeed(data, `fixtures/stores/cache/${dc}.json`));
 }
 
 /** Seed data in the fixture file formats: `kv` by store name, `cache` by `dc`. */
@@ -33,12 +33,25 @@ export function applySeed(core: StoresCore, seed: StoresSeed): void {
   for (const [dc, data] of Object.entries(seed.cache ?? {})) core.seedCache(dc, cacheSeed(data, `seed cache.${dc}`));
 }
 
-function jsonFiles(dir: string): [string, unknown, string][] {
+/**
+ * Throws when `file` resolves (through symlinks) outside `root`: a repo could otherwise link a
+ * fixture to any JSON file of the user's and have it loaded or shown.
+ */
+export function assertInsideRoot(file: string, root: string): void {
+  const realRoot = realpathSync(root);
+  const real = realpathSync(file);
+  if (real !== realRoot && !real.startsWith(realRoot + sep)) {
+    throw new Error(`${relative(root, file)} is a link out of the stores root: not read`);
+  }
+}
+
+function jsonFiles(dir: string, root: string): [string, unknown, string][] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
     .map((f) => {
       const path = join(dir, f);
+      assertInsideRoot(path, root);
       try {
         return [basename(f, ".json"), JSON.parse(readFileSync(path, "utf8")), path];
       } catch (error) {

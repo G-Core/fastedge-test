@@ -12,7 +12,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync
 import path from "node:path";
 import type { ZodType } from "zod";
 import { request as storesRequest, resolveStoresRoot, type StoresConnection } from "./stores/StoresManager.js";
-import { kvSeed } from "./stores/fixtures.js";
+import { kvSeed, assertInsideRoot } from "./stores/fixtures.js";
 import {
   ApiStorageKvPutSchema,
   ApiStorageKvKeySchema,
@@ -92,6 +92,7 @@ export function mountStorageExplorer(
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(store)) continue;
       const file = path.join(KV_DIR, `${store}.json`);
       const full = path.join(dir, `${store}.json`);
+      if (existsSync(full)) assertInsideRoot(full, resolveStoresRoot(workspace()));
       const current = existsSync(full) ? readFileSync(full, "utf8") : null;
       const proposed = exported[store] ?? null;
       if (current === proposed) continue;

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { copyFileSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import WebSocket from "ws";
 import { startTestServer, authedFetch, type TestServer } from "./helpers.js";
@@ -181,6 +182,24 @@ describe("debugger server — GET /api/config", () => {
     }));
   });
   afterAll(() => server.close());
+
+  it("refuses to read or write the config through a symlink out of the workspace", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "fastedge-outside-"));
+    const target = join(outside, "victim.json");
+    writeFileSync(target, JSON.stringify({ secret: "keep" }));
+    const other = await startTestServer();
+    try {
+      mkdirSync(join(other.workspacePath, ".fastedge-debug"), { recursive: true });
+      symlinkSync(target, join(other.workspacePath, ".fastedge-debug", "fastedge-config.test.json"));
+      const get = await authedFetch(other.base, other.token, "/api/config");
+      expect((await get.json()).ok).toBe(false);
+      const save = await authedFetch(other.base, other.token, "/api/config", { method: "POST", body: JSON.stringify({ config: { properties: {} } }) });
+      expect(save.status).toBeGreaterThanOrEqual(400);
+      expect(JSON.parse(readFileSync(target, "utf8"))).toEqual({ secret: "keep" });
+    } finally {
+      await other.close();
+    }
+  });
 
   it("returns the config's relative paths resolved against the config's folder", async () => {
     const { config } = await (await authedFetch(server.base, server.token, "/api/config")).json();

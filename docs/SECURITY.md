@@ -57,13 +57,17 @@ check runs first; origin is a secondary guard.
 Every file path the server reads from a request or a config file is confined
 to `WORKSPACE_PATH` (set by the CLI and the VSCode extension) using both
 lexical and `realpathSync`-based checks: the WASM path, dotenv files, resource
-files, and the built-in origin's `files` folder and `bodyFile`. Symlinks inside
-the workspace that point outside are rejected. Absolute paths are allowed if
+files, the built-in origin's `files` folder and `bodyFile`, and the default config
+file (`.fastedge-debug/fastedge-config.test.json`, read and saved). Symlinks inside
+the workspace that point outside are rejected, including dangling ones (writing
+one would create its target). Absolute paths are allowed if
 they resolve within the workspace root. The built-in origin also refuses
 dotfiles and `..` segments in request paths.
 
-The Storage Explorer writes only the fixture files listed in its diff, after
-you approve them, and refuses to write through a symlink.
+Store fixtures (`fixtures/stores/`) are read only when they resolve inside the
+stores root, both when the stores load and in the Storage Explorer's diff. The
+Storage Explorer writes only the fixture files listed in its diff, after you
+approve them, and refuses to write through a symlink.
 
 ### Save-as write capability
 
