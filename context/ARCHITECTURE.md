@@ -86,7 +86,8 @@ approved once per session. Read-only callers opt in (`validatePath({ allowedFold
 `confineTo(root, { allowedFolders })`, `resolveDotenvPath(..., true)`, `createResource({
 allowedFolders })`); a folder not yet approved throws `ApprovalNeeded`, the route asks
 (`withApproval` / `validateRead`: the extension over IPC, else a terminal prompt, else refused)
-and runs again.
+and runs again. While a request waits, `allowed_folder_approval_pending` tells the page where to
+answer.
 
 The CLI sets only `WORKSPACE_PATH`, so both roots are one folder: the nearest ancestor with a
 `.fastedge-debug/`, else with `package.json` or `Cargo.toml`, else the start directory

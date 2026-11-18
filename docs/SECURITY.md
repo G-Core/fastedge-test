@@ -84,8 +84,10 @@ script's `--allow` is yours only if you wrote the script.
   shows (it answers the server over its private IPC channel), on the command
   line by a prompt in the terminal. With neither, the read is refused. No HTTP
   or WebSocket call can approve a folder, so the page and agents can only cause
-  the question to be asked. An answer lasts until the server stops; a refusal
-  is not asked again.
+  the question to be asked. While the question waits, the page says where to
+  answer it. An answer lasts until the server stops; a refusal is not asked
+  again; no answer within 2 minutes fails the read, and the next read asks
+  again.
 - **Read-only.** Resource files, configs and store fixtures are only written
   inside the workspace.
 - **The same checks as the workspace.** A path must be in the allowed folder

@@ -129,6 +129,12 @@ export interface AllowedFolderApprovedEvent extends BaseEvent {
   data: { folder: string };
 }
 
+/** Waiting for the user to approve an allowed folder (`waiting: true`), or no longer waiting. */
+export interface AllowedFolderApprovalPendingEvent extends BaseEvent {
+  type: "allowed_folder_approval_pending";
+  data: { folder: string; askedIn: "vscode" | "terminal"; waiting: boolean };
+}
+
 /** Loading a resource file failed: the file and the error. */
 export interface ResourceLoadFailedEvent extends BaseEvent {
   type: "resource_load_failed";
@@ -161,4 +167,5 @@ export type ServerEvent =
   | ResourceSavedEvent
   | ResourceLoadFailedEvent
   | AllowedFolderApprovedEvent
+  | AllowedFolderApprovalPendingEvent
   | ResourceRequestCompletedEvent;

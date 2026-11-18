@@ -186,6 +186,16 @@ export interface AllowedFolderApprovedEvent extends BaseEvent {
 }
 
 /**
+ * The debugger is waiting for the user to approve reading an allowed folder (`waiting: true`), or
+ * has stopped waiting (answered or timed out). The page says where to answer: the VS Code dialog
+ * or the terminal that started the debugger.
+ */
+export interface AllowedFolderApprovalPendingEvent extends BaseEvent {
+  type: "allowed_folder_approval_pending";
+  data: { folder: string; askedIn: "vscode" | "terminal"; waiting: boolean };
+}
+
+/**
  * A resource file was saved through the API (the page, an agent): its full path and version, so
  * a page showing that file can reload it (or warn about its own unsaved edits).
  */
@@ -220,6 +230,7 @@ export type ServerEvent =
   | ResourceSavedEvent
   | ResourceLoadFailedEvent
   | AllowedFolderApprovedEvent
+  | AllowedFolderApprovalPendingEvent
   | ResourceRequestCompletedEvent;
 
 /**

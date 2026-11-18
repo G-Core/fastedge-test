@@ -13,12 +13,24 @@ import { validatePath, type PathValidationOptions, type PathValidationResult } f
  */
 
 const TIMEOUT_MS = 120_000;
-const pending = new Map<string, Promise<boolean>>();
+
+/** Where the user was asked, or null when nobody could be. */
+export type AskedIn = "vscode" | "terminal";
+/** The user's answer: `answered: false` when nobody answered in time (or nobody could be asked). */
+export type Approval = { approved: boolean; answered: boolean; askedIn: AskedIn | null };
+
+const pending = new Map<string, Promise<Approval>>();
+let pendingListener: ((folder: string, askedIn: AskedIn, waiting: boolean) => void) | null = null;
+
+/** Called when a request starts waiting for the user and when it ends (the page shows where to answer). */
+export function onApprovalPending(listener: (folder: string, askedIn: AskedIn, waiting: boolean) => void): void {
+  pendingListener = listener;
+}
 
 export const APPROVAL_REQUEST = "fastedge:approve-folder";
 export const APPROVAL_REPLY = "fastedge:folder-approval";
 
-export function requestApproval(folder: string): Promise<boolean> {
+export function requestApproval(folder: string): Promise<Approval> {
   let request = pending.get(folder);
   if (!request) {
     request = ask(folder).finally(() => pending.delete(folder));
@@ -27,10 +39,17 @@ export function requestApproval(folder: string): Promise<boolean> {
   return request;
 }
 
-async function ask(folder: string): Promise<boolean> {
-  const answer = process.send ? await askParent(folder) : process.stdin.isTTY ? await askTerminal(folder) : false;
-  if (answer !== null) recordApproval(folder, answer);
-  return answer === true;
+async function ask(folder: string): Promise<Approval> {
+  const askedIn: AskedIn | null = process.send ? "vscode" : process.stdin.isTTY ? "terminal" : null;
+  if (!askedIn) return { approved: false, answered: false, askedIn };
+  pendingListener?.(folder, askedIn, true);
+  try {
+    const answer = askedIn === "vscode" ? await askParent(folder) : await askTerminal(folder);
+    if (answer !== null) recordApproval(folder, answer);
+    return { approved: answer === true, answered: answer !== null, askedIn };
+  } finally {
+    pendingListener?.(folder, askedIn, false);
+  }
 }
 
 function askParent(folder: string): Promise<boolean | null> {
@@ -57,7 +76,7 @@ async function askTerminal(folder: string): Promise<boolean | null> {
   try {
     const reply = await Promise.race([
       rl.question(
-        `\nThe debugger wants to read ${folder}, an allowed folder outside the workspace.\n` +
+        `\x07\nThe debugger wants to read ${folder}, an allowed folder outside the workspace.\n` +
           "Every config loaded in this session could read it, and a loaded app can send what it reads over the network.\n" +
           "Allow it for this session? [y/N] ",
       ),
@@ -71,8 +90,15 @@ async function askTerminal(folder: string): Promise<boolean | null> {
 
 /** The user did not approve reading an allowed folder (a 400 for the caller). */
 export class NotApproved extends Error {
-  constructor(folder: string) {
-    super(`Reading ${folder} was not approved.`);
+  constructor(folder: string, { answered, askedIn }: Approval) {
+    const where = askedIn === "vscode" ? "in the VS Code dialog" : "in the terminal that started the debugger";
+    super(
+      !askedIn
+        ? `Reading ${folder} was not approved: there is no terminal or editor to ask in.`
+        : answered
+          ? `Reading ${folder} was not approved (asked ${where}).`
+          : `Reading ${folder} was not approved: no answer ${where} within ${TIMEOUT_MS / 60_000} minutes.`,
+    );
   }
 }
 
@@ -83,7 +109,8 @@ export async function withApproval<T>(work: () => Promise<T>): Promise<T> {
       return await work();
     } catch (error) {
       if (!(error instanceof ApprovalNeeded) || attempt >= 8) throw error;
-      if (!(await requestApproval(error.folder))) throw new NotApproved(error.folder);
+      const approval = await requestApproval(error.folder);
+      if (!approval.approved) throw new NotApproved(error.folder, approval);
     }
   }
 }
@@ -93,6 +120,7 @@ export async function validateRead(input: string, options: PathValidationOptions
   for (let attempt = 0; ; attempt++) {
     const result = validatePath(input, { ...options, allowedFolders: true });
     if (!result.approvalNeeded || attempt >= 8) return result;
-    if (!(await requestApproval(result.approvalNeeded))) return { valid: false, error: new NotApproved(result.approvalNeeded).message };
+    const approval = await requestApproval(result.approvalNeeded);
+    if (!approval.approved) return { valid: false, error: new NotApproved(result.approvalNeeded, approval).message };
   }
 }

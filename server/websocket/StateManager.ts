@@ -24,6 +24,7 @@ import {
   ResourceSavedEvent,
   ResourceLoadFailedEvent,
   AllowedFolderApprovedEvent,
+  AllowedFolderApprovalPendingEvent,
   ResourceRequestCompletedEvent,
 } from "./types.js";
 import type { ResourceResult } from "../runner/resource.js";
@@ -163,6 +164,11 @@ export class StateManager {
   /** Emit allowed folder approved event */
   public emitAllowedFolderApproved(folder: string): void {
     this.broadcast(createEvent<AllowedFolderApprovedEvent>("allowed_folder_approved", "system", { folder }));
+  }
+
+  /** Emit allowed folder approval pending event (waiting for the user, or no longer) */
+  public emitAllowedFolderApprovalPending(data: AllowedFolderApprovalPendingEvent["data"]): void {
+    this.broadcast(createEvent<AllowedFolderApprovalPendingEvent>("allowed_folder_approval_pending", "system", data));
   }
 
   /** Emit resource saved event */

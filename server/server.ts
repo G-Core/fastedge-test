@@ -30,7 +30,7 @@ import { mountStorageExplorer } from "./storageExplorer.js";
 import { listWorkspaceFiles } from "./utils/workspaceFiles.js";
 import { confineTo, resolveOrigin } from "./runner/origin.js";
 import { appRoot, workspaceRoot } from "./utils/roots.js";
-import { NotApproved, validateRead, withApproval } from "./utils/approval.js";
+import { NotApproved, onApprovalPending, validateRead, withApproval } from "./utils/approval.js";
 import { approvedFolders, onFolderApproved } from "./utils/allowedFolders.js";
 import type { Origin } from "./schemas/config.js";
 import {
@@ -677,8 +677,9 @@ app.post("/api/stores/advance-clock", async (req: Request, res: Response) => {
   }
 });
 
-// The page lists the allowed folders approved this session.
+// The page lists the allowed folders approved this session, and says where to answer a pending approval.
 onFolderApproved((folder) => stateManager.emitAllowedFolderApproved(folder));
+onApprovalPending((folder, askedIn, waiting) => stateManager.emitAllowedFolderApprovalPending({ folder, askedIn, waiting }));
 
 // Storage Explorer: manage the stores with or without an app loaded.
 mountStorageExplorer(app, getStores, () => appRoot(), () => loadedStores?.dc ?? null);

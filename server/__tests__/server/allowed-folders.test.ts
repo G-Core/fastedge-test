@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { copyFileSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import WebSocket from "ws";
 import { startTestServer, authedFetch, type TestServer } from "./helpers.js";
 
 const PROBE = resolve(process.cwd(), "wasm/cdn-apps/rust/resource-probe/resource-probe.wasm");
@@ -23,6 +24,10 @@ describe("debugger server — allowed folders", () => {
   const refuse = folderWithProbe("refuse");
   const other = folderWithProbe("other");
   const asked: string[] = [];
+  const events: { type: string; data: Record<string, unknown> }[] = [];
+  /** The page's view of pending approvals when each question reached the extension. */
+  const pendingWhenAsked: unknown[] = [];
+  let ws: WebSocket;
   const post = (route: string, body: unknown) =>
     authedFetch(server.base, server.token, route, { method: "POST", body: JSON.stringify(body) });
 
@@ -33,6 +38,7 @@ describe("debugger server — allowed folders", () => {
         const m = message as { type: string; id: string; folder: string };
         if (m.type !== "fastedge:approve-folder") return;
         asked.push(m.folder);
+        pendingWhenAsked.push(events.filter((e) => e.type === "allowed_folder_approval_pending").at(-1)?.data);
         reply({ type: "fastedge:folder-approval", id: m.id, approved: m.folder.includes("allowed-approve-") });
       },
     });
@@ -41,9 +47,15 @@ describe("debugger server — allowed folders", () => {
       main: { hooks: { onResponseBody: "a" }, origin: { url: "built-in" } },
       stores: false,
     }));
+    ws = new WebSocket(`ws://127.0.0.1:${new URL(server.base).port}/ws?token=${server.token}`, { origin: server.base });
+    ws.on("message", (m) => events.push(JSON.parse(m.toString())));
+    await new Promise((ok) => ws.once("open", ok));
   });
 
-  afterAll(() => server.close());
+  afterAll(() => {
+    ws.close();
+    server.close();
+  });
 
   it("a folder that is not allowed is refused without asking", async () => {
     const res = await post("/api/load", { wasmPath: join(other, "probe.wasm") });
@@ -55,6 +67,10 @@ describe("debugger server — allowed folders", () => {
     expect((await post("/api/load", { wasmPath: join(approve, "probe.wasm") })).status).toBe(200);
     expect((await post("/api/load", { wasmPath: join(approve, "probe.wasm") })).status).toBe(200);
     expect(asked.filter((f) => f.includes("allowed-approve-"))).toHaveLength(1);
+    // The page was told where to answer before the question reached the extension, and when it ended.
+    expect(pendingWhenAsked[0]).toMatchObject({ askedIn: "vscode", waiting: true });
+    const pending = events.filter((e) => e.type === "allowed_folder_approval_pending").map((e) => e.data.waiting);
+    expect(pending).toEqual([true, false]);
     const env = await (await authedFetch(server.base, server.token, "/api/environment")).json();
     expect(env.approvedFolders).toHaveLength(1);
   });
@@ -68,7 +84,7 @@ describe("debugger server — allowed folders", () => {
   it("a refused folder fails, and the refusal holds for the session", async () => {
     const first = await post("/api/load", { wasmPath: join(refuse, "probe.wasm") });
     expect(first.status).toBe(400);
-    expect((await first.json()).error).toContain("not approved");
+    expect((await first.json()).error).toContain("not approved (asked in the VS Code dialog)");
     const again = await post("/api/load", { wasmPath: join(refuse, "probe.wasm") });
     expect((await again.json()).error).toContain("refused");
     expect(asked.filter((f) => f.includes("allowed-refuse-"))).toHaveLength(1);
@@ -109,6 +125,6 @@ describe("debugger server — allowed folders with no way to ask", () => {
       body: JSON.stringify({ wasmPath: join(folder, "probe.wasm") }),
     });
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toContain("not approved");
+    expect((await res.json()).error).toContain("no terminal or editor to ask in");
   });
 });

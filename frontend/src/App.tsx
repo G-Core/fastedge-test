@@ -33,6 +33,7 @@ function App() {
   const [resourceFailed, setResourceFailed] = useState<{ configPath: string; error: string } | null>(null);
   // Allowed folders outside the workspace approved this session: shown so such reads are visible.
   const [approvedFolders, setApprovedFolders] = useState<string[]>([]);
+  const [awaitingApproval, setAwaitingApproval] = useState<{ folder: string; askedIn: "vscode" | "terminal" }[]>([]);
 
   // Get state and actions from stores
   const {
@@ -288,6 +289,12 @@ function App() {
         setApprovedFolders((folders) => (folders.includes(event.data.folder) ? folders : [...folders, event.data.folder]));
         break;
 
+      case "allowed_folder_approval_pending": {
+        const { folder, askedIn, waiting } = event.data;
+        setAwaitingApproval((list) => [...list.filter((a) => a.folder !== folder), ...(waiting ? [{ folder, askedIn }] : [])]);
+        break;
+      }
+
       case "resource_load_failed":
         // The server unloaded what was loaded before trying: show the file and its error.
         clearWasm();
@@ -396,6 +403,12 @@ function App() {
             ))}
         </div>
 
+        {awaitingApproval.map(({ folder, askedIn }) => (
+          <div key={folder} className="notice">
+            Waiting for you to approve reading {folder} (outside the workspace): answer{" "}
+            {askedIn === "vscode" ? "the FastEdge dialog in VS Code" : "the prompt in the terminal that started the debugger"}.
+          </div>
+        ))}
         {approvedFolders.length > 0 && (
           <div className="notice">Reading outside the workspace this session: {approvedFolders.join(", ")}</div>
         )}

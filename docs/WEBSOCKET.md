@@ -577,6 +577,31 @@ interface AllowedFolderApprovedEvent {
 
 ---
 
+### allowed_folder_approval_pending
+
+Fired when a load starts waiting for the user to approve an allowed folder (`waiting: true`), and again when it stops waiting: answered, or no answer within 2 minutes (`waiting: false`). The debugger page shows a notice saying where to answer while it waits. The event only reports the question; nothing sent over the WebSocket or the HTTP API can answer it. See [SECURITY.md](SECURITY.md#allowed-folders).
+
+```typescript
+interface AllowedFolderApprovalPendingEvent {
+  type: "allowed_folder_approval_pending";
+  timestamp: number;
+  source: "system";
+  data: {
+    folder: string;
+    askedIn: "vscode" | "terminal";
+    waiting: boolean;
+  };
+}
+```
+
+| Field     | Type                       | Description                                                                 |
+| --------- | -------------------------- | --------------------------------------------------------------------------- |
+| `folder`  | `string`                   | The allowed folder's real path                                              |
+| `askedIn` | `"vscode" \| "terminal"`   | Where the user is asked: the FastEdge dialog in VS Code, or the terminal that started the debugger |
+| `waiting` | `boolean`                  | `true` while waiting for the answer, `false` once it is answered or times out |
+
+---
+
 ### resource_load_failed
 
 Fired when loading a resource file through `POST /api/resource/load` (with `configPath`) fails: a config, path or build problem. Whatever was loaded before is already unloaded. The debugger page switches to Multi-app, opens the file and shows the error, so it can be fixed in place.
