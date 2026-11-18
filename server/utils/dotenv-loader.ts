@@ -197,14 +197,15 @@ export function validateDotenvLeafs(dotenvPath: string): void {
 }
 
 /**
- * Resolve a potentially relative dotenv path to an absolute path, and verify it
- * is contained under `base` (the workspace root). Throws DotenvPathError if the
- * resolved path escapes the workspace — this includes symlinks that point outside.
+ * Resolve a potentially relative dotenv path against `base` to an absolute path, and verify it
+ * is contained under `limit` (the workspace root; default `base`). Throws DotenvPathError if the
+ * resolved path escapes it — this includes symlinks that point outside.
  * Returns undefined for falsy input.
  */
 export function resolveDotenvPath(
   dotenvPath: string | undefined,
   base: string,
+  limit: string = base,
 ): string | undefined {
   if (!dotenvPath) return undefined;
   const resolved = path.isAbsolute(dotenvPath)
@@ -212,21 +213,21 @@ export function resolveDotenvPath(
     : path.resolve(base, dotenvPath);
 
   // Lexical containment check (fast path, handles .. traversal)
-  const rel = path.relative(base, resolved);
+  const rel = path.relative(limit, resolved);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new DotenvPathError(
-      `dotenv path is outside the server workspace (${base}). ` +
+      `dotenv path is outside the server workspace (${limit}). ` +
       `Start the server from your project directory, or use --project-dir <path>.`,
     );
   }
 
   // Realpath check: resolve symlinks to detect escapes through links inside the workspace
   try {
-    const realBase = realpathSync(base);
+    const realBase = realpathSync(limit);
     const realResolved = realpathOrNearest(resolved);
     if (realResolved !== realBase && !realResolved.startsWith(realBase + path.sep)) {
       throw new DotenvPathError(
-      `dotenv path is outside the server workspace (${base}). ` +
+      `dotenv path is outside the server workspace (${limit}). ` +
       `Start the server from your project directory, or use --project-dir <path>.`,
     );
     }

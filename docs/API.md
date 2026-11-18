@@ -10,7 +10,7 @@ The `@gcoredev/fastedge-test` debugger server exposes a REST API for loading WAS
 http://localhost:5179
 ```
 
-The server starts on port `5179`. If that port is in use, it tries the next ports in sequence (50 attempts in total). Set the `PORT` environment variable to change the starting port. The active port is written to `.fastedge-debug/.debug-port` (relative to `WORKSPACE_PATH` if set, otherwise the current working directory) on startup and deleted on shutdown. The file contains `PORT:SHA256_HASH`, where `PORT` is the decimal port number and `SHA256_HASH` is the hex-encoded SHA-256 of the session token. Consumers that only need the port should parse the prefix up to the first colon (e.g. `parseInt(content.split(":")[0], 10)`).
+The server starts on port `5179`. If that port is in use, it tries the next ports in sequence (50 attempts in total). Set the `PORT` environment variable to change the starting port. The active port is written to `.fastedge-debug/.debug-port` (relative to the app root: `FASTEDGE_APP_ROOT`, else `WORKSPACE_PATH`, else the current working directory) on startup and deleted on shutdown. The file contains `PORT:SHA256_HASH`, where `PORT` is the decimal port number and `SHA256_HASH` is the hex-encoded SHA-256 of the session token. Consumers that only need the port should parse the prefix up to the first colon (e.g. `parseInt(content.split(":")[0], 10)`).
 
 JSON request bodies are limited to 20 MB.
 
@@ -65,7 +65,8 @@ All `/api/*` requests also validate the `Host` header. Requests whose `Host` is 
 | `FASTEDGE_DEBUG_TOKEN`   | unset           | Use a known session token instead of generating one; suppresses the `Open:` stderr line. |
 | `FASTEDGE_BIND_HOST`     | `127.0.0.1`     | Interface the HTTP server binds to.                                                      |
 | `FASTEDGE_EXPECTED_HOST` | unset           | Extra hostname (suffix match) allowed in `Host` / `Origin` headers.                      |
-| `WORKSPACE_PATH`         | `process.cwd()` | Workspace root for .env resolution, the port file and the config file.                   |
+| `WORKSPACE_PATH`         | `process.cwd()` | Workspace root: the limit on every path the server reads, and where resource files live. |
+| `FASTEDGE_APP_ROOT`      | `WORKSPACE_PATH` | App root inside the workspace: `.fastedge-debug/` (port file, config, `app.wasm`), `<workspace>` paths, the default dotenv folder. Ignored when outside the workspace root. |
 
 ---
 
@@ -1831,7 +1832,7 @@ curl -X POST http://localhost:5179/api/storage/fixtures/save \
 
 ### GET /api/config
 
-Reads `fastedge-config.test.json` from the `.fastedge-debug/` directory (relative to `WORKSPACE_PATH` if set, otherwise the current working directory) and returns it along with a validation result. A relative `dotenv.path`, `origin.builtIn.files` or `origin.builtIn.bodyFile` in the file is returned as an absolute path resolved against the config file's directory, so the origin can be sent to `POST /api/send` as returned.
+Reads `fastedge-config.test.json` from the app root's `.fastedge-debug/` directory and returns it along with a validation result. A relative `dotenv.path`, `origin.builtIn.files` or `origin.builtIn.bodyFile` in the file is returned as an absolute path resolved against the config file's directory, so the origin can be sent to `POST /api/send` as returned.
 
 **Response**
 
@@ -1929,7 +1930,7 @@ curl -H "x-fastedge-token: <token>" http://localhost:5179/api/config
 
 ### POST /api/config
 
-Saves the provided configuration to `.fastedge-debug/fastedge-config.test.json` (relative to `WORKSPACE_PATH` if set, otherwise the current working directory). The directory is created if it does not exist. If the config includes a `properties` field, a WebSocket event is broadcast to connected clients.
+Saves the provided configuration to the app root's `.fastedge-debug/fastedge-config.test.json`. The directory is created if it does not exist. If the config includes a `properties` field, a WebSocket event is broadcast to connected clients.
 
 Accepts an optional [`X-Source`](#x-source-header) request header.
 

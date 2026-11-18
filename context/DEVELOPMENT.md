@@ -65,7 +65,8 @@ pnpm run dev      # backend watch (esbuild) + Vite dev server with hot reload
 | `FASTEDGE_TEST_CDN_RUNNER=worker` | Makes the CDN integration helpers build `WorkerProxyWasmRunner` (set by `test:integration:cdn:worker`) |
 | `FASTEDGE_DEBUG_TOKEN` | Use this session token instead of a random one (server tests and scripts use it) |
 | `PORT` | First port the server tries (default 5179) |
-| `WORKSPACE_PATH` | Workspace root for config files and the port file (default: the current directory) |
+| `WORKSPACE_PATH` | Workspace root: the limit on every path read, and resource files (default: the current directory) |
+| `FASTEDGE_APP_ROOT` | App root inside the workspace: `.fastedge-debug/` (port file, `app.wasm`, config) and the default dotenv folder (default: the workspace root) |
 
 The user-facing variables are listed in [docs/API.md](../docs/API.md).
 

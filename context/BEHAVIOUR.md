@@ -375,7 +375,7 @@ them. Off unless `dotenv.enabled` is true. Config shape:
 
 ### Where the files are
 
-- Directory: `dotenv.path` if given, else `WORKSPACE_PATH` (VS Code), else the process CWD.
+- Directory: `dotenv.path` if given (relative to the app root, within the workspace root), else the app root (VS Code), else the process CWD.
 - A relative `dotenv.path` in a config file is relative to **that config file**, in every loading
   flow (CLI `loadConfigFile`, `GET /api/config`, VS Code); a config dropped into a browser cannot
   give its folder, so the server resolves the rest against the workspace.

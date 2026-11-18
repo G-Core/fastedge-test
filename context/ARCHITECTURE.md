@@ -71,10 +71,20 @@ manager: the server gives runners a WebSocket-backed `StateManager`; headless ru
 `require.main === module` guard: the bundle is CommonJS loaded through a dynamic `import()`,
 where that check is false, and the server would never start.
 
-`WORKSPACE_PATH` is the root every server-side relative path hangs off (configs, `.fastedge-debug/`,
-path confinement, the port file; `process.cwd()` when unset). The CLI and the extension resolve it
-alike: the nearest ancestor with a `.fastedge-debug/`, else with `package.json` or `Cargo.toml`,
-else the start directory (CLI: `--project-dir` / `-C`, else the first argument, else the cwd).
+Two roots, read through `server/utils/roots.ts`:
+
+- **Workspace root** (`WORKSPACE_PATH`, else `process.cwd()`): the limit on every path the server
+  reads, the page's file suggestions, and the home of resource files (the default one is
+  `<workspace>/.fastedge-debug/fastedge-cdn-resource.test.json`).
+- **App root** (`FASTEDGE_APP_ROOT`, else the workspace root; ignored when outside it):
+  `.fastedge-debug/` with the port file, F5's `app.wasm` and the single-app config; the base of
+  `<workspace>` paths and of the default dotenv folder; where the stores-root search starts.
+
+The CLI sets only `WORKSPACE_PATH`, so both roots are one folder: the nearest ancestor with a
+`.fastedge-debug/`, else with `package.json` or `Cargo.toml`, else the start directory
+(`--project-dir` / `-C`, else the first argument, else the cwd). The VS Code extension sets
+`WORKSPACE_PATH` to the opened folder and `FASTEDGE_APP_ROOT` to the app's folder inside it, so a
+resource can use apps from sibling folders.
 
 ### Startup sequence (`startServer()`)
 
@@ -84,7 +94,7 @@ else the start directory (CLI: `--project-dir` / `-C`, else the first argument, 
 3. Print to **stderr** only: an MCP server may start the debugger and own stdout as its stdio
    transport. Without an injected token, print `http://<host>:<port>/#token=<token>` (plus the
    Vite URL when `FASTEDGE_DEV_FRONTEND` is set).
-4. Write `<WORKSPACE_PATH>/.fastedge-debug/.debug-port` as `<port>:<sha256(token)>`, mode 0600,
+4. Write `<app root>/.fastedge-debug/.debug-port` as `<port>:<sha256(token)>`, mode 0600,
    refusing a symlinked leaf or a `.fastedge-debug` that resolves outside the workspace. It is
    deleted on exit (also on Windows, via `process.on("exit")`).
 

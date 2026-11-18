@@ -6,6 +6,7 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
+import { appRoot } from "../utils/roots.js";
 import { randomBytes } from "node:crypto";
 import { StoresCore } from "./StoresCore.js";
 import { startStoresServer, type StoresServer } from "./StoresServer.js";
@@ -47,7 +48,7 @@ export async function createStores(options: CreateStoresOptions = {}): Promise<T
   const db = new DatabaseSync(":memory:");
   const core = new StoresCore(db);
   const root =
-    options.fixtures === false ? null : (options.fixtures ?? resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd()));
+    options.fixtures === false ? null : (options.fixtures ?? resolveStoresRoot(appRoot()));
   const fixtures = () => {
     if (root) loadFixtures(core, root);
     else core.seedKv({});

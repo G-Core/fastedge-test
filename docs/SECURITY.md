@@ -55,7 +55,8 @@ check runs first; origin is a secondary guard.
 ### Path containment for config paths
 
 Every file path the server reads from a request or a config file is confined
-to `WORKSPACE_PATH` (set by the CLI and the VSCode extension) using both
+to the workspace root (`WORKSPACE_PATH`: the CLI's resolved root, or the folder
+open in VS Code) using both
 lexical and `realpathSync`-based checks: the WASM path, dotenv files, resource
 files, the built-in origin's `files` folder and `bodyFile`, and the default config
 file (`.fastedge-debug/fastedge-config.test.json`, read and saved). Symlinks inside
@@ -172,3 +173,4 @@ you don't, use a container or a VM.
 | `FASTEDGE_DEBUG_TOKEN` | Inject a pre-generated session token (VSCode extension sets this) |
 | `FASTEDGE_EXPECTED_HOST` | Add an extra allowed `Host` / WebSocket origin (Codespaces forwarded hostname) |
 | `WORKSPACE_PATH` | Workspace root for path containment (set by CLI and VSCode extension) |
+| `FASTEDGE_APP_ROOT` | App root inside the workspace (set by the VSCode extension); does not widen containment |

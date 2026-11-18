@@ -11,6 +11,7 @@
  */
 
 import { readFile } from "fs/promises";
+import { appRoot } from "../utils/roots.js";
 import type { IWasmRunner, RunnerConfig } from "./IWasmRunner.js";
 import { WorkerProxyWasmRunner } from "./WorkerProxyWasmRunner.js";
 import { HttpWasmRunner } from "./HttpWasmRunner.js";
@@ -46,7 +47,7 @@ export async function createRunnerFromBuffer(
   const given = typeof config?.stores === "object" ? config.stores : null;
   const connection =
     given ??
-    (config?.stores === false ? null : await connectStores(resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd())));
+    (config?.stores === false ? null : await connectStores(resolveStoresRoot(appRoot())));
   const stores = connection && { connection, dc: config?.dc ?? edgeDc(config?.edge) ?? given?.dc ?? "local", owned: !given };
 
   let runner: IWasmRunner;

@@ -29,6 +29,7 @@ import { createResource, DEFAULT_RESOURCE_FILE, type Resource } from "./runner/r
 import { mountStorageExplorer } from "./storageExplorer.js";
 import { listWorkspaceFiles } from "./utils/workspaceFiles.js";
 import { confineTo, resolveOrigin } from "./runner/origin.js";
+import { appRoot, workspaceRoot } from "./utils/roots.js";
 import type { Origin } from "./schemas/config.js";
 import {
   ApiResourceLoadBodySchema,
@@ -183,14 +184,15 @@ app.get("/api/environment", (req: Request, res: Response) => {
   res.json({
     environment: isVSCode ? "vscode" : "node",
     supportsPathLoading: true,
-    workspaceRoot: process.env.WORKSPACE_PATH ?? null,
+    workspaceRoot: process.env.WORKSPACE_PATH ? workspaceRoot() : null,
+    appRoot: process.env.WORKSPACE_PATH ? appRoot() : null,
   });
 });
 
 // Workspace WASM detection endpoint (VSCode only)
 app.get("/api/workspace-wasm", async (req: Request, res: Response) => {
   const isVSCode = process.env.VSCODE_INTEGRATION === "true";
-  const workspacePath = process.env.WORKSPACE_PATH;
+  const workspacePath = process.env.WORKSPACE_PATH ? appRoot() : undefined;
 
   // Only available in VSCode with workspace
   if (!isVSCode || !workspacePath) {
@@ -224,7 +226,7 @@ app.get("/api/workspace-wasm", async (req: Request, res: Response) => {
 // Called by VSCode extension after F5 rebuild
 app.post("/api/reload-workspace-wasm", async (req: Request, res: Response) => {
   const isVSCode = process.env.VSCODE_INTEGRATION === "true";
-  const workspacePath = process.env.WORKSPACE_PATH;
+  const workspacePath = process.env.WORKSPACE_PATH ? appRoot() : undefined;
 
   // Only available in VSCode with workspace
   if (!isVSCode || !workspacePath) {
@@ -295,7 +297,7 @@ app.post("/api/load", serialized(async (req: Request, res: Response) => {
       throw e;
     }
   } else {
-    dotenvBasePath = process.env.WORKSPACE_PATH || undefined;
+    dotenvBasePath = process.env.WORKSPACE_PATH ? appRoot() : undefined;
   }
 
   // Guard against leaf symlinks escaping the workspace — catches HTTP-WASM where
@@ -328,7 +330,8 @@ app.post("/api/load", serialized(async (req: Request, res: Response) => {
 
       // Expand <workspace> placeholder (VSCode integration)
       if (wasmPath.startsWith("<workspace>")) {
-        const workspacePath = process.env.WORKSPACE_PATH;
+        // <workspace> means the app root (where F5 writes .fastedge-debug/app.wasm).
+        const workspacePath = process.env.WORKSPACE_PATH ? appRoot() : undefined;
         if (!workspacePath) {
           res.status(400).json({
             ok: false,
@@ -346,7 +349,7 @@ app.post("/api/load", serialized(async (req: Request, res: Response) => {
       const validationResult = validatePath(resolvedPath, {
         requireWasmExtension: true,
         checkExists: true,
-        workspaceRoot: process.env.WORKSPACE_PATH ?? process.cwd(),
+        workspaceRoot: workspaceRoot(),
       });
 
       if (!validationResult.valid) {
@@ -456,7 +459,7 @@ app.post("/api/resource/load", serialized(async (req: Request, res: Response) =>
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
-  const root = process.env.WORKSPACE_PATH || process.cwd();
+  const root = workspaceRoot();
   const { config } = parsed.data;
   const configPath = config ? undefined : parsed.data.configPath ?? DEFAULT_RESOURCE_FILE;
 
@@ -492,7 +495,7 @@ app.post("/api/resource/load", serialized(async (req: Request, res: Response) =>
 
 /** A resource file in the workspace (default: the default resource file); it need not exist yet. */
 function resourceFile(configPath: unknown): string {
-  const root = process.env.WORKSPACE_PATH || process.cwd();
+  const root = workspaceRoot();
   const file = typeof configPath === "string" && configPath ? configPath : DEFAULT_RESOURCE_FILE;
   if (!file.endsWith(".json")) throw new Error("a resource file is a .json file");
   return validatePathOrThrow(path.resolve(root, file), { workspaceRoot: root, requireWasmExtension: false, checkExists: false });
@@ -516,13 +519,13 @@ app.get("/api/resource/config", async (req: Request, res: Response) => {
 
 /** A request's origin with its files resolved against the workspace and confined to it. */
 function workspaceOrigin(origin: Origin): Origin {
-  const root = process.env.WORKSPACE_PATH || process.cwd();
+  const root = workspaceRoot();
   return resolveOrigin(origin, root, confineTo(root));
 }
 
 /** Suggestions for the Resource page's path fields: wasm, *.test.json and .env folders in the workspace. */
 app.get("/api/workspace/files", (_req: Request, res: Response) => {
-  const root = process.env.WORKSPACE_PATH || process.cwd();
+  const root = workspaceRoot();
   res.json({ ok: true, root, ...listWorkspaceFiles(root) });
 });
 
@@ -563,7 +566,7 @@ app.post("/api/resource/save", async (req: Request, res: Response) => {
  */
 let storesConnection: Promise<StoresConnection> | null = null;
 async function getStores(): Promise<StoresConnection | null> {
-  storesConnection ??= connectStores(resolveStoresRoot(process.env.WORKSPACE_PATH || process.cwd()));
+  storesConnection ??= connectStores(resolveStoresRoot(appRoot()));
   try {
     return await storesConnection;
   } catch (error) {
@@ -657,7 +660,7 @@ app.post("/api/stores/advance-clock", async (req: Request, res: Response) => {
 });
 
 // Storage Explorer: manage the stores with or without an app loaded.
-mountStorageExplorer(app, getStores, () => process.env.WORKSPACE_PATH || process.cwd(), () => loadedStores?.dc ?? null);
+mountStorageExplorer(app, getStores, () => appRoot(), () => loadedStores?.dc ?? null);
 
 /** Pause (true) or resume (false) the service clock; advance-clock still moves it. */
 app.post("/api/stores/clock", async (req: Request, res: Response) => {
@@ -712,7 +715,7 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
       throw e;
     }
   } else {
-    dotenvPath = process.env.WORKSPACE_PATH || undefined;
+    dotenvPath = process.env.WORKSPACE_PATH ? appRoot() : undefined;
   }
 
   if (dotenvPath) {
@@ -974,16 +977,15 @@ app.post("/api/send", async (req: Request, res: Response) => {
 });
 
 /** Resolve the .fastedge-debug config directory.
- *  Prefers WORKSPACE_PATH (VSCode integration) so the config lives next to
+ *  In the app root (FastEdge for VS Code: the app's own folder) so the config lives next to
  *  the developer's app, not inside the extension/package install folder. */
 function resolveConfigDir(): string {
-  const root = process.env.WORKSPACE_PATH || process.cwd();
-  return path.join(root, ".fastedge-debug");
+  return path.join(appRoot(), ".fastedge-debug");
 }
 
 /** The default config file, checked like every other path: a repo can plant it as a symlink. */
 function configFile(): string {
-  const root = process.env.WORKSPACE_PATH || process.cwd();
+  const root = workspaceRoot();
   return validatePathOrThrow(path.join(resolveConfigDir(), "fastedge-config.test.json"), {
     workspaceRoot: root,
     requireWasmExtension: false,
@@ -993,8 +995,8 @@ function configFile(): string {
 
 /** Resolve a potentially relative dotenv path using the same base as resolveConfigDir(). */
 function resolveDotenvPathFromWorkspace(dotenvPath: string | undefined): string | undefined {
-  const base = process.env.WORKSPACE_PATH || process.cwd();
-  return resolveDotenvPath(dotenvPath, base);
+  // Relative to the app root; may reach anywhere in the workspace root.
+  return resolveDotenvPath(dotenvPath, appRoot(), workspaceRoot());
 }
 
 // Get test configuration
@@ -1163,8 +1165,8 @@ const defaultPort = process.env.PORT ? Number(process.env.PORT) : 5179;
 // so port discovery is co-located with the config and WASM that anchor
 // each app's identity.
 function getPortFilePath(): string | null {
-  const appRoot = process.env.WORKSPACE_PATH || process.cwd();
-  return path.join(appRoot, ".fastedge-debug", ".debug-port");
+  const appRootDir = appRoot();
+  return path.join(appRootDir, ".fastedge-debug", ".debug-port");
 }
 
 function writePortFile(port: number): void {
@@ -1175,10 +1177,10 @@ function writePortFile(port: number): void {
     mkdirSync(debugDir, { recursive: true });
 
     // Reject if .fastedge-debug is itself a symlink pointing outside the workspace.
-    const appRoot = process.env.WORKSPACE_PATH || process.cwd();
+    const appRootDir = appRoot();
     try {
       const realDir = realpathSync(debugDir);
-      const realRoot = realpathSync(appRoot);
+      const realRoot = realpathSync(appRootDir);
       if (realDir !== realRoot && !realDir.startsWith(realRoot + path.sep)) {
         console.warn("Port file directory is outside workspace — refusing to write");
         return;
@@ -1222,10 +1224,10 @@ function deletePortFile(): void {
   // cleanup cannot delete a file in an external directory if .fastedge-debug is
   // (or was replaced with) a symlink pointing outside the workspace.
   try {
-    const appRoot = process.env.WORKSPACE_PATH || process.cwd();
+    const appRootDir = appRoot();
     try {
       const realDir = realpathSync(path.dirname(portFilePath));
-      const realRoot = realpathSync(appRoot);
+      const realRoot = realpathSync(appRootDir);
       if (realDir !== realRoot && !realDir.startsWith(realRoot + path.sep)) return;
     } catch { /* unreachable in practice */ }
     unlinkSync(portFilePath);

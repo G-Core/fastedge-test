@@ -89,7 +89,7 @@ PORT=8080 npx fastedge-debug
 
 `PORT` (or the `startServer` argument) sets the preferred starting port. If that port is already in use, the server tries the next port sequentially, up to 50 ports in total (for example, `5179` through `5228` by default), and logs each skipped port to stderr. If no free port is found in that range, the server exits with an error. Read the port file or the stderr output to find the port that was actually bound.
 
-The server writes the bound port to `.fastedge-debug/.debug-port` under `WORKSPACE_PATH` (if set) or the current working directory, and deletes the file on shutdown. Use this file for programmatic port discovery when starting the server as a subprocess.
+The server writes the bound port to `.fastedge-debug/.debug-port` under the app root (`FASTEDGE_APP_ROOT`, else `WORKSPACE_PATH`, else the current working directory), and deletes the file on shutdown. Use this file for programmatic port discovery when starting the server as a subprocess.
 
 The file format is `PORT:SHA256_HASH` — the decimal port number, a colon, then the hex-encoded SHA-256 of the session token (used by the VS Code extension to verify server identity before reuse). To extract just the port:
 
@@ -131,7 +131,8 @@ curl http://127.0.0.1:5179/health
 | `PORT`               | `number` | `5179`        | Preferred port for the HTTP server. See Port Configuration.                               |
 | `PROXY_RUNNER_DEBUG` | `"1"`    | unset         | Set to `1` to enable verbose debug logging for WebSocket and runner activity.             |
 | `VSCODE_INTEGRATION` | `"true"` | unset         | Set to `true` when running inside the VSCode extension; enables workspace WASM detection. |
-| `WORKSPACE_PATH`     | `string` | unset         | Workspace root; base for `.fastedge-debug/` files and dotenv paths. Set by the CLI.       |
+| `WORKSPACE_PATH`     | `string` | unset         | Workspace root: the limit on every path the server reads, and where resource files live. Set by the CLI. |
+| `FASTEDGE_APP_ROOT`  | `string` | the workspace root | App root inside the workspace: `.fastedge-debug/` (port file, `app.wasm`, the single-app config), `<workspace>` paths and the default dotenv folder. Set by the VS Code extension; ignored when outside `WORKSPACE_PATH`. |
 | `FASTEDGE_RUN_PATH`  | `string` | unset         | Override the path to the `fastedge-run` binary used to execute WASM modules.              |
 | `FASTEDGE_BIND_HOST` | `string` | `"127.0.0.1"` | Interface the server binds to. Non-loopback values require explicit opt-in.               |
 

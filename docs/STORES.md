@@ -37,7 +37,7 @@ The stores root for an app folder is resolved in this order:
 | Variable                | Type     | Effect                                                                  |
 | ----------------------- | -------- | ----------------------------------------------------------------------- |
 | `FASTEDGE_STORES_ROOT`  | `string` | Overrides the stores root. Fixtures load from `<root>/fixtures/stores/` |
-| `WORKSPACE_PATH`        | `string` | Starting folder for the root lookup in `createStores()`, before the process working directory |
+| `WORKSPACE_PATH`        | `string` | Starting folder for the root lookup in `createStores()` when `FASTEDGE_APP_ROOT` is unset, before the process working directory |
 
 How the service is shared:
 
