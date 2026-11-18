@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -33,10 +33,17 @@ const SKIP_IN_TARGET = new Set(["deps", "build", "incremental", ".fingerprint", 
 export function listWorkspaceFiles(root: string, limit = 500, outside: string[] = []): WorkspaceFiles {
   const out: WorkspaceFiles = { wasm: [], configs: [], dotenvDirs: [], folders: [], files: [], truncated: false };
   const add = (list: string[], value: string) => {
+    if (list.includes(value)) return; // overlapping allowed folders
     if (list.length < limit) list.push(value);
     else out.truncated = true;
   };
   // `servable`: no dot segment and not build output, as the built-in origin would serve it.
+  // An allowed folder may hold the workspace: its files are listed once, as the workspace's.
+  let realRoot = root;
+  try {
+    realRoot = realpathSync(root);
+  } catch {}
+  const inRoot = (dir: string) => !path.relative(realRoot, dir).startsWith("..") && !path.isAbsolute(path.relative(realRoot, dir));
   const walk = (dir: string, rel: string, inTarget: boolean, servable = true) => {
     let entries;
     try {
@@ -49,6 +56,7 @@ export function listWorkspaceFiles(root: string, limit = 500, outside: string[] 
       const relPath = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (SKIP.has(entry.name) || (inTarget && SKIP_IN_TARGET.has(entry.name))) continue;
+        if (rel !== "" && path.isAbsolute(rel) && path.join(dir, entry.name) === realRoot) continue;
         const target = inTarget || entry.name === "target";
         const serve = servable && !target && !entry.name.startsWith(".");
         if (serve) add(out.folders, relPath);
@@ -63,7 +71,7 @@ export function listWorkspaceFiles(root: string, limit = 500, outside: string[] 
     if (hasDotenv) add(out.dotenvDirs, rel || ".");
   };
   walk(root, "", false);
-  for (const folder of outside) {
+  for (const folder of outside.filter((f) => !inRoot(f))) {
     const absolute = folder.split(path.sep).join("/");
     add(out.folders, absolute);
     walk(folder, absolute, false);

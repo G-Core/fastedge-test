@@ -54,8 +54,9 @@ describe("OriginEditor", () => {
 
     fireEvent.change(kind, { target: { value: "files" } });
     const folder = screen.getByLabelText("main origin folder");
-    expect([...document.querySelectorAll(`#${CSS.escape(folder.getAttribute("list")!)} option`)].map((o) => o.getAttribute("value"))).toEqual(["../assets"]);
-    fireEvent.change(folder, { target: { value: "../assets" } });
+    fireEvent.focus(folder);
+    expect([...document.querySelectorAll("[role=option]")].map((o) => o.textContent)).toEqual(["../assets"]);
+    fireEvent.click(screen.getByRole("option", { name: "../assets" }));
     expect(seen).toHaveBeenLastCalledWith({ builtIn: { files: "../assets" } });
 
     fireEvent.change(kind, { target: { value: "url" } });

@@ -1,6 +1,7 @@
 import { ChangeEvent, useState, useEffect, useRef } from "react";
 import styles from "./WasmLoader.module.css";
 import { formatFileSize } from "../../../utils/filePath";
+import { PathInput, suggestions } from "../PathInput";
 import { useWorkspaceFiles } from "../../../hooks/useWorkspaceFiles";
 
 /** A suggested path in full: a workspace path joined to `root`; an approved allowed folder's is already absolute. */
@@ -157,23 +158,20 @@ export function WasmLoader({
               Load WASM directly from filesystem path (faster, no upload needed)
             </div>
             <div className={styles.pathInputGroup}>
-              <input
+              {/* Full paths: a relative one resolves against the server's working directory, not the workspace. */}
+              <PathInput
                 type="text"
                 className={styles.pathInput}
                 placeholder="<workspace>/.fastedge-debug/app.wasm"
                 value={wasmPath}
-                list="wasm-loader-files"
+                suggestions={suggestions(files?.wasm, (p) => fullPath(files!.root, p))}
                 aria-label="WASM file path"
                 title={wasmPath}
                 onFocus={refreshFiles}
-                onChange={(e) => setWasmPath(e.target.value)}
+                onChange={setWasmPath}
                 onKeyDown={handlePathKeyDown}
                 disabled={loading}
               />
-              {/* Full paths: a relative one resolves against the server's working directory, not the workspace. */}
-              <datalist id="wasm-loader-files">
-                {files?.wasm.map((p) => <option key={p} value={fullPath(files.root, p)} />)}
-              </datalist>
               <button
                 onClick={handlePathLoad}
                 disabled={loading || !wasmPath.trim()}

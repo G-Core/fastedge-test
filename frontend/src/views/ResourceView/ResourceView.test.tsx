@@ -102,12 +102,16 @@ describe("ResourceView", () => {
     render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
     const wasm = await screen.findByLabelText("totp wasm");
     fireEvent.focus(wasm);
-    await waitFor(() => expect(document.querySelector("#rv-wasm option")).toBeTruthy());
-    const values = (id: string) => [...document.querySelectorAll(`#${id} option`)].map((o) => o.getAttribute("value"));
-    expect(wasm.getAttribute("list")).toBe("rv-wasm");
-    expect(values("rv-wasm")).toEqual(["../apps/edge/target/wasm32-wasip1/release/edge.wasm"]);
-    expect(values("rv-configs")).toEqual(["fastedge-cdn-resource.test.json", "../apps/edge/fixtures/one.test.json"]);
-    expect(values("rv-resource-files")).toEqual([DEFAULT_RESOURCE_FILE, "apps/edge/fixtures/one.test.json"]);
+    const values = (label: string) => {
+      const field = screen.getByLabelText(label);
+      fireEvent.focus(field);
+      const shown = [...document.querySelectorAll("[role=option]")].map((o) => o.textContent);
+      fireEvent.blur(field);
+      return shown;
+    };
+    await waitFor(() => expect(values("totp wasm")).toEqual(["../apps/edge/target/wasm32-wasip1/release/edge.wasm"]));
+    expect(values("totp config")).toEqual(["fastedge-cdn-resource.test.json", "../apps/edge/fixtures/one.test.json"]);
+    expect(values("Resource file")).toEqual([DEFAULT_RESOURCE_FILE, "apps/edge/fixtures/one.test.json"]);
 
     fireEvent.click(screen.getByLabelText("totp dotenv"));
     fireEvent.change(screen.getByLabelText("totp dotenv path"), { target: { value: "../apps/edge/fixtures" } });

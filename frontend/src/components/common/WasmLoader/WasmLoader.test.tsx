@@ -23,13 +23,13 @@ describe("WasmLoader file path", () => {
     render(<WasmLoader onFileLoad={vi.fn()} onPathLoad={onPathLoad} loading={false} defaultTab="path" />);
     const input = screen.getByLabelText("WASM file path");
     fireEvent.focus(input);
-    await waitFor(() => expect(document.querySelectorAll("#wasm-loader-files option")).toHaveLength(2));
-    expect([...document.querySelectorAll("#wasm-loader-files option")].map((o) => o.getAttribute("value"))).toEqual([
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2));
+    expect([...document.querySelectorAll("[role=option]")].map((o) => o.textContent)).toEqual([
       "/ws/.fastedge-debug/app.wasm",
       "/ws/app/target/wasm32-wasip1/release/app.wasm",
     ]);
 
-    fireEvent.change(input, { target: { value: "/ws/.fastedge-debug/app.wasm" } });
+    fireEvent.click(screen.getByRole("option", { name: "/ws/.fastedge-debug/app.wasm" }));
     fireEvent.click(screen.getByText("Load from Path"));
     expect(onPathLoad).toHaveBeenCalledWith("/ws/.fastedge-debug/app.wasm");
   });

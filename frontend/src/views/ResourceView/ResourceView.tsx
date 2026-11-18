@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { PathInput, suggestions } from "../../components/common/PathInput";
 import {
   CDN_HOOKS,
   resource,
@@ -243,13 +244,13 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved, faile
       <div className={`${explorer.toolbar} ${styles.sticky}`}>
         <div className={explorer.group}>
           <span className={explorer.groupLabel}>File</span>
-          <input
+          <PathInput
             className={styles.path}
             aria-label="Resource file"
             value={path}
-            list="rv-resource-files"
+            suggestions={suggestions(files?.configs)}
             onFocus={refreshFiles}
-            onChange={(e) => setPath(e.target.value)}
+            onChange={setPath}
             onKeyDown={(e) => e.key === "Enter" && void open(path)}
           />
           <button type="button" className={panel.button} disabled={busy} onClick={() => void open(path)}>
@@ -285,7 +286,7 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved, faile
       </div>
 
       {message && <p className={message.error ? panel.error : panel.note}>{message.text}</p>}
-      <Suggestions files={files} resourcePath={path} />
+      
 
       {!config ? (
         <div className={explorer.content}>
@@ -295,7 +296,7 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved, faile
         </div>
       ) : (
         <>
-          <AppsSection config={config} edit={edit} onFocusPath={refreshFiles} />
+          <AppsSection config={config} edit={edit} paths={paths} />
           <section className={styles.section}>
             <div className={explorer.sectionHeader}>
               <h4 className={explorer.sectionTitle}>Rules</h4>
@@ -365,27 +366,8 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved, faile
   );
 }
 
-/** The path fields' dropdowns: workspace (and approved allowed folder) files, written relative to the resource file. */
-function Suggestions({ files, resourcePath }: { files: WorkspaceFiles | null; resourcePath: string }) {
-  if (!files) return null;
-  const list = (id: string, paths: string[], relative: boolean) => (
-    <datalist id={id}>
-      {paths.map((p) => (
-        <option key={p} value={relative ? fromResource(files, resourcePath, p) : p} />
-      ))}
-    </datalist>
-  );
-  return (
-    <>
-      {list("rv-resource-files", files.configs, false)}
-      {list("rv-configs", files.configs, true)}
-      {list("rv-wasm", files.wasm, true)}
-      {list("rv-dotenv", files.dotenvDirs, true)}
-    </>
-  );
-}
 
-function AppsSection({ config, edit, onFocusPath }: { config: ResourceConfig; edit: (change: (draft: ResourceConfig) => void) => void; onFocusPath: () => void }) {
+function AppsSection({ config, edit, paths: { files, toPath, onFocusPath } }: { config: ResourceConfig; edit: (change: (draft: ResourceConfig) => void) => void; paths: PathSuggestions }) {
   const [name, setName] = useState("");
   const add = () => {
     if (!name || config.apps[name]) return;
@@ -428,10 +410,10 @@ function AppsSection({ config, edit, onFocusPath }: { config: ResourceConfig; ed
             <tr key={app}>
               <td className={styles.mono}>{app}</td>
               <td>
-                <input aria-label={`${app} config`} title={entry.config} list="rv-configs" onFocus={onFocusPath} value={entry.config ?? ""} placeholder="../app/fastedge-config.test.json" onChange={(e) => set(app, "config", e.target.value)} />
+                <PathInput aria-label={`${app} config`} title={entry.config} suggestions={suggestions(files?.configs, toPath)} onFocus={onFocusPath} value={entry.config ?? ""} placeholder="../app/fastedge-config.test.json" onChange={(v) => set(app, "config", v)} />
               </td>
               <td>
-                <input aria-label={`${app} wasm`} title={entry.wasm} list="rv-wasm" onFocus={onFocusPath} value={entry.wasm ?? ""} placeholder="(from the config)" onChange={(e) => set(app, "wasm", e.target.value)} />
+                <PathInput aria-label={`${app} wasm`} title={entry.wasm} suggestions={suggestions(files?.wasm, toPath)} onFocus={onFocusPath} value={entry.wasm ?? ""} placeholder="(from the config)" onChange={(v) => set(app, "wasm", v)} />
               </td>
               <td>
                 <div className={styles.dotenv}>
@@ -447,14 +429,14 @@ function AppsSection({ config, edit, onFocusPath }: { config: ResourceConfig; ed
                       })
                     }
                   />
-                  <input
+                  <PathInput
                     aria-label={`${app} dotenv path`}
-                    list="rv-dotenv"
+                    suggestions={suggestions(files?.dotenvDirs, toPath)}
                     onFocus={onFocusPath}
                     disabled={!entry.dotenv?.enabled}
                     value={entry.dotenv?.path ?? ""}
                     placeholder="(the resource file's folder)"
-                    onChange={(e) => edit((c) => void (c.apps[app].dotenv = e.target.value ? { enabled: true, path: e.target.value } : { enabled: true }))}
+                    onChange={(v) => edit((c) => void (c.apps[app].dotenv = v ? { enabled: true, path: v } : { enabled: true }))}
                   />
                 </div>
               </td>

@@ -1,4 +1,5 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { PathInput, suggestions } from "../../common/PathInput";
 import type { BuiltInOrigin, ResourceOrigin, WorkspaceFiles } from "../../../api";
 import styles from "./OriginEditor.module.css";
 
@@ -61,7 +62,6 @@ function parseHeaders(text: string): Record<string, string> | undefined {
  * an HTTP app. Writes the same `origin` object agents and config files use.
  */
 export function OriginEditor({ label, value, onChange, unsetLabel, apps = [], echoControls, files, toPath, onFocusPath, showLabel = true }: OriginEditorProps) {
-  const id = useId();
   const mode = modeOf(value);
   const builtIn: BuiltInOrigin = value && "builtIn" in value ? value.builtIn : {};
   const bodySource = builtIn.bodyFile !== undefined ? "file" : "text";
@@ -90,21 +90,16 @@ export function OriginEditor({ label, value, onChange, unsetLabel, apps = [], ec
 
   const pathInput = (kind: "files" | "bodyFile", list: string[], placeholder: string) => (
     <>
-      <input
+      <PathInput
         className={styles.path}
         aria-label={`${label} ${kind === "files" ? "folder" : "body file"}`}
-        list={`${id}-${kind}`}
+        suggestions={suggestions(list, toPath)}
         value={builtIn[kind] ?? ""}
         placeholder={placeholder}
         title={builtIn[kind]}
         onFocus={onFocusPath}
-        onChange={(e) => setBuiltIn({ [kind]: e.target.value })}
+        onChange={(v) => setBuiltIn({ [kind]: v })}
       />
-      <datalist id={`${id}-${kind}`}>
-        {list.map((p) => (
-          <option key={p} value={toPath(p)} />
-        ))}
-      </datalist>
     </>
   );
 
