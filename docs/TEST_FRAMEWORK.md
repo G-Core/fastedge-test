@@ -123,11 +123,11 @@ interface ResourceTestSuite {
 }
 ```
 
-| Field      | Type                           | Required | Description                                                                                          |
-| ---------- | ------------------------------ | -------- | ---------------------------------------------------------------------------------------------------- |
+| Field      | Type                            | Required | Description                                                                                          |
+| ---------- | ------------------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
 | `resource` | `string \| ResourceConfigInput` | Yes      | Path to a resource config file (app paths are relative to it), or an equivalent config object        |
-| `stores`   | `false \| TestStores`          | No       | Default: each test gets its own stores. `false` disables stores; an instance is shared by every test |
-| `tests`    | `ResourceTestCase[]`           | Yes      | Test cases to execute; must be non-empty                                                             |
+| `stores`   | `false \| TestStores`           | No       | Default: each test gets its own stores. `false` disables stores; an instance is shared by every test |
+| `tests`    | `ResourceTestCase[]`            | Yes      | Test cases to execute; must be non-empty                                                             |
 
 Resource suites are defined with `defineTestSuite` and run with `runTestSuite` or `runAndExit`, the same as runner suites. `Resource`, `ResourceRequest` and `ResourceResult` are exported as types; `Resource` is created with [createResource](#createresource).
 
@@ -164,8 +164,13 @@ interface FlowOptions {
   requestHeaders?: Record<string, string>;
   requestBody?: string;
   properties?: Record<string, unknown>;
-  /** Default: true — matches production FastEdge behaviour */
+  /** @deprecated Ignored: the production property rules always apply. Will be removed in the next major version. */
   enforceProductionPropertyRules?: boolean;
+  /**
+   * Where the response comes from instead of `url` (a config's `origin`; loadConfigFile makes
+   * its paths absolute). `url` is then only what the client asked for.
+   */
+  origin?: Origin;
 }
 ```
 
@@ -176,9 +181,10 @@ interface FlowOptions {
 | `requestHeaders`                 | `{}`    | Additional request headers; pseudo-headers here override derived values     |
 | `requestBody`                    | `""`    | Request body string                                                         |
 | `properties`                     | `{}`    | Proxy-wasm properties to inject                                             |
-| `enforceProductionPropertyRules` | `true`  | Deprecated and ignored: the production property rules always apply |
+| `enforceProductionPropertyRules` | `true`  | Deprecated and ignored: the production property rules always apply         |
+| `origin`                         | —       | Response source used instead of `url`; see [TEST_CONFIG.md](TEST_CONFIG.md) |
 
-The upstream response is generated at runtime by a real fetch against `url`, or by the built-in responder when `url === "built-in"`. See the [Origin Mocking](#origin-mocking) section for controlling responses in tests.
+Without `origin`, the upstream response is generated at runtime by a real fetch against `url`, or by the built-in responder when `url === "built-in"`. With `origin` (the `origin` of a config returned by [loadConfigFile](#loadconfigfile)), the response comes from that origin and `url` is only what the client asked for. The `Origin` shape is described in [TEST_CONFIG.md](TEST_CONFIG.md). See the [Origin Mocking](#origin-mocking) section for controlling responses in tests.
 
 ### MockOriginsHandle & MockOriginsOptions
 
@@ -331,15 +337,15 @@ interface RunnerConfig {
 }
 ```
 
-| Field                            | Type                          | Description                                                                                                                                  |
-| -------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`                     | Enable dotenv loading                                                                                                                        |
-| `dotenv.path`                    | `string`                      | Directory to load dotenv files from; defaults to process CWD when omitted                                                                    |
-| `enforceProductionPropertyRules` | `boolean`                     | Deprecated and ignored: the production property rules always apply |
-| `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                                                                                       |
-| `httpPort`                       | `number`                      | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use)                                                                    |
+| Field                            | Type                          | Description                                                                                                                                    |
+| -------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`                     | Enable dotenv loading                                                                                                                          |
+| `dotenv.path`                    | `string`                      | Directory to load dotenv files from; defaults to process CWD when omitted                                                                      |
+| `enforceProductionPropertyRules` | `boolean`                     | Deprecated and ignored: the production property rules always apply                                                                             |
+| `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                                                                                         |
+| `httpPort`                       | `number`                      | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use)                                                                      |
 | `stores`                         | `boolean \| TestStores`       | Local cache and Edge KV. Default `true`. `false` makes CDN apps' cache and KV calls return `InternalFailure`. A `TestStores` instance isolates |
-| `dc`                             | `string`                      | Cache bucket (edge location); runners with the same `dc` share cache entries. Default `"local"`                                              |
+| `dc`                             | `string`                      | Cache bucket (edge location); runners with the same `dc` share cache entries. Default `"local"`                                                |
 
 Within `runTestSuite`, `runnerConfig.stores` is handled per test: when omitted or `true`, each test gets its own fresh `TestStores`; when a `TestStores` instance, every test uses that instance (the suite does not close it); when `false`, stores are disabled.
 
@@ -444,7 +450,7 @@ Output format:
 function runFlow(runner: IWasmRunner, options: FlowOptions): Promise<FullFlowResult>
 ```
 
-Executes a complete request/response flow through the WASM filter. Object-based wrapper around the runner's low-level `callFullFlow` method — callers do not need to construct pseudo-headers manually. Throws if `url` is not a full URL and is not `"built-in"`.
+Executes a complete request/response flow through the WASM filter. Object-based wrapper around the runner's low-level `callFullFlow` method — callers do not need to construct pseudo-headers manually. Throws if `url` is not a full URL and is not `"built-in"`. When `options.origin` is set, it is passed to the runner as the response source (see [FlowOptions](#flowoptions)).
 
 The returned `FullFlowResult` has this shape:
 
@@ -534,7 +540,7 @@ const body = assertHttpJson(response);
 function loadConfigFile(configPath: string): Promise<TestConfig>
 ```
 
-Reads and validates a `fastedge-config.test.json` file. Returns the parsed `TestConfig` or throws with a descriptive error. A relative `dotenv.path` in the file is resolved against the config file's directory. See [TEST_CONFIG.md](TEST_CONFIG.md) for the full config schema.
+Reads and validates a `fastedge-config.test.json` file. Returns the parsed `TestConfig` or throws with a descriptive error. A relative `dotenv.path` in the file is resolved against the config file's directory, as are the file paths of a proxy-wasm config's `origin`. See [TEST_CONFIG.md](TEST_CONFIG.md) for the full config schema.
 
 ```typescript
 import { loadConfigFile } from "@gcoredev/fastedge-test/test";

@@ -404,15 +404,15 @@ interface HttpWasmRequestCompletedEvent {
 
 `response.headers` mirrors Node's `IncomingHttpHeaders`. `undefined` values are dropped during JSON serialization and do not appear on the wire.
 
-| Field                  | Type                                              | Description                                                                       |
-| ---------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `response.status`      | `number`                                          | HTTP status code                                                                  |
-| `response.statusText`  | `string`                                          | HTTP status text                                                                  |
-| `response.headers`     | `Record<string, string \| string[] \| undefined>` | Response headers (`undefined` values omitted in JSON)                             |
-| `response.body`        | `string`                                          | Response body (may be base64 if `isBase64` is `true`)                             |
-| `response.storeCalls`  | `StoreCall[] \| undefined`                        | Cache and Edge KV calls the app made, in order. Present only when stores are on   |
-| `response.contentType` | `string \| null`                                  | Content-Type, or `null` if absent                                                 |
-| `response.isBase64`    | `boolean \| undefined`                            | Whether `body` is base64-encoded                                                  |
+| Field                  | Type                                              | Description                                                                     |
+| ---------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `response.status`      | `number`                                          | HTTP status code                                                                |
+| `response.statusText`  | `string`                                          | HTTP status text                                                                |
+| `response.headers`     | `Record<string, string \| string[] \| undefined>` | Response headers (`undefined` values omitted in JSON)                           |
+| `response.body`        | `string`                                          | Response body (may be base64 if `isBase64` is `true`)                           |
+| `response.storeCalls`  | `StoreCall[] \| undefined`                        | Cache and Edge KV calls the app made, in order. Present only when stores are on |
+| `response.contentType` | `string \| null`                                  | Content-Type, or `null` if absent                                               |
+| `response.isBase64`    | `boolean \| undefined`                            | Whether `body` is base64-encoded                                                |
 
 **Example:**
 
@@ -532,10 +532,10 @@ interface ResourceLoadedEvent {
 }
 ```
 
-| Field         | Type                                                       | Description                                                |
-| ------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| `configPath?` | `string \| null`                                           | The config file the resource was loaded from, if any       |
-| `apps`        | `{ name: string; wasmType: 'proxy-wasm' \| 'http-wasm' }[]` | The resource's apps by name, with each app's WASM type    |
+| Field         | Type                                                        | Description                                            |
+| ------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| `configPath?` | `string \| null`                                            | The config file the resource was loaded from, if any   |
+| `apps`        | `{ name: string; wasmType: 'proxy-wasm' \| 'http-wasm' }[]` | The resource's apps by name, with each app's WASM type |
 
 **Example:**
 
@@ -550,6 +550,43 @@ interface ResourceLoadedEvent {
       { "name": "auth", "wasmType": "proxy-wasm" },
       { "name": "origin", "wasmType": "http-wasm" }
     ]
+  }
+}
+```
+
+---
+
+### resource_saved
+
+Fired when a resource file is saved through the API (by the debugger page or an agent). Clients showing that file can use it to reload the file or warn about their own unsaved edits.
+
+```typescript
+interface ResourceSavedEvent {
+  type: "resource_saved";
+  timestamp: number;
+  source: "ui" | "ai_agent" | "api" | "system";
+  data: {
+    configPath: string;
+    version: string;
+  };
+}
+```
+
+| Field        | Type     | Description                        |
+| ------------ | -------- | ---------------------------------- |
+| `configPath` | `string` | Full path of the saved file        |
+| `version`    | `string` | Version of the file after the save |
+
+**Example:**
+
+```json
+{
+  "type": "resource_saved",
+  "timestamp": 1742734800030,
+  "source": "api",
+  "data": {
+    "configPath": "/workspace/resource.json",
+    "version": "a1b2c3d4"
   }
 }
 ```
@@ -625,12 +662,12 @@ interface ResourceRequestCompletedEvent {
 }
 ```
 
-| Field                | Type                                   | Description                                                                                  |
-| -------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `result.rule`        | `object \| null`                       | The rule that matched the request path (`index`, optional `name`, `match` regex), or `null` when the request used `main` |
-| `result.hooks`       | `object`                               | Each hook that ran, keyed by camelCase hook name, with the app that ran it and its result    |
-| `result.origin`      | `object \| undefined`                  | What answered before the response hooks. Absent when a request hook sent the response itself |
-| `result.finalResponse` | `object`                             | The response returned to the client                                                          |
+| Field                  | Type                  | Description                                                                   |
+| ---------------------- | --------------------- | ----------------------------------------------------------------------------- |
+| `result.rule`          | `object \| null`      | The matching rule (`index`, `name?`, `match`), or `null` when the request used `main` |
+| `result.hooks`         | `object`              | Each hook that ran, keyed by camelCase hook name, with its app and result     |
+| `result.origin`        | `object \| undefined` | What answered before the response hooks. Absent when a request hook responded |
+| `result.finalResponse` | `object`              | The response returned to the client                                           |
 
 `result.origin.kind` is `"url"` for an upstream URL, `"built-in"` for the built-in responder, and `"app"` when an http-wasm app of the resource answered (`app` then names it).
 

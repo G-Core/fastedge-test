@@ -73,7 +73,7 @@ All `/api/*` requests also validate the `Host` header. Requests whose `Host` is 
 
 ### X-Source Header
 
-The `POST /api/load`, `POST /api/resource/load`, `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
+The `POST /api/load`, `POST /api/resource/load`, `POST /api/resource/save`, `POST /api/execute`, `POST /api/send`, and `POST /api/config` endpoints accept an optional `X-Source` request header that tags the origin of the operation in WebSocket broadcast events.
 
 | Value      | Description                                             |
 | ---------- | ------------------------------------------------------- |
@@ -384,12 +384,126 @@ curl -X POST http://localhost:5179/api/resource/load \
 
 **Error Responses**
 
-| Status | Condition                                                                                  |
-| ------ | ------------------------------------------------------------------------------------------ |
-| `400`  | Body failed validation (both `configPath` and `config` given, or either of the wrong type) |
+| Status | Condition                                                                                    |
+| ------ | -------------------------------------------------------------------------------------------- |
+| `400`  | Body failed validation (both `configPath` and `config` given, or either of the wrong type)   |
 | `400`  | The resource config is invalid, a referenced path is outside the workspace, or a build fails |
 
 The previously loaded module or resource is discarded before the new one is created, so a failed load leaves nothing loaded. While a resource is loaded, `POST /api/execute`, `POST /api/call`, and `PATCH /api/dotenv` return `400` (no WASM module loaded).
+
+---
+
+### GET /api/resource/config
+
+Reads a resource file as written, without defaults filled in. Returns `config: null` when the file does not exist yet.
+
+**Query Parameters**
+
+| Parameter | Type     | Default                                                | Description                                                                           |
+| --------- | -------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `path`    | `string` | `.fastedge-debug/fastedge-cdn-resource.test.json`      | Resource file, relative to the workspace root. Must end in `.json` and be inside the workspace. |
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  path: string;                           // Absolute path of the file
+  config: Record<string, unknown> | null; // null when the file does not exist
+  version: string | null;                 // Content version (hash); null when there is no file
+}
+```
+
+**Example**
+
+```bash
+curl -H "x-fastedge-token: <token>" \
+  "http://localhost:5179/api/resource/config?path=resources/main.resource.json"
+```
+
+**Error Responses**
+
+| Status | Condition                                                                         |
+| ------ | --------------------------------------------------------------------------------- |
+| `400`  | `path` does not end in `.json`, is outside the workspace, or the file is not JSON |
+
+---
+
+### POST /api/resource/save
+
+Writes a resource file after checking it against the resource schema. Does not load it; call [`POST /api/resource/load`](#post-apiresourceload) afterwards. The file is written as given, so schema defaults stay out of it. Missing directories are created.
+
+Accepts an optional [`X-Source`](#x-source-header) request header.
+
+**Request Body**
+
+```typescript
+{
+  config: Record<string, unknown>; // The resource config to write
+  configPath?: string;             // Resource file, relative to the workspace root
+                                   // (default: .fastedge-debug/fastedge-cdn-resource.test.json)
+  expectedVersion?: string | null; // The `version` the caller last read; null = the file did not exist
+  force?: boolean;                 // Write even when the file changed since `expectedVersion`
+}
+```
+
+When `expectedVersion` is given and `force` is not set, the save is refused if the file's current version differs.
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  path: string;    // Absolute path written
+  version: string; // Content version of the new file
+}
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/resource/save \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "configPath": "resources/main.resource.json",
+    "expectedVersion": null,
+    "config": { "main": {} }
+  }'
+```
+
+**Error Responses**
+
+| Status | Condition                                                                                                  |
+| ------ | ---------------------------------------------------------------------------------------------------------- |
+| `400`  | Body failed validation, the path does not end in `.json` or is outside the workspace, or it is a symlink   |
+| `409`  | The file changed since `expectedVersion`. The body is `{ ok: false, conflict: true, version, error }`.     |
+
+---
+
+### GET /api/workspace/files
+
+Lists workspace paths that can be offered as suggestions for path fields: `.wasm` files, `*.test.json` files and folders with `.env` files.
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  root: string;         // Workspace root
+  [list: string]: unknown; // Lists of matching workspace paths, grouped by kind
+}
+```
+
+**Example**
+
+```bash
+curl -H "x-fastedge-token: <token>" http://localhost:5179/api/workspace/files
+```
+
+**Error Responses**
+
+See [Error Handling](#error-handling) for `401` and `403` responses that apply to every `/api/*` endpoint.
 
 ---
 
@@ -820,7 +934,7 @@ curl -X POST http://localhost:5179/api/call \
 
 Executes the full Proxy-WASM CDN request/response flow. Equivalent to `POST /api/execute` for Proxy-WASM, but validates the request body against a schema. Only valid for Proxy-WASM modules.
 
-If a resource is loaded through [`POST /api/resource/load`](#post-apiresourceload), the request runs through the resource instead and the response has the [resource result](#response--resource) shape.
+If a resource is loaded through [`POST /api/resource/load`](#post-apiresourceload), the request runs through the resource instead and the response has the **Response — resource** shape below.
 
 Requires a WASM module or resource to be loaded. Accepts an optional [`X-Source`](#x-source-header) request header.
 
@@ -836,12 +950,29 @@ Requires a WASM module or resource to be loaded. Accepts an optional [`X-Source`
     body?: string;                     // Request body (default: "")
   };
   properties?: Record<string, unknown>; // CDN properties; defaults to {} when omitted
+  origin?: Origin;                      // Origin for this request only; not allowed when a resource is loaded
   client?: ClientContext;               // See "Request context on execution endpoints"
   edge?: EdgeContext;                   // See "Request context on execution endpoints"
 }
 ```
 
-The upstream response is generated at runtime — either by a real fetch against `url`, or by the built-in responder when `url === "built-in"`. The published `api-send` JSON schema lists `properties` as required; the server accepts a body without it and uses `{}`.
+The upstream response is generated at runtime — either by a real fetch against `url`, or by the built-in responder when `url === "built-in"`. The `origin` field replaces that source for the request:
+
+```typescript
+type Origin =
+  | { url: string }                  // Fetch the response from this URL
+  | {
+      builtIn: {
+        status?: number;             // Integer 100–599
+        headers?: Record<string, string>;
+        body?: string;
+        bodyFile?: string;           // File whose content is the body (non-empty path)
+        files?: string;              // Folder served by the built-in responder (non-empty path)
+      };
+    };
+```
+
+Files named in `origin` resolve against the workspace root and must stay inside it. The published `api-send` JSON schema lists `properties` as required; the server accepts a body without it and uses `{}`.
 
 **Response — single module**
 
@@ -1003,18 +1134,20 @@ curl -X POST http://localhost:5179/api/send \
 
 **Error Responses**
 
-| Status | Condition                                                                    |
-| ------ | ---------------------------------------------------------------------------- |
-| `400`  | Body failed validation (`url` missing or neither `built-in` nor a valid URL) |
-| `400`  | Body failed validation (invalid `client` or `edge`)                          |
-| `400`  | No WASM module or resource is loaded                                         |
-| `500`  | Execution failed, including use against an HTTP-WASM module                  |
+| Status | Condition                                                                                          |
+| ------ | -------------------------------------------------------------------------------------------------- |
+| `400`  | Body failed validation (`url` missing or neither `built-in` nor a valid URL)                       |
+| `400`  | Body failed validation (invalid `client`, `edge` or `origin`)                                      |
+| `400`  | `origin` is given while a resource is loaded (a resource sets its origins in its file)             |
+| `400`  | `origin` names a file outside the workspace root                                                   |
+| `400`  | No WASM module or resource is loaded                                                               |
+| `500`  | Execution failed, including use against an HTTP-WASM module                                        |
 
 ---
 
 ## Stores
 
-The storage service backs the cache and Edge KV APIs of the loaded module or resource. These endpoints inspect and control it for the loaded app. When nothing is loaded, the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false`. `GET /api/stores/value`, `POST /api/stores/reset`, and `POST /api/stores/advance-clock` return `409` in those cases. To browse and edit the stores without an app loaded, use the [Storage Explorer](#storage-explorer) endpoints.
+The storage service backs the cache and Edge KV APIs of the loaded module or resource. These endpoints inspect and control it for the loaded app. When nothing is loaded, the module was loaded with `stores: false`, or the service could not start, `GET /api/stores` reports `enabled: false`. `GET /api/stores/value`, `POST /api/stores/reset`, `POST /api/stores/advance-clock`, and `POST /api/stores/clock` return `409` in those cases. To browse and edit the stores without an app loaded, use the [Storage Explorer](#storage-explorer) endpoints.
 
 ### GET /api/stores
 
@@ -1177,6 +1310,46 @@ curl -X POST http://localhost:5179/api/stores/advance-clock \
 | `400`  | `ms` is missing, not a number, or not greater than 0 |
 | `409`  | No app with stores is loaded                         |
 | `500`  | The storage service returned an error                |
+
+---
+
+### POST /api/stores/clock
+
+Pauses or resumes the storage service clock. While the clock is paused, cache entries do not expire on their own; [`POST /api/stores/advance-clock`](#post-apistoresadvance-clock) still moves it.
+
+**Request Body**
+
+```typescript
+{
+  paused: boolean; // true pauses the clock, false resumes it
+}
+```
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  paused: unknown; // The clock state reported by the storage service
+}
+```
+
+**Example**
+
+```bash
+curl -X POST http://localhost:5179/api/stores/clock \
+  -H "x-fastedge-token: <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "paused": true }'
+```
+
+**Error Responses**
+
+| Status | Condition                             |
+| ------ | ------------------------------------- |
+| `400`  | `paused` is missing or not a boolean  |
+| `409`  | No app with stores is loaded          |
+| `500`  | The storage service returned an error |
 
 ---
 
@@ -1689,6 +1862,7 @@ type ProxyWasmConfig = {
     headers: Record<string, string>;
     body: string;
   };
+  origin?: Origin; // See POST /api/send
   properties: Record<string, unknown>;
   dotenv?: { enabled?: boolean; path?: string };
   stores?: boolean;
@@ -1970,7 +2144,7 @@ When a request body fails schema validation, `error` is the flattened validation
 | `401`  | Missing or invalid `x-fastedge-token` header on an `/api/*` request                                |
 | `403`  | `Host` header not allowed, or a save-as path not approved by the save dialog                       |
 | `404`  | Resource not found (config file, schema file)                                                      |
-| `409`  | Request conflicts with server state (no app with stores is loaded, stale fixture diff)             |
+| `409`  | Request conflicts with server state (no app with stores is loaded, stale fixture diff, resource file changed) |
 | `500`  | Internal error during execution, I/O, or the storage service                                       |
 | `503`  | The storage service is not available (Storage Explorer endpoints)                                  |
 

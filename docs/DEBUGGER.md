@@ -158,7 +158,7 @@ npx fastedge-debug --project-dir /home/user/myproject
 The server handles `SIGTERM` and `SIGINT`:
 
 1. Logs the received signal.
-2. Cleans up the active WASM runner (frees memory, closes child processes).
+2. Cleans up the loaded WASM app, or every app of a loaded resource (frees memory, stops `fastedge-run` child processes).
 3. Releases the shared storage service connection, so an unused storage service can exit without waiting for its lease to expire.
 4. Closes all WebSocket connections.
 5. Deletes the `.fastedge-debug/.debug-port` file.

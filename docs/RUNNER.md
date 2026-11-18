@@ -49,7 +49,7 @@ import type {
 } from '@gcoredev/fastedge-test';
 ```
 
-`HeaderMap`, `HeaderRecord`, `HeaderTuples`, `LogEntry`, `ProxyStatus`, and `EventSource` are described under [Supporting Types](#supporting-types) and [IStateManager](#istatemanager). They are not exported from the package root.
+`HeaderMap`, `HeaderRecord`, `HeaderTuples`, `HookBody`, `LogEntry`, `ProxyStatus`, `Origin`, and `EventSource` are described under [Supporting Types](#supporting-types), [HookResult](#hookresult), and [IStateManager](#istatemanager). They are not exported from the package root.
 
 `createStores()` builds an isolated in-memory store instance (`TestStores`) that can be passed as `RunnerConfig.stores`. Its options and seed types are `CreateStoresOptions` and `StoresSeed`. See [stores](#runnerconfig) under `RunnerConfig` for how a runner uses the instance.
 
@@ -145,7 +145,8 @@ interface IWasmRunner {
     body: string,
     properties: Record<string, unknown>,
     enforceProductionPropertyRules: boolean,
-    context?: RequestContext
+    context?: RequestContext,
+    origin?: Origin
   ): Promise<FullFlowResult>;
   applyDotenv(enabled: boolean, path?: string): Promise<void>;
   setRequestContext(context: RequestContext): Promise<void>;
@@ -250,7 +251,8 @@ callFullFlow(
   body: string,
   properties: Record<string, unknown>,
   enforceProductionPropertyRules: boolean,
-  context?: RequestContext
+  context?: RequestContext,
+  origin?: Origin
 ): Promise<FullFlowResult>
 ```
 
@@ -263,10 +265,15 @@ callFullFlow(
 | `headers`                        | `Record<string, string>`  | Request headers                                         |
 | `body`                           | `string`                  | Request body                                            |
 | `properties`                     | `Record<string, unknown>` | Shared properties passed to all hooks                   |
-| `enforceProductionPropertyRules` | `boolean`                 | Deprecated and ignored: the production property rules always apply |
+| `enforceProductionPropertyRules` | `boolean`                 | Deprecated and ignored                                  |
 | `context?`                       | `RequestContext`          | Client and edge for this flow only                      |
+| `origin?`                        | `Origin`                  | Where the response comes from instead of `url`          |
+
+`enforceProductionPropertyRules` is kept so existing callers compile; the production property rules always apply, and the parameter will be removed in the next major version.
 
 The upstream response is generated at runtime — either by a real HTTP fetch against `url`, or by the built-in responder when `url === "built-in"` (`BUILTIN_SHORTHAND`). There is no caller-provided mock response. The origin fetch does not follow redirects; a 3xx origin response is passed to the response hooks as-is.
+
+When `origin` is passed, it replaces the fetch of `url` as the source of the response, and `url` is only what the client asked for. File paths inside `origin` must already be absolute. The `Origin` type is not exported by name from the package root.
 
 Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fetch or built-in responder)* → `onResponseHeaders` → `onResponseBody`.
 
@@ -387,7 +394,7 @@ const result: FullFlowResult = await runner.callFullFlow(
   { 'accept': 'application/json' },
   '',
   {},   // properties
-  true, // enforceProductionPropertyRules
+  true, // enforceProductionPropertyRules (ignored)
 );
 await runner.cleanup();
 ```
@@ -436,10 +443,12 @@ function matchRule(config: ResourceConfig, url: string): ResourceResult["rule"]
 
 **Parameters**
 
-| Parameter      | Type                           | Description                                                                                                 |
-| -------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `fileOrObject` | `string \| ResourceConfigInput` | Path to a resource config JSON file (paths inside it are relative to the file), or a config object (paths relative to the current working directory, or to `options.root`) |
-| `options`      | `CreateResourceOptions`        | Optional settings                                                                                           |
+| Parameter      | Type                            | Description                                             |
+| -------------- | ------------------------------- | ------------------------------------------------------- |
+| `fileOrObject` | `string \| ResourceConfigInput` | Path to a resource config JSON file, or a config object |
+| `options`      | `CreateResourceOptions`         | Optional settings                                       |
+
+Paths inside a config file are relative to that file. Paths inside a config object are relative to the current working directory, or to `options.root`.
 
 `createResource` loads every app with `createRunner`, validates the config, and rejects when:
 
@@ -501,8 +510,8 @@ type ResourceHooks = {
   [hook in CdnHook]?: string | { app: string; interruptOnError?: boolean };
 };
 
-/** A URL ("built-in" for the built-in responder) or an HTTP app of the resource. */
-type ResourceOrigin = { url: string } | { app: string };
+/** A URL ("built-in" for the built-in responder), a built-in origin, or an HTTP app of the resource. */
+type ResourceOrigin = { url: string } | { builtIn: BuiltInOrigin } | { app: string }; // BuiltInOrigin: see TEST_CONFIG.md
 
 type CdnHook = "onRequestHeaders" | "onRequestBody" | "onResponseHeaders" | "onResponseBody";
 ```
@@ -671,6 +680,7 @@ interface RunnerConfig {
      *  e.g. test fixture directories or non-standard project layouts. */
     path?: string;
   };
+  /** @deprecated Ignored: the production property rules always apply. Will be removed in the next major version. */
   enforceProductionPropertyRules?: boolean;
   /** Override automatic WASM type detection. Use when detection produces wrong results. */
   runnerType?: WasmType;
@@ -714,7 +724,7 @@ interface RunnerConfig {
 | -------------------------------- | ----------------------- | --------------- | -------------------------------------------------------------- |
 | `dotenv.enabled`                 | `boolean`               | `false`         | Load dotenv files                                              |
 | `dotenv.path`                    | `string`                | `undefined`     | Directory to load dotenv files from                            |
-| `enforceProductionPropertyRules` | `boolean`               | `undefined`     | Deprecated and ignored: the production property rules always apply |
+| `enforceProductionPropertyRules` | `boolean`               | `undefined`     | Deprecated and ignored                                         |
 | `runnerType`                     | `WasmType`              | *auto-detected* | Overrides WASM type detection                                  |
 | `httpPort`                       | `number`                | `undefined`     | HTTP-WASM only: pins the `fastedge-run` port                   |
 | `stores`                         | `boolean \| TestStores` | `true`          | Storage service for cache and Edge KV, or isolated test stores |
@@ -803,6 +813,8 @@ type HookCall = {
   request: {
     headers: HeaderRecord;
     body: string;
+    /** `body` is base64 of raw bytes (a body that is not text, e.g. an image). */
+    isBase64?: boolean;
     method?: string;
     path?: string;
     scheme?: string;
@@ -818,11 +830,14 @@ type HookCall = {
   response?: {
     headers: HeaderRecord;
     body: string;
+    /** `body` is base64 of raw bytes. */
+    isBase64?: boolean;
     status?: number;
     statusText?: string;
   };
   properties: Record<string, unknown>;
-  enforceProductionPropertyRules?: boolean; // Default: true - Enforce property access control rules
+  /** @deprecated Ignored: the production property rules always apply. Will be removed in the next major version. */
+  enforceProductionPropertyRules?: boolean;
   /**
    * Custom properties an earlier hook of this request wrote (and later hooks may read), when the
    * hooks run on different apps: on the edge custom properties belong to the request, not the app.
@@ -843,12 +858,13 @@ type HookCall = {
 | `request`                        | Request state passed to the hook                                                         |
 | `response`                       | Seed state for response hooks via `callHook()`                                           |
 | `properties`                     | Shared properties                                                                        |
-| `enforceProductionPropertyRules` | Deprecated and ignored: the production property rules always apply |
-| `customProperties`               | Names of custom properties written by earlier hooks of the request, for cross-app flows |
+| `enforceProductionPropertyRules` | Deprecated and ignored                                                                   |
+| `customProperties`               | Names of custom properties written by earlier hooks of the request, for cross-app flows  |
 | `requestId`                      | Request id shared by the hooks of a flow driven from outside the runner                  |
 
 - `hook`: one of `"onRequestHeaders"`, `"onRequestBody"`, `"onResponseHeaders"`, `"onResponseBody"`.
 - `context`: when omitted, the runner's context is used. See [Request Context](#request-context).
+- `request.isBase64`, `response.isBase64`: set to `true` when `body` is base64 of raw bytes rather than text, for example an image.
 - `response`: not consumed by `callFullFlow()` or by request hooks. The full-flow path generates the upstream response at runtime.
 - `properties`: for example `request.path`, `vm_config`, `plugin_config`.
 - `enforceProductionPropertyRules`: deprecated and ignored: the production property rules always apply; it will be removed in the next major version.
@@ -859,17 +875,20 @@ type HookCall = {
 ### HookResult
 
 ```typescript
+/** Headers and body of the request or response; `isBase64`: the body is base64 of raw bytes (not text). */
+type HookBody = { headers: HeaderRecord; body: string; isBase64?: boolean };
+
 type HookResult = {
   returnCode: number | null;
   logs: { level: number; message: string }[];
   input: {
-    request: { headers: HeaderRecord; body: string };
-    response: { headers: HeaderRecord; body: string };
+    request: HookBody;
+    response: HookBody;
     properties?: Record<string, unknown>;
   };
   output: {
-    request: { headers: HeaderRecord; body: string };
-    response: { headers: HeaderRecord; body: string };
+    request: HookBody;
+    response: HookBody;
     properties?: Record<string, unknown>;
   };
   properties: Record<string, unknown>;
@@ -892,6 +911,8 @@ type HookResult = {
 | `storeCalls`       | Cache and Edge KV calls made by the hook, in order (stores on only)        |
 | `localResponse`    | The response the hook sent with `send_http_response`, if any               |
 | `customProperties` | Custom properties later hooks of the request may read                      |
+
+`HookBody.isBase64` is `true` when the body is base64. It is set when the call's body was base64, or when the bytes a hook wrote are not valid UTF-8 text.
 
 `storeCalls` is present only when the runner has stores enabled. See [StoreCall](#storecall) for the shape of each entry.
 
@@ -1099,7 +1120,7 @@ async function testCdnApp() {
         'request.path': '/api/data',
         'request.host': 'example.com',
       },                                // shared properties
-      true,                             // enforce production property rules
+      true,                             // enforce production property rules (ignored)
     );
 
     // Inspect hook results
@@ -1161,7 +1182,7 @@ async function testCdnAppOffline() {
       { 'accept': 'application/json' },
       '',
       {},   // properties
-      true, // enforceProductionPropertyRules
+      true, // enforceProductionPropertyRules (ignored)
     );
 
     console.log('Final status:', result.finalResponse.status);
