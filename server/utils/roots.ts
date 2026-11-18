@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -14,12 +15,23 @@ export function workspaceRoot(): string {
  * The app root (`FASTEDGE_APP_ROOT`, default the workspace root): home of `.fastedge-debug/`
  * (port file, F5's `app.wasm`, the single-app config), the base of `<workspace>` paths and of the
  * default dotenv folder, and where the stores root search starts. An app root outside the
- * workspace root is ignored.
+ * workspace root (as written or through a symlink) is ignored.
  */
 export function appRoot(): string {
   const workspace = workspaceRoot();
   const app = process.env.FASTEDGE_APP_ROOT;
   if (!app) return workspace;
-  const rel = path.relative(path.resolve(workspace), path.resolve(app));
-  return rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel) ? workspace : path.resolve(app);
+  // Inside both as written and through symlinks; a path that can't be resolved counts as outside.
+  try {
+    return inside(path.resolve(workspace), path.resolve(app)) && inside(realpathSync(workspace), realpathSync(app))
+      ? path.resolve(app)
+      : workspace;
+  } catch {
+    return workspace;
+  }
+}
+
+function inside(root: string, candidate: string): boolean {
+  const rel = path.relative(root, candidate);
+  return !(rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel));
 }

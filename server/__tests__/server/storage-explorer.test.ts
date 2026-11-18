@@ -104,5 +104,15 @@ describe("debugger server — Storage Explorer", () => {
     expect((await call("/api/storage/fixtures/save", { files: [{ file: again.file, hash: again.hash }] })).status).toBe(400);
     expect(existsSync(join(server.workspacePath, "nowhere.json"))).toBe(false);
     rmSync(join(server.workspacePath, "fixtures/stores/kv/linked.json"));
+
+    // A symlinked folder on the way is refused: the kv folder itself links out.
+    const elsewhere = join(server.workspacePath, "elsewhere");
+    mkdirSync(elsewhere);
+    rmSync(join(server.workspacePath, "fixtures/stores/kv"), { recursive: true });
+    symlinkSync(elsewhere, join(server.workspacePath, "fixtures/stores/kv"));
+    const viaDir = (await call("/api/storage/fixtures/diff")).body.changes.find((c: { store: string }) => c.store === "linked");
+    expect((await call("/api/storage/fixtures/save", { files: [{ file: viaDir.file, hash: viaDir.hash }] })).status).toBe(400);
+    expect(existsSync(join(elsewhere, "linked.json"))).toBe(false);
+    rmSync(join(server.workspacePath, "fixtures/stores/kv"));
   });
 });
