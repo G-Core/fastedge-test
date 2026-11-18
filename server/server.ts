@@ -30,8 +30,8 @@ import { mountStorageExplorer } from "./storageExplorer.js";
 import { listWorkspaceFiles } from "./utils/workspaceFiles.js";
 import { confineTo, resolveOrigin } from "./runner/origin.js";
 import { appRoot, workspaceRoot } from "./utils/roots.js";
-import { NotApproved, onApprovalPending, validateRead, withApproval } from "./utils/approval.js";
-import { approvedFolders, onFolderApproved } from "./utils/allowedFolders.js";
+import { NotApproved, onApprovalPending, requestApproval, validateRead, withApproval } from "./utils/approval.js";
+import { allowedFolderStates, approvedFolders, onFolderApproved } from "./utils/allowedFolders.js";
 import type { Origin } from "./schemas/config.js";
 import {
   ApiResourceLoadBodySchema,
@@ -189,7 +189,27 @@ app.get("/api/environment", (req: Request, res: Response) => {
     workspaceRoot: process.env.WORKSPACE_PATH ? workspaceRoot() : null,
     appRoot: process.env.WORKSPACE_PATH ? appRoot() : null,
     approvedFolders: approvedFolders(),
+    allowedFolders: allowedFolderStates(),
   });
+});
+
+/**
+ * Asks the user to approve an allowed folder now (the page's Ask button), so its files show in the
+ * path fields before anything is loaded from it. Only asks: the answer comes from the user (VS Code
+ * dialog or terminal), never from this call. A folder already answered this session is not asked again.
+ */
+app.post("/api/allowed-folders/ask", async (req: Request, res: Response) => {
+  const entry = allowedFolderStates().find((f) => f.folder === req.body?.folder);
+  if (!entry) {
+    res.status(400).json({ ok: false, error: "Not an allowed folder" });
+    return;
+  }
+  if (entry.state !== "not asked") {
+    res.json({ ok: true, state: entry.state });
+    return;
+  }
+  const approval = await requestApproval(entry.folder);
+  res.json({ ok: true, state: approval.approved ? "approved" : approval.answered ? "refused" : "not asked", ...(approval.approved ? {} : { error: new NotApproved(entry.folder, approval).message }) });
 });
 
 // Workspace WASM detection endpoint (VSCode only)
@@ -541,10 +561,11 @@ function workspaceOrigin(origin: Origin): Promise<Origin> {
   return withApproval(async () => resolveOrigin(origin, root, confineTo(root, { allowedFolders: true })));
 }
 
-/** Suggestions for the Resource page's path fields: wasm, *.test.json and .env folders in the workspace. */
+/** Suggestions for the path fields: wasm, *.test.json and .env folders in the workspace and approved allowed folders. */
 app.get("/api/workspace/files", (_req: Request, res: Response) => {
   const root = workspaceRoot();
-  res.json({ ok: true, root, ...listWorkspaceFiles(root) });
+  // With the approved allowed folders' files (absolute paths).
+  res.json({ ok: true, root, ...listWorkspaceFiles(root, undefined, approvedFolders()) });
 });
 
 /** Writes a resource file (checked against the resource schema first). Does not load it. */

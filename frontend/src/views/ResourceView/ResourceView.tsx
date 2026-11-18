@@ -32,11 +32,34 @@ const NEW_CONFIG: ResourceConfig = { apps: {}, main: { hooks: {}, origin: { url:
 
 /** `to` relative to the folder `from`; both workspace-relative and "/"-separated. */
 export function relativePath(from: string, to: string): string {
-  const a = from.split("/").filter((s) => s && s !== ".");
-  const b = to.split("/").filter((s) => s && s !== ".");
+  const a = segments(from);
+  const b = segments(to);
   let i = 0;
   while (i < a.length && i < b.length && a[i] === b[i]) i++;
   return [...a.slice(i).map(() => ".."), ...b.slice(i)].join("/") || ".";
+}
+
+/** A path's segments ("/" or "\\"), with "." dropped and ".." applied. */
+function segments(p: string): string[] {
+  const out: string[] = [];
+  for (const s of p.split(/[\\/]/)) {
+    if (s === ".." && out.length && out[out.length - 1] !== "..") out.pop();
+    else if (s && s !== ".") out.push(s);
+  }
+  return out;
+}
+
+const isAbsolute = (p: string) => /^([\\/]|[A-Za-z]:)/.test(p);
+
+/**
+ * How a suggested path is written in the resource file at `resourcePath` (absolute, or
+ * workspace-relative): a workspace path ("app/x.wasm") relative to the file's folder; an approved
+ * allowed folder's (absolute) as it is.
+ */
+function fromResource(files: WorkspaceFiles | null, resourcePath: string, workspacePath: string): string {
+  if (!files || isAbsolute(workspacePath)) return workspacePath;
+  const file = isAbsolute(resourcePath) ? resourcePath : `${files.root}/${resourcePath}`;
+  return relativePath(file.replace(/[\\/][^\\/]*$/, ""), `${files.root}/${workspacePath}`);
 }
 
 interface ResourceViewProps {
@@ -73,7 +96,7 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved, faile
   // Bumped on every open: the request section starts again from the file's `request`.
   const [openCount, setOpenCount] = useState(0);
   const [files, refreshFiles] = useWorkspaceFiles();
-  const paths: PathSuggestions = { files, toPath: (p) => relativePath(resourceDir(files, path), p), onFocusPath: refreshFiles };
+  const paths: PathSuggestions = { files, toPath: (p) => fromResource(files, path, p), onFocusPath: refreshFiles };
 
   const run = async (work: () => Promise<string | void>) => {
     setBusy(true);
@@ -342,20 +365,13 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved, faile
   );
 }
 
-/** The path fields' dropdowns: workspace files, written relative to the resource file. */
-/** The resource file's folder, workspace-relative ("" = the workspace root). */
-function resourceDir(files: WorkspaceFiles | null, resourcePath: string): string {
-  const fromRoot = files && resourcePath.startsWith(`${files.root}/`) ? resourcePath.slice(files.root.length + 1) : resourcePath;
-  return fromRoot.includes("/") ? fromRoot.slice(0, fromRoot.lastIndexOf("/")) : "";
-}
-
+/** The path fields' dropdowns: workspace (and approved allowed folder) files, written relative to the resource file. */
 function Suggestions({ files, resourcePath }: { files: WorkspaceFiles | null; resourcePath: string }) {
   if (!files) return null;
-  const dir = resourceDir(files, resourcePath);
   const list = (id: string, paths: string[], relative: boolean) => (
     <datalist id={id}>
       {paths.map((p) => (
-        <option key={p} value={relative ? relativePath(dir, p) : p} />
+        <option key={p} value={relative ? fromResource(files, resourcePath, p) : p} />
       ))}
     </datalist>
   );

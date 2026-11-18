@@ -14,7 +14,8 @@ import { ResourceView } from "./views/ResourceView";
 import { Tabs } from "./components/common/Tabs";
 import { Toggle } from "./components/common/Toggle";
 import { STORES_CHANGED } from "./components/common/StoresPanel/StoresPanel";
-import { getEnvironment, type EnvironmentInfo, type ResourceLoaded, type ResourceResult } from "./api";
+import { AllowedFolders } from "./components/common/AllowedFolders";
+import { getEnvironment, type AllowedFolder, type EnvironmentInfo, type ResourceLoaded, type ResourceResult } from "./api";
 import "./App.css";
 
 function App() {
@@ -32,7 +33,9 @@ function App() {
   const [resourceSaved, setResourceSaved] = useState<{ configPath: string; version: string } | null>(null);
   const [resourceFailed, setResourceFailed] = useState<{ configPath: string; error: string } | null>(null);
   // Allowed folders outside the workspace approved this session: shown so such reads are visible.
-  const [approvedFolders, setApprovedFolders] = useState<string[]>([]);
+  const [allowedFolders, setAllowedFolders] = useState<AllowedFolder[]>([]);
+  const setFolderState = (folder: string, state: AllowedFolder["state"]) =>
+    setAllowedFolders((list) => list.map((f) => (f.folder === folder ? { folder, state } : f)));
   const [awaitingApproval, setAwaitingApproval] = useState<{ folder: string; askedIn: "vscode" | "terminal" }[]>([]);
 
   // Get state and actions from stores
@@ -117,7 +120,7 @@ function App() {
         const envInfo = await getEnvironment();
         setEnvironment(envInfo);
         setWorkspaceRoot(envInfo.workspaceRoot ?? null);
-        setApprovedFolders(envInfo.approvedFolders ?? []);
+        setAllowedFolders(envInfo.allowedFolders ?? []);
         console.log(`[App] Detected environment: ${envInfo.environment}`);
       } catch (error) {
         console.error("[App] Failed to initialize environment:", error);
@@ -286,7 +289,7 @@ function App() {
         break;
 
       case "allowed_folder_approved":
-        setApprovedFolders((folders) => (folders.includes(event.data.folder) ? folders : [...folders, event.data.folder]));
+        setFolderState(event.data.folder, "approved");
         break;
 
       case "allowed_folder_approval_pending": {
@@ -409,9 +412,7 @@ function App() {
             {askedIn === "vscode" ? "the FastEdge dialog in VS Code" : "the prompt in the terminal that started the debugger"}.
           </div>
         ))}
-        {approvedFolders.length > 0 && (
-          <div className="notice">Reading outside the workspace this session: {approvedFolders.join(", ")}</div>
-        )}
+        <AllowedFolders folders={allowedFolders} onState={setFolderState} />
         {wsStatus.error?.startsWith("Missing session token") && (
           <div className="error">{wsStatus.error}</div>
         )}

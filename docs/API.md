@@ -484,7 +484,7 @@ curl -X POST http://localhost:5179/api/resource/save \
 
 ### GET /api/workspace/files
 
-Lists workspace paths that can be offered as suggestions for path fields: `.wasm` files, `*.test.json` files and folders with `.env` files.
+Lists paths that can be offered as suggestions for path fields: `.wasm` files, `*.test.json` files and folders with `.env` files. Workspace paths are relative to `root`; after them come the files of each [allowed folder](SECURITY.md#allowed-folders) approved this session, as absolute paths.
 
 **Response**
 
@@ -505,6 +505,38 @@ curl -H "x-fastedge-token: <token>" http://localhost:5179/api/workspace/files
 **Error Responses**
 
 See [Error Handling](#error-handling) for `401` and `403` responses that apply to every `/api/*` endpoint.
+
+---
+
+### POST /api/allowed-folders/ask
+
+Asks the user to approve an [allowed folder](SECURITY.md#allowed-folders) for this session, before anything is loaded from it (the debugger page's **Ask to read it** button). This call only asks: the user answers in the VS Code dialog or the terminal that started the debugger, and the response waits for that answer (up to 2 minutes). A folder already approved or refused this session is not asked again.
+
+**Request Body**
+
+```typescript
+{
+  folder: string; // An allowed folder's real path, as GET /api/environment lists it in allowedFolders
+}
+```
+
+**Response**
+
+```typescript
+{
+  ok: true;
+  state: "approved" | "refused" | "not asked"; // "not asked": no answer in time, or no way to ask
+  error?: string;                               // Why it was not approved
+}
+```
+
+**Error Responses**
+
+| Status | Cause |
+| ------ | ----- |
+| `400`  | `folder` is not a configured allowed folder |
+
+`GET /api/environment` lists every configured allowed folder with its state in `allowedFolders` (`{ folder, state }[]`).
 
 ---
 

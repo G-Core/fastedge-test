@@ -87,7 +87,9 @@ approved once per session. Read-only callers opt in (`validatePath({ allowedFold
 allowedFolders })`); a folder not yet approved throws `ApprovalNeeded`, the route asks
 (`withApproval` / `validateRead`: the extension over IPC, else a terminal prompt, else refused)
 and runs again. While a request waits, `allowed_folder_approval_pending` tells the page where to
-answer.
+answer. `POST /api/allowed-folders/ask` asks up front (the page's Ask button); `listWorkspaceFiles`
+adds approved folders' files as absolute paths, which the path fields write as they are (workspace
+files are written relative to the resource file).
 
 The CLI sets only `WORKSPACE_PATH`, so both roots are one folder: the nearest ancestor with a
 `.fastedge-debug/`, else with `package.json` or `Cargo.toml`, else the start directory

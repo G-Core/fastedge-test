@@ -1,7 +1,11 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
 
-/** Paths relative to the workspace root, "/"-separated, sorted. */
+/**
+ * Paths relative to the workspace root, "/"-separated, sorted; then those in approved allowed
+ * folders, absolute (the folder is the user's, not the repo's: a relative path would not travel
+ * either, and "../../../.." is hard to read).
+ */
 export interface WorkspaceFiles {
   /** Built `.wasm` files (cargo's `deps` copies left out). */
   wasm: string[];
@@ -22,10 +26,11 @@ const SKIP = new Set(["node_modules", ".git"]);
 const SKIP_IN_TARGET = new Set(["deps", "build", "incremental", ".fingerprint", "examples"]);
 
 /**
- * Lists the files the Resource page offers as suggestions. Does not follow symlinks, so it never
- * leaves the workspace.
+ * Lists the files the path fields offer as suggestions: the workspace's, then those of each
+ * folder in `outside` (allowed folders the user approved). Does not follow symlinks, so it never
+ * leaves the folders it walks.
  */
-export function listWorkspaceFiles(root: string, limit = 500): WorkspaceFiles {
+export function listWorkspaceFiles(root: string, limit = 500, outside: string[] = []): WorkspaceFiles {
   const out: WorkspaceFiles = { wasm: [], configs: [], dotenvDirs: [], folders: [], files: [], truncated: false };
   const add = (list: string[], value: string) => {
     if (list.length < limit) list.push(value);
@@ -58,10 +63,16 @@ export function listWorkspaceFiles(root: string, limit = 500): WorkspaceFiles {
     if (hasDotenv) add(out.dotenvDirs, rel || ".");
   };
   walk(root, "", false);
-  out.wasm.sort();
-  out.configs.sort();
-  out.dotenvDirs.sort();
-  out.folders.sort();
-  out.files.sort();
+  for (const folder of outside) {
+    const absolute = folder.split(path.sep).join("/");
+    add(out.folders, absolute);
+    walk(folder, absolute, false);
+  }
+  const order = (a: string, b: string) => Number(path.isAbsolute(a)) - Number(path.isAbsolute(b)) || (a < b ? -1 : a > b ? 1 : 0);
+  out.wasm.sort(order);
+  out.configs.sort(order);
+  out.dotenvDirs.sort(order);
+  out.folders.sort(order);
+  out.files.sort(order);
   return out;
 }

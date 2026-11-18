@@ -104,3 +104,13 @@ export function recordApproval(folder: string, granted: boolean): void {
 export function approvedFolders(): string[] {
   return [...approved];
 }
+
+export type FolderState = "approved" | "refused" | "not asked";
+
+/** The configured allowed folders (real paths) and whether the user approved each this session. */
+export function allowedFolderStates(): { folder: string; state: FolderState }[] {
+  return allowedFolders().map(({ real }) => ({
+    folder: real,
+    state: approved.has(real) ? "approved" : refused.has(real) ? "refused" : "not asked",
+  }));
+}

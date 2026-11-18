@@ -93,7 +93,10 @@ script's `--allow` is yours only if you wrote the script.
 - **The same checks as the workspace.** A path must be in the allowed folder
   both as written and through symlinks, so a link from the workspace into an
   allowed folder, or from an allowed folder out of it, is refused.
-- **Visible.** The page lists the folders approved this session.
+- **Visible.** The page lists the allowed folders and whether each is approved
+  this session. Its **Ask to read it** button asks for approval up front (it
+  only asks, like a load does); an approved folder's files are then offered in
+  the path fields, as absolute paths.
 
 The risk that remains: an approved folder is readable by every config loaded in
 that session, and a loaded app can send what it reads over the network. A

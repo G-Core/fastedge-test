@@ -22,6 +22,25 @@ export interface EnvironmentInfo {
   workspaceRoot: string | null;
   /** Allowed folders outside the workspace the user approved this session. */
   approvedFolders?: string[];
+  /** Every configured allowed folder and whether the user approved it this session. */
+  allowedFolders?: AllowedFolder[];
+}
+
+export type AllowedFolder = { folder: string; state: "approved" | "refused" | "not asked" };
+
+/**
+ * Asks the user (VS Code dialog or terminal) to approve an allowed folder, so its files show in the
+ * path fields. Resolves when they answer, with the folder's state and, when not approved, why.
+ */
+export async function askAllowedFolder(folder: string): Promise<{ state: AllowedFolder["state"]; error?: string }> {
+  const response = await apiFetch(`${API_BASE}/allowed-folders/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ folder }),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
+  return result;
 }
 
 /**

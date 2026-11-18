@@ -122,6 +122,8 @@ describe("ResourceView", () => {
     expect(relativePath("a/b", "a/c/d")).toBe("../c/d");
     expect(relativePath("app/fixtures", "app/fixtures")).toBe(".");
     expect(relativePath(".", ".")).toBe(".");
+    // From a resource file in an approved allowed folder (absolute paths, ".." applied).
+    expect(relativePath("/lib/res", "/w/./app/../app/x.wasm")).toBe("../../w/app/x.wasm");
   });
 
   it("groups the flow's steps by app and shows a hook's detail as in the Debugger", async () => {

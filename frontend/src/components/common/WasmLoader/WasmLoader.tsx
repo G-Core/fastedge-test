@@ -3,6 +3,9 @@ import styles from "./WasmLoader.module.css";
 import { formatFileSize } from "../../../utils/filePath";
 import { useWorkspaceFiles } from "../../../hooks/useWorkspaceFiles";
 
+/** A suggested path in full: a workspace path joined to `root`; an approved allowed folder's is already absolute. */
+const fullPath = (root: string, p: string) => (/^([\\/]|[A-Za-z]:)/.test(p) ? p : `${root}/${p}`);
+
 type LoaderTab = 'path' | 'upload';
 
 interface WasmLoaderProps {
@@ -169,7 +172,7 @@ export function WasmLoader({
               />
               {/* Full paths: a relative one resolves against the server's working directory, not the workspace. */}
               <datalist id="wasm-loader-files">
-                {files?.wasm.map((p) => <option key={p} value={`${files.root}/${p}`} />)}
+                {files?.wasm.map((p) => <option key={p} value={fullPath(files.root, p)} />)}
               </datalist>
               <button
                 onClick={handlePathLoad}

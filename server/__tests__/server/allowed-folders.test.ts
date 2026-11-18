@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { copyFileSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { copyFileSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import WebSocket from "ws";
@@ -63,6 +63,26 @@ describe("debugger server — allowed folders", () => {
     expect(asked).toEqual([]);
   });
 
+  it("Ask approves a folder before anything loads from it; then its files are suggested, absolute", async () => {
+    const files = async () => (await authedFetch(server.base, server.token, "/api/workspace/files")).json();
+    const real = realpathSync(approve);
+    expect((await files()).wasm).not.toContain(`${real}/probe.wasm`);
+
+    expect((await post("/api/allowed-folders/ask", { folder: other })).status).toBe(400);
+    const res = await post("/api/allowed-folders/ask", { folder: real });
+    expect(await res.json()).toMatchObject({ ok: true, state: "approved" });
+
+    const listed = await files();
+    expect(listed.wasm).toContain(`${real}/probe.wasm`);
+    expect(listed.folders).toContain(real);
+    expect(listed.wasm.indexOf(`${real}/probe.wasm`)).toBe(listed.wasm.length - 1); // after the workspace's own
+    const env = await (await authedFetch(server.base, server.token, "/api/environment")).json();
+    expect(env.allowedFolders).toEqual([
+      { folder: real, state: "approved" },
+      { folder: realpathSync(refuse), state: "not asked" },
+    ]);
+  });
+
   it("an allowed folder is read once the user approves it, and asked only once", async () => {
     expect((await post("/api/load", { wasmPath: join(approve, "probe.wasm") })).status).toBe(200);
     expect((await post("/api/load", { wasmPath: join(approve, "probe.wasm") })).status).toBe(200);
@@ -88,6 +108,11 @@ describe("debugger server — allowed folders", () => {
     const again = await post("/api/load", { wasmPath: join(refuse, "probe.wasm") });
     expect((await again.json()).error).toContain("refused");
     expect(asked.filter((f) => f.includes("allowed-refuse-"))).toHaveLength(1);
+    // Ask does not ask again either, and a refused folder's files are not suggested.
+    expect(await (await post("/api/allowed-folders/ask", { folder: realpathSync(refuse) })).json()).toMatchObject({ state: "refused" });
+    expect(asked.filter((f) => f.includes("allowed-refuse-"))).toHaveLength(1);
+    const listed = await (await authedFetch(server.base, server.token, "/api/workspace/files")).json();
+    expect(listed.wasm.some((p: string) => p.includes("allowed-refuse-"))).toBe(false);
   });
 
   it("writes stay in the workspace, even to an approved folder", async () => {
