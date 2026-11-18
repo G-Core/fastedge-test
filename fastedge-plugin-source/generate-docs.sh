@@ -65,7 +65,7 @@ trap cleanup INT TERM
 #   Tier 1: Core reference files (independent — read from source code only)
 #   Tier 2: quickstart.md (may reference patterns from tier 1 docs)
 #   Tier 3: INDEX.md (summarizes all other docs)
-TIER1_FILES=("DEBUGGER.md" "API.md" "WEBSOCKET.md" "RUNNER.md" "TEST_CONFIG.md" "TEST_FRAMEWORK.md")
+TIER1_FILES=("DEBUGGER.md" "API.md" "WEBSOCKET.md" "RUNNER.md" "TEST_CONFIG.md" "TEST_FRAMEWORK.md" "STORES.md" "RESOURCES.md")
 TIER2_FILES=("quickstart.md")
 TIER3_FILES=("INDEX.md")
 
@@ -115,6 +115,8 @@ SOURCE_FILES[TEST_FRAMEWORK.md]="server/test-framework/index.ts server/test-fram
 SOURCE_FILES[RUNNER.md]="server/runner/index.ts server/runner/standalone.ts server/runner/IWasmRunner.ts server/runner/types.ts server/runner/IStateManager.ts server/runner/ProxyWasmRunner.ts server/runner/HttpWasmRunner.ts"
 SOURCE_FILES[TEST_CONFIG.md]="schemas/fastedge-config.test.schema.json server/schemas/config.ts server/test-framework/suite-runner.ts server/utils/dotenv-loader.ts"
 SOURCE_FILES[DEBUGGER.md]="server/server.ts bin/fastedge-debug.js package.json"
+SOURCE_FILES[STORES.md]="context/BEHAVIOUR.md server/stores/fixtures.ts server/stores/testStores.ts server/stores/StoresManager.ts server/stores/trace.ts server/test-framework/types.ts frontend/src/views/StorageExplorerView/StorageExplorerView.tsx frontend/src/views/StorageExplorerView/SaveFixtures.tsx"
+SOURCE_FILES[RESOURCES.md]="context/BEHAVIOUR.md server/schemas/config.ts server/runner/resource.ts server/runner/origin.ts server/test-framework/types.ts frontend/src/views/ResourceView/ResourceView.tsx"
 
 generate_file() {
   local target="$1"

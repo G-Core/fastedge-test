@@ -9,6 +9,8 @@
 | [quickstart.md](quickstart.md)         | All users             | Install, configure, and run your first test in under five minutes                                |
 | [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) | Test authors          | High-level API (`defineTestSuite`, `runTestSuite`, assertions) for writing automated test suites |
 | [TEST_CONFIG.md](TEST_CONFIG.md)       | Test authors          | `fastedge-config.test.json` schema — all fields, defaults, and validation rules                  |
+| [STORES.md](STORES.md)                 | Test authors          | Seeding and inspecting the cache and Edge KV stores in tests                                     |
+| [RESOURCES.md](RESOURCES.md)           | Test authors          | Testing several apps on one CDN resource: rules, hooks and the built-in origin                   |
 | [RUNNER.md](RUNNER.md)                 | Advanced / CI tooling | Low-level programmatic API for direct runner lifecycle control                                   |
 | [DEBUGGER.md](DEBUGGER.md)             | All users             | `fastedge-debug` CLI — starting the interactive debugger server                                  |
 | [API.md](API.md)                       | Tooling integrators   | HTTP REST API exposed by the debugger server                                                     |
@@ -22,6 +24,8 @@
 | Writing tests for a WASM module                  | [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) |
 | Writing tests with Vitest fixtures               | [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) |
 | Understanding the test config file format        | [TEST_CONFIG.md](TEST_CONFIG.md)       |
+| Seeding the cache or Edge KV stores in tests     | [STORES.md](STORES.md)                 |
+| Several apps on one CDN resource                 | [RESOURCES.md](RESOURCES.md)           |
 | Running the interactive debugger UI              | [DEBUGGER.md](DEBUGGER.md)             |
 | Building custom CI or automation tooling         | [API.md](API.md)                       |
 | Subscribing to real-time server events           | [WEBSOCKET.md](WEBSOCKET.md)           |
@@ -160,12 +164,12 @@ test("counts requests", async ({ runner, stores }) => {
 });
 ```
 
-| Export             | Kind     | Description                                                           |
-| ------------------ | -------- | --------------------------------------------------------------------- |
+| Export             | Kind     | Description                                                                |
+| ------------------ | -------- | -------------------------------------------------------------------------- |
 | `test`             | const    | Vitest `test` extended with the `stores`, `runner` and `resource` fixtures |
-| `createStores`     | function | Creates stores to share across tests, passed as `RunnerConfig.stores` |
-| `TestStores`       | type     | Per-test cache and Edge KV stores                                     |
-| `FastEdgeFixtures` | type     | Fixture types provided by `test`                                      |
+| `createStores`     | function | Creates stores to share across tests, passed as `RunnerConfig.stores`      |
+| `TestStores`       | type     | Per-test cache and Edge KV stores                                          |
+| `FastEdgeFixtures` | type     | Fixture types provided by `test`                                           |
 
 ### `@gcoredev/fastedge-test/server`
 
