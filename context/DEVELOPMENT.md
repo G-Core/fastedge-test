@@ -294,7 +294,14 @@ Host functions are the imports an app's wasm calls. All of them are defined insi
 
 - The JSON Schemas in `schemas/` are generated from the Zod schemas in `server/schemas/` and the runner types, and committed. After changing a config, API body or result type, run `pnpm run build:schemas` and commit the result.
 - `pnpm run check-types` type-checks the server and the frontend without building (PR CI runs it).
-- A change to the public API, config format, test framework or runner updates the matching file in `docs/` in the same commit.
+- `docs/` is generated: `pnpm run generate:docs [FILE.md …]` updates it from the source and
+  `fastedge-plugin-source/.generation-config.md`. A change to the public API, config format, test
+  framework or runner regenerates the matching doc in the same commit; review the diff.
+- The generator reads the existing doc and keeps accurate hand edits, but it can undo them, and a
+  doc generated from scratch has none. So when it gets something wrong, fix the cause too: a stale
+  code comment, or a rule in that doc's section of `.generation-config.md` ("Corrections from
+  earlier generations"). Facts the code can't show (edge behaviour, Gcore API shapes) go in
+  `.generation-config.md`. A fix made only in `docs/` will not last.
 - A change to a mechanism updates [ARCHITECTURE.md](ARCHITECTURE.md); a change to what an app observes updates [BEHAVIOUR.md](BEHAVIOUR.md); a new command, test convention or rule updates this file.
 
 ### 7.6 Commits
