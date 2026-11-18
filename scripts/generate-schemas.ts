@@ -113,8 +113,15 @@ for (const { name, sourcePath, typeName } of tsSchemaConfigs) {
       };
     }
 
+    // @deprecated text comes out as `deprecated: "<text>"`; JSON Schema wants a boolean, and
+    // editors (VS Code) show `deprecationMessage`.
+    const json = JSON.stringify(schema, (key, value) =>
+      value && typeof value === 'object' && typeof value.deprecated === 'string'
+        ? { ...value, deprecated: true, deprecationMessage: value.deprecated }
+        : value, 2);
+
     const outputPath = path.join(schemasDir, `${name}.schema.json`);
-    fs.writeFileSync(outputPath, JSON.stringify(schema, null, 2) + '\n');
+    fs.writeFileSync(outputPath, json + '\n');
     console.log(`✓ Generated ${name}.schema.json`);
   } catch (err) {
     console.error(`✗ Failed to generate ${name}.schema.json:`, err);

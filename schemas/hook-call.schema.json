@@ -71,7 +71,9 @@
           "additionalProperties": {}
         },
         "enforceProductionPropertyRules": {
-          "type": "boolean"
+          "type": "boolean",
+          "deprecated": true,
+          "deprecationMessage": "Ignored: the production property rules always apply. Will be removed in the next major version."
         },
         "customProperties": {
           "type": "array",
