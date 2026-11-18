@@ -113,6 +113,15 @@ parameter is not possible.
 
 ## Accepted limitations
 
+### Path checks are not atomic with the read or write
+
+The server checks a path (containment, symlinks) and then opens it. A process
+that can change the workspace between the two could swap a checked folder or
+file for a symlink. Loaded apps have no file access, so only a program already
+running as you could do this, and such a program can read and write your files
+directly. The stores root (`FASTEDGE_STORES_ROOT`, else the nearest git root
+from the app root) is trusted as configured.
+
 ### No time limit on a CDN hook
 
 Each CDN app runs in its own worker thread, so the server stays responsive
