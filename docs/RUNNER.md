@@ -275,6 +275,8 @@ The upstream response is generated at runtime — either by a real HTTP fetch ag
 
 When `origin` is passed, it replaces the fetch of `url` as the source of the response, and `url` is only what the client asked for. File paths inside `origin` must already be absolute. The `Origin` type is not exported by name from the package root.
 
+**Outbound requests are filtered.** The origin fetch and every `proxy_http_call` allow only `http:` and `https:`, and block cloud-metadata and link-local addresses (`169.254.0.0/16`, `100.100.100.200`, `fe80::/10`, `fc00::/7`, and IPv4-mapped forms of these). Every address a hostname resolves to is checked. Loopback and private LAN addresses are allowed, so local mock origins work. A blocked origin fetch ends the flow with `finalResponse.status` `0` and an `Egress blocked: …` message in the body. A blocked callout fails like any failed call: the app receives no response headers, and the logs show `[host] http_call failed … Egress blocked`. HTTP apps are not filtered: `fastedge-run` makes their requests itself.
+
 Hook execution order: `onRequestHeaders` → `onRequestBody` → *(real HTTP fetch or built-in responder)* → `onResponseHeaders` → `onResponseBody`.
 
 If a request context is set (see [Request Context](#request-context)), its properties and headers are added to the call; the `properties` and `headers` arguments take precedence. When `context` is passed, it is used for this flow instead of the runner's context.
