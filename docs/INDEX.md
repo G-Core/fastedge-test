@@ -15,7 +15,7 @@
 | [DEBUGGER.md](DEBUGGER.md)             | All users             | `fastedge-debug` CLI — starting the interactive debugger server                                  |
 | [API.md](API.md)                       | Tooling integrators   | HTTP REST API exposed by the debugger server                                                     |
 | [WEBSOCKET.md](WEBSOCKET.md)           | Tooling integrators   | WebSocket event stream API for real-time server events                                           |
-| [SECURITY.md](SECURITY.md)             | All                   | Security posture of the debugger server — mitigations in place and accepted limitations          |
+| [SECURITY.md](SECURITY.md)             | All                   | Security posture of the debugger server, and what an app you didn't write can reach              |
 
 ## Quick Links
 

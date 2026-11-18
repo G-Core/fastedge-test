@@ -14,6 +14,9 @@ is an attacker who can reach the server over the network — via the LAN, a
 browser page the developer visits (DNS-rebinding), or another local process —
 and issue requests that execute WASM, read secrets, or write files.
 
+A second threat is the app itself: a repository you cloned can ship a hostile
+`.wasm`, config files or fixtures. See [Running apps you didn't write](#running-apps-you-didnt-write).
+
 ---
 
 ## Mitigations in place
@@ -49,13 +52,18 @@ band:
 loopback origins, `vscode-webview://`, or `FASTEDGE_EXPECTED_HOST`. The token
 check runs first; origin is a secondary guard.
 
-### Path containment for WASM and dotenv
+### Path containment for config paths
 
-All file paths accepted by `/api/load` and `/api/dotenv` are confined to
-`WORKSPACE_PATH` (set by the CLI and the VSCode extension) using both lexical
-and `realpathSync`-based checks. Symlinks inside the workspace that point
-outside are rejected. Absolute paths are allowed if they resolve within the
-workspace root.
+Every file path the server reads from a request or a config file is confined
+to `WORKSPACE_PATH` (set by the CLI and the VSCode extension) using both
+lexical and `realpathSync`-based checks: the WASM path, dotenv files, resource
+files, and the built-in origin's `files` folder and `bodyFile`. Symlinks inside
+the workspace that point outside are rejected. Absolute paths are allowed if
+they resolve within the workspace root. The built-in origin also refuses
+dotfiles and `..` segments in request paths.
+
+The Storage Explorer writes only the fixture files listed in its diff, after
+you approve them, and refuses to write through a symlink.
 
 ### Save-as write capability
 
@@ -81,6 +89,10 @@ the request is sent:
 - All IP addresses a hostname resolves to are checked; a single blocked
   address is enough to block the request.
 
+The policy covers CDN (proxy-wasm) apps, whose requests the debugger makes.
+An HTTP app's outbound requests are made by `fastedge-run` itself and are
+**not** checked.
+
 Hostnames are resolved via DNS before the check, and all returned addresses
 are checked. **DNS rebinding between the policy check and the actual
 connect is not mitigated** — an attacker who controls DNS TTL could
@@ -96,27 +108,55 @@ parameter is not possible.
 
 ## Accepted limitations
 
-### Synchronous WASM execution can block the event loop
+### No time limit on a CDN hook
 
-Loaded WASM runs synchronously on Node's main event loop. A WASM module
-containing an infinite loop will hang the debugger server until the process
-is restarted.
+Each CDN app runs in its own worker thread, so the server stays responsive
+while a hook runs. There is no time limit on a hook, though: an app with an
+infinite loop hangs that request. Loading another app (or restarting the
+server) terminates the worker. HTTP apps are limited by `fastedge-run`, which
+stops an app after 10 minutes by default.
 
-**Why this is not mitigated further:** Node.js provides no mechanism to
-interrupt a synchronous loop from the same thread. The correct fix is moving
-WASM execution to a `worker_threads` Worker with a hard deadline, but the
-added complexity is not warranted for a developer tool given that:
+On the edge, every app has an execution-time budget set by its plan.
 
-1. The remote attack vector is closed (loopback bind + session token means
-   only the authenticated local developer can load WASM).
-2. The only realistic path to a hang is the developer loading their own
-   buggy or malicious WASM.
-3. Recovery is a process restart (`fastedge-debug` re-launches in seconds).
+### Network access for apps
 
-If your threat model requires protection against this (e.g. running the
-debugger in a shared environment where untrusted WASM can be submitted),
-move WASM execution to a dedicated `worker_threads` Worker and call
-`worker.terminate()` on deadline.
+Loopback and LAN addresses are reachable from apps on purpose (see the egress
+policy above), so an app can send requests to services on your machine or
+network.
+
+---
+
+## Running apps you didn't write
+
+Running an app in the debugger is safer than running its repository's code,
+but it is not isolated from your network.
+
+**Code that runs natively, with your user's rights** (the same for any
+repository you clone):
+
+- Building: `cargo build` runs `build.rs`, procedural macros and settings from
+  `.cargo/config.toml`; `npm install` runs package scripts.
+- Tests: a test suite such as `fastedge-test/app.test.mjs` is plain Node.js.
+- The FastEdge VSCode extension builds the app when you start debugging, but
+  only in a folder VSCode trusts: it is disabled in Restricted Mode.
+
+**What a loaded app can reach:**
+
+| | CDN (proxy-wasm) app | HTTP app |
+|---|---|---|
+| Runs in | Node's WebAssembly sandbox, in a worker thread | `fastedge-run` (wasmtime), a separate process |
+| Your files | None: WASI is given no directories | None |
+| Environment | Its own dotenv values only | Its own dotenv values only |
+| Network | Internet, loopback and LAN; cloud-metadata and link-local ranges blocked | Not filtered |
+| Data it sees | The request, its stores, the origin's response | The request, its stores |
+
+So a hostile app cannot read your files or start programs. It can send what it
+sees to the internet, and it can call unauthenticated services on your machine
+or LAN (for example a Docker daemon exposed over TCP, or a development
+database).
+
+**Advice:** build, test and debug only repositories you trust. To examine one
+you don't, use a container or a VM.
 
 ---
 

@@ -302,6 +302,8 @@ Host functions are the imports an app's wasm calls. All of them are defined insi
   code comment, or a rule in that doc's section of `.generation-config.md` ("Corrections from
   earlier generations"). Facts the code can't show (edge behaviour, Gcore API shapes) go in
   `.generation-config.md`. A fix made only in `docs/` will not last.
+- The exception is `docs/SECURITY.md`, which is written by hand (the generator never touches it). A change
+  to the server's protections (bind, token, path checks, egress, isolation of apps) updates it.
 - A change to a mechanism updates [ARCHITECTURE.md](ARCHITECTURE.md); a change to what an app observes updates [BEHAVIOUR.md](BEHAVIOUR.md); a new command, test convention or rule updates this file.
 
 ### 7.6 Commits
