@@ -1,4 +1,4 @@
-import { useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from "react";
+import { useEffect, useReducer, useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from "react";
 import styles from "./PathInput.module.css";
 
 /** A path to offer: `value` is what the field gets; `outside` puts it under "Allowed folders". */
@@ -40,6 +40,18 @@ export function PathInput({ value, onChange, suggestions: all, onFocus, onBlur, 
   const ordered = groups.flatMap((g) => g.items);
   const visible = open && ordered.length > 0;
   const rect = visible ? field.current?.getBoundingClientRect() : undefined;
+
+  // The list is position: fixed under the field: follow the field when anything scrolls or resizes.
+  const [, remeasure] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!visible) return;
+    window.addEventListener("scroll", remeasure, true);
+    window.addEventListener("resize", remeasure);
+    return () => {
+      window.removeEventListener("scroll", remeasure, true);
+      window.removeEventListener("resize", remeasure);
+    };
+  }, [visible]);
 
   const pick = (v: string) => {
     onChange(v);

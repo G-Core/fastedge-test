@@ -27,6 +27,18 @@ describe("PathInput", () => {
     expect(screen.getByText("Allowed folders")).toBeInTheDocument();
   });
 
+  it("stays under the field when the page scrolls", () => {
+    render(<Field />);
+    const input = screen.getByLabelText("path");
+    let top = 100;
+    input.getBoundingClientRect = () => ({ top, bottom: top + 20, left: 10, width: 300 }) as DOMRect;
+    fireEvent.focus(input);
+    expect(screen.getByRole("listbox").style.top).toBe("122px");
+    top = 40;
+    fireEvent.scroll(window);
+    expect(screen.getByRole("listbox").style.top).toBe("62px");
+  });
+
   it("filters by every typed word, and picks with the keyboard", () => {
     const onKey = vi.fn();
     render(<Field onKey={onKey} />);
