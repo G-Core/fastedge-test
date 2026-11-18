@@ -491,7 +491,7 @@ function RuleCard({ title, rule, hooks, origin, apps, onRule, onHooks, onOrigin,
       {isRule && (
         <label className={explorer.check}>
           <input type="checkbox" checked={hooks !== undefined} onChange={(e) => onHooks(e.target.checked ? {} : undefined)} />
-          Own hooks (replace main's completely, as on the edge)
+          FastEdge hooks for this rule (replace main's completely, as on the edge)
         </label>
       )}
       {hooks === undefined ? (
