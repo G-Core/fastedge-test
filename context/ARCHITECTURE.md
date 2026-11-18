@@ -80,6 +80,14 @@ Two roots, read through `server/utils/roots.ts`:
   `.fastedge-debug/` with the port file, F5's `app.wasm` and the single-app config; the base of
   `<workspace>` paths and of the default dotenv folder; where the stores-root search starts.
 
+**Allowed folders** (`server/utils/allowedFolders.ts`, `utils/approval.ts`): reads (never writes)
+may also come from folders the user configured (`--allow`, `FASTEDGE_ALLOWED_FOLDERS`), each
+approved once per session. Read-only callers opt in (`validatePath({ allowedFolders: true })`,
+`confineTo(root, { allowedFolders })`, `resolveDotenvPath(..., true)`, `createResource({
+allowedFolders })`); a folder not yet approved throws `ApprovalNeeded`, the route asks
+(`withApproval` / `validateRead`: the extension over IPC, else a terminal prompt, else refused)
+and runs again.
+
 The CLI sets only `WORKSPACE_PATH`, so both roots are one folder: the nearest ancestor with a
 `.fastedge-debug/`, else with `package.json` or `Cargo.toml`, else the start directory
 (`--project-dir` / `-C`, else the first argument, else the cwd). The VS Code extension sets

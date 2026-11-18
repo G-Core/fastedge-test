@@ -57,9 +57,9 @@ export function resolveOrigin<T extends Origin | { app: string }>(origin: T, bas
 }
 
 /** A `resolveOrigin` confinement: the path must exist inside `root` (lexically and through symlinks). */
-export function confineTo(root: string): (absolute: string, kind: "file" | "dir") => string {
+export function confineTo(root: string, options: { allowedFolders?: boolean } = {}): (absolute: string, kind: "file" | "dir") => string {
   return (absolute, kind) => {
-    const checked = validatePathOrThrow(absolute, { workspaceRoot: root, requireWasmExtension: false, checkExists: kind === "file" });
+    const checked = validatePathOrThrow(absolute, { workspaceRoot: root, requireWasmExtension: false, checkExists: kind === "file", allowedFolders: options.allowedFolders });
     if (kind === "dir" && !statSync(checked, { throwIfNoEntry: false })?.isDirectory()) throw new Error(`${absolute} is not a folder`);
     return checked;
   };

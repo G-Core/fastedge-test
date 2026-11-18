@@ -177,6 +177,15 @@ export interface ResourceLoadFailedEvent extends BaseEvent {
 }
 
 /**
+ * The user approved reading an allowed folder (outside the workspace) for this session. The page
+ * lists these folders so reads from outside the workspace are visible.
+ */
+export interface AllowedFolderApprovedEvent extends BaseEvent {
+  type: "allowed_folder_approved";
+  data: { folder: string };
+}
+
+/**
  * A resource file was saved through the API (the page, an agent): its full path and version, so
  * a page showing that file can reload it (or warn about its own unsaved edits).
  */
@@ -210,6 +219,7 @@ export type ServerEvent =
   | ResourceLoadedEvent
   | ResourceSavedEvent
   | ResourceLoadFailedEvent
+  | AllowedFolderApprovedEvent
   | ResourceRequestCompletedEvent;
 
 /**

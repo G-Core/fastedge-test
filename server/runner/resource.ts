@@ -8,6 +8,7 @@
  * hook starts with fresh memory. See cdnFlow.ts.
  */
 import { existsSync } from "node:fs";
+import { ApprovalNeeded } from "../utils/allowedFolders.js";
 import { readFile, stat } from "fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -66,18 +67,23 @@ export type CreateResourceOptions = {
    * spanning several projects is then debugged from a folder holding them all (a monorepo).
    */
   root?: string;
+  /**
+   * Reads may also come from allowed folders outside `root` that the user approved
+   * (utils/allowedFolders.ts); one not yet approved throws `ApprovalNeeded`. Default false.
+   */
+  allowedFolders?: boolean;
 };
 
 /** A resource from a config file (paths relative to it) or an object (paths relative to the cwd). */
 export async function createResource(fileOrObject: string | ResourceConfigInput, options: CreateResourceOptions = {}): Promise<Resource> {
-  const confine = confinement(options.root);
+  const confine = confinement(options.root, options.allowedFolders);
   const file = typeof fileOrObject === "string" ? confine(fileOrObject, "file") : undefined;
   const baseDir = file ? path.dirname(file) : options.root ?? process.cwd();
   const raw = file ? JSON.parse(await readFile(file, "utf8")) : fileOrObject;
   const config = ResourceConfigSchema.parse(raw);
   checkReferences(config);
   // Built-in origins' files: relative to the resource file, inside `root`.
-  const confineOrigin = options.root ? confineTo(options.root) : undefined;
+  const confineOrigin = options.root ? confineTo(options.root, { allowedFolders: options.allowedFolders }) : undefined;
   config.main.origin = resolveOrigin(config.main.origin, baseDir, confineOrigin);
   for (const rule of config.rules) if (rule.origin) rule.origin = resolveOrigin(rule.origin, baseDir, confineOrigin);
 
@@ -248,11 +254,11 @@ async function httpAppOrigin(
 type Confine = (file: string, kind: "file" | "wasm" | "dir") => string;
 
 /** Checks a path is inside `root` (lexically and through symlinks); identity without a root. */
-function confinement(root: string | undefined): Confine {
+function confinement(root: string | undefined, allowedFolders = false): Confine {
   return (file, kind) => {
     const absolute = path.resolve(file);
     if (!root) return absolute;
-    const checked = validatePathOrThrow(absolute, { workspaceRoot: root, requireWasmExtension: kind === "wasm", checkExists: kind === "file" });
+    const checked = validatePathOrThrow(absolute, { workspaceRoot: root, requireWasmExtension: kind === "wasm", checkExists: kind === "file", allowedFolders });
     if (kind === "dir") validateDotenvLeafs(checked);
     return checked;
   };
@@ -280,6 +286,7 @@ async function resolveApp(name: string, entry: ResourceConfig["apps"][string], b
     wasm = confine(wasm, "wasm");
     if (dotenv) dotenv.path = confine(dotenv.path, "dir");
   } catch (error) {
+    if (error instanceof ApprovalNeeded) throw error; // asked of the user, then the load runs again
     throw new Error(`app "${name}": ${(error as Error).message}`);
   }
   try {

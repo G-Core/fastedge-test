@@ -128,6 +128,16 @@ button.secondary:hover:not(:disabled) {
   background: #4d4d4d;
 }
 
+/* Reads from outside the workspace this session (approved allowed folders). */
+.notice {
+  background: #2f2a1a;
+  color: #e0c070;
+  padding: 8px 10px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  border: 1px solid #5a4d2a;
+}
+
 .error {
   background: #3d1f1f;
   color: #ff6b6b;

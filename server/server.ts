@@ -30,6 +30,8 @@ import { mountStorageExplorer } from "./storageExplorer.js";
 import { listWorkspaceFiles } from "./utils/workspaceFiles.js";
 import { confineTo, resolveOrigin } from "./runner/origin.js";
 import { appRoot, workspaceRoot } from "./utils/roots.js";
+import { NotApproved, validateRead, withApproval } from "./utils/approval.js";
+import { approvedFolders, onFolderApproved } from "./utils/allowedFolders.js";
 import type { Origin } from "./schemas/config.js";
 import {
   ApiResourceLoadBodySchema,
@@ -186,6 +188,7 @@ app.get("/api/environment", (req: Request, res: Response) => {
     supportsPathLoading: true,
     workspaceRoot: process.env.WORKSPACE_PATH ? workspaceRoot() : null,
     appRoot: process.env.WORKSPACE_PATH ? appRoot() : null,
+    approvedFolders: approvedFolders(),
   });
 });
 
@@ -288,9 +291,9 @@ app.post("/api/load", serialized(async (req: Request, res: Response) => {
   let dotenvBasePath: string | undefined;
   if (dotenv?.path !== undefined) {
     try {
-      dotenvBasePath = resolveDotenvPathFromWorkspace(dotenv.path);
+      dotenvBasePath = await resolveDotenvPathFromWorkspace(dotenv.path);
     } catch (e) {
-      if (e instanceof DotenvPathError) {
+      if (e instanceof DotenvPathError || e instanceof NotApproved) {
         res.status(400).json({ ok: false, error: e.message });
         return;
       }
@@ -346,7 +349,8 @@ app.post("/api/load", serialized(async (req: Request, res: Response) => {
 
       // Validate path for security; workspaceRoot confines the path to the workspace
       // (lexically and via realpath to catch symlink escapes)
-      const validationResult = validatePath(resolvedPath, {
+      // An approved allowed folder may hold it too (the user is asked first).
+      const validationResult = await validateRead(resolvedPath, {
         requireWasmExtension: true,
         checkExists: true,
         workspaceRoot: workspaceRoot(),
@@ -471,10 +475,14 @@ app.post("/api/resource/load", serialized(async (req: Request, res: Response) =>
 
   try {
     const storesOn = (await getStores()) !== null;
-    const resource = await createResource(configPath ? path.resolve(root, configPath) : (config as never), {
-      root,
-      ...(storesOn ? {} : { stores: false }),
-    });
+    // Reads may come from approved allowed folders; the user is asked, then the load runs again.
+    const resource = await withApproval(() =>
+      createResource(configPath ? path.resolve(root, configPath) : (config as never), {
+        root,
+        allowedFolders: true,
+        ...(storesOn ? {} : { stores: false }),
+      }),
+    );
     currentResource = resource;
     const stores = storesOn && resource.config.stores !== false;
     loadedStores = stores ? { dc: resource.config.dc ?? edgeDc(resource.config.edge) ?? "local" } : null;
@@ -493,7 +501,17 @@ app.post("/api/resource/load", serialized(async (req: Request, res: Response) =>
   }
 }));
 
-/** A resource file in the workspace (default: the default resource file); it need not exist yet. */
+/** A resource file to read: in the workspace or an approved allowed folder (the user is asked first). */
+async function resourceFileToRead(configPath: unknown): Promise<string> {
+  const root = workspaceRoot();
+  const file = typeof configPath === "string" && configPath ? configPath : DEFAULT_RESOURCE_FILE;
+  if (!file.endsWith(".json")) throw new Error("a resource file is a .json file");
+  const checked = await validateRead(path.resolve(root, file), { workspaceRoot: root, requireWasmExtension: false, checkExists: false });
+  if (!checked.valid) throw new Error(checked.error);
+  return checked.normalizedPath!;
+}
+
+/** A resource file to write: in the workspace only (default: the default resource file); it need not exist yet. */
 function resourceFile(configPath: unknown): string {
   const root = workspaceRoot();
   const file = typeof configPath === "string" && configPath ? configPath : DEFAULT_RESOURCE_FILE;
@@ -509,7 +527,7 @@ function contentVersion(text: string | null): string | null {
 /** A resource file as written (no defaults filled in), for the Resource page; config null = no file yet. */
 app.get("/api/resource/config", async (req: Request, res: Response) => {
   try {
-    const file = resourceFile(req.query.path);
+    const file = await resourceFileToRead(req.query.path);
     const text = existsSync(file) ? await fs.readFile(file, "utf-8") : null;
     res.json({ ok: true, path: file, config: text === null ? null : JSON.parse(text), version: contentVersion(text) });
   } catch (error) {
@@ -517,10 +535,10 @@ app.get("/api/resource/config", async (req: Request, res: Response) => {
   }
 });
 
-/** A request's origin with its files resolved against the workspace and confined to it. */
-function workspaceOrigin(origin: Origin): Origin {
+/** A request's origin with its files resolved against the workspace, confined to it or an approved allowed folder. */
+function workspaceOrigin(origin: Origin): Promise<Origin> {
   const root = workspaceRoot();
-  return resolveOrigin(origin, root, confineTo(root));
+  return withApproval(async () => resolveOrigin(origin, root, confineTo(root, { allowedFolders: true })));
 }
 
 /** Suggestions for the Resource page's path fields: wasm, *.test.json and .env folders in the workspace. */
@@ -659,6 +677,9 @@ app.post("/api/stores/advance-clock", async (req: Request, res: Response) => {
   }
 });
 
+// The page lists the allowed folders approved this session.
+onFolderApproved((folder) => stateManager.emitAllowedFolderApproved(folder));
+
 // Storage Explorer: manage the stores with or without an app loaded.
 mountStorageExplorer(app, getStores, () => appRoot(), () => loadedStores?.dc ?? null);
 
@@ -706,9 +727,9 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
   let dotenvPath: string | undefined;
   if (dotenv.path !== undefined) {
     try {
-      dotenvPath = resolveDotenvPathFromWorkspace(dotenv.path);
+      dotenvPath = await resolveDotenvPathFromWorkspace(dotenv.path);
     } catch (e) {
-      if (e instanceof DotenvPathError) {
+      if (e instanceof DotenvPathError || e instanceof NotApproved) {
         res.status(400).json({ ok: false, error: (e as Error).message });
         return;
       }
@@ -907,7 +928,7 @@ app.post("/api/send", async (req: Request, res: Response) => {
   }
   let origin: Origin | undefined;
   try {
-    origin = parsed.data.origin && workspaceOrigin(parsed.data.origin);
+    origin = parsed.data.origin && (await workspaceOrigin(parsed.data.origin));
   } catch (error) {
     res.status(400).json({ ok: false, error: (error as Error).message });
     return;
@@ -994,9 +1015,9 @@ function configFile(): string {
 }
 
 /** Resolve a potentially relative dotenv path using the same base as resolveConfigDir(). */
-function resolveDotenvPathFromWorkspace(dotenvPath: string | undefined): string | undefined {
-  // Relative to the app root; may reach anywhere in the workspace root.
-  return resolveDotenvPath(dotenvPath, appRoot(), workspaceRoot());
+function resolveDotenvPathFromWorkspace(dotenvPath: string | undefined): Promise<string | undefined> {
+  // Relative to the app root; anywhere in the workspace root, or an approved allowed folder.
+  return withApproval(async () => resolveDotenvPath(dotenvPath, appRoot(), workspaceRoot(), true));
 }
 
 // Get test configuration

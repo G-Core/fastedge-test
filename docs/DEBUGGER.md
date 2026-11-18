@@ -46,6 +46,16 @@ The flag accepts `--project-dir <path>`, `--project-dir=<path>`, and the short a
 
 When the flag is omitted, the positional argument (if any) or the current working directory is used as the starting point.
 
+### `--allow <dir>` (repeatable)
+
+Lets the debugger read a folder outside the workspace, for example a folder of prebuilt wasm files or a website used as an origin:
+
+```bash
+npx fastedge-debug --allow ~/apps/wasm --allow ~/sites/my-site
+```
+
+The first time a load reads from an allowed folder, the debugger asks in this terminal whether to allow it for the session; without a terminal it refuses. Allowed folders are read-only: saves stay inside the workspace. The flag accepts `--allow <dir>` and `--allow=<dir>`; a folder that does not exist is ignored with a warning. See [SECURITY.md](SECURITY.md#allowed-folders).
+
 ## Programmatic Usage
 
 The `./server` export is the server bundle. Importing it starts the server automatically, using the `PORT` environment variable or the default port. Set environment variables before the import:

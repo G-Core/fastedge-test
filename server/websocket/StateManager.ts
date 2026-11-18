@@ -23,6 +23,7 @@ import {
   ResourceLoadedEvent,
   ResourceSavedEvent,
   ResourceLoadFailedEvent,
+  AllowedFolderApprovedEvent,
   ResourceRequestCompletedEvent,
 } from "./types.js";
 import type { ResourceResult } from "../runner/resource.js";
@@ -157,6 +158,11 @@ export class StateManager {
   /** Emit resource load failed event */
   public emitResourceLoadFailed(data: ResourceLoadFailedEvent["data"], source: EventSource = "system"): void {
     this.broadcast(createEvent<ResourceLoadFailedEvent>("resource_load_failed", source, data));
+  }
+
+  /** Emit allowed folder approved event */
+  public emitAllowedFolderApproved(folder: string): void {
+    this.broadcast(createEvent<AllowedFolderApprovedEvent>("allowed_folder_approved", "system", { folder }));
   }
 
   /** Emit resource saved event */

@@ -556,6 +556,27 @@ interface ResourceLoadedEvent {
 
 ---
 
+### allowed_folder_approved
+
+Fired when the user approves reading an allowed folder (outside the workspace) for this session. The debugger page lists these folders, so reads from outside the workspace are visible. See [SECURITY.md](SECURITY.md#allowed-folders).
+
+```typescript
+interface AllowedFolderApprovedEvent {
+  type: "allowed_folder_approved";
+  timestamp: number;
+  source: "system";
+  data: {
+    folder: string;
+  };
+}
+```
+
+| Field    | Type     | Description                             |
+| -------- | -------- | --------------------------------------- |
+| `folder` | `string` | The approved folder's real path         |
+
+---
+
 ### resource_load_failed
 
 Fired when loading a resource file through `POST /api/resource/load` (with `configPath`) fails: a config, path or build problem. Whatever was loaded before is already unloaded. The debugger page switches to Multi-app, opens the file and shows the error, so it can be fixed in place.

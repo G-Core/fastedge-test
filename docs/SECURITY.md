@@ -70,6 +70,34 @@ stores root, both when the stores load and in the Storage Explorer's diff. The
 Storage Explorer writes only the fixture files listed in its diff, after you
 approve them, and refuses to write through a symlink.
 
+### Allowed folders
+
+Folders outside the workspace you let the debugger **read**, for example a folder of
+prebuilt wasm files or a website used as an origin. Only you configure them:
+`fastedge-debug --allow <dir>`, or the FastEdge for VS Code user setting, which
+the extension passes as `FASTEDGE_ALLOWED_FOLDERS`. Workspace settings, config
+files, dotenv files and fixtures never add a folder. A folder passed by an npm
+script's `--allow` is yours only if you wrote the script.
+
+- **Approved per session, by you, outside the API.** The first time a load reads
+  from an allowed folder, you are asked: in VS Code by a dialog the extension
+  shows (it answers the server over its private IPC channel), on the command
+  line by a prompt in the terminal. With neither, the read is refused. No HTTP
+  or WebSocket call can approve a folder, so the page and agents can only cause
+  the question to be asked. An answer lasts until the server stops; a refusal
+  is not asked again.
+- **Read-only.** Resource files, configs and store fixtures are only written
+  inside the workspace.
+- **The same checks as the workspace.** A path must be in the allowed folder
+  both as written and through symlinks, so a link from the workspace into an
+  allowed folder, or from an allowed folder out of it, is refused.
+- **Visible.** The page lists the folders approved this session.
+
+The risk that remains: an approved folder is readable by every config loaded in
+that session, and a loaded app can send what it reads over the network. A
+malicious repository can use a folder you approved for something else in the
+same session. Keep secrets out of allowed folders.
+
 ### Save-as write capability
 
 `/api/config/save-as` only writes to a path that was vended in the same
@@ -159,7 +187,7 @@ repository you clone):
 | | CDN (proxy-wasm) app | HTTP app |
 |---|---|---|
 | Runs in | Node's WebAssembly sandbox, in a worker thread | `fastedge-run` (wasmtime), a separate process |
-| Your files | None: WASI is given no directories | None |
+| Your files | None: WASI is given no directories; the debugger reads the workspace, and [allowed folders](#allowed-folders) you approve | None; the same for the debugger |
 | Environment | Its own dotenv values only | Its own dotenv values only |
 | Network | Internet, loopback and LAN; cloud-metadata and link-local ranges blocked | Not filtered |
 | Data it sees | The request, its stores, the origin's response | The request, its stores |
@@ -183,3 +211,4 @@ you don't, use a container or a VM.
 | `FASTEDGE_EXPECTED_HOST` | Add an extra allowed `Host` / WebSocket origin (Codespaces forwarded hostname) |
 | `WORKSPACE_PATH` | Workspace root for path containment (set by CLI and VSCode extension) |
 | `FASTEDGE_APP_ROOT` | App root inside the workspace (set by the VSCode extension); does not widen containment |
+| `FASTEDGE_ALLOWED_FOLDERS` | JSON array of allowed folders (set by `--allow` and the VSCode extension); each read from one needs your approval |

@@ -123,6 +123,12 @@ export interface ResourceLoadedEvent extends BaseEvent {
   data: ResourceLoaded;
 }
 
+/** The user approved reading an allowed folder (outside the workspace) for this session. */
+export interface AllowedFolderApprovedEvent extends BaseEvent {
+  type: "allowed_folder_approved";
+  data: { folder: string };
+}
+
 /** Loading a resource file failed: the file and the error. */
 export interface ResourceLoadFailedEvent extends BaseEvent {
   type: "resource_load_failed";
@@ -154,4 +160,5 @@ export type ServerEvent =
   | ResourceLoadedEvent
   | ResourceSavedEvent
   | ResourceLoadFailedEvent
+  | AllowedFolderApprovedEvent
   | ResourceRequestCompletedEvent;

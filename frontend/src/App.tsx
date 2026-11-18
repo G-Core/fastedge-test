@@ -31,6 +31,8 @@ function App() {
   // The last resource file saved through the API (by this page or anyone else).
   const [resourceSaved, setResourceSaved] = useState<{ configPath: string; version: string } | null>(null);
   const [resourceFailed, setResourceFailed] = useState<{ configPath: string; error: string } | null>(null);
+  // Allowed folders outside the workspace approved this session: shown so such reads are visible.
+  const [approvedFolders, setApprovedFolders] = useState<string[]>([]);
 
   // Get state and actions from stores
   const {
@@ -114,6 +116,7 @@ function App() {
         const envInfo = await getEnvironment();
         setEnvironment(envInfo);
         setWorkspaceRoot(envInfo.workspaceRoot ?? null);
+        setApprovedFolders(envInfo.approvedFolders ?? []);
         console.log(`[App] Detected environment: ${envInfo.environment}`);
       } catch (error) {
         console.error("[App] Failed to initialize environment:", error);
@@ -281,6 +284,10 @@ function App() {
         setResourceResult(null);
         break;
 
+      case "allowed_folder_approved":
+        setApprovedFolders((folders) => (folders.includes(event.data.folder) ? folders : [...folders, event.data.folder]));
+        break;
+
       case "resource_load_failed":
         // The server unloaded what was loaded before trying: show the file and its error.
         clearWasm();
@@ -389,6 +396,9 @@ function App() {
             ))}
         </div>
 
+        {approvedFolders.length > 0 && (
+          <div className="notice">Reading outside the workspace this session: {approvedFolders.join(", ")}</div>
+        )}
         {wsStatus.error?.startsWith("Missing session token") && (
           <div className="error">{wsStatus.error}</div>
         )}

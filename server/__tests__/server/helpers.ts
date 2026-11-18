@@ -24,7 +24,14 @@ export interface TestServer {
  * Parses stderr to discover the actual port (the server auto-increments from
  * 5179 if needed, so we can't assume a fixed port).
  */
-export async function startTestServer(options: { appFolder?: string } = {}): Promise<TestServer> {
+export async function startTestServer(
+  options: {
+    appFolder?: string;
+    env?: Record<string, string>;
+    /** Fork with an IPC channel, as FastEdge for VS Code does; called with each message the server sends. */
+    onMessage?: (message: unknown, reply: (answer: unknown) => void) => void;
+  } = {},
+): Promise<TestServer> {
   const token = randomBytes(16).toString("hex");
   const workspacePath = mkdtempSync(join(tmpdir(), "fastedge-test-"));
   const appPath = options.appFolder ? join(workspacePath, options.appFolder) : workspacePath;
@@ -38,9 +45,14 @@ export async function startTestServer(options: { appFolder?: string } = {}): Pro
       FASTEDGE_BIND_HOST: "127.0.0.1",
       WORKSPACE_PATH: workspacePath,
       ...(options.appFolder ? { FASTEDGE_APP_ROOT: appPath } : {}),
+      ...options.env,
     },
-    stdio: ["ignore", "ignore", "pipe"],
+    stdio: options.onMessage ? ["ignore", "ignore", "pipe", "ipc"] : ["ignore", "ignore", "pipe"],
   });
+  if (options.onMessage) {
+    const onMessage = options.onMessage;
+    proc.on("message", (message) => onMessage(message, (answer) => proc.send(answer as never)));
+  }
 
   const port = await new Promise<number>((resolve, reject) => {
     const timeout = setTimeout(

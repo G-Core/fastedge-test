@@ -20,6 +20,8 @@ export interface EnvironmentInfo {
   environment: 'vscode' | 'node';
   supportsPathLoading: boolean;
   workspaceRoot: string | null;
+  /** Allowed folders outside the workspace the user approved this session. */
+  approvedFolders?: string[];
 }
 
 /**

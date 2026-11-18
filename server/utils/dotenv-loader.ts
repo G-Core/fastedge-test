@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import { realpathSync } from "fs";
+import { ApprovalNeeded, checkAllowedRead } from "./allowedFolders.js";
 import path from "path";
 import type { FastEdgeConfig } from "../fastedge-host/types.js";
 
@@ -206,11 +207,28 @@ export function resolveDotenvPath(
   dotenvPath: string | undefined,
   base: string,
   limit: string = base,
+  allowedFolders = false,
 ): string | undefined {
   if (!dotenvPath) return undefined;
   const resolved = path.isAbsolute(dotenvPath)
     ? dotenvPath
     : path.resolve(base, dotenvPath);
+  try {
+    return checkDotenvContainment(resolved, limit);
+  } catch (error) {
+    if (!(error instanceof DotenvPathError) || !allowedFolders) throw error;
+    // Outside the workspace: an approved allowed folder may still be read.
+    try {
+      checkAllowedRead(resolved);
+    } catch (allowedError) {
+      if (allowedError instanceof ApprovalNeeded) throw allowedError;
+      throw new DotenvPathError((allowedError as Error).message);
+    }
+    return resolved;
+  }
+}
+
+function checkDotenvContainment(resolved: string, limit: string): string {
 
   // Lexical containment check (fast path, handles .. traversal)
   const rel = path.relative(limit, resolved);

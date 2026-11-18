@@ -1,5 +1,6 @@
 import { resolve, normalize, relative, isAbsolute, sep } from "path";
 import { existsSync, statSync, realpathSync, lstatSync } from "fs";
+import { ApprovalNeeded, checkAllowedRead } from "./allowedFolders.js";
 
 /**
  * Options for path validation
@@ -25,6 +26,12 @@ export interface PathValidationOptions {
    * Check if file exists. Default: true
    */
   checkExists?: boolean;
+
+  /**
+   * A read: a path outside `workspaceRoot` may lie in an allowed folder the user approved
+   * (utils/allowedFolders.ts). Never set it for a write. Default: false
+   */
+  allowedFolders?: boolean;
 }
 
 /**
@@ -33,6 +40,8 @@ export interface PathValidationOptions {
 export interface PathValidationResult {
   valid: boolean;
   error?: string;
+  /** The allowed folder the user must approve before this read. */
+  approvalNeeded?: string;
   normalizedPath?: string;
 }
 
@@ -58,6 +67,34 @@ const DANGEROUS_PATHS = [
   ".kube",
   "node_modules",
 ];
+
+const OUTSIDE =
+  "Path is outside the workspace root: move it inside, or start the debugger for a folder that contains it.";
+
+/**
+ * Inside the workspace root both as written and through symlinks (for a path not created yet, its
+ * nearest existing ancestor). A dangling symlink counts as outside: writing it creates its target,
+ * wherever that is. If real paths can't be resolved (e.g. a missing root), the lexical check decides.
+ */
+function insideWorkspace(absolutePath: string, workspaceRoot: string): boolean {
+  const resolvedWorkspaceRoot = resolve(workspaceRoot);
+  const relativePath = relative(resolvedWorkspaceRoot, absolutePath);
+  if (relativePath === ".." || relativePath.startsWith(".." + sep) || isAbsolute(relativePath)) return false;
+  try {
+    const realRoot = realpathSync(resolvedWorkspaceRoot);
+    let probe = absolutePath;
+    while (!existsSync(probe)) {
+      if (lstatSync(probe, { throwIfNoEntry: false })?.isSymbolicLink()) return false;
+      const parent = resolve(probe, "..");
+      if (parent === probe) break;
+      probe = parent;
+    }
+    const realProbe = realpathSync(probe);
+    return realProbe === realRoot || realProbe.startsWith(realRoot + sep);
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Validates a file path for security and accessibility.
@@ -99,47 +136,14 @@ export function validatePath(
   }
 
   // Check workspace root restriction
-  if (workspaceRoot) {
-    const resolvedWorkspaceRoot = resolve(workspaceRoot);
-    const relativePath = relative(resolvedWorkspaceRoot, absolutePath);
-
-    // Lexical check: if relative path starts with .., it's outside workspace
-    if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
-      return {
-        valid: false,
-        error:
-          "Path is outside the workspace root: move it inside, or start the debugger for a folder that contains it.",
-      };
-    }
-
-    // Realpath check: catch symlinks inside the workspace that point outside it
-    // (works even when the final leaf does not exist yet by walking up to an existing ancestor)
+  if (workspaceRoot && !insideWorkspace(absolutePath, workspaceRoot)) {
+    if (!options.allowedFolders) return { valid: false, error: OUTSIDE };
     try {
-      const realRoot = realpathSync(resolvedWorkspaceRoot);
-      let probe = absolutePath;
-      while (!existsSync(probe)) {
-        // A dangling symlink "does not exist", but writing it creates its target, wherever it is.
-        if (lstatSync(probe, { throwIfNoEntry: false })?.isSymbolicLink()) {
-          return {
-            valid: false,
-            error:
-              "Path is outside the workspace root: move it inside, or start the debugger for a folder that contains it.",
-          };
-        }
-        const parent = resolve(probe, "..");
-        if (parent === probe) break;
-        probe = parent;
-      }
-      const realProbe = realpathSync(probe);
-      if (realProbe !== realRoot && !realProbe.startsWith(realRoot + sep)) {
-        return {
-          valid: false,
-          error:
-            "Path is outside the workspace root: move it inside, or start the debugger for a folder that contains it.",
-        };
-      }
-    } catch {
-      // If we can't resolve real paths (e.g. missing root), fall back to lexical check above.
+      checkAllowedRead(absolutePath);
+    } catch (error) {
+      return error instanceof ApprovalNeeded
+        ? { valid: false, error: error.message, approvalNeeded: error.folder }
+        : { valid: false, error: (error as Error).message };
     }
   }
 
@@ -236,6 +240,7 @@ export function validatePathOrThrow(
 ): string {
   const result = validatePath(inputPath, options);
 
+  if (result.approvalNeeded) throw new ApprovalNeeded(result.approvalNeeded);
   if (!result.valid) {
     throw new Error(result.error || "Invalid path");
   }
