@@ -142,3 +142,24 @@ describe("debugger server — resources", () => {
     expect((await post("/api/resource/save", { configPath: "v/res.json", config })).status).toBe(200);
   });
 });
+
+describe("debugger server — GET /api/config", () => {
+  let server: TestServer;
+  beforeAll(async () => {
+    server = await startTestServer();
+    mkdirSync(join(server.workspacePath, ".fastedge-debug"), { recursive: true });
+    writeFileSync(join(server.workspacePath, ".fastedge-debug", "fastedge-config.test.json"), JSON.stringify({
+      request: { url: "https://example.com/a.png" },
+      origin: { builtIn: { files: "assets" } },
+      dotenv: { enabled: true, path: "." },
+    }));
+  });
+  afterAll(() => server.close());
+
+  it("returns the config's relative paths resolved against the config's folder", async () => {
+    const { config } = await (await authedFetch(server.base, server.token, "/api/config")).json();
+    const dir = join(server.workspacePath, ".fastedge-debug");
+    expect(config.origin.builtIn.files).toBe(join(dir, "assets"));
+    expect(config.dotenv.path).toBe(dir);
+  });
+});

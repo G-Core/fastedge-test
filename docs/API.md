@@ -1831,7 +1831,7 @@ curl -X POST http://localhost:5179/api/storage/fixtures/save \
 
 ### GET /api/config
 
-Reads `fastedge-config.test.json` from the `.fastedge-debug/` directory (relative to `WORKSPACE_PATH` if set, otherwise the current working directory) and returns it along with a validation result. A relative `dotenv.path` in the file is returned as an absolute path resolved against the config file's directory.
+Reads `fastedge-config.test.json` from the `.fastedge-debug/` directory (relative to `WORKSPACE_PATH` if set, otherwise the current working directory) and returns it along with a validation result. A relative `dotenv.path`, `origin.builtIn.files` or `origin.builtIn.bodyFile` in the file is returned as an absolute path resolved against the config file's directory, so the origin can be sent to `POST /api/send` as returned.
 
 **Response**
 

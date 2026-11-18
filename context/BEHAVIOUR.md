@@ -299,7 +299,8 @@ and the response hooks. They are **deprecated**: declare `origin.builtIn` instea
   the body. Responses carry `x-content-type-options: nosniff`.
 - **The config wins:** with `builtIn` declared, `x-debugger-*` headers are ignored, with a log
   line.
-- Paths are relative to the config file (`/api/send`: to the workspace) and must lie inside the
+- Paths are relative to the config file (`/api/send`: to the workspace; `GET /api/config` returns them
+  resolved against the config's folder) and must lie inside the
   workspace in the debugger, or inside `root` for `createResource`. An empty path is refused (use
   `"."` for the config's own folder).
 

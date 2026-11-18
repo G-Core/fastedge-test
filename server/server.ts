@@ -995,6 +995,11 @@ app.get("/api/config", async (req: Request, res: Response) => {
     if (config.dotenv?.path && !path.isAbsolute(config.dotenv.path)) {
       config.dotenv.path = path.resolve(configDir, config.dotenv.path);
     }
+    // The built-in origin's files too: /api/send resolves relative paths against the workspace.
+    for (const key of ["files", "bodyFile"] as const) {
+      const value = config.origin?.builtIn?.[key];
+      if (typeof value === "string" && value && !path.isAbsolute(value)) config.origin.builtIn[key] = path.resolve(configDir, value);
+    }
 
     // Validate config against schema, include validation result in response
     const validation = TestConfigSchema.safeParse(config);
