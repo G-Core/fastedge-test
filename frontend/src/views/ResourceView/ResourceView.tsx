@@ -13,6 +13,8 @@ import {
   type WorkspaceFiles,
 } from "../../api";
 import { useWorkspaceFiles } from "../../hooks/useWorkspaceFiles";
+import { RequestContextPanel } from "../../components/common/RequestContextPanel";
+import type { ClientContext, EdgeContext } from "../../stores/types";
 import { LogLevelSelector } from "../../components/common/LogLevelSelector";
 import { HookDetail } from "../../components/proxy-wasm/HookStagesPanel";
 import { OriginEditor, originProblem } from "../../components/proxy-wasm/OriginEditor";
@@ -303,6 +305,14 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved }: Res
               />
             ))}
           </section>
+          {/* Saved to the file; the next send reloads the apps (a runner's dc is fixed at load). */}
+          <RequestContextPanel
+            appType="resource"
+            client={(config.client as ClientContext | undefined) ?? null}
+            edge={(config.edge as EdgeContext | undefined) ?? null}
+            onClientChange={(client) => edit((c) => void (client ? (c.client = client) : delete c.client))}
+            onEdgeChange={(edge) => edit((c) => void (edge ? (c.edge = edge) : delete c.edge))}
+          />
           <RequestSection
             key={openCount}
             config={config}

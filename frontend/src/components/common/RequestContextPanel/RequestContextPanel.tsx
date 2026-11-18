@@ -160,7 +160,8 @@ function ContextSection({ title, hint, value, presets, fields, sublabel, onChang
 }
 
 interface RequestContextPanelProps {
-  appType: "proxy-wasm" | "http-wasm";
+  /** `resource`: CDN apps on the hooks and possibly an HTTP app as origin, so both sets of fields. */
+  appType: "proxy-wasm" | "http-wasm" | "resource";
   client: ClientContext | null;
   edge: EdgeContext | null;
   onClientChange: (client: ClientContext | null) => void;
@@ -191,13 +192,16 @@ export function RequestContextPanel({
   }, []);
 
   const cdn = appType === "proxy-wasm";
+  const resource = appType === "resource";
 
   return (
     <CollapsiblePanel title="Request Context" defaultExpanded={false}>
       <ContextSection
         title="Client"
         hint={
-          cdn ? (
+          resource ? (
+            <>One client for the whole resource: the CDN apps' <code>request.*</code> geo properties and <code>GeoIP-*</code> headers, and an HTTP app origin's <code>geoip-*</code> headers.</>
+          ) : cdn ? (
             <>Sets the <code>request.*</code> geo properties and the <code>GeoIP-*</code> / <code>X-Real-IP</code> headers.</>
           ) : (
             <>Sets the <code>geoip-*</code> and <code>x-real-ip</code> request headers.</>
@@ -212,7 +216,9 @@ export function RequestContextPanel({
       <ContextSection
         title="Edge"
         hint={
-          cdn ? (
+          resource ? (
+            <>One edge for the whole resource, as on a CDN, where one POP runs every app of a request. Its <code>dc</code> is the cache bucket; <code>pop-*</code> reach an HTTP app origin.</>
+          ) : cdn ? (
             <>Sets the dictionary keys (<code>dc</code>, <code>region</code>, <code>country</code>, <code>city</code>, <code>hostname</code>) and <code>X-ID</code>. Its <code>dc</code> is the cache bucket.</>
           ) : (
             <>Sets the <code>dc</code> and <code>pop-*</code> request headers. Its <code>dc</code> is the cache bucket.</>
@@ -220,7 +226,7 @@ export function RequestContextPanel({
         }
         value={edge as Context | null}
         presets={presets?.edge ?? null}
-        fields={cdn ? EDGE_FIELDS : [...EDGE_FIELDS.filter((f) => f.key === "dc"), ...POP_FIELDS]}
+        fields={resource ? [...EDGE_FIELDS, ...POP_FIELDS] : cdn ? EDGE_FIELDS : [...EDGE_FIELDS.filter((f) => f.key === "dc"), ...POP_FIELDS]}
         sublabel={(p) => (presets ? `${presets.edge[p].city} (${presets.edge[p].dc})` : undefined)}
         onChange={(v) => onEdgeChange(v as EdgeContext | null)}
       />

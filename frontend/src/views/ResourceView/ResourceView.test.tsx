@@ -183,6 +183,23 @@ describe("ResourceView", () => {
     expect(r.load.mock.invocationCallOrder[0]).toBeLessThan(r.send.mock.invocationCallOrder[0]);
   });
 
+  it("the request context is the resource's client and edge, saved to the file", async () => {
+    render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
+    await screen.findByLabelText("sso config");
+    fireEvent.click(screen.getByText("Request Context"));
+    const [client, edge] = screen.getAllByRole("radiogroup");
+    fireEvent.click(edge.querySelectorAll("button")[2]); // NL
+    fireEvent.click(client.querySelectorAll("button")[1]); // DE
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(r.save).toHaveBeenCalledTimes(1));
+    expect(r.save.mock.calls[0][1]).toMatchObject({ client: { preset: "de" }, edge: { preset: "nl" } });
+
+    fireEvent.click(edge.querySelectorAll("button")[0]); // None
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(r.save).toHaveBeenCalledTimes(2));
+    expect(r.save.mock.calls[1][1]).not.toHaveProperty("edge");
+  });
+
   it("asks before overwriting a file changed on disk", async () => {
     const confirm = vi.spyOn(window, "confirm");
     render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);

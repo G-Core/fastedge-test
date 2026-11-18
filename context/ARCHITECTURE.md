@@ -636,6 +636,9 @@ edge rules it models: [BEHAVIOUR.md](BEHAVIOUR.md#resources).
 
 Each app is its own runner (its own worker or `fastedge-run`). In the debugger every file must be
 inside the workspace. The Resource page saves the file as written (no schema defaults filled in).
+Its Request Context panel edits the file's top-level `client` and `edge` (one for every app, as
+one POP runs all of a request's apps); the next send saves and reloads, since a runner's `dc` is
+fixed at load.
 
 ---
 
