@@ -1,6 +1,6 @@
 import { resolve, normalize, relative, isAbsolute, sep } from "path";
 import { existsSync, statSync, realpathSync, lstatSync } from "fs";
-import { ApprovalNeeded, checkAllowedRead } from "./allowedFolders.js";
+import { ApprovalNeeded, checkAllowedRead, OUTSIDE } from "./allowedFolders.js";
 
 /**
  * Options for path validation
@@ -67,9 +67,6 @@ const DANGEROUS_PATHS = [
   ".kube",
   "node_modules",
 ];
-
-const OUTSIDE =
-  "Path is outside the workspace root: move it inside, or start the debugger for a folder that contains it.";
 
 /**
  * Inside the workspace root both as written and through symlinks (for a path not created yet, its

@@ -9,6 +9,10 @@ import path from "node:path";
  * never through the HTTP API.
  */
 
+/** The error for a path outside the workspace and every allowed folder (names no path). */
+export const OUTSIDE =
+  "Path is outside the workspace root: move it inside, start the debugger for a folder that contains it, or add its folder to your allowed folders (VS Code setting fastedge.debugger.allowedFolders, or fastedge-debug --allow <dir>).";
+
 /** A read needs the user's approval of `folder` first. */
 export class ApprovalNeeded extends Error {
   constructor(readonly folder: string) {
@@ -82,7 +86,7 @@ export function allowedFolderOf(absolute: string): string | null {
 /** Throws unless `absolute` lies in an allowed folder the user approved this session. */
 export function checkAllowedRead(absolute: string): void {
   const folder = allowedFolderOf(absolute);
-  if (!folder) throw new Error("Path is outside the workspace root: move it inside, or start the debugger for a folder that contains it.");
+  if (!folder) throw new Error(OUTSIDE);
   if (approved.has(folder)) return;
   if (refused.has(folder)) throw new Error(`Reading ${folder} was refused for this session.`);
   throw new ApprovalNeeded(folder);
@@ -107,9 +111,13 @@ export function approvedFolders(): string[] {
 
 export type FolderState = "approved" | "refused" | "not asked";
 
-/** The configured allowed folders (real paths) and whether the user approved each this session. */
-export function allowedFolderStates(): { folder: string; state: FolderState }[] {
-  return allowedFolders().map(({ real }) => ({
+/**
+ * The configured allowed folders (real paths) outside `workspaceRoot`, and whether the user
+ * approved each this session. One in the workspace is not listed: the workspace is readable anyway.
+ */
+export function allowedFolderStates(workspaceRoot: string): { folder: string; state: FolderState }[] {
+  const root = existsSync(workspaceRoot) ? realpathSync(workspaceRoot) : workspaceRoot;
+  return allowedFolders().filter(({ real }) => !inside(root, real)).map(({ real }) => ({
     folder: real,
     state: approved.has(real) ? "approved" : refused.has(real) ? "refused" : "not asked",
   }));

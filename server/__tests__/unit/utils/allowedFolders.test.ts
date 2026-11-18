@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdirSync, mkdtempSync, realpathSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { allowedFolderOf, checkAllowedRead, recordApproval, ApprovalNeeded } from "../../../utils/allowedFolders";
+import { allowedFolderOf, allowedFolderStates, checkAllowedRead, recordApproval, ApprovalNeeded } from "../../../utils/allowedFolders";
 
 const saved = process.env.FASTEDGE_ALLOWED_FOLDERS;
 afterEach(() => {
@@ -49,5 +49,15 @@ describe("allowed folders", () => {
     recordApproval(realpathSync(folder), false);
     expect(() => checkAllowedRead(file)).toThrow("refused");
     expect(() => checkAllowedRead(join(tmpdir(), "x.wasm"))).toThrow("outside the workspace root");
+    expect(() => checkAllowedRead(join(tmpdir(), "x.wasm"))).toThrow("allowed folders");
+  });
+
+  it("does not list a folder in the workspace (or the workspace itself): it is readable anyway", () => {
+    const workspace = mkdtempSync(join(tmpdir(), "ws-"));
+    const lib = mkdtempSync(join(tmpdir(), "lib-"));
+    mkdirSync(join(workspace, "sub"));
+    process.env.FASTEDGE_ALLOWED_FOLDERS = JSON.stringify([workspace, join(workspace, "sub"), lib]);
+
+    expect(allowedFolderStates(workspace).map((f) => f.folder)).toEqual([realpathSync(lib)]);
   });
 });

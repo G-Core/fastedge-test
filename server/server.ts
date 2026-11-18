@@ -189,7 +189,7 @@ app.get("/api/environment", (req: Request, res: Response) => {
     workspaceRoot: process.env.WORKSPACE_PATH ? workspaceRoot() : null,
     appRoot: process.env.WORKSPACE_PATH ? appRoot() : null,
     approvedFolders: approvedFolders(),
-    allowedFolders: allowedFolderStates(),
+    allowedFolders: allowedFolderStates(workspaceRoot()),
   });
 });
 
@@ -199,7 +199,7 @@ app.get("/api/environment", (req: Request, res: Response) => {
  * dialog or terminal), never from this call. A folder already answered this session is not asked again.
  */
 app.post("/api/allowed-folders/ask", async (req: Request, res: Response) => {
-  const entry = allowedFolderStates().find((f) => f.folder === req.body?.folder);
+  const entry = allowedFolderStates(workspaceRoot()).find((f) => f.folder === req.body?.folder);
   if (!entry) {
     res.status(400).json({ ok: false, error: "Not an allowed folder" });
     return;
