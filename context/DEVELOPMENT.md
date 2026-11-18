@@ -293,7 +293,7 @@ Host functions are the imports an app's wasm calls. All of them are defined insi
 ### 7.5 Schemas, API and docs
 
 - The JSON Schemas in `schemas/` are generated from the Zod schemas in `server/schemas/` and the runner types, and committed. After changing a config, API body or result type, run `pnpm run build:schemas` and commit the result.
-- `pnpm run check-types` type-checks the server without building.
+- `pnpm run check-types` type-checks the server and the frontend without building (PR CI runs it).
 - A change to the public API, config format, test framework or runner updates the matching file in `docs/` in the same commit.
 - A change to a mechanism updates [ARCHITECTURE.md](ARCHITECTURE.md); a change to what an app observes updates [BEHAVIOUR.md](BEHAVIOUR.md); a new command, test convention or rule updates this file.
 

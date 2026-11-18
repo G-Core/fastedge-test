@@ -30,6 +30,9 @@ jobs:
           cli_version: ${{ steps.cli.outputs.version }}
           github_token: ${{ github.token }}
 
+      - name: Check types
+        run: pnpm run check-types
+
       - name: Build (including WASM test apps)
         run: pnpm run build:ci-test
 

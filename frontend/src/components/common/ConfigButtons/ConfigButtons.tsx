@@ -41,7 +41,7 @@ export function ConfigButtons() {
         const configDotenvEnabled = config.dotenv?.enabled ?? false;
         const configDotenvPath = config.dotenv?.path ?? null;
         loadWasm(config.wasm.path, configDotenvEnabled, configDotenvPath)
-          .then(() => alert(`✅ Configuration loaded from ${event.data.fileName}\n🚀 WASM auto-loaded: ${config.wasm.path}`))
+          .then(() => alert(`✅ Configuration loaded from ${event.data.fileName}\n🚀 WASM auto-loaded: ${config.wasm?.path}`))
           .catch((wasmError: unknown) => {
             const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
             alert(`✅ Configuration loaded from ${event.data.fileName}\n⚠️ Failed to auto-load WASM: ${wasmMsg}`);
@@ -100,7 +100,7 @@ export function ConfigButtons() {
             const configDotenvEnabled = config.dotenv?.enabled ?? false;
             const configDotenvPath = config.dotenv?.path ?? null;
             await loadWasm(config.wasm.path, configDotenvEnabled, configDotenvPath);
-            alert(`✅ Configuration loaded from ${file.name}\n🚀 WASM auto-loaded: ${config.wasm.path}`);
+            alert(`✅ Configuration loaded from ${file.name}\n🚀 WASM auto-loaded: ${config.wasm?.path}`);
           } catch (wasmError) {
             const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
             alert(`✅ Configuration loaded from ${file.name}\n⚠️ Failed to auto-load WASM: ${wasmMsg}`);

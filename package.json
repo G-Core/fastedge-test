@@ -57,7 +57,7 @@
     "build:http-test-apps:rust": "npm-run-all -s build:http-test-apps:rust:basic build:http-test-apps:rust:wasi",
     "build:http-test-apps:rust:basic": "./scripts/build-rust-wasm.sh test-applications/http-apps/rust/basic wasm/http-apps/rust/basic --flat",
     "build:http-test-apps:rust:wasi": "./scripts/build-rust-wasm.sh test-applications/http-apps/rust/wasi wasm/http-apps/rust/wasi --flat",
-    "check-types": "tsc -p server/tsconfig.json --noEmit",
+    "check-types": "tsc -p server/tsconfig.json --noEmit && tsc -p frontend --noEmit",
     "dev": "npm-run-all -p dev:backend dev:frontend",
     "dev:backend": "run-p dev:backend:esbuild dev:backend:server",
     "dev:backend:esbuild": "node esbuild/watch-server.js",

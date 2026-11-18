@@ -282,6 +282,6 @@ export interface TestConfig {
 
 export interface PersistConfig {
   request: RequestState;
-  config: ConfigState;
+  config: Pick<ConfigState, "properties" | "dotenv" | "logLevel">;
   ui: Pick<UIState, "expandedPanels">;
 }

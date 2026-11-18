@@ -54,7 +54,6 @@ function App() {
     setHookResults,
     setFinalResponse,
     hookResults,
-    properties,
     mergeProperties,
     setCalculatedProperties,
 
