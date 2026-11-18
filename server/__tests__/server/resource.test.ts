@@ -193,8 +193,9 @@ describe("debugger server — GET /api/config", () => {
       symlinkSync(target, join(other.workspacePath, ".fastedge-debug", "fastedge-config.test.json"));
       const get = await authedFetch(other.base, other.token, "/api/config");
       expect((await get.json()).ok).toBe(false);
-      const save = await authedFetch(other.base, other.token, "/api/config", { method: "POST", body: JSON.stringify({ config: { properties: {} } }) });
-      expect(save.status).toBeGreaterThanOrEqual(400);
+      const save = await authedFetch(other.base, other.token, "/api/config", { method: "POST", body: JSON.stringify({ config: { request: { method: "GET", url: "https://example.com/", headers: {} } } }) });
+      expect(save.status).toBe(500);
+      expect((await save.json()).error).toContain("outside the workspace root");
       expect(JSON.parse(readFileSync(target, "utf8"))).toEqual({ secret: "keep" });
     } finally {
       await other.close();
