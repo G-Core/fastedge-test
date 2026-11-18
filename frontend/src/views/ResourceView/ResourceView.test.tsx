@@ -162,6 +162,16 @@ describe("ResourceView", () => {
     expect(screen.getByText("Response Body (Modified): binary, 3 bytes (shown as base64)")).toBeTruthy();
   });
 
+  it("a failed load opens that file and shows the error", async () => {
+    const { rerender } = render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
+    await screen.findByLabelText("sso config");
+    r.read.mockResolvedValue({ path: "/ws/other.json", config: config(), version: "v3" });
+    rerender(<ResourceView loaded={null} result={null} onResult={vi.fn()} failed={{ configPath: "/ws/other.json", error: 'app "print": Path is outside the workspace root' }} />);
+    expect(await screen.findByText(/app "print": Path is outside the workspace root/)).toBeTruthy();
+    expect(r.read).toHaveBeenLastCalledWith("/ws/other.json");
+    expect(screen.getByLabelText("Resource file")).toHaveProperty("value", "/ws/other.json");
+  });
+
   it("opening another file takes that file's request", async () => {
     render(<ResourceView loaded={null} result={null} onResult={vi.fn()} />);
     await screen.findByLabelText("sso config");

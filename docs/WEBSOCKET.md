@@ -556,6 +556,43 @@ interface ResourceLoadedEvent {
 
 ---
 
+### resource_load_failed
+
+Fired when loading a resource file through `POST /api/resource/load` (with `configPath`) fails: a config, path or build problem. Whatever was loaded before is already unloaded. The debugger page switches to Multi-app, opens the file and shows the error, so it can be fixed in place.
+
+```typescript
+interface ResourceLoadFailedEvent {
+  type: "resource_load_failed";
+  timestamp: number;
+  source: "ui" | "ai_agent" | "api" | "system";
+  data: {
+    configPath: string;
+    error: string;
+  };
+}
+```
+
+| Field        | Type     | Description                                             |
+| ------------ | -------- | ------------------------------------------------------- |
+| `configPath` | `string` | Full path of the file that failed to load               |
+| `error`      | `string` | The same error the route returned                       |
+
+**Example:**
+
+```json
+{
+  "type": "resource_load_failed",
+  "timestamp": 1742734800025,
+  "source": "api",
+  "data": {
+    "configPath": "/workspace/.fastedge-debug/fastedge-cdn-resource.test.json",
+    "error": "app \"print\": Path is outside the workspace root: move it inside, or start the debugger for a folder that contains it."
+  }
+}
+```
+
+---
+
 ### resource_saved
 
 Fired when a resource file is saved through the API (by the debugger page or an agent). Clients showing that file can use it to reload the file or warn about their own unsaved edits.

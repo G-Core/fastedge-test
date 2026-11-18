@@ -108,7 +108,7 @@ export function validatePath(
       return {
         valid: false,
         error:
-          "Path is outside the workspace root. If your build output lives above this directory (e.g. a Cargo workspace), restart the debugger with --project-dir <workspace root>.",
+          "Path is outside the workspace root: move it inside, or start the debugger for a folder that contains it.",
       };
     }
 
@@ -127,7 +127,7 @@ export function validatePath(
         return {
           valid: false,
           error:
-            "Path is outside the workspace root. If your build output lives above this directory (e.g. a Cargo workspace), restart the debugger with --project-dir <workspace root>.",
+            "Path is outside the workspace root: move it inside, or start the debugger for a folder that contains it.",
         };
       }
     } catch {

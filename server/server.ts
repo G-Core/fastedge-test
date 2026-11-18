@@ -481,8 +481,12 @@ app.post("/api/resource/load", serialized(async (req: Request, res: Response) =>
     stateManager.emitResourceLoaded({ configPath: configPath ? path.resolve(root, configPath) : null, apps }, source);
     res.json({ ok: true, apps, config: resource.config });
   } catch (error) {
-    // A config, path or build problem: the caller can fix it.
-    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+    // A config, path or build problem: the caller can fix it. A page shows the file with the error.
+    const message = error instanceof Error ? error.message : String(error);
+    if (configPath) {
+      stateManager.emitResourceLoadFailed({ configPath: path.resolve(root, configPath), error: message }, (req.headers["x-source"] as any) || "ui");
+    }
+    res.status(400).json({ ok: false, error: message });
   }
 }));
 

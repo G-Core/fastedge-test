@@ -29,7 +29,7 @@ export function DotenvPanel({
   const normRoot = workspaceRoot ? toForward(workspaceRoot).replace(/\/+$/, "") : "";
   const pathError =
     normRoot && normPath && !(normPath === normRoot || normPath.startsWith(normRoot + "/"))
-      ? `Path is outside the workspace root (${workspaceRoot}). Restart the debugger with --project-dir <workspace root> to allow this path.`
+      ? `Path is outside the workspace root (${workspaceRoot}). Move it inside, or start the debugger for a folder that contains it.`
       : null;
   const listenerRef = useRef<((e: MessageEvent) => void) | null>(null);
   const pathRef = useRef(path);

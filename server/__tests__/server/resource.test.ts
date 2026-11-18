@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { copyFileSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import WebSocket from "ws";
 import { startTestServer, authedFetch, type TestServer } from "./helpers.js";
 
 const PROBE = resolve(process.cwd(), "wasm/cdn-apps/rust/resource-probe/resource-probe.wasm");
@@ -54,6 +55,31 @@ describe("debugger server — resources", () => {
   it("loads a named file, and refuses both configPath and config", async () => {
     expect((await post("/api/resource/load", { configPath: ".fastedge-debug/fastedge-cdn-resource.test.json" })).status).toBe(200);
     expect((await post("/api/resource/load", { configPath: "x", config: {} })).status).toBe(400);
+  });
+
+  it("a named file that fails to load is broadcast with its error", async () => {
+    writeFileSync(join(server.workspacePath, ".fastedge-debug", "outside.test.json"), JSON.stringify({
+      apps: { a: { wasm: PROBE } },
+      main: { origin: { url: "built-in" } },
+    }));
+    const ws = new WebSocket(`ws://127.0.0.1:${new URL(server.base).port}/ws?token=${server.token}`, { origin: server.base });
+    const events: { type: string; data: Record<string, unknown> }[] = [];
+    ws.on("message", (m) => events.push(JSON.parse(m.toString())));
+    await new Promise((ok) => ws.once("open", ok));
+
+    const res = await post("/api/resource/load", { configPath: ".fastedge-debug/outside.test.json" });
+    rmSync(join(server.workspacePath, ".fastedge-debug", "outside.test.json")); // other tests list the workspace's configs
+    expect(res.status).toBe(400);
+    const { error } = await res.json();
+    expect(error).toContain("outside the workspace root");
+    expect(error).not.toContain("--project-dir");
+
+    await new Promise((ok) => setTimeout(ok, 100));
+    ws.close();
+    expect(events.find((e) => e.type === "resource_load_failed")?.data).toEqual({
+      configPath: join(server.workspacePath, ".fastedge-debug", "outside.test.json"),
+      error,
+    });
   });
 
   it("reads and saves a resource file as written; refuses bad configs and paths", async () => {

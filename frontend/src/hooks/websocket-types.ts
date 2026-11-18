@@ -123,6 +123,12 @@ export interface ResourceLoadedEvent extends BaseEvent {
   data: ResourceLoaded;
 }
 
+/** Loading a resource file failed: the file and the error. */
+export interface ResourceLoadFailedEvent extends BaseEvent {
+  type: "resource_load_failed";
+  data: { configPath: string; error: string };
+}
+
 /** A resource file was saved through the API: its full path and new content version. */
 export interface ResourceSavedEvent extends BaseEvent {
   type: "resource_saved";
@@ -147,4 +153,5 @@ export type ServerEvent =
   | ReloadWorkspaceWasmEvent
   | ResourceLoadedEvent
   | ResourceSavedEvent
+  | ResourceLoadFailedEvent
   | ResourceRequestCompletedEvent;

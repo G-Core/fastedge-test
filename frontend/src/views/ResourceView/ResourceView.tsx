@@ -49,6 +49,8 @@ interface ResourceViewProps {
   appLoaded?: boolean;
   /** The last resource file saved through the API (this page, an agent, another tab). */
   saved?: { configPath: string; version: string } | null;
+  /** The last resource load that failed (VS Code, an agent): shown with its error. */
+  failed?: { configPath: string; error: string } | null;
 }
 
 /**
@@ -56,7 +58,7 @@ interface ResourceViewProps {
  * origin), save it, load it and send requests through it. The file is the source of truth: agents
  * and tests use the same file through the API.
  */
-export function ResourceView({ loaded, result, onResult, appLoaded, saved }: ResourceViewProps) {
+export function ResourceView({ loaded, result, onResult, appLoaded, saved, failed }: ResourceViewProps) {
   const [path, setPath] = useState(DEFAULT_RESOURCE_FILE);
   const [config, setConfig] = useState<ResourceConfig | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -108,6 +110,16 @@ export function ResourceView({ loaded, result, onResult, appLoaded, saved }: Res
     if (loaded?.configPath && loaded.configPath !== opened.current && !dirty) void open(loaded.configPath);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded?.configPath]);
+
+  // A load failed elsewhere: show that file (unless there are unsaved edits) and the error.
+  useEffect(() => {
+    if (!failed) return;
+    void (async () => {
+      if (!dirty) await open(failed.configPath);
+      setMessage({ error: true, text: `Not loaded: ${failed.error}` });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [failed]);
 
   const edit = (change: (draft: ResourceConfig) => void) => {
     const draft = structuredClone(config ?? NEW_CONFIG);

@@ -705,7 +705,7 @@ for the loaded resource), not in the store.
 | `http_wasm_request_completed` | `/api/execute` (HTTP) | response only; logs arrive as `http_wasm_log` |
 | `properties_updated` | `POST /api/config` | `mergeProperties()` |
 | `reload_workspace_wasm` | `/api/reload-workspace-wasm` | `loadWasm(path)` from the UI |
-| `resource_loaded`, `resource_saved`, `resource_request_completed` | resource routes | Resource page state; a page showing a saved file reloads it or warns |
+| `resource_loaded`, `resource_load_failed`, `resource_saved`, `resource_request_completed` | resource routes | Resource page state; a failed load opens the file with its error; a page showing a saved file reloads it or warns |
 | `connection_status` | `WebSocketManager` | connection indicator, client count |
 
 Event payloads: [docs/WEBSOCKET.md](../docs/WEBSOCKET.md).
