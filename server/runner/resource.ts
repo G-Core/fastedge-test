@@ -20,7 +20,7 @@ import type { StoreCall } from "../stores/trace.js";
 import type { FullFlowResult, HeaderRecord, HookResult } from "./types.js";
 import { HeaderManager } from "./HeaderManager.js";
 import { PropertyResolver } from "./PropertyResolver.js";
-import { cdnContext, withHeaders, type RequestContext } from "./requestContext.js";
+import { cdnContext, contextProperties, withHeaders, type RequestContext } from "./requestContext.js";
 import { validatePathOrThrow } from "../utils/pathValidator.js";
 import { validateDotenvLeafs } from "../utils/dotenv-loader.js";
 import { BUILTIN_SHORTHAND, BUILTIN_URL, CDN_HOOKS, isBuiltInUrl, runCdnFlow, type CdnHook, type OriginRequest, type OriginResponse } from "./cdnFlow.js";
@@ -179,6 +179,7 @@ async function runRequest(
     return typeof assigned === "string" ? { app: assigned, interruptOnError: true } : { app: assigned.app, interruptOnError: assigned.interruptOnError ?? true };
   };
 
+  const explicitHeaders = request.headers ?? config.request?.headers ?? {};
   const flow = await runCdnFlow({
     runnerFor: (hook) => {
       const assigned = hookApp(hook);
@@ -205,11 +206,11 @@ async function runRequest(
   }, {
     hook: "",
     request: {
-      headers: withHeaders(applied.headers, request.headers ?? config.request?.headers ?? {}),
+      headers: withHeaders(applied.headers, explicitHeaders),
       body: request.body ?? config.request?.body ?? "",
       method: request.method ?? config.request?.method ?? "GET",
     },
-    properties: { ...urlProperties, ...applied.properties, ...config.properties, ...request.properties },
+    properties: { ...urlProperties, ...contextProperties(applied.properties, explicitHeaders), ...config.properties, ...request.properties },
     enforceProductionPropertyRules: true,
   }, requestUrl);
 
