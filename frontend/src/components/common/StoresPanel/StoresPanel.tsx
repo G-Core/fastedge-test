@@ -34,8 +34,8 @@ function decode(base64: string, truncated: boolean): string | null {
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   let text: string;
   try {
-    // A cut value may end mid-character: decode leniently at the cut, strictly elsewhere.
-    text = new TextDecoder("utf-8", { fatal: !truncated }).decode(bytes);
+    // A cut value may end mid-character: streaming mode holds back an incomplete last character.
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes, { stream: truncated });
   } catch {
     return null;
   }

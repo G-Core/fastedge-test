@@ -28,6 +28,7 @@ export function HttpWasmView() {
     httpResponse,
     httpLogs,
     wasmPath,
+    loading, // Send waits for a reload: the runner is being replaced
     dotenv,
     client,
     edge,
@@ -63,7 +64,7 @@ export function HttpWasmView() {
         <RequestPanel
           method={httpMethod}
           url={httpUrl}
-          wasmLoaded={wasmPath !== null}
+          wasmLoaded={wasmPath !== null && !loading}
           onMethodChange={setHttpMethod}
           onUrlChange={handleUrlChange}
           onSend={handleSend}

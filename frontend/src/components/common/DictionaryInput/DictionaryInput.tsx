@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import styles from "./DictionaryInput.module.css";
 
 interface DefaultValue {
@@ -108,9 +108,14 @@ export function DictionaryInput({
   });
 
   // Sync rows when value prop changes externally (e.g., from calculated properties)
+  const previousValue = useRef(value);
   useEffect(() => {
+    // A key removed from outside (another control cleared it) goes, or the next edit would restore it.
+    const removed = new Set(Object.keys(previousValue.current).filter((k) => !Object.prototype.hasOwnProperty.call(value, k)));
+    previousValue.current = value;
     setRows((currentRows) => {
-      const updatedRows = currentRows.map((row) => {
+      const kept = currentRows.filter((row) => !(row.enabled && !row.readOnly && removed.has(row.key.trim())));
+      const updatedRows = kept.map((row) => {
         // If this key exists in the new value prop, update it
         if (row.key && value.hasOwnProperty(row.key)) {
           return { ...row, value: value[row.key], enabled: true };
@@ -119,7 +124,7 @@ export function DictionaryInput({
       });
 
       // Add any new keys from value that don't exist in current rows
-      const existingKeys = new Set(currentRows.map((r) => r.key));
+      const existingKeys = new Set(kept.map((r) => r.key));
       const newKeys = Object.keys(value).filter((k) => !existingKeys.has(k));
 
       if (newKeys.length > 0) {

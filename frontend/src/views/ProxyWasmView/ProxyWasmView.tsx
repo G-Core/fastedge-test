@@ -53,6 +53,7 @@ export function ProxyWasmView() {
 
     // WASM state
     wasmPath,
+    loading, // Send waits for a reload: the runner is being replaced
   } = useAppStore();
 
   // Response state (request_headers/body from slice; response seed is empty —
@@ -118,7 +119,7 @@ export function ProxyWasmView() {
       <RequestPanel
         method={method}
         url={url}
-        wasmLoaded={wasmPath !== null}
+        wasmLoaded={wasmPath !== null && !loading}
         onMethodChange={setMethod}
         onUrlChange={setUrl}
         onSend={handleSend}

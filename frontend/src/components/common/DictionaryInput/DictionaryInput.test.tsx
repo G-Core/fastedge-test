@@ -913,6 +913,15 @@ describe('DictionaryInput', () => {
 
       expect(screen.getAllByPlaceholderText('Key')).toHaveLength(3); // 2 data + 1 empty
     });
+
+    it('drops a key removed externally, so the next edit does not restore it', () => {
+      const { rerender } = render(
+        <DictionaryInput value={{ status: '500', keep: 'a' }} onChange={mockOnChange} />
+      );
+      rerender(<DictionaryInput value={{ keep: 'a' }} onChange={mockOnChange} />);
+      fireEvent.change(screen.getAllByPlaceholderText('Value')[0], { target: { value: 'b' } });
+      expect(mockOnChange).toHaveBeenLastCalledWith({ keep: 'b' });
+    });
   });
 
   describe('disableDelete mode', () => {

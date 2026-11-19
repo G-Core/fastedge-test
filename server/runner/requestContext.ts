@@ -150,6 +150,15 @@ export function httpContextHeaders({ client, edge }: RequestContext): Record<str
   };
 }
 
+/**
+ * The context's properties for a request with these headers. The edge reads `request.x_real_ip`
+ * from the X-Real-IP header, so an explicit header replaces the client preset's IP.
+ */
+export function contextProperties(properties: Record<string, string>, headers: Record<string, unknown>): Record<string, string> {
+  const ip = Object.entries(headers).find(([k]) => k.toLowerCase() === "x-real-ip")?.[1];
+  return ip === undefined || !("request.x_real_ip" in properties) ? properties : { ...properties, "request.x_real_ip": String(Array.isArray(ip) ? ip[0] : ip) };
+}
+
 /** `extra` under `explicit`: an explicit header (any case) wins. */
 export function withHeaders<T>(extra: Record<string, string>, explicit: Record<string, T>): Record<string, T | string> {
   const taken = new Set(Object.keys(explicit).map((k) => k.toLowerCase()));

@@ -25,7 +25,7 @@ import type { SyncStores } from "./storesBridge.js";
 import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { StoreCall } from "../stores/trace.js";
-import { cdnContext, withHeaders, type RequestContext } from "./requestContext.js";
+import { cdnContext, contextProperties, withHeaders, type RequestContext } from "./requestContext.js";
 
 const textEncoder = new TextEncoder();
 
@@ -234,7 +234,7 @@ export class ProxyWasmRunner implements IWasmRunner {
     const c = context ? cdnContext(context) : this.context;
     const applied: HookCall = {
       ...call,
-      properties: { ...c.properties, ...(call.properties ?? {}) },
+      properties: { ...contextProperties(c.properties, call.request.headers ?? {}), ...(call.properties ?? {}) },
       request: { ...call.request, headers: withHeaders(c.headers, call.request.headers ?? {}) },
     };
     return this.callContext.run({ ...c, callerHeaders: call.request.headers ?? {} }, () => work(applied));

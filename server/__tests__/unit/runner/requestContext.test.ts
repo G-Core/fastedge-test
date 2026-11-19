@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cdnContext, edgeDc, httpContextHeaders, withHeaders } from "../../../runner/requestContext";
+import { cdnContext, contextProperties, edgeDc, httpContextHeaders, withHeaders } from "../../../runner/requestContext";
 import { Dictionary } from "../../../fastedge-host/Dictionary";
 import { TestConfigSchema } from "../../../schemas/config";
 
@@ -50,6 +50,13 @@ describe("request context", () => {
       "x-id": "n",
       "GeoIP-City": "Paris",
     });
+  });
+
+  it("an explicit X-Real-IP header sets request.x_real_ip over the client preset (the edge reads it from the header)", () => {
+    const { properties } = cdnContext({ client: { preset: "de" } });
+    expect(contextProperties(properties, { "X-Real-IP": "203.0.113.9" })["request.x_real_ip"]).toBe("203.0.113.9");
+    expect(contextProperties(properties, {})["request.x_real_ip"]).toBe(properties["request.x_real_ip"]);
+    expect(contextProperties({}, { "x-real-ip": "203.0.113.9" })).toEqual({}); // no context: unchanged
   });
 
   it("rejects an unknown preset", () => {

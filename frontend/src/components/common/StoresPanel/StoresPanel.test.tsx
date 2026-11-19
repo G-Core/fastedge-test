@@ -84,6 +84,12 @@ describe("StoresPanel", () => {
     expect(await screen.findByText("binary (base64)")).toBeTruthy();
     expect(values).toHaveBeenLastCalledWith({ store: "users" }, "alice");
 
+    // A cut value: an incomplete last character is fine, invalid bytes before it are binary.
+    values.mockResolvedValueOnce({ type: "string", size: 9000, value: btoa("\xff\xfeabc"), truncated: true });
+    fireEvent.click(screen.getByText("alice"));
+    fireEvent.click(screen.getByText("alice"));
+    expect(await screen.findByText("binary (base64)")).toBeTruthy();
+
     values.mockResolvedValueOnce({
       type: "zset",
       count: 3,
