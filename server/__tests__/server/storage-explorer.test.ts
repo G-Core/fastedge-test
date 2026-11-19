@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { existsSync, readFileSync, mkdirSync, symlinkSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, symlinkSync, writeFileSync, rmSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { startTestServer, authedFetch, type TestServer } from "./helpers.js";
 
@@ -113,6 +113,6 @@ describe("debugger server — Storage Explorer", () => {
     const viaDir = (await call("/api/storage/fixtures/diff")).body.changes.find((c: { store: string }) => c.store === "linked");
     expect((await call("/api/storage/fixtures/save", { files: [{ file: viaDir.file, hash: viaDir.hash }] })).status).toBe(400);
     expect(existsSync(join(elsewhere, "linked.json"))).toBe(false);
-    rmSync(join(server.workspacePath, "fixtures/stores/kv"));
+    unlinkSync(join(server.workspacePath, "fixtures/stores/kv")); // the link itself (rmSync refuses a link to a folder on some Node versions)
   });
 });
