@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { CollapsiblePanel } from "../CollapsiblePanel";
 import { FLAGS } from "../RequestContextPanel";
+import { useAppStore } from "../../../stores";
 import type { Preset } from "../../../stores/types";
 import {
   advanceStoresClock,
@@ -166,10 +167,12 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
     }
   }, [dc]);
 
-  // On open, on a dc switch, and after each request.
+  // On open, on a dc switch, after each request, and after an app load (not during one: the
+  // snapshot would show the bucket being replaced).
+  const loading = useAppStore((s) => s.loading);
   useEffect(() => {
-    void refresh();
-  }, [refresh, refreshKey]);
+    if (!loading) void refresh();
+  }, [refresh, refreshKey, loading]);
 
   // And when the next cache entry expires, so expired entries drop out.
   useEffect(() => {
@@ -180,12 +183,14 @@ function StoresContent({ refreshKey }: { refreshKey: unknown }) {
   }, [snapshot, fetchedAt, refresh]);
 
   const act = async (action: () => Promise<void>) => {
+    let failed: string | null = null;
     try {
       await action();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      failed = e instanceof Error ? e.message : String(e);
     }
     await refresh();
+    if (failed) setError(failed); // after the refresh, which clears errors
   };
 
   if (error && !snapshot) return <p className={styles.error}>{error}</p>;

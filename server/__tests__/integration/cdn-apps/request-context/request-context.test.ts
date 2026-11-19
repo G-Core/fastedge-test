@@ -45,6 +45,17 @@ describe("CDN request context", () => {
     expect(logsContain(after, "Request City: Frankfurt am Main")).toBe(true);
   });
 
+  it("does not report context headers as the request's own (the UI would keep them as overrides)", async () => {
+    const runner = new ProxyWasmRunner(undefined, false);
+    await runner.load(Buffer.from(await wasm()), { client: { preset: "de" } });
+    const started: Record<string, unknown>[] = [];
+    const record = (_u: string, _m: string, h: Record<string, unknown>) => started.push(h);
+    runner.setStateManager(new Proxy({}, { get: (_t, k) => (k === "emitRequestStarted" ? record : () => {}) }) as never);
+    await runner.callFullFlow("built-in", "GET", { "geoip-country-code": "XX", "x-mine": "1" }, "", {}, true);
+    expect(started[0]).toMatchObject({ "geoip-country-code": "XX", "x-mine": "1" });
+    expect(started[0]["geoip-city"]).toBeUndefined();
+  });
+
   it("reaches the worker runner and selects the cache bucket", async () => {
     const runner = await createRunnerFromBuffer(Buffer.from(await wasm()), {
       stores: false,

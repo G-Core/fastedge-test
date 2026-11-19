@@ -115,10 +115,13 @@ function App() {
   // dc field applies on blur / Enter). Everything else in the context goes with each request.
   const edgeKey = edge ? `${edge.dc ?? ""}|${edge.preset ?? ""}` : "";
   const loadedEdgeKey = useRef(edgeKey);
+  const startedEdgeKey = useRef(edgeKey);
   useEffect(() => {
-    loadedEdgeKey.current = edgeKey; // the edge this load used
+    // A load reads the edge when it starts; one changed during the load still needs a reload.
+    if (loading) startedEdgeKey.current = edgeKey;
+    else loadedEdgeKey.current = startedEdgeKey.current;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadTime]);
+  }, [loading]);
   useEffect(() => {
     // A load in progress (e.g. a config load, which sets the edge first) uses the new edge itself.
     if (loading || edgeKey === loadedEdgeKey.current || !(wasmFile || wasmPath)) return;

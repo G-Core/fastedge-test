@@ -226,7 +226,7 @@ export class ProxyWasmRunner implements IWasmRunner {
   }
 
   /** The context of the call being run (AsyncLocalStorage: overlapping calls stay apart). */
-  private callContext = new AsyncLocalStorage<ReturnType<typeof cdnContext>>();
+  private callContext = new AsyncLocalStorage<ReturnType<typeof cdnContext> & { callerHeaders?: Record<string, unknown> }>();
   private edgeDictionary = () => (this.callContext.getStore() ?? this.context).dictionary;
 
   /** Run `work` with `context` (or the runner's), applied under the call's explicit values. */
@@ -237,7 +237,7 @@ export class ProxyWasmRunner implements IWasmRunner {
       properties: { ...c.properties, ...(call.properties ?? {}) },
       request: { ...call.request, headers: withHeaders(c.headers, call.request.headers ?? {}) },
     };
-    return this.callContext.run(c, () => work(applied));
+    return this.callContext.run({ ...c, callerHeaders: call.request.headers ?? {} }, () => work(applied));
   }
 
   async load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void> {
@@ -331,10 +331,18 @@ export class ProxyWasmRunner implements IWasmRunner {
     // Emit request started event
     if (this.stateManager) {
       const requestMethod = call.request.method ?? "GET";
+      // The UI copies these into its editable headers: leave out the ones the context added, or
+      // they would stay as explicit values after the context changes.
+      const ctx = this.callContext.getStore();
+      const shown = Object.fromEntries(
+        Object.entries(call.request.headers ?? {}).filter(
+          ([k]) => !ctx?.callerHeaders || !Object.hasOwn(ctx.headers, k) || Object.hasOwn(ctx.callerHeaders, k),
+        ),
+      );
       this.stateManager.emitRequestStarted(
         targetUrl,
         requestMethod,
-        call.request.headers || {},
+        shown,
         "system",
       );
     }

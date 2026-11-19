@@ -24,7 +24,8 @@ export class Dictionary implements IDictionary {
    * Get a configuration value by key
    */
   get(key: string): string | null {
-    return this.data.get(key) ?? this.defaults()[key] ?? null;
+    const defaults = this.defaults();
+    return this.data.get(key) ?? (Object.hasOwn(defaults, key) ? defaults[key] : null);
   }
 
   /**
@@ -46,7 +47,7 @@ export class Dictionary implements IDictionary {
    * Check if a key exists
    */
   has(key: string): boolean {
-    return this.data.has(key) || key in this.defaults();
+    return this.data.has(key) || Object.hasOwn(this.defaults(), key);
   }
 
   /**

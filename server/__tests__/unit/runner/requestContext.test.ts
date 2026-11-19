@@ -63,6 +63,8 @@ describe("request context", () => {
     expect(d.get("city")).toBe("Frankfurt am Main");
     expect(d.has("city")).toBe(true);
     expect(d.get("hostname")).toBeNull();
+    expect(d.get("constructor")).toBeNull(); // not an inherited member
+    expect(d.has("toString")).toBe(false);
   });
 
   it("accepts client / edge in config files and rejects unknown fields", () => {

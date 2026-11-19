@@ -102,6 +102,14 @@ describe("StoresPanel", () => {
     expect(await screen.findByText("Gone (deleted or expired).")).toBeTruthy();
   });
 
+  it("keeps a failed action's error after the refresh", async () => {
+    vi.mocked(api.resetStores).mockRejectedValueOnce(new Error("bad fixture"));
+    open();
+    await screen.findByText("page:/");
+    fireEvent.click(screen.getByText("Reset"));
+    expect(await screen.findByText("bad fixture")).toBeTruthy();
+  });
+
   it("refreshes when the next cache entry expires", async () => {
     vi.mocked(api.getStoresSnapshot)
       .mockResolvedValueOnce({ ...snapshot(), cache: [{ key: "soon", size: 1, expiresAt: 1_000_000 + 50 }] })
