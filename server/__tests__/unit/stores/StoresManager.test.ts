@@ -54,6 +54,17 @@ describe('StoresManager', () => {
     if (process.platform !== 'win32') expect(statSync(storesDir(root)).mode & 0o777).toBe(0o700);
   });
 
+  it('a starter does not remove a lock another starter took over', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'stores-mgr-'));
+    const lock = join(storesDir(root), 'service.lock');
+    const connecting = connect(root);
+    // Another starter reclaims the lock (as after a start slower than the stale-lock time).
+    for (const end = Date.now() + 5000; !existsSync(lock) && Date.now() < end; ) await sleep(2);
+    writeFileSync(lock, 'other');
+    await connecting;
+    expect(readFileSync(lock, 'utf8')).toBe('other');
+  });
+
   it('another root gets its own service', async () => {
     const a = await connect(mkdtempSync(join(tmpdir(), 'stores-mgr-')));
     const b = await connect(mkdtempSync(join(tmpdir(), 'stores-mgr-')));

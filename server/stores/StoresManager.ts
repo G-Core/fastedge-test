@@ -113,6 +113,7 @@ async function ensureService(root: string, timeoutMs: number): Promise<Descripto
   const dir = storesDir(root);
   const lock = join(dir, "service.lock");
   const deadline = Date.now() + timeoutMs;
+  const mine = randomUUID(); // in the lock, so we remove only our own (another starter may have reclaimed it)
   ownerOnly(dir); // before using a running service too: a folder from an older version may be 0755
 
   while (Date.now() < deadline) {
@@ -123,6 +124,7 @@ async function ensureService(root: string, timeoutMs: number): Promise<Descripto
     try {
       mkdirSync(dir, { recursive: true, mode: 0o700 });
       fd = openSync(lock, "wx");
+      writeFileSync(fd, mine);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       // Someone else is starting it; take over a lock left by a crashed starter.
@@ -154,7 +156,11 @@ async function ensureService(root: string, timeoutMs: number): Promise<Descripto
       throw new Error(`could not start the stores service${logTail(dir)}`);
     } finally {
       closeSync(fd);
-      rmSync(lock, { force: true });
+      try {
+        if (readFileSync(lock, "utf8") === mine) rmSync(lock, { force: true });
+      } catch {
+        // already gone
+      }
     }
   }
   throw new Error(`timed out waiting for the stores service${logTail(dir)}`);
