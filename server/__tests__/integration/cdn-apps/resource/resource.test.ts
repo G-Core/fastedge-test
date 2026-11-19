@@ -99,6 +99,14 @@ describe("resource test APIs", () => {
     expect(suite.results[1].error).toBe("nope");
   });
 
+  it("a resource suite's own stores use the resource's bucket", async () => {
+    const suite = await runTestSuite({
+      resource: { ...config, dc: "fr5" },
+      tests: [{ name: "dc", run: async (_r, { stores }) => expect(stores!.dc).toBe("fr5") }],
+    });
+    expect(suite.failed).toBe(0);
+  });
+
   fastedgeTest("the vitest resource fixture loads on the test's stores", async ({ resource }) => {
     const r = await resource(config);
     expect((await r.request({ url: "https://example.com/" })).hooks.onResponseBody?.app).toBe("a");

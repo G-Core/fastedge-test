@@ -198,7 +198,9 @@ export function ResponsePanel({ response }: ResponsePanelProps) {
       return (
         <div className={styles.imagePreview}>
           <img
-            src={`data:${response.contentType};base64,${response.body}`}
+            src={response.isBase64 === false
+              ? `data:${response.contentType},${encodeURIComponent(response.body)}`
+              : `data:${response.contentType};base64,${response.body}`}
             alt="Response preview"
             className={styles.previewImage}
             onError={(e) => {

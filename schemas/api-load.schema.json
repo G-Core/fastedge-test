@@ -122,5 +122,27 @@
       },
       "additionalProperties": false
     }
-  }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "wasmBase64"
+      ],
+      "properties": {
+        "wasmBase64": {
+          "minLength": 1
+        }
+      }
+    },
+    {
+      "required": [
+        "wasmPath"
+      ],
+      "properties": {
+        "wasmPath": {
+          "minLength": 1
+        }
+      }
+    }
+  ]
 }

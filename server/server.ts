@@ -555,6 +555,17 @@ app.get("/api/resource/config", async (req: Request, res: Response) => {
   }
 });
 
+/** Rewrites the built-in origin's workspace-relative files relative to `dir`, where the config is saved (it is read from there). */
+function originFilesRelativeTo(config: object, dir: string): void {
+  const builtIn = (config as { origin?: { builtIn?: Record<string, unknown> } }).origin?.builtIn;
+  for (const key of ["files", "bodyFile"] as const) {
+    const value = builtIn?.[key];
+    if (typeof value === "string" && value && !path.isAbsolute(value)) {
+      builtIn![key] = path.relative(dir, path.resolve(workspaceRoot(), value)).split(path.sep).join("/") || ".";
+    }
+  }
+}
+
 /** A request's origin with its files resolved against the workspace, confined to it or an approved allowed folder. */
 function workspaceOrigin(origin: Origin): Promise<Origin> {
   const root = workspaceRoot();
@@ -1088,6 +1099,7 @@ app.post("/api/config", async (req: Request, res: Response) => {
     const configDir = resolveConfigDir();
     mkdirSync(configDir, { recursive: true });
     const configPath = configFile();
+    originFilesRelativeTo(config, path.dirname(configPath));
     await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
 
     // Emit properties updated event if properties changed
@@ -1174,6 +1186,7 @@ app.post("/api/config/save-as", async (req: Request, res: Response) => {
   try {
     const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
+    originFilesRelativeTo(config, dir);
     await fs.writeFile(filePath, JSON.stringify(config, null, 2), "utf-8");
 
     res.json({ ok: true, savedPath: filePath });

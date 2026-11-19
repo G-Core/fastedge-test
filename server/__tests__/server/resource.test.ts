@@ -208,4 +208,11 @@ describe("debugger server — GET /api/config", () => {
     expect(config.origin.builtIn.files).toBe(join(dir, "assets"));
     expect(config.dotenv.path).toBe(dir);
   });
+
+  it("saves the origin's workspace-relative files relative to the saved config, so they load back the same", async () => {
+    const save = await authedFetch(server.base, server.token, "/api/config", { method: "POST", body: JSON.stringify({ config: { request: { method: "GET", url: "https://example.com/", headers: {} }, origin: { builtIn: { files: "assets" } } } }) });
+    expect(save.status).toBe(200);
+    const { config } = await (await authedFetch(server.base, server.token, "/api/config")).json();
+    expect(config.origin.builtIn.files).toBe(join(server.workspacePath, "assets"));
+  });
 });

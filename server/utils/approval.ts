@@ -20,6 +20,8 @@ export type AskedIn = "vscode" | "terminal";
 export type Approval = { approved: boolean; answered: boolean; askedIn: AskedIn | null };
 
 const pending = new Map<string, Promise<Approval>>();
+// One question at a time: two terminal prompts on one stdin would both take the same answer.
+let asking: Promise<unknown> = Promise.resolve();
 let pendingListener: ((folder: string, askedIn: AskedIn, waiting: boolean) => void) | null = null;
 
 /** Called when a request starts waiting for the user and when it ends (the page shows where to answer). */
@@ -33,7 +35,8 @@ export const APPROVAL_REPLY = "fastedge:folder-approval";
 export function requestApproval(folder: string): Promise<Approval> {
   let request = pending.get(folder);
   if (!request) {
-    request = ask(folder).finally(() => pending.delete(folder));
+    request = asking.then(() => ask(folder)).finally(() => pending.delete(folder));
+    asking = request.catch(() => {});
     pending.set(folder, request);
   }
   return request;

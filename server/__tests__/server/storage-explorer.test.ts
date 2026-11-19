@@ -64,6 +64,7 @@ describe("debugger server — Storage Explorer", () => {
     expect((await call("/api/storage/cache/put", { dc: "fr5", key: "b", value: { base64: "???" } })).status).toBe(400);
     expect((await call("/api/storage/kv/put", { store: "users", key: "rank", type: "zset", members: [] })).status).toBe(400);
     expect((await call("/api/storage/kv/put", { store: "users", key: "f", type: "bloom", items: [] })).status).toBe(400);
+    expect((await call("/api/storage/import", { store: "users", data: { zsets: { rank: [] } } })).status).toBe(400);
   });
 
   it("saves to fixtures only what the diff showed", async () => {

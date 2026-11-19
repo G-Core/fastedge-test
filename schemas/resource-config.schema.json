@@ -183,7 +183,35 @@
                       "minLength": 1
                     }
                   },
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "body",
+                          "bodyFile"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "body",
+                          "files"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "bodyFile",
+                          "files"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "files",
+                          "status"
+                        ]
+                      }
+                    ]
+                  }
                 }
               },
               "required": [
@@ -365,7 +393,35 @@
                         "minLength": 1
                       }
                     },
-                    "additionalProperties": false
+                    "additionalProperties": false,
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": [
+                            "body",
+                            "bodyFile"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "body",
+                            "files"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "bodyFile",
+                            "files"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "files",
+                            "status"
+                          ]
+                        }
+                      ]
+                    }
                   }
                 },
                 "required": [

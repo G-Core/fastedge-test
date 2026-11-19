@@ -82,7 +82,9 @@ export const BuiltInOriginSchema = z.object({
   files: z.string().min(1, "files: name the folder to serve (\".\" = the config's own folder)").optional(),
 }).strict()
   .refine((o) => [o.body, o.bodyFile, o.files].filter((v) => v !== undefined).length <= 1, { message: "set at most one of body, bodyFile, files" })
-  .refine((o) => o.files === undefined || o.status === undefined, { message: "files sets the status itself (200, or 404 for a missing file)" });
+  .refine((o) => o.files === undefined || o.status === undefined, { message: "files sets the status itself (200, or 404 for a missing file)" })
+  // The refinements above, for the generated JSON Schema (editors check configs against it).
+  .meta({ not: { anyOf: [["body", "bodyFile"], ["body", "files"], ["bodyFile", "files"], ["files", "status"]].map((required) => ({ required })) } });
 
 /** Where a CDN request's response comes from: a URL ("built-in" = the echo responder) or `builtIn`. */
 export const OriginSchema = z.union([

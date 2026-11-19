@@ -246,7 +246,11 @@ function isFixture(data: Record<string, unknown>): boolean {
 /** The fixture parser's checks (e.g. an empty KV value, refused on the edge), as a 400. */
 function validate(data: unknown): void {
   try {
-    kvSeed(data, "data");
+    const seed = kvSeed(data, "data");
+    // As the single-key editor: an empty sorted set or bloom filter would only delete the key.
+    for (const section of ["zsets", "bloom"] as const) {
+      for (const [key, items] of Object.entries(seed[section])) if (!items.length) throw new Error(`data ${section}.${key}: empty`);
+    }
   } catch (error) {
     throw new HttpError(400, (error as Error).message);
   }

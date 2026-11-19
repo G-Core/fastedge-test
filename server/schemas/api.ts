@@ -26,6 +26,8 @@ export const ApiLoadBodySchema = z.object({
   message: 'Either wasmBase64 or wasmPath must be provided',
 }).refine(d => !(d.wasmBase64 && d.wasmPath), {
   message: 'Provide either wasmBase64 or wasmPath, not both',
+}).meta({ // the refinements, for the JSON Schema: exactly one of them non-empty
+  oneOf: ['wasmBase64', 'wasmPath'].map((key) => ({ required: [key], properties: { [key]: { minLength: 1 } } })),
 });
 
 export const ApiSendBodySchema = z.object({
@@ -47,7 +49,7 @@ export const ApiResourceLoadBodySchema = z.object({
   config: z.record(z.string(), z.unknown()).optional(),
 }).refine((body) => body.configPath === undefined || body.config === undefined, {
   message: "Give configPath or config, not both",
-});
+}).meta({ not: { required: ["configPath", "config"] } }); // the refinement, for the JSON Schema
 
 /** Write a resource file (default: the default resource file); the config is written as given. */
 export const ApiResourceSaveBodySchema = z.object({

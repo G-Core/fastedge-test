@@ -12,5 +12,11 @@
       },
       "additionalProperties": {}
     }
+  },
+  "not": {
+    "required": [
+      "configPath",
+      "config"
+    ]
   }
 }

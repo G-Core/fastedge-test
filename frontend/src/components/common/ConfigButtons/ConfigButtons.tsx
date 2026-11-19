@@ -91,6 +91,10 @@ export function ConfigButtons() {
         if (config.dotenv?.path && !config.dotenv.path.startsWith('/')) {
           console.warn(`Config contains relative dotenv path "${config.dotenv.path}" — will resolve against server workspace root, not the config file location.`);
         }
+        const builtIn = config.origin && 'builtIn' in config.origin ? config.origin.builtIn : null;
+        if ([builtIn?.files, builtIn?.bodyFile].some((p) => p && !p.startsWith('/'))) {
+          console.warn('Config contains relative origin paths — they resolve against the server workspace root, not the config file location.');
+        }
 
         loadFromConfig(config);
 
