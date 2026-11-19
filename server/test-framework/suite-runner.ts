@@ -70,7 +70,7 @@ export async function runTestSuite(suite: TestSuite): Promise<SuiteResult> {
     const configured = suite.runnerConfig?.stores;
     let own: TestStores | null = null;
     try {
-      if (configured !== false && typeof configured !== "object") own = await createStores();
+      if (configured !== false && typeof configured !== "object") own = await createStores({ dc: "resource" in suite ? undefined : suite.runnerConfig?.dc });
       const stores = own ?? (typeof configured === "object" ? configured : null);
       const runnerConfig = { ...suite.runnerConfig, stores: stores ?? false };
       const runner = suite.wasmBuffer

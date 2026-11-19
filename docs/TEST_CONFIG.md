@@ -43,7 +43,7 @@ The config schema is a union of two variants selected by `appType`:
 | `dotenv`           | `object`  | No                | —              | Dotenv file loading configuration.                                                    |
 | `dotenv.enabled`   | `boolean` | No                | `false`        | Whether to load dotenv files.                                                         |
 | `dotenv.path`      | `string`  | No                | —              | Directory containing the dotenv files (not a file).                                   |
-| `stores`           | `boolean` | No                | `true`         | Enables the local cache and Edge KV. `false` makes every cache / KV call fail.        |
+| `stores`           | `boolean` | No                | `true`         | Enables the local cache and Edge KV. `false`: CDN cache / KV calls fail; HTTP apps use fastedge-run's own per-process cache. |
 | `dc`               | `string`  | No                | `"local"`      | Cache bucket name. Runners with the same `dc` share cache entries.                    |
 
 `additionalProperties` is `false` at the top level and in `wasm`, `dotenv`, and `request`; unrecognised fields fail validation. `dc` must be a non-empty string.

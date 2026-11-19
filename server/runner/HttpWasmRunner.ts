@@ -73,6 +73,7 @@ export class HttpWasmRunner implements IWasmRunner {
    */
   private spawnEnv(): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = { RUST_LOG: "info", ...process.env };
+    delete env.FASTEDGE_STORES_SERVICE; // stores off: not one inherited from our own environment
     if (this.stores) {
       const { url, token } = this.stores.connection;
       env.FASTEDGE_STORES_SERVICE = `${url},${token},${this.stores.dc}`;

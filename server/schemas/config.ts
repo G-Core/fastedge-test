@@ -34,7 +34,8 @@ const BaseConfigSchema = z.object({
   dotenv: DotenvSchema.optional(),
   /**
    * The local cache and Edge KV (the storage service). On by default; `false` turns
-   * them off, and every cache / KV call then fails with an error status.
+   * them off: a CDN app's cache / KV calls then fail with an error status; an HTTP app falls
+   * back to fastedge-run's own per-process cache and its `.env.kv_stores` stores.
    */
   stores: z.boolean().optional(),
   /** Cache bucket: runners with the same `dc` share cache entries. Default `local`. */

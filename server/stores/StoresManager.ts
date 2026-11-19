@@ -58,7 +58,7 @@ export function resolveStoresRoot(appRoot: string): string {
 
 export async function connectStores(root: string, options: ConnectOptions = {}): Promise<StoresConnection> {
   const leaseTtlMs = options.leaseTtlMs ?? 30_000;
-  const startTimeoutMs = options.startTimeoutMs ?? 15_000;
+  const startTimeoutMs = options.startTimeoutMs ?? STALE_LOCK_MS + 15_000; // room to reclaim a crashed starter's lock
   const id = randomUUID();
   let service = await ensureService(root, startTimeoutMs);
   await call(service, "/v1/admin", { op: "lease", id, ttlMs: leaseTtlMs });
@@ -237,6 +237,10 @@ function send(d: Pick<Descriptor, "port" | "token">, path: string, body: unknown
       },
       (res) => {
         const chunks: Buffer[] = [];
+        res.on("error", reject);
+        res.on("close", () => {
+          if (!res.complete) reject(new Error("stores service: connection closed mid-reply"));
+        });
         res.on("data", (c: Buffer) => chunks.push(c));
         res.on("end", () => {
           try {

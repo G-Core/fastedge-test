@@ -261,7 +261,7 @@ Releases all resources held by the runner.
 cleanup(): Promise<void>
 ```
 
-- **Proxy-WASM**: No long-running subprocess is held. State is reset on the next `load()` call.
+- **Proxy-WASM**: Terminates the runner's worker thread. The runner cannot be loaded again: create a new one.
 - **HttpWasmRunner**: Kills the `fastedge-run` process, releases the allocated port (a pinned `httpPort` is simply freed), and deletes any temporary WASM file written to disk.
 - **Stores lease**: A runner created by `createRunner` or `createRunnerFromBuffer` with stores enabled (`stores` omitted or `true`) releases its lease on the storage service during cleanup. A runner given a `TestStores` instance does not own it and does not release it.
 

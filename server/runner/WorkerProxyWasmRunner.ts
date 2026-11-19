@@ -64,10 +64,10 @@ export class WorkerProxyWasmRunner implements IWasmRunner {
     if (bridge) {
       this.closeBridge = serveBridge(bridge.parent, (kind, body) => request(stores!.connection, kind, body));
     }
-    this.worker.unref();
     this.worker.on("message", (m: Reply | Event | FetchRequest) => this.onMessage(m));
     this.worker.on("error", (e) => this.stop(e));
     this.worker.on("exit", (code) => this.stop(new Error(`CDN runner worker exited (code ${code})`)));
+    this.worker.unref(); // after the listeners: adding a message listener refs the worker again
   }
 
   private call<T>(method: string, ...args: unknown[]): Promise<T> {

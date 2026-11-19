@@ -35,6 +35,7 @@ const fail = (error: string): Reply => ({ ok: false, error });
 
 export class StoresCore {
   private clockOffsetMs = 0;
+  private cacheOps = 0;
   private q: Record<string, StatementSync>;
 
   constructor(
@@ -70,6 +71,7 @@ export class StoresCore {
       expireAt: p("UPDATE cache SET expires_at = ? WHERE dc = ? AND key = ?"),
       del: p("DELETE FROM cache WHERE dc = ? AND key = ?"),
       dropExpired: p("DELETE FROM cache WHERE dc = ? AND expires_at <= ?"),
+      sweep: p("DELETE FROM cache WHERE expires_at <= ?"),
       purge: p("DELETE FROM cache WHERE dc = ?"),
       // A literal prefix compare: no glob, as on the edge (probe P6).
       purgePrefix: p("DELETE FROM cache WHERE dc = ?1 AND substr(key, 1, length(?2)) = ?2"),
@@ -104,6 +106,9 @@ export class StoresCore {
   cache(body: Body): Reply {
     const dc = text(body, "dc");
     const now = this.now();
+    // Expired rows are invisible but kept until deleted (the edge's Redis drops them itself):
+    // sweep every bucket now and then, so a long session's database stays bounded.
+    if (++this.cacheOps % 1000 === 1) this.q.sweep.run(now);
     const live = (key: string) =>
       this.q.live.get(dc, key, now) as { value: Uint8Array; expires_at: number } | undefined;
 
@@ -375,7 +380,12 @@ export function edgeGlob(pattern: string): { glob: string | null; prefix: string
       i++;
       if (pattern[i] === "]") throw new InvalidPattern(`range with no end: ${pattern}`);
       const hi = member();
-      ranges.push(lo <= hi ? `${lo}-${hi}` : `${hi}-${lo}`);
+      // A range endpoint SQLite reads specially (`]`, `^`, `-`) becomes a single member.
+      let [a, b] = [lo, hi].map((ch) => ch.codePointAt(0)!).sort((x, y) => x - y);
+      while (a <= b && "]^-".includes(String.fromCodePoint(a))) chars.add(String.fromCodePoint(a++));
+      while (a <= b && "]^-".includes(String.fromCodePoint(b))) chars.add(String.fromCodePoint(b--));
+      if (a === b) chars.add(String.fromCodePoint(a));
+      else if (a < b) ranges.push(`${String.fromCodePoint(a)}-${String.fromCodePoint(b)}`);
     }
     i++;
     if (!chars.size && !ranges.length) {
@@ -387,11 +397,13 @@ export function edgeGlob(pattern: string): { glob: string | null; prefix: string
       glob += "^"; // `[\^]`: a set of only `^` cannot be written in SQLite
       continue;
     }
-    // SQLite: `]` only first, `^` never first, `-` last. ponytail: a range ending in one of these is not handled.
-    const order = (ch: string) => (ch === "]" ? 0 : ch === "^" ? 2 : ch === "-" ? 3 : 1);
+    // SQLite: `]` is literal only first; a `-` with nothing before it (or after `]`) is literal;
+    // `^` must not be first. So: `]`, `-`, ranges, the rest, `^` last (`[\^\-]` → `[-^]`).
+    const order = (ch: string) => (ch === "]" ? 0 : ch === "-" ? 1 : ch === "^" ? 3 : 2);
     const members = [...chars].sort((a, b) => order(a) - order(b));
-    const first = members[0] === "]" ? members.shift()! : "";
-    glob += `[${negate ? "^" : ""}${first}${ranges.join("")}${members.join("")}]`;
+    const lead = members.filter((ch) => ch === "]" || ch === "-").join("");
+    const rest = members.filter((ch) => ch !== "]" && ch !== "-").join("");
+    glob += `[${negate ? "^" : ""}${lead}${ranges.join("")}${rest}]`;
   }
   return { glob: empty ? null : glob, prefix };
 }

@@ -22,7 +22,7 @@ import type { SyncStores } from "./storesBridge.js";
 import { ProxyStatus } from "./types.js";
 
 const { Ok, NotFound, BadArgument, InternalFailure } = ProxyStatus;
-const utf8 = new TextDecoder("utf-8", { fatal: true });
+const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }); // a leading U+FEFF is part of the key
 
 type Fn = (...args: never[]) => number;
 

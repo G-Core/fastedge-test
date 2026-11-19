@@ -16,7 +16,7 @@ import type { KvSeed, StoresCore } from "./StoresCore.js";
 
 export function loadFixtures(core: StoresCore, root: string): void {
   const dir = join(root, "fixtures", "stores");
-  const kv: Record<string, KvSeed> = {};
+  const kv: Record<string, KvSeed> = Object.create(null);
   for (const [name, data] of jsonFiles(join(dir, "kv"))) kv[name] = kvSeed(data, `fixtures/stores/kv/${name}.json`);
   core.seedKv(kv);
   for (const [dc, data] of jsonFiles(join(dir, "cache"))) core.seedCache(dc, cacheSeed(data, `fixtures/stores/cache/${dc}.json`));
@@ -27,7 +27,7 @@ export type StoresSeed = { kv?: Record<string, unknown>; cache?: Record<string, 
 
 /** Add seed data: the named KV stores are replaced, cache keys overwritten, the rest kept. */
 export function applySeed(core: StoresCore, seed: StoresSeed): void {
-  const kv: Record<string, KvSeed> = {};
+  const kv: Record<string, KvSeed> = Object.create(null);
   for (const [name, data] of Object.entries(seed.kv ?? {})) kv[name] = kvSeed(data, `seed kv.${name}`);
   if (Object.keys(kv).length) core.seedKv(kv, true);
   for (const [dc, data] of Object.entries(seed.cache ?? {})) core.seedCache(dc, cacheSeed(data, `seed cache.${dc}`));
@@ -49,7 +49,7 @@ function jsonFiles(dir: string): [string, unknown, string][] {
 
 function kvSeed(data: unknown, where: string): KvSeed {
   const o = record(data, where);
-  const seed: KvSeed = { strings: {}, zsets: {}, bloom: {} };
+  const seed: KvSeed = { strings: Object.create(null), zsets: Object.create(null), bloom: Object.create(null) };
   for (const [k, v] of Object.entries(record(o.strings ?? {}, `${where} strings`))) {
     seed.strings[k] = value(v, `${where} strings.${k}`);
     // The edge API refuses an empty KV value (cache values may be empty).
@@ -74,7 +74,7 @@ function kvSeed(data: unknown, where: string): KvSeed {
 }
 
 function cacheSeed(data: unknown, where: string): Record<string, { value: Uint8Array; ttlMs: number | null }> {
-  const out: Record<string, { value: Uint8Array; ttlMs: number | null }> = {};
+  const out: Record<string, { value: Uint8Array; ttlMs: number | null }> = Object.create(null);
   for (const [k, v] of Object.entries(record(data, where))) {
     const e = record(v, `${where} ${k}`);
     const ttl = e.ttl_ms;

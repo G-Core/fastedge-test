@@ -9,7 +9,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StoresCore, edgeGlob } from '../../../stores/StoresCore';
-import { loadFixtures } from '../../../stores/fixtures';
+import { applySeed, loadFixtures } from '../../../stores/fixtures';
 
 const MAX = 345_600_000;
 const b64 = (s: string) => Buffer.from(s).toString('base64');
@@ -17,15 +17,26 @@ const b64 = (s: string) => Buffer.from(s).toString('base64');
 let core: StoresCore;
 const cache = (op: string, args: Record<string, unknown> = {}, dc = 'local') => core.cache({ op, dc, ...args });
 const kv = (op: string, args: Record<string, unknown> = {}) => core.kv({ op, store: 's', ...args });
+let db: DatabaseSync;
+const rowsIn = () => (db.prepare('SELECT count(*) AS n FROM cache').get() as { n: number }).n;
 const ttlOf = (key: string, dc = 'local') =>
-  (core as any).db.prepare('SELECT expires_at FROM cache WHERE dc = ? AND key = ?').get(dc, key).expires_at - core.now();
+  (db.prepare('SELECT expires_at FROM cache WHERE dc = ? AND key = ?').get(dc, key) as { expires_at: number }).expires_at - core.now();
 
 beforeEach(() => {
   // Frozen wall clock, so TTL checks are exact; the service clock moves only via advanceClock.
   vi.useFakeTimers({ toFake: ['Date'] });
-  core = new StoresCore(new DatabaseSync(':memory:'));
+  db = new DatabaseSync(':memory:');
+  core = new StoresCore(db);
 });
 afterEach(() => vi.useRealTimers());
+
+it('expired cache rows are swept from every bucket, not only on purge', () => {
+  cache('set', { key: 'a', value: b64('1'), ttlMs: '10' });
+  cache('set', { key: 'b', value: b64('1'), ttlMs: '10' }, 'ams');
+  core.advanceClock(11);
+  for (let i = 0; i < 999; i++) cache('get', { key: 'x' });
+  expect(rowsIn()).toBe(0);
+});
 
 describe('cache', () => {
   it('get/set/delete/exists round trip binary and empty values (P2: empty is not missing)', () => {
@@ -203,6 +214,9 @@ describe('kv', () => {
     expect(scan('g[\\^]5')).toBe('g^5');
     expect(scan('g[\\]]6')).toBe('g]6');
     expect(scan('g[\\-]7')).toBe('g-7');
+    expect(scan('g[\\^\\-]?')).toBe('g-7,g^5'); // not SQLite's negated `[^-]`
+    expect(scan('g[\\]-\\^]?')).toBe('g]6,g^5'); // a range with special endpoints
+    expect(scan('g[\\^-a]?')).toBe('g^5'); // `^` to `a`, not a negated set
     expect(scan('g\\x1')).toBe('gx1');
     expect(scan('g[]1')).toBe('');
     expect(scan('')).toBe('');
@@ -213,7 +227,7 @@ describe('kv', () => {
 
   it('edgeGlob gives the SQLite glob and the literal prefix', () => {
     expect(edgeGlob('a\\?b\\[c\\x*')).toEqual({ glob: 'a[?]b[[]cx*', prefix: 'a?b[cx' });
-    expect(edgeGlob('[^a\\]\\-]')).toEqual({ glob: '[^]a-]', prefix: '' });
+    expect(edgeGlob('[^a\\]\\-]')).toEqual({ glob: '[^]-a]', prefix: '' });
     expect(edgeGlob('x[]y').glob).toBeNull();
   });
 
@@ -223,6 +237,12 @@ describe('kv', () => {
 });
 
 describe('fixtures', () => {
+  it('keeps a store, key or bucket named __proto__', () => {
+    applySeed(core, JSON.parse('{"kv":{"__proto__":{"strings":{"__proto__":"v"}}},"cache":{"__proto__":{"__proto__":{"value":"c"}}}}'));
+    expect(core.kv({ op: 'get', store: '__proto__', key: '__proto__' })).toEqual({ ok: true, value: b64('v') });
+    expect(cache('get', { key: '__proto__' }, '__proto__')).toEqual({ ok: true, value: b64('c') });
+  });
+
   it('seeds KV and cache from fixtures/stores, replacing old KV data', () => {
     const root = mkdtempSync(join(tmpdir(), 'stores-'));
     mkdirSync(join(root, 'fixtures/stores/kv'), { recursive: true });
