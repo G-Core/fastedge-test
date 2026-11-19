@@ -72,6 +72,18 @@ describe('runTestSuite', () => {
     expect(seen).toEqual(['1', '1']);
   });
 
+  it("a suite's own stores use the edge's bucket, as the app does", async () => {
+    const result = await runTestSuite({
+      wasmBuffer: wasm,
+      runnerConfig: { edge: { preset: 'nl' } },
+      tests: [{ name: 'nl', run: async (runner, { stores }) => {
+        await incr(runner);
+        expect(stores!.cache.get('n')).toBe('1');
+      } }],
+    });
+    expect(result.failed).toBe(0);
+  });
+
   it('a suite-wide instance is shared on purpose', async () => {
     const shared: TestStores = await createStores();
     const seen: string[] = [];

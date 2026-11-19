@@ -2,6 +2,7 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { createRunner, createRunnerFromBuffer } from "../runner/standalone.js";
 import { createStores, type TestStores } from "../stores/testStores.js";
+import { edgeDc } from "../runner/requestContext.js";
 import { BUILTIN_SHORTHAND, BUILTIN_URL } from "../runner/ProxyWasmRunner.js";
 import { TestConfigSchema } from "../schemas/config.js";
 import type { TestConfig } from "../schemas/config.js";
@@ -70,7 +71,7 @@ export async function runTestSuite(suite: TestSuite): Promise<SuiteResult> {
     const configured = suite.runnerConfig?.stores;
     let own: TestStores | null = null;
     try {
-      if (configured !== false && typeof configured !== "object") own = await createStores({ dc: "resource" in suite ? undefined : suite.runnerConfig?.dc });
+      if (configured !== false && typeof configured !== "object") own = await createStores({ dc: "resource" in suite ? undefined : (suite.runnerConfig?.dc ?? edgeDc(suite.runnerConfig?.edge)) }); // the app's bucket
       const stores = own ?? (typeof configured === "object" ? configured : null);
       const runnerConfig = { ...suite.runnerConfig, stores: stores ?? false };
       const runner = suite.wasmBuffer
