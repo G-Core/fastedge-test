@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -50,6 +50,8 @@ describe('StoresManager', () => {
     mkdirSync(storesDir(root), { recursive: true });
     writeFileSync(join(storesDir(root), 'service.log'), 'x start failed: old fixture error\n');
     expect(await incr(await connect(root))).toBe('1');
+    // The folder holds the database in the clear: owner only, even though it already existed.
+    if (process.platform !== 'win32') expect(statSync(storesDir(root)).mode & 0o777).toBe(0o700);
   });
 
   it('another root gets its own service', async () => {

@@ -1,9 +1,6 @@
 /**
  * HTTP apps (fastedge-run) and CDN apps share the cache and Edge KV through the storage service.
- *
- * Needs a fastedge-run that forwards to the service (FastEdge-lib `feat/stores-forward`, not
- * released yet): run with FASTEDGE_TEST_STORES_E2E=1 and FASTEDGE_RUN_PATH=<that build>.
- * Remove the gate when .fastedge-cli-version moves to a release with it.
+ * Needs the fastedge-run release in .fastedge-cli-version (it forwards to the service).
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -29,7 +26,7 @@ const http = async (r: IWasmRunner, query: string) =>
 const cdn = async (r: IWasmRunner, headers: Record<string, string>) =>
   (await r.callFullFlow('built-in', 'GET', headers, '', {}, true)).finalResponse.body;
 
-describe.skipIf(!process.env.FASTEDGE_TEST_STORES_E2E)('HTTP + CDN apps share the stores', () => {
+describe('HTTP + CDN apps share the stores', () => {
   beforeAll(() => {
     root = mkdtempSync(join(tmpdir(), 'http-stores-'));
     mkdirSync(join(root, 'fixtures/stores/kv'), { recursive: true });

@@ -14,7 +14,7 @@
 import http from "node:http";
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { openSync, closeSync, readFileSync, rmSync, statSync, mkdirSync, existsSync, writeFileSync } from "node:fs";
+import { chmodSync, openSync, closeSync, readFileSync, rmSync, statSync, mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { embeddedSource } from "../embedded.js";
@@ -96,10 +96,24 @@ export async function connectStores(root: string, options: ConnectOptions = {}):
   };
 }
 
+/**
+ * The stores folder holds the database (cache and KV values in the clear): owner only, also when it
+ * already existed. Best effort: a folder we cannot chmod (another owner, a mount without modes)
+ * still works. ponytail: POSIX modes only; Windows keeps the folder's inherited ACL.
+ */
+function ownerOnly(dir: string): void {
+  try {
+    chmodSync(dir, 0o700);
+  } catch {
+    // keep going with the folder as it is
+  }
+}
+
 async function ensureService(root: string, timeoutMs: number): Promise<Descriptor> {
   const dir = storesDir(root);
   const lock = join(dir, "service.lock");
   const deadline = Date.now() + timeoutMs;
+  ownerOnly(dir); // before using a running service too: a folder from an older version may be 0755
 
   while (Date.now() < deadline) {
     const found = readDescriptor(dir);
@@ -107,7 +121,7 @@ async function ensureService(root: string, timeoutMs: number): Promise<Descripto
 
     let fd: number;
     try {
-      mkdirSync(dir, { recursive: true });
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
       fd = openSync(lock, "wx");
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;

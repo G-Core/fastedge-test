@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   const root = process.env.FASTEDGE_STORES_ROOT!;
   const token = process.env.FASTEDGE_STORES_TOKEN!;
   const dir = storesDir(root);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(dir, { recursive: true, mode: 0o700 }); // the starter made it owner only (StoresManager)
   if (!existsSync(join(dir, ".gitignore"))) writeFileSync(join(dir, ".gitignore"), "*\n");
   writeFileSync(join(dir, "service.log"), "");
   const log = (line: string) => appendFileSync(join(dir, "service.log"), `${new Date().toISOString()} ${line}\n`);

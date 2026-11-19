@@ -30,10 +30,9 @@ cache is shared per account per POP by HTTP and CDN apps.
 - fastedge-run asks the service for its seeded stores (`admin kv-stores`) and attaches each one
   **unless** `--kv-stores` or dotenv already names it, so a `redis://` entry in `.env.kv_stores`
   still wins.
-- Needs fastedge-run from FastEdge-lib `feat/stores-forward` (not released yet). The released
-  binary ignores the variable: HTTP apps keep its in-memory cache until `.fastedge-cli-version`
-  moves to a release with it. The end-to-end tests (`integration/http-apps/stores/`) run only with
-  `FASTEDGE_TEST_STORES_E2E=1 FASTEDGE_RUN_PATH=<that build>`.
+- Needs the fastedge-run release in `.fastedge-cli-version` (v0.23.0 or later); an older binary
+  ignores the variable and HTTP apps keep its in-memory cache. The end-to-end tests are
+  `integration/http-apps/stores/`.
 
 ## CDN apps (proxy-wasm)
 
