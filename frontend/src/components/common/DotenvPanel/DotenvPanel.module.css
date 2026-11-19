@@ -102,14 +102,6 @@
   border-color: #5a5a5a;
 }
 
-.pathInputErr {
-  border-color: #c0392b !important;
-}
-
-.pathInputErr:focus {
-  border-color: #e74c3c !important;
-}
-
 
 .browseButton {
   padding: 2px 8px;

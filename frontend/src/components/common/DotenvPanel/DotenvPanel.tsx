@@ -144,7 +144,7 @@ export function DotenvPanel({
             ) : (
               <>
                 <input
-                  className={`${styles.pathInput}${pathError ? ` ${styles.pathInputErr}` : ""}`}
+                  className={styles.pathInput}
                   type="text"
                   value={path ?? ""}
                   onChange={(e) => onPathChange(e.target.value || null)}
