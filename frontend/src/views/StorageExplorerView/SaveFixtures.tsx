@@ -3,22 +3,39 @@ import { storage, type FixtureChange } from "../../api";
 import panel from "../../components/common/StoresPanel/StoresPanel.module.css";
 import styles from "./StorageExplorerView.module.css";
 
-/** A line diff (LCS; fixture files are small): unchanged, removed and added lines in order. */
+/** Above this many LCS cells (middle lines before × after), the middle shows as replaced. */
+const MAX_DIFF_CELLS = 4_000_000;
+
+/**
+ * A line diff: unchanged, removed and added lines in order. Common leading and trailing lines are
+ * kept as they are; LCS runs on the rest, unless that is too large for the page.
+ */
 export function lineDiff(before: string, after: string): { op: " " | "-" | "+"; line: string }[] {
   const a = before === "" ? [] : before.replace(/\n$/, "").split("\n");
   const b = after === "" ? [] : after.replace(/\n$/, "").split("\n");
-  const lcs = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
-  for (let i = a.length - 1; i >= 0; i--) {
-    for (let j = b.length - 1; j >= 0; j--) lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) head++;
+  let tail = 0;
+  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+  const out: { op: " " | "-" | "+"; line: string }[] = a.slice(0, head).map((line) => ({ op: " ", line }));
+  const ma = a.slice(head, a.length - tail);
+  const mb = b.slice(head, b.length - tail);
+  if ((ma.length + 1) * (mb.length + 1) > MAX_DIFF_CELLS) {
+    out.push(...ma.map((line) => ({ op: "-" as const, line })), ...mb.map((line) => ({ op: "+" as const, line })));
+  } else {
+    const lcs = Array.from({ length: ma.length + 1 }, () => new Array<number>(mb.length + 1).fill(0));
+    for (let i = ma.length - 1; i >= 0; i--) {
+      for (let j = mb.length - 1; j >= 0; j--) lcs[i][j] = ma[i] === mb[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+    let i = 0;
+    let j = 0;
+    while (i < ma.length || j < mb.length) {
+      if (i < ma.length && j < mb.length && ma[i] === mb[j]) out.push({ op: " ", line: ma[i++] }), j++;
+      else if (j < mb.length && (i === ma.length || lcs[i][j + 1] >= lcs[i + 1][j])) out.push({ op: "+", line: mb[j++] });
+      else out.push({ op: "-", line: ma[i++] });
+    }
   }
-  const out: { op: " " | "-" | "+"; line: string }[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < a.length || j < b.length) {
-    if (i < a.length && j < b.length && a[i] === b[j]) out.push({ op: " ", line: a[i++] }), j++;
-    else if (j < b.length && (i === a.length || lcs[i][j + 1] >= lcs[i + 1][j])) out.push({ op: "+", line: b[j++] });
-    else out.push({ op: "-", line: a[i++] });
-  }
+  out.push(...a.slice(a.length - tail).map((line) => ({ op: " " as const, line })));
   return out;
 }
 

@@ -73,8 +73,12 @@ export function originHandler(origin: Origin, host: Pick<CdnFlowHost, "log">): (
     }
     // As a CDN forwards it: the request's path and query, at the origin's host.
     return async (r) => {
+      // Set the path, not resolve it: a path starting with // would name another host.
       const forwarded = new URL(r.url);
-      const target = new URL(forwarded.pathname + forwarded.search, origin.url).href;
+      const url = new URL(origin.url);
+      url.pathname = forwarded.pathname;
+      url.search = forwarded.search;
+      const target = url.href;
       return fetchOrigin(host, target, r.method, r.headers, r.body, { ...r.properties, "request.url": target }, r.isBase64);
     };
   }

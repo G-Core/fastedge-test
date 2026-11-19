@@ -85,7 +85,7 @@ Hooks need CDN (proxy-wasm) apps. Assigning an HTTP app to a hook is a load erro
 
 Rules override `main` for requests whose path matches.
 
-- The first rule whose `match` regular expression matches the request **path** wins. The query string is not part of the match.
+- The first rule whose `match` regular expression matches the request **path** wins. The query string is not part of the match. Matching a path is limited to 100 ms: a pattern that backtracks for longer fails the request.
 - A rule's `hooks`, when set, **replace** `main`'s hooks completely. A hook the rule leaves out does not fall back to `main`'s app.
 - A rule that leaves out `hooks` uses `main`'s hooks. A rule that leaves out `origin` uses `main`'s origin.
 - A request that matches no rule uses `main`.

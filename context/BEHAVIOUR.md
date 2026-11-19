@@ -446,7 +446,7 @@ per hook, and an origin that is a URL, the built-in origin or an HTTP app. Confi
 
 - **Hooks:** an app name, or `{ app, interruptOnError }` (default true). A hook with no app is
   skipped and the request passes through it unchanged.
-- **Rules:** the first rule whose `match` regex matches the request **path** (not the query) wins.
+- **Rules:** the first rule whose `match` regex matches the request **path** (not the query) wins. Matching a path is limited to 100 ms: a pattern that backtracks for longer fails the request.
   Its `hooks`, when set, replace main's completely (measured on the edge); `hooks` or `origin`
   left out are main's.
 - **One `client` / `edge` per resource,** applied once to the request every app sees. A request

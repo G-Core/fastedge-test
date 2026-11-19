@@ -77,9 +77,11 @@ function realOrNearest(absolute: string): string {
  */
 export function allowedFolderOf(absolute: string): string | null {
   const real = realOrNearest(absolute);
-  const folder = allowedFolders().find(
+  const matches = allowedFolders().filter(
     (f) => (inside(f.given, absolute) || inside(f.real, absolute)) && inside(f.real, real),
   );
+  // Overlapping folders: an approved one, else one not refused, else any (its refusal is the answer).
+  const folder = matches.find((f) => approved.has(f.real)) ?? matches.find((f) => !refused.has(f.real)) ?? matches[0];
   return folder?.real ?? null;
 }
 

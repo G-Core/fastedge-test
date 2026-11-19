@@ -66,10 +66,12 @@ export const ApiCallBodySchema = z.object({
   request: z.object({
     headers: z.record(z.string(), z.string()),
     body: z.string(),
+    isBase64: z.boolean().optional().describe("The body is base64 of raw bytes"),
   }).optional(),
   response: z.object({
     headers: z.record(z.string(), z.string()),
     body: z.string(),
+    isBase64: z.boolean().optional().describe("The body is base64 of raw bytes"),
   }).optional(),
   properties: z.record(z.string(), z.unknown()).optional().default({}),
   ...context,
@@ -107,13 +109,13 @@ export type ApiDotenvBody = z.infer<typeof ApiDotenvBodySchema>;
 const StoreName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/, "store names: letters, digits, . _ - (not first)");
 
 /** A value as in fixture files: UTF-8 text, or { base64 }. */
-const StoredValue = z.union([z.string(), z.object({ base64: z.string() }).strict()]);
+const StoredValue = z.union([z.string(), z.object({ base64: z.string().base64("not base64") }).strict()]);
 
 /** Replace one Edge KV key (any type) of a store, creating the store if needed. */
 export const ApiStorageKvPutSchema = z.discriminatedUnion("type", [
   z.object({ store: StoreName, key: z.string().min(1), type: z.literal("string"), value: StoredValue }),
-  z.object({ store: StoreName, key: z.string().min(1), type: z.literal("zset"), members: z.array(z.tuple([StoredValue, z.number()])) }),
-  z.object({ store: StoreName, key: z.string().min(1), type: z.literal("bloom"), items: z.array(z.string()) }),
+  z.object({ store: StoreName, key: z.string().min(1), type: z.literal("zset"), members: z.array(z.tuple([StoredValue, z.number()])).min(1, "a sorted set needs a member (delete the key instead)") }),
+  z.object({ store: StoreName, key: z.string().min(1), type: z.literal("bloom"), items: z.array(z.string()).min(1, "a bloom filter needs an item (delete the key instead)") }),
 ]);
 
 export const ApiStorageKvKeySchema = z.object({ store: StoreName, key: z.string().min(1) });

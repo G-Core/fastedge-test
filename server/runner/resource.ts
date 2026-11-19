@@ -8,6 +8,7 @@
  * hook starts with fresh memory. See cdnFlow.ts.
  */
 import { existsSync } from "node:fs";
+import vm from "node:vm";
 import { ApprovalNeeded } from "../utils/allowedFolders.js";
 import { readFile, stat } from "fs/promises";
 import path from "node:path";
@@ -126,12 +127,19 @@ export async function createResource(fileOrObject: string | ResourceConfigInput,
     return reloading;
   };
 
+  // One request at a time: each app's runner holds the instance of the hook it runs, so a hook
+  // waiting on proxy_http_call must not be overtaken by another request's hook.
+  let queue: Promise<unknown> = Promise.resolve();
   return {
     config,
     apps,
-    request: async (request = {}) => {
-      await reloadRebuilt();
-      return runRequest(config, apps, context, request);
+    request: (request = {}) => {
+      const run = queue.then(async () => {
+        await reloadRebuilt();
+        return runRequest(config, apps, context, request);
+      });
+      queue = run.catch(() => {});
+      return run;
     },
     cleanup: async () => {
       await Promise.all([...apps.values()].map((runner) => runner.cleanup()));
@@ -140,9 +148,24 @@ export async function createResource(fileOrObject: string | ResourceConfigInput,
 }
 
 /** The rule matching this URL's path (first match wins), or null for main. */
+/**
+ * Rule patterns come from config files, maybe a cloned repo's: matching runs under a time limit,
+ * so a pattern that backtracks fails the request instead of hanging the server.
+ */
+const MATCH_TIMEOUT_MS = 100;
+const matcher = new vm.Script("rules.findIndex((rule) => new RegExp(rule).test(path))");
+const matchContext = vm.createContext({ rules: [] as string[], path: "" });
+
 export function matchRule(config: ResourceConfig, url: string): ResourceResult["rule"] {
   const pathname = new URL(url, "http://resource.invalid").pathname;
-  const index = config.rules.findIndex((rule) => new RegExp(rule.match).test(pathname));
+  Object.assign(matchContext, { rules: config.rules.map((rule) => rule.match), path: pathname });
+  let index: number;
+  try {
+    index = matcher.runInContext(matchContext, { timeout: MATCH_TIMEOUT_MS }) as number;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ERR_SCRIPT_EXECUTION_TIMEOUT") throw error;
+    throw new Error(`resource rules: matching ${pathname} took over ${MATCH_TIMEOUT_MS} ms (a pattern that backtracks?)`);
+  }
   if (index < 0) return null;
   const { name, match } = config.rules[index];
   return { index, name, match };

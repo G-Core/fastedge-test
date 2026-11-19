@@ -60,6 +60,10 @@ describe("debugger server — Storage Explorer", () => {
     expect(empty.status).toBe(400);
     expect(empty.body.error).toContain("cannot be empty");
     expect((await call("/api/storage/kv/put", { store: "../x", key: "k", type: "string", value: "v" })).status).toBe(400);
+    // Not base64, or an empty collection (saving it would delete the key): refused.
+    expect((await call("/api/storage/cache/put", { dc: "fr5", key: "b", value: { base64: "???" } })).status).toBe(400);
+    expect((await call("/api/storage/kv/put", { store: "users", key: "rank", type: "zset", members: [] })).status).toBe(400);
+    expect((await call("/api/storage/kv/put", { store: "users", key: "f", type: "bloom", items: [] })).status).toBe(400);
   });
 
   it("saves to fixtures only what the diff showed", async () => {

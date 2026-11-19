@@ -157,3 +157,15 @@ describe('ApiConfigBodySchema', () => {
   });
 
 });
+
+describe("/api/call body", () => {
+  it("keeps isBase64 on the request and response bodies", () => {
+    const parsed = ApiCallBodySchema.parse({
+      hook: "onRequestBody",
+      request: { headers: {}, body: "/w==", isBase64: true },
+      response: { headers: {}, body: "", isBase64: false },
+    });
+    expect(parsed.request?.isBase64).toBe(true);
+    expect(parsed.response?.isBase64).toBe(false);
+  });
+});

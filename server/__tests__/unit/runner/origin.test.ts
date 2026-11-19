@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import http from "node:http";
 import { mkdtempSync, mkdirSync, realpathSync, writeFileSync, symlinkSync, truncateSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -144,5 +145,26 @@ describe("built-in origin: fixed responses and config", () => {
     expect(BuiltInOriginSchema.safeParse({ files: "" }).success).toBe(false);
     expect(BuiltInOriginSchema.safeParse({ bodyFile: "" }).success).toBe(false);
     expect(OriginSchema.safeParse({ builtIn: { status: 201, body: "ok" } }).success).toBe(true);
+  });
+});
+
+describe("URL origin", () => {
+  it("forwards the request's path at the origin's host, even a path starting with //", async () => {
+    const seen: string[] = [];
+    const server = http.createServer((req, res) => {
+      seen.push(`${req.headers.host} ${req.url}`);
+      res.end("ok");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as { port: number };
+    try {
+      const handler = originHandler({ url: `http://127.0.0.1:${port}/base` }, quiet);
+      const request = (url: string): OriginRequest => ({ url, method: "GET", headers: {}, body: "", properties: {} });
+      expect(await handler(request("https://client.example/p?q=1"))).toMatchObject({ status: 200 });
+      await handler(request("https://client.example//attacker.example/p"));
+      expect(seen).toEqual([`127.0.0.1:${port} /p?q=1`, `127.0.0.1:${port} //attacker.example/p`]);
+    } finally {
+      server.close();
+    }
   });
 });

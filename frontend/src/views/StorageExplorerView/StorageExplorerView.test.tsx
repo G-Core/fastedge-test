@@ -126,4 +126,14 @@ describe("lineDiff", () => {
       { op: "+", line: "d" },
     ]);
   });
+
+  it("keeps common lines and shows a too-large middle as replaced", () => {
+    const before = ["head", ...Array.from({ length: 3000 }, (_, i) => `old ${i}`), "tail"].join("\n");
+    const after = ["head", ...Array.from({ length: 3000 }, (_, i) => `new ${i}`), "tail"].join("\n");
+    const diff = lineDiff(before, after);
+    expect(diff[0]).toEqual({ op: " ", line: "head" });
+    expect(diff[diff.length - 1]).toEqual({ op: " ", line: "tail" });
+    expect(diff.filter((d) => d.op === "-")).toHaveLength(3000);
+    expect(diff.filter((d) => d.op === "+")).toHaveLength(3000);
+  });
 });

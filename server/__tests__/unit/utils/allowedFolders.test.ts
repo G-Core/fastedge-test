@@ -52,6 +52,16 @@ describe("allowed folders", () => {
     expect(() => checkAllowedRead(join(tmpdir(), "x.wasm"))).toThrow("allowed folders");
   });
 
+  it("overlapping folders: a read uses the approved one, not the first configured", () => {
+    const shared = realpathSync(mkdtempSync(join(tmpdir(), "shared-")));
+    mkdirSync(join(shared, "app"));
+    process.env.FASTEDGE_ALLOWED_FOLDERS = JSON.stringify([shared, join(shared, "app")]);
+    recordApproval(shared, false);
+    recordApproval(join(shared, "app"), true);
+    expect(() => checkAllowedRead(join(shared, "app", "a.wasm"))).not.toThrow();
+    expect(() => checkAllowedRead(join(shared, "b.wasm"))).toThrow("refused");
+  });
+
   it("does not list a folder in the workspace (or the workspace itself): it is readable anyway", () => {
     const workspace = mkdtempSync(join(tmpdir(), "ws-"));
     const lib = mkdtempSync(join(tmpdir(), "lib-"));

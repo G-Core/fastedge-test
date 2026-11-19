@@ -25,6 +25,10 @@
         },
         "body": {
           "type": "string"
+        },
+        "isBase64": {
+          "description": "The body is base64 of raw bytes",
+          "type": "boolean"
         }
       },
       "required": [
@@ -46,6 +50,10 @@
         },
         "body": {
           "type": "string"
+        },
+        "isBase64": {
+          "description": "The body is base64 of raw bytes",
+          "type": "boolean"
         }
       },
       "required": [

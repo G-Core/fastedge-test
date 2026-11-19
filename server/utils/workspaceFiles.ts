@@ -30,6 +30,8 @@ const SKIP_IN_TARGET = new Set(["deps", "build", "incremental", ".fingerprint", 
  * folder in `outside` (allowed folders the user approved). Does not follow symlinks, so it never
  * leaves the folders it walks.
  */
+const MAX_ENTRIES_VISITED = 50_000;
+
 export function listWorkspaceFiles(root: string, limit = 500, outside: string[] = []): WorkspaceFiles {
   const out: WorkspaceFiles = { wasm: [], configs: [], dotenvDirs: [], folders: [], files: [], truncated: false };
   const add = (list: string[], value: string) => {
@@ -44,6 +46,8 @@ export function listWorkspaceFiles(root: string, limit = 500, outside: string[] 
     realRoot = realpathSync(root);
   } catch {}
   const inRoot = (dir: string) => !path.relative(realRoot, dir).startsWith("..") && !path.isAbsolute(path.relative(realRoot, dir));
+  // The lists are capped, and so is the walk: it runs on the server's event loop.
+  let visits = 0;
   const walk = (dir: string, rel: string, inTarget: boolean, servable = true) => {
     let entries;
     try {
@@ -53,6 +57,10 @@ export function listWorkspaceFiles(root: string, limit = 500, outside: string[] 
     }
     let hasDotenv = false;
     for (const entry of entries) {
+      if (++visits > MAX_ENTRIES_VISITED) {
+        out.truncated = true;
+        return;
+      }
       const relPath = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (SKIP.has(entry.name) || (inTarget && SKIP_IN_TARGET.has(entry.name))) continue;
