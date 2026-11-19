@@ -237,12 +237,6 @@ describe('kv', () => {
 });
 
 describe('fixtures', () => {
-  it('keeps a store, key or bucket named __proto__', () => {
-    applySeed(core, JSON.parse('{"kv":{"__proto__":{"strings":{"__proto__":"v"}}},"cache":{"__proto__":{"__proto__":{"value":"c"}}}}'));
-    expect(core.kv({ op: 'get', store: '__proto__', key: '__proto__' })).toEqual({ ok: true, value: b64('v') });
-    expect(cache('get', { key: '__proto__' }, '__proto__')).toEqual({ ok: true, value: b64('c') });
-  });
-
   it('seeds KV and cache from fixtures/stores, replacing old KV data', () => {
     const root = mkdtempSync(join(tmpdir(), 'stores-'));
     mkdirSync(join(root, 'fixtures/stores/kv'), { recursive: true });
@@ -267,6 +261,13 @@ describe('fixtures', () => {
     expect(cache('get', { key: 'greeting' }, 'ams').value).toBe(b64('hi'));
     expect(ttlOf('greeting', 'ams')).toBe(1000);
     expect(ttlOf('raw', 'ams')).toBe(MAX);
+  });
+
+  it('keeps a store, key or bucket named __proto__', () => {
+    applySeed(core, JSON.parse('{"kv":{"__proto__":{"strings":{"__proto__":"v"}}},"cache":{"__proto__":{"__proto__":{"value":"c"}}}}'));
+    expect(core.kv({ op: 'get', store: '__proto__', key: '__proto__' })).toEqual({ ok: true, value: b64('v') });
+    expect(cache('get', { key: '__proto__' }, '__proto__')).toEqual({ ok: true, value: b64('c') });
+    expect(Object.keys(core.exportKv())).toEqual(['__proto__']);
   });
 
   it('refuses a fixture that is a symlink out of the stores root', () => {

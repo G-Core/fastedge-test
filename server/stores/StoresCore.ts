@@ -299,8 +299,10 @@ export class StoresCore {
 
   /** Every Edge KV store's full contents (for Save to fixtures). */
   exportKv(): Record<string, KvSeed> {
-    const out: Record<string, KvSeed> = {};
-    for (const store of this.kvStores()) out[store] = { strings: {}, zsets: {}, bloom: {} };
+    const out: Record<string, KvSeed> = Object.create(null); // `__proto__` is a valid name
+    for (const store of this.kvStores()) {
+      out[store] = { strings: Object.create(null), zsets: Object.create(null), bloom: Object.create(null) };
+    }
     const rows = <T>(sql: string) => this.db.prepare(sql).all() as T[];
     for (const r of rows<{ store: string; key: string; value: Uint8Array }>("SELECT store, key, value FROM kv_string ORDER BY store, key")) {
       out[r.store].strings[r.key] = r.value;

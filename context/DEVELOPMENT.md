@@ -18,7 +18,7 @@ How to build fastedge-test, run its tests, and follow its conventions.
 |---|---|---|
 | Node.js | Everything. Stores use `node:sqlite`, so older Node fails. | `engines.node` in `package.json`; `.node-version` for the exact dev version |
 | pnpm | The repo is a pnpm workspace: the test apps under `test-applications/` are workspace packages | `pnpm-lock.yaml` (install with `--frozen-lockfile` to match CI) |
-| Rust + `wasm32-wasip1` and `wasm32-wasip2` targets | Building the Rust test apps | Stable toolchain; each Rust workspace picks its target in `.cargo/config.toml` |
+| Rust + `wasm32-wasip1` and `wasm32-wasip2` targets | Building the Rust test apps | Stable toolchain, except the CDN apps: their `rust-toolchain.toml` pins Rust 1.99 (proxy-wasm 0.2.5's `main!` does not link on 1.100+; rustup installs the pin on first build). Each Rust workspace picks its target in `.cargo/config.toml` |
 | `fastedge-run` | Runs HTTP apps (and HTTP-app origins). CDN apps do not need it. | `.fastedge-cli-version` (the version CI tests with and releases ship) |
 
 AssemblyScript and `fastedge-build` (the JS SDK compiler) come in as dev dependencies; nothing to install separately.
