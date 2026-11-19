@@ -155,6 +155,10 @@ running as you could do this, and such a program can read and write your files
 directly. The stores root (`FASTEDGE_STORES_ROOT`, else the nearest git root
 from the app root) is trusted as configured.
 
+The stores database holds cache and Edge KV values unencrypted. On Linux and
+macOS its folder (`.fastedge-debug/stores/`) is made readable by you only. On
+Windows it keeps the permissions it inherits from its parent folder.
+
 ### No time limit on a CDN hook
 
 Each CDN app runs in its own worker thread, so the server stays responsive

@@ -537,7 +537,9 @@ apps share the cache. Semantics and known differences: [BEHAVIOUR.md](BEHAVIOUR.
 **Stores root:** `FASTEDGE_STORES_ROOT`, else the nearest ancestor with `.git`, else the app
 folder. Sibling apps in one repo therefore share one service and one set of fixtures. Files live in
 `<root>/.fastedge-debug/stores/`: `stores.db`, `service.json` (pid, port, token, protocol;
-mode 0600, written via rename), `service.lock`, `service.log`, and a `.gitignore` of `*`. (Not
+mode 0600, written via rename), `service.lock`, `service.log`, and a `.gitignore` of `*`. The
+folder is made owner only (0700) before each connect, so the database (values in the clear) is not
+readable by other local users; best effort, and POSIX only (Windows keeps the inherited ACL). (Not
 `.fastedge/`, which is the JS SDK's project folder.)
 
 **Finding or starting the service (`connectStores`):** read `service.json`; if the service answers
