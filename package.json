@@ -134,5 +134,6 @@
     "typescript": "^5.4.5",
     "vite": "^7.3.1",
     "vitest": "^4.0.18"
-  }
+  },
+  "license": "Apache-2.0"
 }
