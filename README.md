@@ -16,7 +16,7 @@ npm install @gcoredev/fastedge-test
 pnpm add @gcoredev/fastedge-test
 ```
 
-**Requirements**: Node.js 18+
+**Requirements**: Node.js 22.13+ (the local cache and Edge KV use `node:sqlite`)
 
 ## Two Ways to Use This Package
 
@@ -390,6 +390,13 @@ const runner = await createRunner('dist/app.wasm', {
 - The edge's `dc` is the cache bucket (the top-level `dc` wins). Leave both out to keep the old
   behaviour. `runner.setRequestContext({ client, edge })` changes them between requests.
 
+## Resources
+
+A resource runs one request through several CDN apps, one per hook, with rules and an origin,
+as a CDN resource does on the edge. Describe it in `.fastedge-debug/fastedge-cdn-resource.test.json`,
+open it in the debugger, or test it with `createResource()` or `runTestSuite({ resource, tests })`.
+See **[Resources](docs/RESOURCES.md)**.
+
 ## JSON Schemas
 
 The package ships JSON Schema files for `fastedge-config.test.json` and all API request/response bodies, enabling IDE autocomplete and validation.
@@ -437,10 +444,17 @@ await runAndExit(defineTestSuite({
 
 ## Documentation
 
+- **[Quickstart](docs/quickstart.md)** — the debugger, a test suite and the low-level runner in a few steps
 - **[Local Debugger Server](docs/DEBUGGER.md)** — running the visual debugger UI, npx usage, programmatic `startServer()`, REST API quickstart
 - **[Test Framework Guide](docs/TEST_FRAMEWORK.md)** — full API reference, all assertion helpers, examples
+- **[Runner API](docs/RUNNER.md)** — the low-level runner: `createRunner`, `RunnerConfig`, client and edge location
+- **[Test Config](docs/TEST_CONFIG.md)** — `fastedge-config.test.json`, origins and dotenv
+- **[Cache and Edge KV](docs/STORES.md)** — fixtures, the Storage Explorer, stores in tests
+- **[Resources](docs/RESOURCES.md)** — several apps on one CDN resource: hooks, rules and origins
+- **[Security](docs/SECURITY.md)** — the workspace boundary, allowed folders and what a loaded app can reach
 - **[REST API Reference](docs/API.md)** — HTTP endpoints for server-based testing (UI / WebSocket)
-- **[Repository](https://github.com/G-Core/fastedge-debugger)** — source code, issues, contributing
+- **[WebSocket Protocol](docs/WEBSOCKET.md)** — real-time events from the debugger server
+- **[Repository](https://github.com/G-Core/fastedge-test)** — source code, issues, contributing
 
 ---
 
