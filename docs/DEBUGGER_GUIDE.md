@@ -12,9 +12,11 @@ npx -p @gcoredev/fastedge-test fastedge-debug   # anywhere else
 ```
 
 The server prints a URL with a session token: `Open: http://127.0.0.1:5179/#token=<hex>`. Open
-that exact URL; a page opened without the token cannot reach the server. The folder you start it in
-is the **workspace**: the debugger reads files inside it, and anything outside it only after you
-approve (see [Folders outside the workspace](#folders-outside-the-workspace)).
+that exact URL; a page opened without the token cannot reach the server. The **workspace** is the
+project folder the CLI finds from where you start it, not always that folder itself (the rules are in
+[DEBUGGER.md](DEBUGGER.md#cli-usage); `--project-dir` sets it). The debugger reads files inside the
+workspace, and anything outside it only after you approve (see
+[Folders outside the workspace](#folders-outside-the-workspace)).
 
 In VS Code, the [FastEdge Launcher](https://github.com/G-Core/FastEdge-vscode) extension starts the
 same debugger for you: see [In VS Code](#in-vs-code).
@@ -38,8 +40,9 @@ The bar under the loader holds the method, the URL and **Send**. Below it, the *
 has the headers (tick a row to send it) and the body.
 
 - **CDN apps** start on `http://fastedge-builtin.debug`, the built-in origin: no network, it answers
-  with a JSON echo of the request it received. Use any other URL to send the request on to a real
-  origin after the request hooks.
+  with a JSON echo of the request it received. With no origin set in
+  [Request Context](#request-context), any other URL sends the request on to that real origin after
+  the request hooks.
 - **HTTP apps** start on `http://test.localhost/`: the request goes straight to your app.
 
 **Send** runs the whole flow. For a CDN app that is `onRequestHeaders`, `onRequestBody`, the origin,
@@ -63,8 +66,10 @@ Where the request comes from and where the app runs:
   continent, latitude, longitude). These become the request's geo properties and headers.
 - **Edge:** a preset plus overrides for the POP that runs the app (dc, hostname, region, country,
   city). The **dc** is also the cache bucket the app uses.
-- **Origin** (CDN apps): where the origin response comes from when the URL is the built-in one: a
-  JSON echo of the request, a fixed response, a folder of files, or a URL.
+- **Origin** (CDN apps): where the origin response comes from. **The request URL** (the default)
+  fetches the URL, or answers locally when it is the built-in one. Any other choice (a JSON echo of
+  the request, a fixed response, a folder of files, or a URL) applies whatever the request URL is:
+  the URL is then only what the client asked for, and its path and query go to that origin.
 - **Properties** (CDN apps): explicit property values. They win over the client settings.
 
 ### Logging
