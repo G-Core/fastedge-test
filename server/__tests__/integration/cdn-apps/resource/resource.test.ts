@@ -107,6 +107,12 @@ describe("resource test APIs", () => {
     expect(suite.failed).toBe(0);
   });
 
+  it("a missing resource file fails each test instead of the suite", async () => {
+    const suite = await runTestSuite({ resource: "/no/such/resource.json", tests: [{ name: "t", run: async () => {} }] });
+    expect(suite.failed).toBe(1);
+    expect(suite.results[0].error).toContain("ENOENT");
+  });
+
   fastedgeTest("the vitest resource fixture loads on the test's stores", async ({ resource }) => {
     const r = await resource(config);
     expect((await r.request({ url: "https://example.com/" })).hooks.onResponseBody?.app).toBe("a");

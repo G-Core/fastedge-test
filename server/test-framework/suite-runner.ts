@@ -71,19 +71,19 @@ export async function runTestSuite(suite: TestSuite | ResourceTestSuite): Promis
   const suiteStart = Date.now();
   const results: TestResult[] = [];
 
-  // The isolated stores' default bucket: the app's (or the resource's) dc.
-  const context = "resource" in suite
-    ? ((typeof suite.resource === "string" ? JSON.parse(await readFile(suite.resource, "utf8")) : suite.resource) as { dc?: string; edge?: Parameters<typeof edgeDc>[0] })
-    : suite.runnerConfig;
-  const dc = context?.dc ?? edgeDc(context?.edge);
-
   for (const test of suite.tests) {
     const testStart = Date.now();
     // Each test gets its own isolated stores, unless the suite gives an instance or turns them off.
     const configured = "resource" in suite ? suite.stores : suite.runnerConfig?.stores;
     let own: TestStores | null = null;
     try {
-      if (configured !== false && typeof configured !== "object") own = await createStores({ dc });
+      if (configured !== false && typeof configured !== "object") {
+        // The app's (or the resource's) bucket; inside the try, so a bad resource file fails the test.
+        const context = "resource" in suite
+          ? ((typeof suite.resource === "string" ? JSON.parse(await readFile(suite.resource, "utf8")) : suite.resource) as { dc?: string; edge?: Parameters<typeof edgeDc>[0] })
+          : suite.runnerConfig;
+        own = await createStores({ dc: context?.dc ?? edgeDc(context?.edge) });
+      }
       const stores = own ?? (typeof configured === "object" ? configured : null);
       let runner: { cleanup(): Promise<void> };
       if ("resource" in suite) {
