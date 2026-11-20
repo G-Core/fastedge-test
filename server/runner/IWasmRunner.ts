@@ -1,3 +1,7 @@
+import type { TestStores } from "../stores/testStores.js";
+import type { Origin } from "../schemas/config.js";
+import type { StoreCall } from "../stores/trace.js";
+import type { ClientContext, EdgeContext, RequestContext } from "./requestContext.js";
 /**
  * Base interface for WASM runners
  *
@@ -19,6 +23,7 @@ export interface RunnerConfig {
      *  e.g. test fixture directories or non-standard project layouts. */
     path?: string;
   };
+  /** @deprecated Ignored: the production property rules always apply. Will be removed in the next major version. */
   enforceProductionPropertyRules?: boolean;
   /** Override automatic WASM type detection. Use when detection produces wrong results. */
   runnerType?: WasmType;
@@ -31,6 +36,30 @@ export interface RunnerConfig {
    * for proxy-wasm runners.
    */
   httpPort?: number;
+  /**
+   * Local cache and Edge KV through the storage service shared by every runner in the
+   * stores root (the nearest git root; FASTEDGE_STORES_ROOT overrides). Default `true`.
+   * `false`: CDN apps' cache / KV calls return InternalFailure. A `createStores()` instance:
+   * isolated in-memory stores for tests (runners given the same instance share them).
+   */
+  stores?: boolean | TestStores;
+  /**
+   * Cache bucket (edge location). Runners with the same `dc` share cache entries.
+   * Default `"local"`, or the `dc` of a `createStores()` instance.
+   */
+  dc?: string;
+  /**
+   * Where the client is (preset `de` / `nl` / `us` plus overrides). CDN apps get `request.*`
+   * properties and `GeoIP-*` / `X-Real-IP` headers, HTTP apps `geoip-*` / `x-real-ip` headers.
+   * Explicit properties and headers win.
+   */
+  client?: ClientContext;
+  /**
+   * Which edge POP runs the app (preset `de` = fr5, `nl` = am3, `us` = sv5, plus overrides).
+   * CDN apps get the dictionary keys and `X-ID`, HTTP apps the `dc` / `pop-*` headers. Its
+   * `dc` is the cache bucket unless `dc` is set. Explicit dotenv dictionary keys and headers win.
+   */
+  edge?: EdgeContext;
 }
 
 /**
@@ -41,6 +70,8 @@ export interface HttpRequest {
   method: string;
   headers: Record<string, string>;
   body?: string;
+  /** Client and edge for this request only; default: the runner's (`setRequestContext`). */
+  context?: RequestContext;
 }
 
 /**
@@ -60,6 +91,11 @@ export interface HttpResponse {
   contentType: string | null;
   isBase64?: boolean;
   logs: Array<{ level: number; message: string }>;
+  /**
+   * The cache / Edge KV calls the app made for this request, in order (stores on only).
+   * Needs a fastedge-run that forwards to the storage service.
+   */
+  storeCalls?: StoreCall[];
 }
 
 /**
@@ -114,7 +150,11 @@ export interface IWasmRunner {
    * @param headers Request headers
    * @param body Request body
    * @param properties Shared properties
-   * @param enforceProductionPropertyRules Whether to enforce property access rules
+   * @param enforceProductionPropertyRules Ignored: the production property rules always apply
+   *   (kept so existing callers compile; removed in the next major version)
+   * @param context Client and edge for this flow only; default: the runner's
+   * @param origin Where the response comes from instead of `url` (file paths already absolute;
+   * see resolveOrigin); `url` is then only what the client asked for
    * @returns Full flow execution result
    */
   callFullFlow(
@@ -123,7 +163,9 @@ export interface IWasmRunner {
     headers: Record<string, string>,
     body: string,
     properties: Record<string, unknown>,
-    enforceProductionPropertyRules: boolean
+    enforceProductionPropertyRules: boolean,
+    context?: RequestContext,
+    origin?: Origin,
   ): Promise<FullFlowResult>;
 
   /**
@@ -134,6 +176,13 @@ export interface IWasmRunner {
    * @param path Optional directory to load dotenv files from
    */
   applyDotenv(enabled: boolean, path?: string): Promise<void>;
+
+  /**
+   * Change the runner's client and edge (see `RunnerConfig.client` / `.edge`) from the next
+   * request; a request that names its own context uses that instead. The cache bucket stays
+   * as loaded.
+   */
+  setRequestContext(context: RequestContext): Promise<void>;
 
   /**
    * Clean up resources (processes, temp files, etc.)

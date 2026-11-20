@@ -1,0 +1,427 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/ResourceResult",
+  "definitions": {
+    "ResourceResult": {
+      "type": "object",
+      "properties": {
+        "rule": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "number"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "match": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "index",
+                "match"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The rule that matched, or null for main."
+        },
+        "hooks": {
+          "type": "object",
+          "properties": {
+            "onRequestHeaders": {
+              "type": "object",
+              "properties": {
+                "app": {
+                  "type": "string"
+                },
+                "result": {
+                  "$ref": "#/definitions/HookResult"
+                }
+              },
+              "required": [
+                "app",
+                "result"
+              ]
+            },
+            "onRequestBody": {
+              "type": "object",
+              "properties": {
+                "app": {
+                  "type": "string"
+                },
+                "result": {
+                  "$ref": "#/definitions/HookResult"
+                }
+              },
+              "required": [
+                "app",
+                "result"
+              ]
+            },
+            "onResponseHeaders": {
+              "type": "object",
+              "properties": {
+                "app": {
+                  "type": "string"
+                },
+                "result": {
+                  "$ref": "#/definitions/HookResult"
+                }
+              },
+              "required": [
+                "app",
+                "result"
+              ]
+            },
+            "onResponseBody": {
+              "type": "object",
+              "properties": {
+                "app": {
+                  "type": "string"
+                },
+                "result": {
+                  "$ref": "#/definitions/HookResult"
+                }
+              },
+              "required": [
+                "app",
+                "result"
+              ]
+            }
+          },
+          "description": "Each hook that ran, with the app that ran it."
+        },
+        "origin": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "url",
+                "built-in",
+                "app"
+              ]
+            },
+            "app": {
+              "type": "string"
+            },
+            "response": {
+              "$ref": "#/definitions/OriginResponse"
+            },
+            "storeCalls": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/StoreCall"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "response"
+          ],
+          "description": "What answered before the response hooks. Absent when a request hook sent the response."
+        },
+        "finalResponse": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "number"
+            },
+            "statusText": {
+              "type": "string"
+            },
+            "headers": {
+              "$ref": "#/definitions/HeaderRecord"
+            },
+            "body": {
+              "type": "string"
+            },
+            "contentType": {
+              "type": "string"
+            },
+            "isBase64": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "status",
+            "statusText",
+            "headers",
+            "body",
+            "contentType"
+          ]
+        }
+      },
+      "required": [
+        "rule",
+        "hooks",
+        "finalResponse"
+      ]
+    },
+    "HookResult": {
+      "type": "object",
+      "properties": {
+        "returnCode": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "logs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": {
+                "type": "number"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "level",
+              "message"
+            ]
+          }
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "$ref": "#/definitions/HookBody"
+            },
+            "response": {
+              "$ref": "#/definitions/HookBody"
+            },
+            "properties": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "request",
+            "response"
+          ]
+        },
+        "output": {
+          "type": "object",
+          "properties": {
+            "request": {
+              "$ref": "#/definitions/HookBody"
+            },
+            "response": {
+              "$ref": "#/definitions/HookBody"
+            },
+            "properties": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "request",
+            "response"
+          ]
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "storeCalls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StoreCall"
+          },
+          "description": "The cache / Edge KV calls this hook made, in order (stores on only)."
+        },
+        "localResponse": {
+          "$ref": "#/definitions/LocalResponse",
+          "description": "Set when the hook answered with send_http_response."
+        },
+        "customProperties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Custom properties later hooks of this request may read (see `HookCall.customProperties`)."
+        }
+      },
+      "required": [
+        "returnCode",
+        "logs",
+        "input",
+        "output",
+        "properties"
+      ]
+    },
+    "HookBody": {
+      "type": "object",
+      "properties": {
+        "headers": {
+          "$ref": "#/definitions/HeaderRecord"
+        },
+        "body": {
+          "type": "string"
+        },
+        "isBase64": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "headers",
+        "body"
+      ],
+      "description": "Headers and body of the request or response; `isBase64`: the body is base64 of raw bytes (not text)."
+    },
+    "HeaderRecord": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "StoreCall": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string",
+          "enum": [
+            "cdn",
+            "http"
+          ]
+        },
+        "hook": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "cache",
+            "kv"
+          ]
+        },
+        "op": {
+          "type": "string"
+        },
+        "dc": {
+          "type": "string",
+          "description": "Cache bucket (cache calls)."
+        },
+        "store": {
+          "type": "string",
+          "description": "Edge KV store (KV calls)."
+        },
+        "key": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string",
+          "description": "`ok`, or the service's error (`wrong-type`, `invalid-pattern`, ...)."
+        },
+        "value": {
+          "type": "string",
+          "description": "The result value: a count, a flag, or the size of a value or list."
+        },
+        "at": {
+          "type": "number",
+          "description": "Wall-clock time (ms since epoch)."
+        }
+      },
+      "required": [
+        "app",
+        "kind",
+        "op",
+        "result",
+        "at"
+      ]
+    },
+    "LocalResponse": {
+      "type": "object",
+      "properties": {
+        "statusCode": {
+          "type": "number"
+        },
+        "statusText": {
+          "type": "string"
+        },
+        "headers": {
+          "$ref": "#/definitions/HeaderTuples",
+          "description": "The additional headers passed as send_http_response's 4th argument."
+        },
+        "bodyBase64": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "statusCode",
+        "statusText",
+        "headers",
+        "bodyBase64"
+      ],
+      "description": "A response a hook sent with send_http_response."
+    },
+    "HeaderTuples": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 2,
+        "maxItems": 2
+      }
+    },
+    "OriginResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "number"
+        },
+        "statusText": {
+          "type": "string"
+        },
+        "headers": {
+          "$ref": "#/definitions/HeaderRecord"
+        },
+        "body": {
+          "type": "string"
+        },
+        "contentType": {
+          "type": "string"
+        },
+        "isBase64": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "status",
+        "statusText",
+        "headers",
+        "body",
+        "contentType",
+        "isBase64"
+      ]
+    }
+  }
+}

@@ -10,6 +10,7 @@
  */
 
 const esbuild = require("esbuild");
+const { embeddedPlugin } = require("./embedded");
 const path = require("path");
 const fs = require("fs");
 
@@ -47,6 +48,11 @@ async function watch() {
       platform: "node",
       target: "node20",
       outfile: path.join(distDir, "server.js"),
+      format: "cjs",
+      // Same import.meta.url shim as bundle-server.js: fileURLToPath() needs it in the CJS bundle.
+      banner: { js: "var __importMetaUrl = require('url').pathToFileURL(__filename).href;" },
+      define: { "import.meta.url": "__importMetaUrl" },
+      plugins: [embeddedPlugin],
       external: [
         "fsevents", // Optional native dependency (Mac only)
       ],

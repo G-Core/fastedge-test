@@ -1,6 +1,7 @@
+import { Tabs } from "../Tabs";
 import { useState, useEffect } from "react";
 import { CollapsiblePanel } from "../CollapsiblePanel";
-import { JsonDisplay } from "../JsonDisplay";
+import { JsonDisplay, CollapsiblePre, textSize } from "../JsonDisplay";
 import { useAppStore } from "../../../stores";
 import styles from "./ResponsePanel.module.css";
 
@@ -181,21 +182,15 @@ export function ResponsePanel({ response }: ResponsePanelProps) {
         const parsed = JSON.parse(response.body);
         return <JsonDisplay data={parsed} style={{ margin: 0 }} />;
       } catch {
-        return <pre style={{ margin: 0 }}>{response.body}</pre>;
+        // not JSON after all: shown as text below
       }
     }
-
-    if (isHtml) {
-      const formatted = formatHtml(response.body);
-      return <pre style={{ margin: 0 }}>{formatted}</pre>;
-    }
-
-    if (isXml) {
-      const formatted = formatXml(response.body);
-      return <pre style={{ margin: 0 }}>{formatted}</pre>;
-    }
-
-    return <pre style={{ margin: 0 }}>{response.body}</pre>;
+    const text = isHtml ? formatHtml(response.body) : isXml ? formatXml(response.body) : response.body;
+    return (
+      <CollapsiblePre size={textSize(text)} style={{ margin: 0 }}>
+        {text}
+      </CollapsiblePre>
+    );
   };
 
   const renderPreview = () => {
@@ -203,7 +198,9 @@ export function ResponsePanel({ response }: ResponsePanelProps) {
       return (
         <div className={styles.imagePreview}>
           <img
-            src={`data:${response.contentType};base64,${response.body}`}
+            src={response.isBase64 === false
+              ? `data:${response.contentType},${encodeURIComponent(response.body)}`
+              : `data:${response.contentType};base64,${response.body}`}
             alt="Response preview"
             className={styles.previewImage}
             onError={(e) => {
@@ -328,30 +325,15 @@ export function ResponsePanel({ response }: ResponsePanelProps) {
         }
       >
         <div className={styles.tabs}>
-          <div className={styles.tabButtons}>
-            {!isBinary && (
-              <button
-                className={`${styles.tab} ${activeTab === "body" ? styles.active : ""}`}
-                onClick={() => setActiveTab("body")}
-              >
-                Body
-              </button>
-            )}
-            {hasPreview && (
-              <button
-                className={`${styles.tab} ${activeTab === "preview" ? styles.active : ""}`}
-                onClick={() => setActiveTab("preview")}
-              >
-                Preview
-              </button>
-            )}
-            <button
-              className={`${styles.tab} ${activeTab === "headers" ? styles.active : ""}`}
-              onClick={() => setActiveTab("headers")}
-            >
-              Headers
-            </button>
-          </div>
+          <Tabs
+            tabs={[
+              ...(!isBinary ? [{ id: "body" as const, label: "Body" }] : []),
+              ...(hasPreview ? [{ id: "preview" as const, label: "Preview" }] : []),
+              { id: "headers" as const, label: "Headers" },
+            ]}
+            active={activeTab}
+            onChange={setActiveTab}
+          />
           {isHtml && (
             <div className={styles.previewToolbar}>
               <button

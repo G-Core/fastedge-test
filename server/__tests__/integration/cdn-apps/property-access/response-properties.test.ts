@@ -8,7 +8,7 @@ import {
   getPropertyAccessViolations,
   logsContain,
 } from '../../utils/test-helpers';
-import { assertPropertyReadable, assertPropertyDenied } from '../../utils/property-assertions';
+import { assertPropertyWriteIgnored, assertPropertyReadable, assertPropertyDenied } from '../../utils/property-assertions';
 
 describe('Response Properties - Integration Tests', () => {
   describe('valid-response-status-read.wasm - response.status read', () => {
@@ -52,19 +52,14 @@ describe('Response Properties - Integration Tests', () => {
       );
     });
 
-    it('should deny writing to response.status (read-only)', async () => {
+    it('accepts a write to response.status with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook(createHookCall('onResponseHeaders', {
         ':status': '200',
         'content-type': 'text/plain',
       }));
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'response.status', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations[0]).toContain('read-only');
+      assertPropertyWriteIgnored(result, 'response.status');
     });
 
     it('should NOT modify response.status value', async () => {
@@ -76,12 +71,11 @@ describe('Response Properties - Integration Tests', () => {
       }));
 
       // The test WASM binary tries to set_property("response.status", "500")
-      // then re-reads it. The write should be denied, so the re-read should
-      // return the original value (not 500). Since the value is now correctly
+      // then re-reads it. The edge accepts the write but ignores it, so the
+      // re-read returns the original value (not 500). Since the value is now correctly
       // encoded as 2-byte big-endian u16, the UTF-8 decoded log won't match
       // "200" or "500" literally, but the write denial is what matters.
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'response.status', 'write');
+      assertPropertyWriteIgnored(result, 'response.status');
       expect(logsContain(result, 'Response ALTERED STATUS >> 500')).toBe(false);
     });
   });

@@ -1,4 +1,8 @@
 import type { IWasmRunner, RunnerConfig } from "../runner/IWasmRunner.js";
+import type { Origin } from "../schemas/config.js";
+import type { TestStores } from "../stores/testStores.js";
+import type { Resource } from "../runner/resource.js";
+import type { ResourceConfigInput } from "../schemas/config.js";
 
 export type { RunnerConfig };
 
@@ -6,10 +10,13 @@ export type { RunnerConfig };
  * A single test case in a TestSuite.
  * Receives a fully loaded runner; call any runner methods inside `run`.
  * Throw (or use assertion helpers) to fail the test.
+ *
+ * `context.stores`: this test's own cache and Edge KV (fresh per test, seeded from
+ * `fixtures/stores/`), or the instance given in `runnerConfig.stores`; null with `stores: false`.
  */
 export interface TestCase {
   name: string;
-  run: (runner: IWasmRunner) => Promise<void>;
+  run: (runner: IWasmRunner, context: { stores: TestStores | null }) => Promise<void>;
 }
 
 type TestSuiteBase = {
@@ -29,6 +36,23 @@ type TestSuiteBase = {
 export type TestSuite =
   | (TestSuiteBase & { wasmPath: string; wasmBuffer?: never })
   | (TestSuiteBase & { wasmBuffer: Buffer; wasmPath?: never });
+
+/** A test case of a ResourceTestSuite: receives a fresh, loaded resource. */
+export interface ResourceTestCase {
+  name: string;
+  run: (resource: Resource, context: { stores: TestStores | null }) => Promise<void>;
+}
+
+/**
+ * A suite over a resource (several apps, one per hook): a config file (paths relative to it) or
+ * object. Each test gets a fresh resource on its own stores.
+ */
+export interface ResourceTestSuite {
+  resource: string | ResourceConfigInput;
+  /** Default: this test's own stores; false = off; or an instance shared by every test. */
+  stores?: false | TestStores;
+  tests: ResourceTestCase[];
+}
 
 /** Result for a single test case */
 export interface TestResult {
@@ -70,6 +94,11 @@ export interface FlowOptions {
   requestHeaders?: Record<string, string>;
   requestBody?: string;
   properties?: Record<string, unknown>;
-  /** Default: true — matches production FastEdge behaviour */
+  /** @deprecated Ignored: the production property rules always apply. Will be removed in the next major version. */
   enforceProductionPropertyRules?: boolean;
+  /**
+   * Where the response comes from instead of `url` (a config's `origin`; loadConfigFile makes
+   * its paths absolute). `url` is then only what the client asked for.
+   */
+  origin?: Origin;
 }

@@ -1,0 +1,36 @@
+.list {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(90vw, 1000px);
+  max-height: 50vh;
+  overflow-y: auto;
+  background: #1e1e1e;
+  border: 1px solid #555;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.heading {
+  position: sticky;
+  top: 0;
+  padding: 4px 8px;
+  background: #2a2a2a;
+  color: #999;
+  font-family: sans-serif;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.option {
+  padding: 3px 8px;
+  color: #ddd;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.active {
+  background: #094771;
+  color: #fff;
+}

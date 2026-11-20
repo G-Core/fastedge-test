@@ -1,4 +1,6 @@
+import { Tabs } from "../../common/Tabs";
 import { useState } from "react";
+import { StoreCallsList } from "../../common/StoreCallsList";
 import { HookCall, HookResult, LogEntry } from "../../../types";
 import { CollapsiblePanel } from "../../common/CollapsiblePanel";
 import { LogLevelSelector } from "../../common/LogLevelSelector";
@@ -12,6 +14,13 @@ interface HookStagesPanelProps {
   onLogLevelChange: (level: number) => void;
 }
 
+/** A binary body arrives as base64: say so, with its real size. */
+function bodyTitle(title: string, body: string, isBase64?: boolean): string {
+  if (!isBase64) return title;
+  const bytes = Math.floor((body.length * 3) / 4) - (body.endsWith("==") ? 2 : body.endsWith("=") ? 1 : 0);
+  return `${title}: binary, ${bytes.toLocaleString()} bytes (shown as base64)`;
+}
+
 const HOOKS = [
   "onRequestHeaders",
   "onRequestBody",
@@ -19,7 +28,7 @@ const HOOKS = [
   "onResponseBody",
 ];
 
-type SubView = "logs" | "inputs" | "outputs";
+type SubView = "logs" | "storage" | "inputs" | "outputs";
 
 export function HookStagesPanel({
   results,
@@ -28,6 +37,44 @@ export function HookStagesPanel({
   onLogLevelChange,
 }: HookStagesPanelProps) {
   const [activeHook, setActiveHook] = useState<string>("onRequestHeaders");
+
+  return (
+    <div className={styles.hookStagesPanel}>
+      <CollapsiblePanel title="Logging" defaultExpanded={false}>
+        <div className={styles.stagesHeader}>
+          <Tabs
+            className={styles.tabs}
+            tabs={HOOKS.map((hook) => ({ id: hook, label: hook }))}
+            active={activeHook}
+            onChange={setActiveHook}
+          />
+
+          <LogLevelSelector
+            logLevel={logLevel}
+            onLogLevelChange={onLogLevelChange}
+          />
+        </div>
+
+        <HookDetail hook={activeHook} results={results} hookCall={hookCall} logLevel={logLevel} />
+      </CollapsiblePanel>
+    </div>
+  );
+}
+
+interface HookDetailProps {
+  hook: string;
+  /** Results by hook name; only `hook`'s is shown. */
+  results: Partial<Record<string, HookResult>>;
+  /** The request before the hooks ran, shown as a hook's inputs until it has run. */
+  hookCall?: HookCall;
+  logLevel: number;
+}
+
+/**
+ * One hook's result: logs (at or above `logLevel`), storage calls, inputs and outputs. Used by
+ * the Debugger's Logging panel and by the CDN resource flow view.
+ */
+export function HookDetail({ hook: activeHook, results, hookCall, logLevel }: HookDetailProps) {
   const [activeSubView, setActiveSubView] = useState<SubView>("logs");
 
   /**
@@ -77,6 +124,7 @@ export function HookStagesPanel({
         case "onRequestBody":
           return {
             body: result.input.request.body,
+            isBase64: result.input.request.isBase64,
             headers: result.input.request.headers,
             metadata:
               "Request body and headers as received by this hook on the server (BEFORE modification)",
@@ -91,6 +139,7 @@ export function HookStagesPanel({
         case "onResponseBody":
           return {
             body: result.input.response.body,
+            isBase64: result.input.response.isBase64,
             headers: result.input.response.headers,
             requestHeaders: result.input.request.headers,
             metadata:
@@ -102,6 +151,7 @@ export function HookStagesPanel({
     }
 
     // Fallback to hookCall data (before execution)
+    if (!hookCall) return { metadata: "This hook did not run." };
     switch (hook) {
       case "onRequestHeaders":
         return {
@@ -164,9 +214,11 @@ export function HookStagesPanel({
           <div className={styles.section}>
             <JsonDisplay
               data={parseBodyIfJson(inputs.body, inputs.headers || {})}
-              title={
-                hook.includes("Response") ? "Response Body" : "Request Body"
-              }
+              title={bodyTitle(
+                hook.includes("Response") ? "Response Body" : "Request Body",
+                inputs.body,
+                "isBase64" in inputs && inputs.isBase64,
+              )}
             />
           </div>
         )}
@@ -227,7 +279,7 @@ export function HookStagesPanel({
                   ? parseBodyIfJson(inputs.request.body, inputs.request.headers)
                   : undefined
               }
-              title="Request Body (Modified)"
+              title={bodyTitle("Request Body (Modified)", outputs.request.body, outputs.request.isBase64)}
             />
           </div>
         )}
@@ -257,7 +309,7 @@ export function HookStagesPanel({
                         )
                       : undefined
                   }
-                  title="Response Body (Modified)"
+                  title={bodyTitle("Response Body (Modified)", outputs.response.body, outputs.response.isBase64)}
                 />
               </div>
             )}
@@ -376,55 +428,29 @@ export function HookStagesPanel({
     );
   };
 
+  const storageCount = results[activeHook]?.storeCalls?.length;
+
   return (
-    <div className={styles.hookStagesPanel}>
-      <CollapsiblePanel title="Logging" defaultExpanded={false}>
-        <div className={styles.stagesHeader}>
-          <div className={styles.tabs}>
-            {HOOKS.map((hook) => (
-              <button
-                key={hook}
-                className={`${styles.tab} ${activeHook === hook ? styles.active : ""}`}
-                onClick={() => setActiveHook(hook)}
-              >
-                {hook}
-              </button>
-            ))}
-          </div>
-
-          <LogLevelSelector
-            logLevel={logLevel}
-            onLogLevelChange={onLogLevelChange}
-          />
-        </div>
-
-        <div className={styles.subViewTabs}>
-          <button
-            className={`${styles.subTab} ${activeSubView === "logs" ? styles.active : ""}`}
-            onClick={() => setActiveSubView("logs")}
-          >
-            Logs
-          </button>
-          <button
-            className={`${styles.subTab} ${activeSubView === "inputs" ? styles.active : ""}`}
-            onClick={() => setActiveSubView("inputs")}
-          >
-            Inputs
-          </button>
-          <button
-            className={`${styles.subTab} ${activeSubView === "outputs" ? styles.active : ""}`}
-            onClick={() => setActiveSubView("outputs")}
-          >
-            Outputs
-          </button>
-        </div>
+    <>
+        <Tabs
+          className={styles.subViewTabs}
+          variant="sub"
+          tabs={[
+            { id: "logs", label: "Logs" },
+            { id: "storage", label: `Storage${storageCount ? ` (${storageCount})` : ""}` },
+            { id: "inputs", label: "Inputs" },
+            { id: "outputs", label: "Outputs" },
+          ]}
+          active={activeSubView}
+          onChange={setActiveSubView}
+        />
 
         <div className={styles.stageContent}>
           {activeSubView === "logs" && renderLogs(activeHook)}
+          {activeSubView === "storage" && <StoreCallsList calls={results[activeHook]?.storeCalls} source="hook" />}
           {activeSubView === "inputs" && renderInputs(activeHook)}
           {activeSubView === "outputs" && renderOutputs(activeHook)}
         </div>
-      </CollapsiblePanel>
-    </div>
+    </>
   );
 }

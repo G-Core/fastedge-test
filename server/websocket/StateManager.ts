@@ -1,3 +1,4 @@
+import type { StoreCall } from "../stores/trace.js";
 /**
  * State Manager
  *
@@ -19,7 +20,14 @@ import {
   HttpWasmRequestCompletedEvent,
   HttpWasmLogEvent,
   ReloadWorkspaceWasmEvent,
+  ResourceLoadedEvent,
+  ResourceSavedEvent,
+  ResourceLoadFailedEvent,
+  AllowedFolderApprovedEvent,
+  AllowedFolderApprovalPendingEvent,
+  ResourceRequestCompletedEvent,
 } from "./types.js";
+import type { ResourceResult } from "../runner/resource.js";
 
 export class StateManager {
   private wsManager: WebSocketManager;
@@ -143,6 +151,36 @@ export class StateManager {
     this.broadcast(event);
   }
 
+  /** Emit resource loaded event */
+  public emitResourceLoaded(data: ResourceLoadedEvent["data"], source: EventSource = "system"): void {
+    this.broadcast(createEvent<ResourceLoadedEvent>("resource_loaded", source, data));
+  }
+
+  /** Emit resource load failed event */
+  public emitResourceLoadFailed(data: ResourceLoadFailedEvent["data"], source: EventSource = "system"): void {
+    this.broadcast(createEvent<ResourceLoadFailedEvent>("resource_load_failed", source, data));
+  }
+
+  /** Emit allowed folder approved event */
+  public emitAllowedFolderApproved(folder: string): void {
+    this.broadcast(createEvent<AllowedFolderApprovedEvent>("allowed_folder_approved", "system", { folder }));
+  }
+
+  /** Emit allowed folder approval pending event (waiting for the user, or no longer) */
+  public emitAllowedFolderApprovalPending(data: AllowedFolderApprovalPendingEvent["data"]): void {
+    this.broadcast(createEvent<AllowedFolderApprovalPendingEvent>("allowed_folder_approval_pending", "system", data));
+  }
+
+  /** Emit resource saved event */
+  public emitResourceSaved(data: ResourceSavedEvent["data"], source: EventSource = "system"): void {
+    this.broadcast(createEvent<ResourceSavedEvent>("resource_saved", source, data));
+  }
+
+  /** Emit resource request completed event */
+  public emitResourceRequestCompleted(result: ResourceResult, source: EventSource = "system"): void {
+    this.broadcast(createEvent<ResourceRequestCompletedEvent>("resource_request_completed", source, { result }));
+  }
+
   /**
    * Emit request failed event
    */
@@ -188,6 +226,7 @@ export class StateManager {
       body: string;
       contentType: string | null;
       isBase64?: boolean;
+      storeCalls?: StoreCall[];
     },
     source: EventSource = "system",
   ): void {

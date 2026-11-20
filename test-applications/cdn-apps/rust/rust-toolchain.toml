@@ -1,0 +1,7 @@
+# Rust 1.100 links wasi-libc's crt1-reactor.o into wasm32-wasip1 cdylibs; it defines `_initialize`,
+# as does proxy-wasm 0.2.5's `main!`, so the apps no longer link. Remove this pin once a
+# proxy-wasm release fixes `main!` for Rust 1.100 and the lock file uses it.
+[toolchain]
+channel = "1.99.0"
+targets = ["wasm32-wasip1"]
+profile = "minimal"

@@ -82,7 +82,7 @@ const suite = defineTestSuite({
 await runAndExit(suite);
 ```
 
-Each test runs against a fresh runner instance, and a thrown error marks the test as failed. `defineTestSuite` throws if neither `wasmPath` nor `wasmBuffer` is provided, or if `tests` is empty.
+Each test runs against a fresh runner instance with its own isolated stores, and a thrown error marks the test as failed. `defineTestSuite` throws if neither `wasmPath` nor `wasmBuffer` is provided, or if `tests` is empty.
 
 `runAndExit` prints a test summary and exits with code `0` (all pass) or `1` (any fail), making it suitable for CI pipelines.
 
@@ -109,7 +109,7 @@ try {
     },
     "",                       // request body
     {},                       // properties
-    true,                     // enforceProductionPropertyRules
+    true,                     // enforceProductionPropertyRules (deprecated, ignored)
   );
 
   console.log(result.finalResponse);

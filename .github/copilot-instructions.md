@@ -69,6 +69,8 @@ Files in `docs/` are **machine-generated** from source code by `./fastedge-plugi
 | `server/server.ts` (startup, port, health) | `docs/DEBUGGER.md` |
 | `bin/fastedge-debug.js` | `docs/DEBUGGER.md` |
 | `package.json` (exports) | `docs/INDEX.md` |
+| `server/stores/`, `server/runner/StoresHost.ts` | `docs/STORES.md` |
+| `server/runner/resource.ts`, `schemas/resource-config.schema.json` | `docs/RESOURCES.md` |
 | `fastedge-plugin-source/manifest.json` | `.github/copilot-instructions.md` |
 
 ### Violation example

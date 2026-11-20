@@ -1,1 +1,1 @@
-export { JsonDisplay } from "./JsonDisplay";
+export { JsonDisplay, CollapsiblePre, textSize } from "./JsonDisplay";

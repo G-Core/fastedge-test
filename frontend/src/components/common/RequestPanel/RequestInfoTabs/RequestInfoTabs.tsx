@@ -1,3 +1,4 @@
+import { Tabs } from "../../Tabs";
 import { useState } from "react";
 import { DictionaryInput } from "../../DictionaryInput";
 import styles from "./RequestInfoTabs.module.css";
@@ -41,20 +42,15 @@ export function RequestInfoTabs({
 
   return (
     <div className={styles.requestInfoTabs}>
-      <div className={styles.tabs}>
-        <button
-          className={`${styles.tab} ${activeTab === "headers" ? styles.active : ""}`}
-          onClick={() => setActiveTab("headers")}
-        >
-          Headers
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === "body" ? styles.active : ""}`}
-          onClick={() => setActiveTab("body")}
-        >
-          Body
-        </button>
-      </div>
+      <Tabs
+        className={styles.tabs}
+        tabs={[
+          { id: "headers", label: "Headers" },
+          { id: "body", label: "Body" },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
       <div className={styles.tabContent}>
         {activeTab === "headers" && (

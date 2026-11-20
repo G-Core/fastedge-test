@@ -16,7 +16,7 @@ npm install @gcoredev/fastedge-test
 pnpm add @gcoredev/fastedge-test
 ```
 
-**Requirements**: Node.js 18+
+**Requirements**: Node.js 22.13+ (the local cache and Edge KV use `node:sqlite`)
 
 ## Two Ways to Use This Package
 
@@ -46,7 +46,7 @@ If port 5179 is already in use, the server automatically tries the next port seq
 PORT=8080 npx @gcoredev/fastedge-test
 ```
 
-See **[Local Debugger Server](docs/LOCAL_SERVER.md)** for the full guide including programmatic usage, REST API access, and WebSocket log streaming.
+See **[Local Debugger Server](docs/DEBUGGER.md)** for the full guide including programmatic usage, REST API access, and WebSocket log streaming.
 
 ---
 
@@ -142,6 +142,8 @@ interface RunnerConfig {
     path?: string;                          // Directory to load them from (default: process cwd)
   };
   enforceProductionPropertyRules?: boolean; // CDN property access control (default: true)
+  stores?: boolean | TestStores;            // Local cache and Edge KV (default: true; isolated per test in runTestSuite)
+  dc?: string;                              // Cache bucket shared by runners (default: "local")
 }
 ```
 
@@ -335,6 +337,66 @@ await runner.cleanup();
 
 ---
 
+## Cache and Edge KV
+
+CDN and HTTP apps get a local cache and Edge KV, on by default (`stores: false` in
+`RunnerConfig` or `fastedge-config.test.json` turns them off). Every runner, test process and
+debugger in one git repository shares them; runners with the same `dc` share cache entries.
+Data lives in `.fastedge-debug/stores/` (git-ignored). Edge KV is read-only to apps, as on the
+edge; seed it from fixtures:
+
+```
+fixtures/stores/kv/<store>.json   { "strings": { "key": "value" }, "zsets": { "key": [["member", 1.5]] }, "bloom": { "key": ["item"] } }
+fixtures/stores/cache/<dc>.json   { "key": { "value": "text", "ttl_ms": 60000 } }
+```
+
+A value can be `{ "base64": "..." }` for binary data. Only stores with a fixture are attached.
+
+**In tests, every test gets its own stores** (in memory, seeded from the fixtures, gone after the
+test), so tests never see each other's data:
+
+```typescript
+import { test } from '@gcoredev/fastedge-test/vitest';
+import { expect } from 'vitest';
+
+test('counts hits', async ({ runner, stores }) => {
+  const app = await runner('./build/app.wasm');   // CDN or HTTP; cleaned up after the test
+  await app.callFullFlow('built-in', 'GET', {}, '', {}, true);
+  expect(stores.cache.get('hits')).toBe('1');
+  stores.advanceClock(60_000);                    // cache expiry for every runner on these stores
+});
+```
+
+`runTestSuite` does the same per test (`run: async (runner, { stores }) => ...`). Elsewhere, use
+`createStores()` and pass it as `RunnerConfig.stores`; runners given one instance share it.
+
+---
+
+## Client and Edge Location
+
+`client` (where the request comes from) and `edge` (which POP runs the app) are presets
+(`de`, `nl`, `us`) plus field overrides, in `fastedge-config.test.json` or `RunnerConfig`:
+
+```ts
+const runner = await createRunner('dist/app.wasm', {
+  client: { preset: 'nl' },                 // request.* geo properties / geoip-* headers
+  edge: { preset: 'de', city: 'Frankfurt' }, // dictionary dc, region, country, city, hostname
+});
+```
+
+- CDN apps get `request.*` properties, `GeoIP-*` / `X-Real-IP` headers, the edge dictionary keys
+  and `X-ID`. HTTP apps get `geoip-*`, `x-real-ip`, `dc` and `pop-*` headers.
+- Explicit properties, request headers and dotenv dictionary entries win over them.
+- The edge's `dc` is the cache bucket (the top-level `dc` wins). Leave both out to keep the old
+  behaviour. `runner.setRequestContext({ client, edge })` changes them between requests.
+
+## Resources
+
+A resource runs one request through several CDN apps, one per hook, with rules and an origin,
+as a CDN resource does on the edge. Describe it in `.fastedge-debug/fastedge-cdn-resource.test.json`,
+open it in the debugger, or test it with `createResource()` or `runTestSuite({ resource, tests })`.
+See **[Resources](docs/RESOURCES.md)**.
+
 ## JSON Schemas
 
 The package ships JSON Schema files for `fastedge-config.test.json` and all API request/response bodies, enabling IDE autocomplete and validation.
@@ -382,11 +444,17 @@ await runAndExit(defineTestSuite({
 
 ## Documentation
 
-- **[Local Debugger Server](docs/LOCAL_SERVER.md)** — running the visual debugger UI, npx usage, programmatic `startServer()`, REST API quickstart
+- **[Quickstart](docs/quickstart.md)** — the debugger, a test suite and the low-level runner in a few steps
+- **[Local Debugger Server](docs/DEBUGGER.md)** — running the visual debugger UI, npx usage, programmatic `startServer()`, REST API quickstart
 - **[Test Framework Guide](docs/TEST_FRAMEWORK.md)** — full API reference, all assertion helpers, examples
+- **[Runner API](docs/RUNNER.md)** — the low-level runner: `createRunner`, `RunnerConfig`, client and edge location
+- **[Test Config](docs/TEST_CONFIG.md)** — `fastedge-config.test.json`, origins and dotenv
+- **[Cache and Edge KV](docs/STORES.md)** — fixtures, the Storage Explorer, stores in tests
+- **[Resources](docs/RESOURCES.md)** — several apps on one CDN resource: hooks, rules and origins
+- **[Security](docs/SECURITY.md)** — the workspace boundary, allowed folders and what a loaded app can reach
 - **[REST API Reference](docs/API.md)** — HTTP endpoints for server-based testing (UI / WebSocket)
-- **[WASM Loading Guide](docs/HYBRID_LOADING.md)** — path vs buffer tradeoffs and performance data
-- **[Repository](https://github.com/G-Core/fastedge-debugger)** — source code, issues, contributing
+- **[WebSocket Protocol](docs/WEBSOCKET.md)** — real-time events from the debugger server
+- **[Repository](https://github.com/G-Core/fastedge-test)** — source code, issues, contributing
 
 ---
 

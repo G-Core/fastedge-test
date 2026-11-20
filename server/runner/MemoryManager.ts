@@ -79,6 +79,16 @@ export class MemoryManager {
     view.setUint32(ptr, value, true);
   }
 
+  writeI64(ptr: number, value: bigint): void {
+    if (!this.memory || !ptr) return;
+    new DataView(this.memory.buffer).setBigInt64(ptr, value, true);
+  }
+
+  writeU64(ptr: number, value: bigint): void {
+    if (!this.memory || !ptr) return;
+    new DataView(this.memory.buffer).setBigUint64(ptr, value, true);
+  }
+
   writeStringResult(
     value: string,
     valuePtrPtr: number,

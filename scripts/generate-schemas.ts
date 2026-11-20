@@ -18,6 +18,9 @@ import {
   ApiSendBodySchema,
   ApiCallBodySchema,
   ApiConfigBodySchema,
+  ApiResourceLoadBodySchema,
+  ApiResourceSaveBodySchema,
+  ResourceConfigSchema,
 } from '../server/schemas/index';
 
 const projectRoot = path.join(__dirname, '..');
@@ -29,18 +32,23 @@ if (!fs.existsSync(schemasDir)) {
 }
 
 // --- Zod → JSON Schema for config/API types ---
-// Zod v4 exposes toJSONSchema() as an instance method on each schema
+// Zod v4 exposes toJSONSchema() as an instance method on each schema. These are all things people
+// and agents write (config files, request bodies), so the schema describes the input: a field with
+// a default (e.g. `properties`, `request.body`, `rules`) is optional, as the server accepts it.
 
-const zodSchemas: Array<{ name: string; schema: { toJSONSchema(): object } }> = [
+const zodSchemas: Array<{ name: string; schema: { toJSONSchema(params?: { io?: 'input' | 'output' }): object } }> = [
   { name: 'fastedge-config.test', schema: TestConfigSchema },
   { name: 'api-load', schema: ApiLoadBodySchema },
   { name: 'api-send', schema: ApiSendBodySchema },
   { name: 'api-call', schema: ApiCallBodySchema },
   { name: 'api-config', schema: ApiConfigBodySchema },
+  { name: 'resource-config', schema: ResourceConfigSchema },
+  { name: 'api-resource-load', schema: ApiResourceLoadBodySchema },
+  { name: 'api-resource-save', schema: ApiResourceSaveBodySchema },
 ];
 
 for (const { name, schema } of zodSchemas) {
-  const jsonSchema = schema.toJSONSchema();
+  const jsonSchema = schema.toJSONSchema({ io: 'input' });
   const outputPath = path.join(schemasDir, `${name}.schema.json`);
   fs.writeFileSync(outputPath, JSON.stringify(jsonSchema, null, 2) + '\n');
   console.log(`✓ Generated ${name}.schema.json`);
@@ -63,6 +71,11 @@ const tsSchemaConfigs = [
     name: 'hook-call',
     sourcePath: path.join(projectRoot, 'server/runner/types.ts'),
     typeName: 'HookCall',
+  },
+  {
+    name: 'resource-result',
+    sourcePath: path.join(projectRoot, 'server/runner/resource.ts'),
+    typeName: 'ResourceResult',
   },
   {
     name: 'http-request',
@@ -100,8 +113,15 @@ for (const { name, sourcePath, typeName } of tsSchemaConfigs) {
       };
     }
 
+    // @deprecated text comes out as `deprecated: "<text>"`; JSON Schema wants a boolean, and
+    // editors (VS Code) show `deprecationMessage`.
+    const json = JSON.stringify(schema, (key, value) =>
+      value && typeof value === 'object' && typeof value.deprecated === 'string'
+        ? { ...value, deprecated: true, deprecationMessage: value.deprecated }
+        : value, 2);
+
     const outputPath = path.join(schemasDir, `${name}.schema.json`);
-    fs.writeFileSync(outputPath, JSON.stringify(schema, null, 2) + '\n');
+    fs.writeFileSync(outputPath, json + '\n');
     console.log(`✓ Generated ${name}.schema.json`);
   } catch (err) {
     console.error(`✗ Failed to generate ${name}.schema.json:`, err);

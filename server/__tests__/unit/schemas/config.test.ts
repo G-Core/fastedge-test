@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   TestConfigSchema,
   RequestConfigSchema,
@@ -239,5 +241,26 @@ describe('HttpRequestConfigSchema', () => {
     const result = HttpRequestConfigSchema.safeParse({ path: '/api/users?id=89' });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.path).toBe('/api/users?id=89');
+  });
+});
+
+describe("generated JSON schemas (schemas/*.schema.json)", () => {
+  // Editors validate hand-written files against these: a field with a default is optional there,
+  // as the server accepts it (generated with toJSONSchema({ io: "input" })).
+  const load = (name: string) => JSON.parse(readFileSync(join(__dirname, "../../../../schemas", `${name}.schema.json`), "utf8"));
+
+  it("resource-config: only apps and main are required; a request needs only its url", () => {
+    const schema = load("resource-config");
+    expect(schema.required).toEqual(["apps", "main"]);
+    expect(schema.properties.main.required).toEqual(["origin"]);
+    expect(schema.properties.request.required).toEqual(["url"]);
+  });
+
+  it("fastedge-config.test: properties and request defaults are optional; only HTTP must name its appType", () => {
+    const [http, cdn] = load("fastedge-config.test").anyOf;
+    expect(http.required).toEqual(["appType", "request"]);
+    expect(http.properties.request.required).toEqual(["path"]);
+    expect(cdn.required).toEqual(["request"]);
+    expect(cdn.properties.request.required).toEqual(["url"]);
   });
 });

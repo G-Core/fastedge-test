@@ -178,15 +178,15 @@ describe('PropertyAccessControl', () => {
         expect(result.reason).toContain('not available');
       });
 
-      it('denies modifying custom properties from onRequestHeaders in other hooks', () => {
+      it('lets a later hook write the name again, as a new property of that hook (edge: Ok)', () => {
         const value = new Uint8Array([1, 2, 3]);
         control.registerCustomProperty('custom.modify', value, HookContext.OnRequestHeaders);
-
-        // Can modify in onRequestHeaders
         expect(control.canSetProperty('custom.modify', HookContext.OnRequestHeaders).allowed).toBe(true);
 
-        // Cannot modify in other hooks
-        expect(control.canSetProperty('custom.modify', HookContext.OnRequestBody).allowed).toBe(false);
+        // The edge never fails the write; the property then lives in the later hooks.
+        expect(control.canSetProperty('custom.modify', HookContext.OnRequestBody).allowed).toBe(true);
+        control.registerCustomProperty('custom.modify', value, HookContext.OnRequestBody);
+        expect(control.canGetProperty('custom.modify', HookContext.OnResponseBody).allowed).toBe(true);
       });
     });
 
@@ -292,6 +292,33 @@ describe('PropertyAccessControl', () => {
       expect(paths).toContain('request.method');
       expect(paths).toContain('nginx.log_field1');
       expect(paths).toContain('response.status');
+    });
+  });
+
+  describe("write statuses match the edge", () => {
+    const control = new PropertyAccessControl();
+    const check = (path: string, hook: HookContext) => control.canSetProperty(path, hook);
+
+    it("onRequestHeaders: url / host / path / query apply; any other write is Ok with no effect", () => {
+      for (const p of ["request.url", "request.host", "request.path", "request.query"]) {
+        expect(check(p, HookContext.OnRequestHeaders)).toEqual({ allowed: true });
+      }
+      for (const p of ["request.scheme", "request.method", "request.country", "response.status"]) {
+        expect(check(p, HookContext.OnRequestHeaders)).toMatchObject({ allowed: false, ignored: true });
+      }
+    });
+
+    it("later hooks: the request.* set fails; other built-ins are Ok with no effect", () => {
+      for (const hook of [HookContext.OnRequestBody, HookContext.OnResponseHeaders, HookContext.OnResponseBody]) {
+        for (const p of ["request.url", "request.scheme", "request.method", "request.query", "request.x_real_ip"]) {
+          const result = check(p, hook);
+          expect(result.allowed).toBe(false);
+          expect(result.ignored).toBeUndefined();
+        }
+        for (const p of ["response.status", "request.country", "nginx.log_field1"]) {
+          expect(check(p, hook)).toMatchObject({ allowed: false, ignored: true });
+        }
+      }
     });
   });
 });

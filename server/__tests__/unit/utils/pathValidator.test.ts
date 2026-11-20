@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtemp, writeFile, rm } from "fs/promises";
+import { mkdtemp, writeFile, rm, symlink } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import {
@@ -264,8 +264,20 @@ describe("Path Validator", () => {
     });
   });
 
+  describe("symlinks", () => {
+    it("refuses a dangling symlink leaf: writing it would create a file outside the workspace", async () => {
+      const link = join(tempDir, "dangling.json");
+      await symlink(join(tmpdir(), "pathvalidator-dangling-target.json"), link);
+
+      const result = validatePath(link, { workspaceRoot: tempDir, checkExists: false, requireWasmExtension: false });
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain("outside the workspace root");
+    });
+  });
+
   describe("workspace root error messages", () => {
-    it("should suggest --project-dir when path is outside workspace (lexical check)", () => {
+    it("says how to fix it in words that fit the CLI and VS Code alike (lexical check)", () => {
       const outsidePath = join(tmpdir(), "outside.wasm");
 
       const result = validatePath(outsidePath, {
@@ -274,7 +286,8 @@ describe("Path Validator", () => {
       });
 
       expect(result.valid).toBe(false);
-      expect(result.error).toContain("--project-dir");
+      expect(result.error).toContain("start the debugger for a folder that contains it");
+      expect(result.error).not.toContain("--project-dir");
     });
 
     it("should not include the workspace root path in the error message", () => {

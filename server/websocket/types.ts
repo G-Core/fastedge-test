@@ -1,3 +1,5 @@
+import type { StoreCall } from "../stores/trace.js";
+import type { ResourceResult } from "../runner/resource.js";
 /**
  * WebSocket Event Types
  *
@@ -113,6 +115,7 @@ export interface HttpWasmRequestCompletedEvent extends BaseEvent {
       // Mirrors Node's IncomingHttpHeaders — undefined values are dropped by JSON serialization.
       headers: Record<string, string | string[] | undefined>;
       body: string;
+      storeCalls?: StoreCall[];
       contentType: string | null;
       isBase64?: boolean;
     };
@@ -153,6 +156,63 @@ export interface ReloadWorkspaceWasmEvent extends BaseEvent {
 }
 
 /**
+ * Resource loaded (several apps, one per hook)
+ */
+export interface ResourceLoadedEvent extends BaseEvent {
+  type: "resource_loaded";
+  data: {
+    /** The config file, when loaded from one. */
+    configPath?: string | null;
+    apps: { name: string; wasmType: "proxy-wasm" | "http-wasm" }[];
+  };
+}
+
+/**
+ * Loading a resource file failed (a config, path or build problem): the file and the error, so a
+ * page can show the file with the error instead of staying on the previous view.
+ */
+export interface ResourceLoadFailedEvent extends BaseEvent {
+  type: "resource_load_failed";
+  data: { configPath: string; error: string };
+}
+
+/**
+ * The user approved reading an allowed folder (outside the workspace) for this session. The page
+ * lists these folders so reads from outside the workspace are visible.
+ */
+export interface AllowedFolderApprovedEvent extends BaseEvent {
+  type: "allowed_folder_approved";
+  data: { folder: string };
+}
+
+/**
+ * The debugger is waiting for the user to approve reading an allowed folder (`waiting: true`), or
+ * has stopped waiting (answered or timed out). The page says where to answer: the VS Code dialog
+ * or the terminal that started the debugger.
+ */
+export interface AllowedFolderApprovalPendingEvent extends BaseEvent {
+  type: "allowed_folder_approval_pending";
+  data: { folder: string; askedIn: "vscode" | "terminal"; waiting: boolean };
+}
+
+/**
+ * A resource file was saved through the API (the page, an agent): its full path and version, so
+ * a page showing that file can reload it (or warn about its own unsaved edits).
+ */
+export interface ResourceSavedEvent extends BaseEvent {
+  type: "resource_saved";
+  data: { configPath: string; version: string };
+}
+
+/**
+ * Resource request completed: the rule that matched, each hook's app and result, the origin
+ */
+export interface ResourceRequestCompletedEvent extends BaseEvent {
+  type: "resource_request_completed";
+  data: { result: ResourceResult };
+}
+
+/**
  * Union of all possible events
  */
 export type ServerEvent =
@@ -165,7 +225,13 @@ export type ServerEvent =
   | HttpWasmRequestCompletedEvent
   | HttpWasmLogEvent
   | ConnectionStatusEvent
-  | ReloadWorkspaceWasmEvent;
+  | ReloadWorkspaceWasmEvent
+  | ResourceLoadedEvent
+  | ResourceSavedEvent
+  | ResourceLoadFailedEvent
+  | AllowedFolderApprovedEvent
+  | AllowedFolderApprovalPendingEvent
+  | ResourceRequestCompletedEvent;
 
 /**
  * Helper to create events with automatic timestamp

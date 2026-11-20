@@ -92,3 +92,17 @@ export function assertLogDoesNotContain(result: HookResult, message: string) {
   const matchingLog = result.logs.find((log: LogEntry) => log.message.includes(message));
   expect(matchingLog, `Logs should not contain message: "${message}"`).toBeUndefined();
 }
+
+/**
+ * Assert that a property write was accepted with no effect, as on the edge: the host returns Ok
+ * (the app does not fail) and logs that the write changed nothing.
+ */
+export function assertPropertyWriteIgnored(result: HookResult, propertyPath: string) {
+  const ignored = result.logs.find(
+    (log: LogEntry) => log.message.includes(`set_property '${propertyPath}'`) && log.message.includes('has no effect'),
+  );
+  expect(ignored, `Write to ${propertyPath} should be accepted with no effect`).toBeDefined();
+  expect(
+    result.logs.some((log: LogEntry) => log.message.includes('Property access denied') && log.message.includes(propertyPath)),
+  ).toBe(false);
+}

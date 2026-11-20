@@ -64,6 +64,33 @@ function extractProjectDirFlag(argv) {
   return null;
 }
 
+// --allow <dir> (repeatable): a folder outside the workspace the debugger may read once you
+// approve it in this terminal (allowed folders). Removed from argv like --project-dir.
+function extractAllowFlags(argv) {
+  const folders = [];
+  for (let i = 2; i < argv.length; ) {
+    const a = argv[i];
+    if (a === "--allow") {
+      const value = argv[i + 1];
+      if (!value) {
+        console.error("Error: --allow requires a folder argument.");
+        process.exit(2);
+      }
+      folders.push(resolve(value));
+      argv.splice(i, 2);
+    } else if (a.startsWith("--allow=")) {
+      folders.push(resolve(a.slice("--allow=".length)));
+      argv.splice(i, 1);
+    } else {
+      i++;
+    }
+  }
+  return folders;
+}
+
+const allowFlags = extractAllowFlags(process.argv);
+if (allowFlags.length) process.env.FASTEDGE_ALLOWED_FOLDERS = JSON.stringify(allowFlags);
+
 const projectDirFlag = extractProjectDirFlag(process.argv);
 const startPath = projectDirFlag
   ? resolve(projectDirFlag)

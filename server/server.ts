@@ -17,18 +17,31 @@ import { createServer } from "node:http";
 import { randomBytes, createHash } from "node:crypto";
 import { safeTokenEqual, hostAllowed } from "./utils/token.js";
 import { WasmRunnerFactory } from "./runner/WasmRunnerFactory.js";
+import { connectStores, resolveStoresRoot, request as storesRequest, type StoresConnection } from "./stores/StoresManager.js";
 import type { IWasmRunner } from "./runner/IWasmRunner.js";
 import { HttpWasmRunner } from "./runner/HttpWasmRunner.js";
+import { CLIENT_PRESETS, EDGE_PRESETS, edgeDc, type RequestContext } from "./runner/requestContext.js";
 import { WebSocketManager, StateManager } from "./websocket/index.js";
 import { detectWasmType } from "./utils/wasmTypeDetector.js";
-import { validatePath } from "./utils/pathValidator.js";
+import { validatePath, validatePathOrThrow } from "./utils/pathValidator.js";
 import { resolveDotenvPath, validateDotenvLeafs, DotenvPathError } from "./utils/dotenv-loader.js";
+import { createResource, DEFAULT_RESOURCE_FILE, type Resource } from "./runner/resource.js";
+import { mountStorageExplorer } from "./storageExplorer.js";
+import { listWorkspaceFiles } from "./utils/workspaceFiles.js";
+import { confineTo, resolveOrigin } from "./runner/origin.js";
+import { appRoot, workspaceRoot } from "./utils/roots.js";
+import { NotApproved, onApprovalPending, requestApproval, validateRead, withApproval } from "./utils/approval.js";
+import { allowedFolderStates, approvedFolders, onFolderApproved } from "./utils/allowedFolders.js";
+import type { Origin } from "./schemas/config.js";
 import {
+  ApiResourceLoadBodySchema,
+  ApiResourceSaveBodySchema,
   ApiLoadBodySchema,
   ApiSendBodySchema,
   ApiCallBodySchema,
   ApiConfigBodySchema,
   ApiDotenvBodySchema,
+  ApiExecuteContextSchema,
   SaveAsBodySchema,
   TestConfigSchema,
 } from "./schemas/index.js";
@@ -60,13 +73,17 @@ const stateManager = new StateManager(wsManager, debug);
 // Initialize runner factory
 const runnerFactory = new WasmRunnerFactory();
 let currentRunner: IWasmRunner | null = null;
+/** The loaded resource (several apps), instead of a single app. */
+let currentResource: Resource | null = null;
 
 // Allowlist of known schema filenames. The /api/schema/:name route checks this
 // before serving a file, preventing path traversal through encoded slashes.
 // We scan the directory when it's present; if it's missing (e.g. the VSCode
 // extension packaging stripped it), the set is empty and every schema request
 // returns 404 — safe, since no file can be served without being allowlisted.
-const schemasDir = path.join(__dirname, "schemas");
+// The build copies them to dist/schemas/; the npm package ships only the top-level schemas/.
+const schemasDir = [path.join(__dirname, "schemas"), path.join(__dirname, "..", "schemas")]
+  .find((dir) => existsSync(dir)) ?? path.join(__dirname, "schemas");
 let knownSchemas: Set<string>;
 try {
   knownSchemas = new Set(
@@ -169,14 +186,36 @@ app.get("/api/environment", (req: Request, res: Response) => {
   res.json({
     environment: isVSCode ? "vscode" : "node",
     supportsPathLoading: true,
-    workspaceRoot: process.env.WORKSPACE_PATH ?? null,
+    workspaceRoot: process.env.WORKSPACE_PATH ? workspaceRoot() : null,
+    appRoot: process.env.WORKSPACE_PATH ? appRoot() : null,
+    approvedFolders: approvedFolders(),
+    allowedFolders: allowedFolderStates(workspaceRoot()),
   });
+});
+
+/**
+ * Asks the user to approve an allowed folder now (the page's Ask button), so its files show in the
+ * path fields before anything is loaded from it. Only asks: the answer comes from the user (VS Code
+ * dialog or terminal), never from this call. A folder already answered this session is not asked again.
+ */
+app.post("/api/allowed-folders/ask", async (req: Request, res: Response) => {
+  const entry = allowedFolderStates(workspaceRoot()).find((f) => f.folder === req.body?.folder);
+  if (!entry) {
+    res.status(400).json({ ok: false, error: "Not an allowed folder" });
+    return;
+  }
+  if (entry.state !== "not asked") {
+    res.json({ ok: true, state: entry.state });
+    return;
+  }
+  const approval = await requestApproval(entry.folder);
+  res.json({ ok: true, state: approval.approved ? "approved" : approval.answered ? "refused" : "not asked", ...(approval.approved ? {} : { error: new NotApproved(entry.folder, approval).message }) });
 });
 
 // Workspace WASM detection endpoint (VSCode only)
 app.get("/api/workspace-wasm", async (req: Request, res: Response) => {
   const isVSCode = process.env.VSCODE_INTEGRATION === "true";
-  const workspacePath = process.env.WORKSPACE_PATH;
+  const workspacePath = process.env.WORKSPACE_PATH ? appRoot() : undefined;
 
   // Only available in VSCode with workspace
   if (!isVSCode || !workspacePath) {
@@ -210,7 +249,7 @@ app.get("/api/workspace-wasm", async (req: Request, res: Response) => {
 // Called by VSCode extension after F5 rebuild
 app.post("/api/reload-workspace-wasm", async (req: Request, res: Response) => {
   const isVSCode = process.env.VSCODE_INTEGRATION === "true";
-  const workspacePath = process.env.WORKSPACE_PATH;
+  const workspacePath = process.env.WORKSPACE_PATH ? appRoot() : undefined;
 
   // Only available in VSCode with workspace
   if (!isVSCode || !workspacePath) {
@@ -246,29 +285,42 @@ app.post("/api/reload-workspace-wasm", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/load", async (req: Request, res: Response) => {
+/**
+ * Loads run one at a time, in arrival order, so an older load (e.g. an edge reload) cannot
+ * finish last and win. Requests are not queued: each carries its own client / edge.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+function serialized(handler: (req: Request, res: Response) => Promise<void>) {
+  return (req: Request, res: Response): Promise<void> => {
+    const run = queue.then(() => handler(req, res));
+    queue = run.catch(() => {});
+    return run;
+  };
+}
+
+app.post("/api/load", serialized(async (req: Request, res: Response) => {
   const parsed = ApiLoadBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ ok: false, error: parsed.error.flatten() });
     return;
   }
-  const { wasmBase64, wasmPath, dotenv, httpPort } = parsed.data;
+  const { wasmBase64, wasmPath, dotenv, httpPort, stores, dc, client, edge } = parsed.data;
 
   // Resolve and validate the dotenv path before touching runner state so a
   // containment violation returns 400 rather than triggering the 500 catch block.
   let dotenvBasePath: string | undefined;
   if (dotenv?.path !== undefined) {
     try {
-      dotenvBasePath = resolveDotenvPathFromWorkspace(dotenv.path);
+      dotenvBasePath = await resolveDotenvPathFromWorkspace(dotenv.path);
     } catch (e) {
-      if (e instanceof DotenvPathError) {
+      if (e instanceof DotenvPathError || e instanceof NotApproved) {
         res.status(400).json({ ok: false, error: e.message });
         return;
       }
       throw e;
     }
   } else {
-    dotenvBasePath = process.env.WORKSPACE_PATH || undefined;
+    dotenvBasePath = process.env.WORKSPACE_PATH ? appRoot() : undefined;
   }
 
   // Guard against leaf symlinks escaping the workspace — catches HTTP-WASM where
@@ -301,7 +353,8 @@ app.post("/api/load", async (req: Request, res: Response) => {
 
       // Expand <workspace> placeholder (VSCode integration)
       if (wasmPath.startsWith("<workspace>")) {
-        const workspacePath = process.env.WORKSPACE_PATH;
+        // <workspace> means the app root (where F5 writes .fastedge-debug/app.wasm).
+        const workspacePath = process.env.WORKSPACE_PATH ? appRoot() : undefined;
         if (!workspacePath) {
           res.status(400).json({
             ok: false,
@@ -316,10 +369,11 @@ app.post("/api/load", async (req: Request, res: Response) => {
 
       // Validate path for security; workspaceRoot confines the path to the workspace
       // (lexically and via realpath to catch symlink escapes)
-      const validationResult = validatePath(resolvedPath, {
+      // An approved allowed folder may hold it too (the user is asked first).
+      const validationResult = await validateRead(resolvedPath, {
         requireWasmExtension: true,
         checkExists: true,
-        workspaceRoot: process.env.WORKSPACE_PATH ?? process.cwd(),
+        workspaceRoot: workspaceRoot(),
       });
 
       if (!validationResult.valid) {
@@ -359,15 +413,21 @@ app.post("/api/load", async (req: Request, res: Response) => {
     // Auto-detect WASM type
     const wasmType = await detectWasmType(bufferOrPath);
 
-    // Cleanup previous runner
+    // Cleanup previous runner (or resource)
     if (currentRunner) {
       await currentRunner.cleanup();
     }
+    await currentResource?.cleanup();
+    currentResource = null;
 
     // Create appropriate runner based on detected type
+    loadedStores = null; // until this load succeeds
+    const storesConnection = stores !== false ? await getStores() : null;
+    const appDc = dc ?? edgeDc(edge) ?? "local";
     currentRunner = runnerFactory.createRunner(
       wasmType,
       dotenv?.enabled ?? false,
+      storesConnection && { connection: storesConnection, dc: appDc, owned: false },
     );
     currentRunner.setStateManager(stateManager);
 
@@ -378,7 +438,10 @@ app.post("/api/load", async (req: Request, res: Response) => {
     await currentRunner.load(bufferOrPath, {
       dotenv: { enabled: dotenv?.enabled ?? false, path: dotenvBasePath },
       httpPort,
+      client,
+      edge,
     });
+    loadedStores = storesConnection && { dc: appDc };
 
     // Emit WASM loaded event — include runner port for HTTP WASM so the
     // frontend can build the live preview URL without a separate API call
@@ -406,7 +469,276 @@ app.post("/api/load", async (req: Request, res: Response) => {
     }
     res.status(500).json({ ok: false, error: String(error) });
   }
+}));
+
+/**
+ * Load a resource: several apps, one per hook, as on a CDN resource (default file
+ * .fastedge-debug/fastedge-cdn-resource.test.json in the workspace). Every file it reads must be
+ * inside the workspace, so a resource spanning several projects is debugged from a folder that
+ * holds them all. Replaces the loaded app or resource; /api/send then runs it.
+ */
+app.post("/api/resource/load", serialized(async (req: Request, res: Response) => {
+  const parsed = ApiResourceLoadBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: parsed.error.flatten() });
+    return;
+  }
+  const root = workspaceRoot();
+  const { config } = parsed.data;
+  const configPath = config ? undefined : parsed.data.configPath ?? DEFAULT_RESOURCE_FILE;
+
+  await currentRunner?.cleanup();
+  currentRunner = null;
+  await currentResource?.cleanup();
+  currentResource = null;
+  loadedStores = null; // until this load succeeds
+
+  try {
+    const storesOn = (await getStores()) !== null;
+    // Reads may come from approved allowed folders; the user is asked, then the load runs again.
+    const resource = await withApproval(() =>
+      createResource(configPath ? path.resolve(root, configPath) : (config as never), {
+        root,
+        allowedFolders: true,
+        ...(storesOn ? {} : { stores: false }),
+      }),
+    );
+    currentResource = resource;
+    const stores = storesOn && resource.config.stores !== false;
+    loadedStores = stores ? { dc: resource.config.dc ?? edgeDc(resource.config.edge) ?? "local" } : null;
+
+    const apps = [...resource.apps].map(([name, runner]) => ({ name, wasmType: runner.getType() }));
+    const source = (req.headers["x-source"] as any) || "ui";
+    stateManager.emitResourceLoaded({ configPath: configPath ? path.resolve(root, configPath) : null, apps }, source);
+    res.json({ ok: true, apps, config: resource.config });
+  } catch (error) {
+    // A config, path or build problem: the caller can fix it. A page shows the file with the error.
+    const message = error instanceof Error ? error.message : String(error);
+    if (configPath) {
+      stateManager.emitResourceLoadFailed({ configPath: path.resolve(root, configPath), error: message }, (req.headers["x-source"] as any) || "ui");
+    }
+    res.status(400).json({ ok: false, error: message });
+  }
+}));
+
+/** A resource file to read: in the workspace or an approved allowed folder (the user is asked first). */
+async function resourceFileToRead(configPath: unknown): Promise<string> {
+  const root = workspaceRoot();
+  const file = typeof configPath === "string" && configPath ? configPath : DEFAULT_RESOURCE_FILE;
+  if (!file.endsWith(".json")) throw new Error("a resource file is a .json file");
+  const checked = await validateRead(path.resolve(root, file), { workspaceRoot: root, requireWasmExtension: false, checkExists: false });
+  if (!checked.valid) throw new Error(checked.error);
+  return checked.normalizedPath!;
+}
+
+/** A resource file to write: in the workspace only (default: the default resource file); it need not exist yet. */
+function resourceFile(configPath: unknown): string {
+  const root = workspaceRoot();
+  const file = typeof configPath === "string" && configPath ? configPath : DEFAULT_RESOURCE_FILE;
+  if (!file.endsWith(".json")) throw new Error("a resource file is a .json file");
+  return validatePathOrThrow(path.resolve(root, file), { workspaceRoot: root, requireWasmExtension: false, checkExists: false });
+}
+
+/** A file's content version (a hash), or null when there is no file. */
+function contentVersion(text: string | null): string | null {
+  return text === null ? null : createHash("sha256").update(text).digest("hex").slice(0, 16);
+}
+
+/** A resource file as written (no defaults filled in), for the Resource page; config null = no file yet. */
+app.get("/api/resource/config", async (req: Request, res: Response) => {
+  try {
+    const file = await resourceFileToRead(req.query.path);
+    const text = existsSync(file) ? await fs.readFile(file, "utf-8") : null;
+    res.json({ ok: true, path: file, config: text === null ? null : JSON.parse(text), version: contentVersion(text) });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
 });
+
+/** Rewrites the built-in origin's workspace-relative files relative to `dir`, where the config is saved (it is read from there). */
+function originFilesRelativeTo(config: object, dir: string): void {
+  const builtIn = (config as { origin?: { builtIn?: Record<string, unknown> } }).origin?.builtIn;
+  for (const key of ["files", "bodyFile"] as const) {
+    const value = builtIn?.[key];
+    if (typeof value === "string" && value && !path.isAbsolute(value)) {
+      builtIn![key] = path.relative(dir, path.resolve(workspaceRoot(), value)).split(path.sep).join("/") || ".";
+    }
+  }
+}
+
+/** A request's origin with its files resolved against the workspace, confined to it or an approved allowed folder. */
+function workspaceOrigin(origin: Origin): Promise<Origin> {
+  const root = workspaceRoot();
+  return withApproval(async () => resolveOrigin(origin, root, confineTo(root, { allowedFolders: true })));
+}
+
+/** Suggestions for the path fields: wasm, *.test.json and .env folders in the workspace and approved allowed folders. */
+app.get("/api/workspace/files", (_req: Request, res: Response) => {
+  const root = workspaceRoot();
+  // With the approved allowed folders' files (absolute paths).
+  res.json({ ok: true, root, ...listWorkspaceFiles(root, undefined, approvedFolders()) });
+});
+
+/** Writes a resource file (checked against the resource schema first). Does not load it. */
+app.post("/api/resource/save", async (req: Request, res: Response) => {
+  const parsed = ApiResourceSaveBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const file = resourceFile(parsed.data.configPath);
+    // lstat: a dangling link too (the path check above follows only links that resolve).
+    if (lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(`${file} is a symlink: not saving through it`);
+    // Someone else (an agent, an editor) changed the file since the caller read it.
+    if (parsed.data.expectedVersion !== undefined && !parsed.data.force) {
+      const current = contentVersion(existsSync(file) ? await fs.readFile(file, "utf-8") : null);
+      if (current !== parsed.data.expectedVersion) {
+        res.status(409).json({ ok: false, conflict: true, version: current, error: `${file} changed since it was read` });
+        return;
+      }
+    }
+    mkdirSync(path.dirname(file), { recursive: true });
+    // As given: the schema's defaults stay out of the file.
+    const text = JSON.stringify(req.body.config, null, 2) + "\n";
+    await fs.writeFile(file, text, "utf-8");
+    const version = contentVersion(text)!;
+    stateManager.emitResourceSaved({ configPath: file, version }, (req.headers["x-source"] as any) || "ui");
+    res.json({ ok: true, path: file, version });
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+/**
+ * The storage service connection, shared by every runner this server creates and held for
+ * the server's lifetime. If the service cannot start, runners go on with stores off.
+ */
+let storesConnection: Promise<StoresConnection> | null = null;
+async function getStores(): Promise<StoresConnection | null> {
+  storesConnection ??= connectStores(resolveStoresRoot(appRoot()));
+  try {
+    return await storesConnection;
+  } catch (error) {
+    storesConnection = null;
+    console.error(`Stores are off: ${(error as Error).message}`);
+    return null;
+  }
+}
+
+/** The loaded app's stores: its cache bucket, or null (no app loaded, or stores off). */
+let loadedStores: { dc: string } | null = null;
+
+/** One admin call to the storage service; null when the loaded app has no stores. */
+async function storesAdmin(body: Record<string, unknown>): Promise<unknown> {
+  const connection = loadedStores && (await getStores());
+  if (!connection) return null;
+  const reply = await storesRequest(connection, "admin", body);
+  if (!reply.ok) {
+    // snapshot / reset are newer than the first service protocol: an older service refuses them.
+    throw new Error(
+      reply.error === "bad-request"
+        ? "the running storage service is older than this debugger: close other fastedge-test instances, then restart this debugger"
+        : `stores service: ${reply.error}`,
+    );
+  }
+  return reply.value;
+}
+
+/** Stores panel: what the cache (one `dc`, default the loaded app's) and Edge KV hold. */
+app.get("/api/stores", async (req: Request, res: Response) => {
+  const appDc = loadedStores?.dc ?? "local";
+  const dc = typeof req.query.dc === "string" && req.query.dc ? req.query.dc : appDc;
+  try {
+    const snapshot = await storesAdmin({ op: "snapshot", dc });
+    res.json(snapshot ? { ok: true, enabled: true, appDc, ...snapshot } : { ok: true, enabled: false });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+/** Storage panel: one value, `?dc=&key=` (cache) or `?store=&key=` (Edge KV); null if gone. */
+app.get("/api/stores/value", async (req: Request, res: Response) => {
+  const { dc, store, key } = req.query;
+  if (typeof key !== "string" || (typeof dc === "string") === (typeof store === "string")) {
+    res.status(400).json({ ok: false, error: "key and exactly one of dc / store are required" });
+    return;
+  }
+  try {
+    if (!loadedStores) {
+      res.status(409).json({ ok: false, error: "no app with stores is loaded" });
+      return;
+    }
+    const value = await storesAdmin({ op: "inspect", key, ...(typeof dc === "string" ? { dc } : { store }) });
+    res.json({ ok: true, value });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+/** Back to the fixtures: cache emptied (every `dc`), Edge KV re-seeded. */
+app.post("/api/stores/reset", async (_req: Request, res: Response) => {
+  try {
+    if (!loadedStores) {
+      res.status(409).json({ ok: false, error: "no app with stores is loaded" });
+      return;
+    }
+    await storesAdmin({ op: "reset" });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+/** Move the service clock (cache expiry) forward by `ms`. */
+app.post("/api/stores/advance-clock", async (req: Request, res: Response) => {
+  const ms = req.body?.ms;
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) {
+    res.status(400).json({ ok: false, error: "ms must be a positive number" });
+    return;
+  }
+  try {
+    if (!loadedStores) {
+      res.status(409).json({ ok: false, error: "no app with stores is loaded" });
+      return;
+    }
+    await storesAdmin({ op: "advance-clock", ms });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+// The page lists the allowed folders approved this session, and says where to answer a pending approval.
+onFolderApproved((folder) => stateManager.emitAllowedFolderApproved(folder));
+onApprovalPending((folder, askedIn, waiting) => stateManager.emitAllowedFolderApprovalPending({ folder, askedIn, waiting }));
+
+// Storage Explorer: manage the stores with or without an app loaded.
+mountStorageExplorer(app, getStores, () => appRoot(), () => loadedStores?.dc ?? null);
+
+/** Pause (true) or resume (false) the service clock; advance-clock still moves it. */
+app.post("/api/stores/clock", async (req: Request, res: Response) => {
+  const paused = req.body?.paused;
+  if (typeof paused !== "boolean") {
+    res.status(400).json({ ok: false, error: "paused must be a boolean" });
+    return;
+  }
+  try {
+    if (!loadedStores) {
+      res.status(409).json({ ok: false, error: "no app with stores is loaded" });
+      return;
+    }
+    res.json({ ok: true, paused: await storesAdmin({ op: "pause-clock", paused }) });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+/** Release the shared lease on shutdown, so an unused service exits without waiting for the TTL. */
+async function releaseStores(): Promise<void> {
+  const connection = await storesConnection?.catch(() => null);
+  await connection?.close();
+}
 
 app.patch("/api/dotenv", async (req: Request, res: Response) => {
   const parsed = ApiDotenvBodySchema.safeParse(req.body);
@@ -428,16 +760,16 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
   let dotenvPath: string | undefined;
   if (dotenv.path !== undefined) {
     try {
-      dotenvPath = resolveDotenvPathFromWorkspace(dotenv.path);
+      dotenvPath = await resolveDotenvPathFromWorkspace(dotenv.path);
     } catch (e) {
-      if (e instanceof DotenvPathError) {
+      if (e instanceof DotenvPathError || e instanceof NotApproved) {
         res.status(400).json({ ok: false, error: (e as Error).message });
         return;
       }
       throw e;
     }
   } else {
-    dotenvPath = process.env.WORKSPACE_PATH || undefined;
+    dotenvPath = process.env.WORKSPACE_PATH ? appRoot() : undefined;
   }
 
   if (dotenvPath) {
@@ -460,8 +792,27 @@ app.patch("/api/dotenv", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * The client / edge a request body names, for that request only (one left out is none).
+ * Neither named: undefined, so the runner's own (from load) applies. The cache bucket stays
+ * as loaded.
+ */
+function requestContextOf(body: object, context: RequestContext): RequestContext | undefined {
+  return "client" in body || "edge" in body ? context : undefined;
+}
+
+/** Client and edge presets, for the request context panel. */
+app.get("/api/request-context/presets", (_req: Request, res: Response) => {
+  res.json({ ok: true, client: CLIENT_PRESETS, edge: EDGE_PRESETS });
+});
+
 app.post("/api/execute", async (req: Request, res: Response) => {
   const { url, path: reqPath, method, headers, body } = req.body ?? {};
+  const context = ApiExecuteContextSchema.safeParse(req.body ?? {});
+  if (!context.success) {
+    res.status(400).json({ ok: false, error: context.error.flatten() });
+    return;
+  }
 
   if (!currentRunner) {
     res.status(400).json({
@@ -472,6 +823,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
   }
 
   try {
+    const requestContext = requestContextOf(req.body ?? {}, context.data);
     if (currentRunner.getType() === "http-wasm") {
       // HTTP WASM: Accept either `path` (preferred) or `url` (legacy).
       // When `path` is provided, use it directly (e.g. "/api/hello?q=1").
@@ -502,6 +854,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
         method: method || "GET",
         headers: headers || {},
         body: body || "",
+        context: requestContext,
       });
 
       // Emit HTTP WASM request completed event
@@ -514,6 +867,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
           body: result.body,
           contentType: result.contentType,
           isBase64: result.isBase64,
+          storeCalls: result.storeCalls,
         },
         source,
       );
@@ -535,6 +889,7 @@ app.post("/api/execute", async (req: Request, res: Response) => {
         request?.body || "",
         properties || {},
         true, // enforceProductionPropertyRules
+        requestContext,
       );
 
       // Emit request completed event
@@ -580,6 +935,7 @@ app.post("/api/call", async (req: Request, res: Response) => {
   try {
     const result = await currentRunner.callHook({
       hook,
+      context: requestContextOf(req.body, parsed.data),
       request: request ?? { headers: {}, body: "" },
       response: response ?? { headers: {}, body: "" },
       properties: properties ?? {},
@@ -599,6 +955,37 @@ app.post("/api/send", async (req: Request, res: Response) => {
   }
   const { url, request, properties } = parsed.data;
 
+  if (currentResource && parsed.data.origin) {
+    res.status(400).json({ ok: false, error: "origin: a resource sets its origins in its file (main / rules)" });
+    return;
+  }
+  let origin: Origin | undefined;
+  try {
+    origin = parsed.data.origin && (await workspaceOrigin(parsed.data.origin));
+  } catch (error) {
+    res.status(400).json({ ok: false, error: (error as Error).message });
+    return;
+  }
+
+  if (currentResource) {
+    const source = (req.headers["x-source"] as any) || "ui";
+    try {
+      const result = await currentResource.request({
+        url,
+        method: request?.method,
+        headers: request?.headers,
+        body: request?.body,
+        properties,
+      });
+      stateManager.emitResourceRequestCompleted(result, source);
+      res.json({ ok: true, ...result });
+    } catch (error) {
+      stateManager.emitRequestFailed("Request execution failed", String(error), source);
+      res.status(500).json({ ok: false, error: String(error) });
+    }
+    return;
+  }
+
   if (!currentRunner) {
     res.status(400).json({
       ok: false,
@@ -616,6 +1003,8 @@ app.post("/api/send", async (req: Request, res: Response) => {
       request?.body || "",
       properties || {},
       true, // enforceProductionPropertyRules
+      requestContextOf(req.body, parsed.data),
+      origin,
     );
 
     // Emit request completed event
@@ -642,30 +1031,44 @@ app.post("/api/send", async (req: Request, res: Response) => {
 });
 
 /** Resolve the .fastedge-debug config directory.
- *  Prefers WORKSPACE_PATH (VSCode integration) so the config lives next to
+ *  In the app root (FastEdge for VS Code: the app's own folder) so the config lives next to
  *  the developer's app, not inside the extension/package install folder. */
 function resolveConfigDir(): string {
-  const root = process.env.WORKSPACE_PATH || process.cwd();
-  return path.join(root, ".fastedge-debug");
+  return path.join(appRoot(), ".fastedge-debug");
+}
+
+/** The default config file, checked like every other path: a repo can plant it as a symlink. */
+function configFile(): string {
+  const root = workspaceRoot();
+  return validatePathOrThrow(path.join(resolveConfigDir(), "fastedge-config.test.json"), {
+    workspaceRoot: root,
+    requireWasmExtension: false,
+    checkExists: false,
+  });
 }
 
 /** Resolve a potentially relative dotenv path using the same base as resolveConfigDir(). */
-function resolveDotenvPathFromWorkspace(dotenvPath: string | undefined): string | undefined {
-  const base = process.env.WORKSPACE_PATH || process.cwd();
-  return resolveDotenvPath(dotenvPath, base);
+function resolveDotenvPathFromWorkspace(dotenvPath: string | undefined): Promise<string | undefined> {
+  // Relative to the app root; anywhere in the workspace root, or an approved allowed folder.
+  return withApproval(async () => resolveDotenvPath(dotenvPath, appRoot(), workspaceRoot(), true));
 }
 
 // Get test configuration
 app.get("/api/config", async (req: Request, res: Response) => {
   try {
     const configDir = resolveConfigDir();
-    const configPath = path.join(configDir, "fastedge-config.test.json");
+    const configPath = configFile();
     const configData = await fs.readFile(configPath, "utf-8");
     const config = JSON.parse(configData);
 
     // Resolve relative dotenv.path against the config file's directory
     if (config.dotenv?.path && !path.isAbsolute(config.dotenv.path)) {
       config.dotenv.path = path.resolve(configDir, config.dotenv.path);
+    }
+    // The built-in origin's files too: /api/send resolves relative paths against the workspace.
+    for (const key of ["files", "bodyFile"] as const) {
+      const value = config.origin?.builtIn?.[key];
+      if (typeof value === "string" && value && !path.isAbsolute(value)) config.origin.builtIn[key] = path.resolve(configDir, value);
     }
 
     // Validate config against schema, include validation result in response
@@ -695,7 +1098,8 @@ app.post("/api/config", async (req: Request, res: Response) => {
   try {
     const configDir = resolveConfigDir();
     mkdirSync(configDir, { recursive: true });
-    const configPath = path.join(configDir, "fastedge-config.test.json");
+    const configPath = configFile();
+    originFilesRelativeTo(config, path.dirname(configPath));
     await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
 
     // Emit properties updated event if properties changed
@@ -782,6 +1186,7 @@ app.post("/api/config/save-as", async (req: Request, res: Response) => {
   try {
     const dir = path.dirname(filePath);
     await fs.mkdir(dir, { recursive: true });
+    originFilesRelativeTo(config, dir);
     await fs.writeFile(filePath, JSON.stringify(config, null, 2), "utf-8");
 
     res.json({ ok: true, savedPath: filePath });
@@ -816,8 +1221,8 @@ const defaultPort = process.env.PORT ? Number(process.env.PORT) : 5179;
 // so port discovery is co-located with the config and WASM that anchor
 // each app's identity.
 function getPortFilePath(): string | null {
-  const appRoot = process.env.WORKSPACE_PATH || process.cwd();
-  return path.join(appRoot, ".fastedge-debug", ".debug-port");
+  const appRootDir = appRoot();
+  return path.join(appRootDir, ".fastedge-debug", ".debug-port");
 }
 
 function writePortFile(port: number): void {
@@ -828,10 +1233,10 @@ function writePortFile(port: number): void {
     mkdirSync(debugDir, { recursive: true });
 
     // Reject if .fastedge-debug is itself a symlink pointing outside the workspace.
-    const appRoot = process.env.WORKSPACE_PATH || process.cwd();
+    const appRootDir = appRoot();
     try {
       const realDir = realpathSync(debugDir);
-      const realRoot = realpathSync(appRoot);
+      const realRoot = realpathSync(appRootDir);
       if (realDir !== realRoot && !realDir.startsWith(realRoot + path.sep)) {
         console.warn("Port file directory is outside workspace — refusing to write");
         return;
@@ -875,10 +1280,10 @@ function deletePortFile(): void {
   // cleanup cannot delete a file in an external directory if .fastedge-debug is
   // (or was replaced with) a symlink pointing outside the workspace.
   try {
-    const appRoot = process.env.WORKSPACE_PATH || process.cwd();
+    const appRootDir = appRoot();
     try {
       const realDir = realpathSync(path.dirname(portFilePath));
-      const realRoot = realpathSync(appRoot);
+      const realRoot = realpathSync(appRootDir);
       if (realDir !== realRoot && !realDir.startsWith(realRoot + path.sep)) return;
     } catch { /* unreachable in practice */ }
     unlinkSync(portFilePath);
@@ -948,9 +1353,15 @@ export async function startServer(port = defaultPort): Promise<void> {
       // When no token was injected externally (CLI mode), log the full URL with
       // the token in the fragment so only the local user reading stderr can open it.
       if (!process.env.FASTEDGE_DEBUG_TOKEN) {
-        console.error(
-          `Open: http://${hostForUrl}:${resolvedPort}/#token=${SESSION_TOKEN}`,
-        );
+        // The link to click: highlighted (bold, underlined cyan) on a colour terminal, or with
+        // FORCE_COLOR (pnpm dev, whose runner pipes output); never with NO_COLOR.
+        const color = !process.env.NO_COLOR && (process.stderr.isTTY || !!process.env.FORCE_COLOR);
+        const link = (url: string) => (color ? `\x1b[1;4;36m${url}\x1b[0m` : url);
+        console.error(`\nOpen: ${link(`http://${hostForUrl}:${resolvedPort}/#token=${SESSION_TOKEN}`)}`);
+        // pnpm dev: the Vite dev server (hot reload) needs the same token.
+        const devFrontend = process.env.FASTEDGE_DEV_FRONTEND;
+        if (devFrontend) console.error(`Dev:  ${link(`${devFrontend.replace(/\/$/, "")}/#token=${SESSION_TOKEN}`)} (hot reload)`);
+        console.error("");
       }
       writePortFile(resolvedPort);
       resolve();
@@ -973,29 +1384,18 @@ process.on("exit", () => {
   deletePortFile();
 });
 
-// Graceful shutdown
-process.on("SIGTERM", async () => {
-  console.log("SIGTERM received, closing server...");
-  if (currentRunner) {
-    await currentRunner.cleanup();
-  }
+// Graceful shutdown: stop every runner (a resource's HTTP apps are fastedge-run processes).
+async function shutdown(signal: string): Promise<void> {
+  console.log(`${signal} received, closing server...`);
+  await currentRunner?.cleanup();
+  await currentResource?.cleanup();
+  await releaseStores();
   wsManager.close();
   deletePortFile();
   httpServer.close(() => {
     console.log("Server closed");
     process.exit(0);
   });
-});
-
-process.on("SIGINT", async () => {
-  console.log("SIGINT received, closing server...");
-  if (currentRunner) {
-    await currentRunner.cleanup();
-  }
-  wsManager.close();
-  deletePortFile();
-  httpServer.close(() => {
-    console.log("Server closed");
-    process.exit(0);
-  });
-});
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));

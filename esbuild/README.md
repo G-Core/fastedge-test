@@ -61,5 +61,5 @@ This folder is ready for additional esbuild scripts:
 - `build:bundle` - Full bundle (backend + frontend)
 
 **Documentation**:
-- `context/VSCODE_BUNDLING.md` - How bundling works
+- `context/ARCHITECTURE.md` (entry points and packaging) - How bundling works
 - `../FastEdge-vscode/context/BUNDLED_DEBUGGER.md` - Extension integration

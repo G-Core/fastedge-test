@@ -1,4 +1,5 @@
 import { ProxyWasmRunner } from '../../../runner/ProxyWasmRunner';
+import { WorkerProxyWasmRunner } from '../../../runner/WorkerProxyWasmRunner';
 import type { FastEdgeConfig } from '../../../fastedge-host';
 import type { HookCall, HookResult, LogEntry } from '../../../runner/types';
 
@@ -10,13 +11,21 @@ import type { HookCall, HookResult, LogEntry } from '../../../runner/types';
  * @param fastEdgeConfig - Optional FastEdge configuration for secrets/dictionary
  * @returns A configured ProxyWasmRunner instance
  */
+/**
+ * FASTEDGE_TEST_CDN_RUNNER=worker runs the suite through WorkerProxyWasmRunner (what
+ * createRunner and the debugger use). The tests only call IWasmRunner methods, so the
+ * cast is safe.
+ */
+function newCdnRunner(fastEdgeConfig: FastEdgeConfig | undefined, dotenvEnabled: boolean): ProxyWasmRunner {
+  return process.env.FASTEDGE_TEST_CDN_RUNNER === 'worker'
+    ? (new WorkerProxyWasmRunner(fastEdgeConfig, dotenvEnabled) as unknown as ProxyWasmRunner)
+    : new ProxyWasmRunner(fastEdgeConfig, dotenvEnabled);
+}
+
 export function createTestRunner(
   fastEdgeConfig?: FastEdgeConfig
 ): ProxyWasmRunner {
-  return new ProxyWasmRunner(
-    fastEdgeConfig,
-    false // Disable dotenv loading in tests
-  );
+  return newCdnRunner(fastEdgeConfig, false); // Disable dotenv loading in tests
 }
 
 /**
@@ -29,10 +38,7 @@ export function createTestRunner(
  * @returns A configured ProxyWasmRunner instance with dotenv enabled
  */
 export function createTestRunnerWithDotenv(): ProxyWasmRunner {
-  return new ProxyWasmRunner(
-    undefined,
-    true // Enable dotenv loading
-  );
+  return newCdnRunner(undefined, true); // Enable dotenv loading
 }
 
 /**

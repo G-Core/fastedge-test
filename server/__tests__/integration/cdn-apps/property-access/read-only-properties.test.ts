@@ -8,7 +8,7 @@ import {
   getPropertyAccessViolations,
   logsContain,
 } from '../../utils/test-helpers';
-import { assertPropertyDenied } from '../../utils/property-assertions';
+import { assertPropertyWriteIgnored, assertPropertyDenied } from '../../utils/property-assertions';
 
 describe('Read-Only Properties - Integration Tests', () => {
   describe('invalid-method-write.wasm - request.method', () => {
@@ -23,7 +23,7 @@ describe('Read-Only Properties - Integration Tests', () => {
       );
     });
 
-    it('should deny writing to request.method (read-only)', async () => {
+    it('accepts a write to request.method with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook(createHookCall('onRequestHeaders', {
@@ -32,12 +32,7 @@ describe('Read-Only Properties - Integration Tests', () => {
         ':authority': 'example.com',
         ':scheme': 'https',
       }));
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.method', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations[0]).toContain('read-only');
+      assertPropertyWriteIgnored(result, 'request.method');
     });
 
     it('should NOT modify request.method value', async () => {
@@ -68,7 +63,7 @@ describe('Read-Only Properties - Integration Tests', () => {
       );
     });
 
-    it('should deny writing to request.scheme (read-only)', async () => {
+    it('accepts a write to request.scheme with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook(createHookCall('onRequestHeaders', {
@@ -77,12 +72,7 @@ describe('Read-Only Properties - Integration Tests', () => {
         ':authority': 'example.com',
         ':scheme': 'https',
       }));
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.scheme', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations[0]).toContain('read-only');
+      assertPropertyWriteIgnored(result, 'request.scheme');
     });
 
     it('should NOT modify request.scheme value', async () => {
@@ -114,7 +104,7 @@ describe('Read-Only Properties - Integration Tests', () => {
       );
     });
 
-    it('should deny writing to request.country (read-only geolocation)', async () => {
+    it('accepts a write to request.country with no effect, as on the edge', async () => {
       await runner.load(Buffer.from(wasmBinary));
 
       const result = await runner.callHook(createHookCall('onRequestHeaders', {
@@ -123,12 +113,7 @@ describe('Read-Only Properties - Integration Tests', () => {
         ':authority': 'example.com',
         ':scheme': 'https',
       }));
-
-      expect(hasPropertyAccessViolation(result)).toBe(true);
-      assertPropertyDenied(result, 'request.country', 'write');
-
-      const violations = getPropertyAccessViolations(result);
-      expect(violations[0]).toContain('read-only');
+      assertPropertyWriteIgnored(result, 'request.country');
     });
 
     it('should NOT modify request.country value', async () => {

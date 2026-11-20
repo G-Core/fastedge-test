@@ -24,6 +24,7 @@ rust_host/
 
 # Internal Dev code
 configs/
+proto/
 
 # Test applications (ignore built binaries, track directory structure)
 wasm/**/*.wasm

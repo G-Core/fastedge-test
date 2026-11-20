@@ -55,17 +55,10 @@
   border-bottom: 1px solid #3d3d3d;
 }
 
-.logTab {
+.logTabs {
   display: flex;
   align-items: center;
-  padding: 0.5rem 1rem;
-  border-bottom: 2px solid #ff6c37;
-  color: #ff6c37;
-}
-
-.tabLabel {
-  font-size: 0.9rem;
-  font-weight: 500;
+  gap: 0.5rem;
 }
 
 .loggingControls {
@@ -88,6 +81,7 @@
   transition: color 0.15s;
 }
 
-.clearLogsButton:hover {
+.clearLogsButton:hover:not(:disabled) {
+  background: transparent;
   color: #b0b0b0;
 }

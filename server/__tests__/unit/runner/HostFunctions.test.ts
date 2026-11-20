@@ -4,7 +4,8 @@ import type { MemoryManager } from "../../../runner/MemoryManager";
 import type { PropertyResolver } from "../../../runner/PropertyResolver";
 import type { PropertyAccessControl } from "../../../runner/PropertyAccessControl";
 import { MapType, ProxyStatus } from "../../../runner/types";
-import { HookContext } from "../../../runner/PropertyAccessControl";
+import { HookContext, PropertyAccessControl as RealPropertyAccessControl } from "../../../runner/PropertyAccessControl";
+import { PropertyResolver as RealPropertyResolver } from "../../../runner/PropertyResolver";
 
 // Header host calls, driven directly. The stub memory resolves a "pointer"
 // to the string at that index, so a key is passed as (index, length).
@@ -59,7 +60,7 @@ describe("HostFunctions header maps", () => {
     expect(get("x-added")).toBe(ProxyStatus.NotFound);
   });
 
-  // Edge-measured (preprod, 2026-11-04): trailer and gRPC maps are not served
+  // Measured on the edge: trailer and gRPC maps are not served
   // in any phase, and an unknown map type is BadArgument.
   it.each([
     [MapType.RequestTrailers, ProxyStatus.Unimplemented],
@@ -85,7 +86,7 @@ describe("HostFunctions header maps", () => {
     expect(host.getResponseHeaders()).toEqual({ "x-res": "s" });
   });
 
-  // Edge-measured (preprod, 2026-11-04): which header writes each hook accepts.
+  // Measured on the edge: which header writes each hook accepts.
   const R = MapType.RequestHeaders;
   const S = MapType.ResponseHeaders;
   it.each([
@@ -119,3 +120,47 @@ describe("HostFunctions header maps", () => {
     }
   });
 });
+
+describe("HostFunctions proxy_set_property statuses (edge parity)", () => {
+  // Real access rules and resolver; only memory is stubbed (a "pointer" is a string index).
+  function setupProps(hook: HookContext) {
+    const strings: string[] = [];
+    const memory = {
+      readString: (ptr: number) => strings[ptr],
+      readBytes: (ptr: number) => new TextEncoder().encode(strings[ptr]),
+      writeStringResult: () => {},
+    } as unknown as MemoryManager;
+    const resolver = new RealPropertyResolver();
+    const host = new HostFunctions(memory, resolver, new RealPropertyAccessControl(), () => hook);
+    const imports = host.createImports() as Record<string, (...a: number[]) => number>;
+    const str = (v: string): [number, number] => [strings.push(v) - 1, v.length];
+    const set = (path: string, value: string) => imports.proxy_set_property(...str(path), ...str(value));
+    return { set, resolver };
+  }
+
+  it("onResponseBody: response.status write returns Ok and changes nothing", () => {
+    const { set, resolver } = setupProps(HookContext.OnResponseBody);
+    const before = resolver.resolve("response.status");
+    expect(set("response.status", "500")).toBe(ProxyStatus.Ok);
+    expect(resolver.resolve("response.status")).toBe(before);
+  });
+
+  it("onResponseBody: request.method write fails with BadArgument", () => {
+    const { set } = setupProps(HookContext.OnResponseBody);
+    expect(set("request.method", "POST")).toBe(ProxyStatus.BadArgument);
+  });
+
+  it("onRequestHeaders: request.method write returns Ok and changes nothing", () => {
+    const { set, resolver } = setupProps(HookContext.OnRequestHeaders);
+    const before = resolver.resolve("request.method");
+    expect(set("request.method", "POST")).toBe(ProxyStatus.Ok);
+    expect(resolver.resolve("request.method")).toBe(before);
+  });
+
+  it("custom property writes return Ok in every hook", () => {
+    for (const hook of [HookContext.OnRequestHeaders, HookContext.OnRequestBody, HookContext.OnResponseBody]) {
+      expect(setupProps(hook).set("my.custom", "x")).toBe(ProxyStatus.Ok);
+    }
+  });
+});
+

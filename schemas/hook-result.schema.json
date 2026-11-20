@@ -33,34 +33,10 @@
           "type": "object",
           "properties": {
             "request": {
-              "type": "object",
-              "properties": {
-                "headers": {
-                  "$ref": "#/definitions/HeaderRecord"
-                },
-                "body": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "headers",
-                "body"
-              ]
+              "$ref": "#/definitions/HookBody"
             },
             "response": {
-              "type": "object",
-              "properties": {
-                "headers": {
-                  "$ref": "#/definitions/HeaderRecord"
-                },
-                "body": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "headers",
-                "body"
-              ]
+              "$ref": "#/definitions/HookBody"
             },
             "properties": {
               "type": "object",
@@ -76,34 +52,10 @@
           "type": "object",
           "properties": {
             "request": {
-              "type": "object",
-              "properties": {
-                "headers": {
-                  "$ref": "#/definitions/HeaderRecord"
-                },
-                "body": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "headers",
-                "body"
-              ]
+              "$ref": "#/definitions/HookBody"
             },
             "response": {
-              "type": "object",
-              "properties": {
-                "headers": {
-                  "$ref": "#/definitions/HeaderRecord"
-                },
-                "body": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "headers",
-                "body"
-              ]
+              "$ref": "#/definitions/HookBody"
             },
             "properties": {
               "type": "object",
@@ -118,6 +70,24 @@
         "properties": {
           "type": "object",
           "additionalProperties": {}
+        },
+        "storeCalls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StoreCall"
+          },
+          "description": "The cache / Edge KV calls this hook made, in order (stores on only)."
+        },
+        "localResponse": {
+          "$ref": "#/definitions/LocalResponse",
+          "description": "Set when the hook answered with send_http_response."
+        },
+        "customProperties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Custom properties later hooks of this request may read (see `HookCall.customProperties`)."
         }
       },
       "required": [
@@ -127,6 +97,25 @@
         "output",
         "properties"
       ]
+    },
+    "HookBody": {
+      "type": "object",
+      "properties": {
+        "headers": {
+          "$ref": "#/definitions/HeaderRecord"
+        },
+        "body": {
+          "type": "string"
+        },
+        "isBase64": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "headers",
+        "body"
+      ],
+      "description": "Headers and body of the request or response; `isBase64`: the body is base64 of raw bytes (not text)."
     },
     "HeaderRecord": {
       "type": "object",
@@ -142,6 +131,103 @@
             }
           }
         ]
+      }
+    },
+    "StoreCall": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "type": "string",
+          "enum": [
+            "cdn",
+            "http"
+          ]
+        },
+        "hook": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "cache",
+            "kv"
+          ]
+        },
+        "op": {
+          "type": "string"
+        },
+        "dc": {
+          "type": "string",
+          "description": "Cache bucket (cache calls)."
+        },
+        "store": {
+          "type": "string",
+          "description": "Edge KV store (KV calls)."
+        },
+        "key": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "result": {
+          "type": "string",
+          "description": "`ok`, or the service's error (`wrong-type`, `invalid-pattern`, ...)."
+        },
+        "value": {
+          "type": "string",
+          "description": "The result value: a count, a flag, or the size of a value or list."
+        },
+        "at": {
+          "type": "number",
+          "description": "Wall-clock time (ms since epoch)."
+        }
+      },
+      "required": [
+        "app",
+        "kind",
+        "op",
+        "result",
+        "at"
+      ]
+    },
+    "LocalResponse": {
+      "type": "object",
+      "properties": {
+        "statusCode": {
+          "type": "number"
+        },
+        "statusText": {
+          "type": "string"
+        },
+        "headers": {
+          "$ref": "#/definitions/HeaderTuples",
+          "description": "The additional headers passed as send_http_response's 4th argument."
+        },
+        "bodyBase64": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "statusCode",
+        "statusText",
+        "headers",
+        "bodyBase64"
+      ],
+      "description": "A response a hook sent with send_http_response."
+    },
+    "HeaderTuples": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 2,
+        "maxItems": 2
       }
     }
   }

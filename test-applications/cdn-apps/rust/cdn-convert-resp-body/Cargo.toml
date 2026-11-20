@@ -1,0 +1,11 @@
+[package]
+name = "cdn-convert-resp-body"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+proxy-wasm = { workspace = true }
+image = "0.25"

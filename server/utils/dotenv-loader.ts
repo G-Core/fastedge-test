@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import { realpathSync } from "fs";
+import { ApprovalNeeded, checkAllowedRead } from "./allowedFolders.js";
 import path from "path";
 import type { FastEdgeConfig } from "../fastedge-host/types.js";
 
@@ -178,7 +179,7 @@ export function validateDotenvLeafs(dotenvPath: string): void {
   let realBase: string;
   try { realBase = realpathSync(dotenvPath); } catch { return; } // directory absent — nothing to load
 
-  // Full set consumed by fastedge-run (see FastEdge/fastedge-lib/src/dotenv.rs)
+  // Full set consumed by fastedge-run (its dotenv loader)
   for (const name of [".env", ".env.secrets", ".env.variables", ".env.req_headers", ".env.rsp_headers", ".env.kv_stores"]) {
     const filePath = path.join(dotenvPath, name);
     try {
@@ -197,36 +198,54 @@ export function validateDotenvLeafs(dotenvPath: string): void {
 }
 
 /**
- * Resolve a potentially relative dotenv path to an absolute path, and verify it
- * is contained under `base` (the workspace root). Throws DotenvPathError if the
- * resolved path escapes the workspace — this includes symlinks that point outside.
+ * Resolve a potentially relative dotenv path against `base` to an absolute path, and verify it
+ * is contained under `limit` (the workspace root; default `base`). Throws DotenvPathError if the
+ * resolved path escapes it — this includes symlinks that point outside.
  * Returns undefined for falsy input.
  */
 export function resolveDotenvPath(
   dotenvPath: string | undefined,
   base: string,
+  limit: string = base,
+  allowedFolders = false,
 ): string | undefined {
   if (!dotenvPath) return undefined;
   const resolved = path.isAbsolute(dotenvPath)
     ? dotenvPath
     : path.resolve(base, dotenvPath);
+  try {
+    return checkDotenvContainment(resolved, limit);
+  } catch (error) {
+    if (!(error instanceof DotenvPathError) || !allowedFolders) throw error;
+    // Outside the workspace: an approved allowed folder may still be read.
+    try {
+      checkAllowedRead(resolved);
+    } catch (allowedError) {
+      if (allowedError instanceof ApprovalNeeded) throw allowedError;
+      throw new DotenvPathError((allowedError as Error).message);
+    }
+    return resolved;
+  }
+}
+
+function checkDotenvContainment(resolved: string, limit: string): string {
 
   // Lexical containment check (fast path, handles .. traversal)
-  const rel = path.relative(base, resolved);
+  const rel = path.relative(limit, resolved);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new DotenvPathError(
-      `dotenv path is outside the server workspace (${base}). ` +
+      `dotenv path is outside the server workspace (${limit}). ` +
       `Start the server from your project directory, or use --project-dir <path>.`,
     );
   }
 
   // Realpath check: resolve symlinks to detect escapes through links inside the workspace
   try {
-    const realBase = realpathSync(base);
+    const realBase = realpathSync(limit);
     const realResolved = realpathOrNearest(resolved);
     if (realResolved !== realBase && !realResolved.startsWith(realBase + path.sep)) {
       throw new DotenvPathError(
-      `dotenv path is outside the server workspace (${base}). ` +
+      `dotenv path is outside the server workspace (${limit}). ` +
       `Start the server from your project directory, or use --project-dir <path>.`,
     );
     }

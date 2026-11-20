@@ -46,6 +46,20 @@
       ],
       "required": true,
       "description": "Dotenv injection mechanism — prefix scheme, file options, priority order"
+    },
+    "stores": {
+      "files": [
+        "docs/STORES.md"
+      ],
+      "required": false,
+      "description": "Local cache and Edge KV: seeding, the Storage Explorer, stores in tests, local KV vs a real KV store"
+    },
+    "resources": {
+      "files": [
+        "docs/RESOURCES.md"
+      ],
+      "required": false,
+      "description": "Multi-app resources: several CDN apps on one request, rules, origins, and how they map to a CDN resource"
     }
   },
   "target_mapping": {
@@ -71,6 +85,14 @@
     },
     "dotenv": {
       "reference_file": "plugins/gcore-fastedge/skills/test/reference/dotenv.md",
+      "section": null
+    },
+    "stores": {
+      "reference_file": "plugins/gcore-fastedge/skills/test/reference/stores.md",
+      "section": null
+    },
+    "resources": {
+      "reference_file": "plugins/gcore-fastedge/skills/test/reference/resources.md",
       "section": null
     }
   },

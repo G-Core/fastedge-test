@@ -1,0 +1,80 @@
+/**
+ * Request context (client / edge) on a CDN app: the client preset reaches `request.*`
+ * properties and GeoIP headers, the edge preset reaches the dictionary and X-ID, and explicit
+ * properties and headers win.
+ */
+
+import { describe, it, expect } from "vitest";
+import { loadCdnAppWasm, WASM_TEST_BINARIES } from "../../utils/wasm-loader";
+import { createHookCall, logsContain } from "../../utils/test-helpers";
+import { ProxyWasmRunner } from "../../../../runner/ProxyWasmRunner";
+import { createRunnerFromBuffer } from "../../../../runner/standalone";
+
+const wasm = () => loadCdnAppWasm("properties", WASM_TEST_BINARIES.cdnApps.properties.validReadonlyRead);
+
+describe("CDN request context", () => {
+  it("fills properties, headers and dictionary from the presets; explicit values win", async () => {
+    // In-process, so the dictionary can be read back.
+    const runner = new ProxyWasmRunner({ dictionary: { city: "dotenv-city" } }, false);
+    await runner.load(Buffer.from(await wasm()), { client: { preset: "nl" }, edge: { preset: "us" } });
+
+    const result = await runner.callHook({
+      ...createHookCall("onRequestHeaders"),
+      properties: { "request.country.name": "France" },
+    });
+    expect(logsContain(result, "Request City: Amsterdam")).toBe(true);
+    expect(logsContain(result, "Request Country Name: France")).toBe(true);
+    expect(result.output.request.headers).toMatchObject({ "geoip-city": "Amsterdam", "x-id": "sv5-hw-edge-gpig-gc10" });
+
+    const dictionary = (runner as unknown as { dictionary: { get(k: string): string | null } }).dictionary;
+    expect(dictionary.get("dc")).toBe("sv5");
+    expect(dictionary.get("city")).toBe("dotenv-city"); // explicit dictionary entry wins
+
+    await runner.setRequestContext({ client: { preset: "de" } });
+    const again = await runner.callHook(createHookCall("onRequestHeaders", { ":path": "/", "GeoIP-City": "Paris" }));
+    expect(logsContain(again, "Request City: Frankfurt am Main")).toBe(true);
+    expect(again.output.request.headers["geoip-city"]).toBe("Paris");
+    expect(again.output.request.headers["x-id"]).toBeUndefined();
+    expect(dictionary.get("dc")).toBeNull();
+
+    // A call's own context is for that call only; the runner's stays.
+    const own = await runner.callHook({ ...createHookCall("onRequestHeaders"), context: { client: { preset: "us" }, edge: { preset: "nl" } } });
+    expect(logsContain(own, "Request City: Chicago")).toBe(true);
+    expect(own.output.request.headers["x-id"]).toBe("am3-hw-edge-gpig-gc96");
+    const after = await runner.callHook(createHookCall("onRequestHeaders"));
+    expect(logsContain(after, "Request City: Frankfurt am Main")).toBe(true);
+  });
+
+  it("does not report context headers as the request's own (the UI would keep them as overrides)", async () => {
+    const runner = new ProxyWasmRunner(undefined, false);
+    await runner.load(Buffer.from(await wasm()), { client: { preset: "de" } });
+    const started: Record<string, unknown>[] = [];
+    const record = (_u: string, _m: string, h: Record<string, unknown>) => started.push(h);
+    runner.setStateManager(new Proxy({}, { get: (_t, k) => (k === "emitRequestStarted" ? record : () => {}) }) as never);
+    await runner.callFullFlow("built-in", "GET", { "geoip-country-code": "XX", "x-mine": "1" }, "", {}, true);
+    expect(started[0]).toMatchObject({ "geoip-country-code": "XX", "x-mine": "1" });
+    expect(started[0]["geoip-city"]).toBeUndefined();
+  });
+
+  it("reaches the worker runner and selects the cache bucket", async () => {
+    const runner = await createRunnerFromBuffer(Buffer.from(await wasm()), {
+      stores: false,
+      client: { preset: "us" },
+      edge: { preset: "nl" },
+    });
+    try {
+      const result = await runner.callFullFlow("built-in", "GET", {}, "", {}, true);
+      expect(logsContain(result.hookResults.onRequestHeaders, "Request City: Chicago")).toBe(true);
+      expect(result.hookResults.onRequestHeaders.output.request.headers["x-id"]).toBe("am3-hw-edge-gpig-gc96");
+
+      // A flow's own context is for that flow only.
+      const nl = await runner.callFullFlow("built-in", "GET", {}, "", {}, true, { client: { preset: "nl" } });
+      expect(logsContain(nl.hookResults.onRequestHeaders, "Request City: Amsterdam")).toBe(true);
+      expect(nl.hookResults.onRequestHeaders.output.request.headers["x-id"]).toBeUndefined();
+      const back = await runner.callFullFlow("built-in", "GET", {}, "", {}, true);
+      expect(logsContain(back.hookResults.onRequestHeaders, "Request City: Chicago")).toBe(true);
+    } finally {
+      await runner.cleanup();
+    }
+  });
+});

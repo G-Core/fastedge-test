@@ -39,7 +39,28 @@ export interface PropertyDefinition {
 export interface AccessCheckResult {
   allowed: boolean;
   reason?: string;
+  /**
+   * Writes only: the edge accepts this write (status Ok) but it has no effect. The host
+   * returns Ok and changes nothing, as production does, instead of failing the call.
+   */
+  ignored?: boolean;
 }
+
+/**
+ * Built-ins whose write fails (BadArgument) on the edge, in onRequestBody / onResponseHeaders /
+ * onResponseBody. In onRequestHeaders a write never fails on the edge: url / host / path / query /
+ * nginx.log_field1 are applied and every other write is ignored.
+ */
+const EDGE_REFUSED_WRITES = new Set([
+  "request.url",
+  "request.host",
+  "request.path",
+  "request.scheme",
+  "request.method",
+  "request.extension",
+  "request.query",
+  "request.x_real_ip",
+]);
 
 // Custom property tracking
 interface CustomPropertyData {
@@ -309,7 +330,13 @@ export class PropertyAccessControl {
 
     if (builtIn) {
       // Built-in property
-      return this.canSetBuiltInProperty(builtIn, currentHook);
+      const check = this.canSetBuiltInProperty(builtIn, currentHook);
+      if (check.allowed) return check;
+      // The edge fails only EDGE_REFUSED_WRITES, outside onRequestHeaders; any other write is Ok with no effect.
+      if (currentHook === HookContext.OnRequestHeaders || !EDGE_REFUSED_WRITES.has(path)) {
+        return { allowed: false, ignored: true, reason: `${check.reason}: the edge accepts the write and ignores it` };
+      }
+      return check;
     } else {
       // Custom property
       return this.canSetCustomProperty(path, currentHook);
@@ -320,8 +347,9 @@ export class PropertyAccessControl {
    * Register custom property creation/modification
    */
   registerCustomProperty(path: string, value: Uint8Array, hook: HookContext): void {
-    if (!this.customProperties.has(path)) {
-      // New custom property
+    const existing = this.customProperties.get(path);
+    if (!existing || (existing.createdIn === HookContext.OnRequestHeaders && hook !== HookContext.OnRequestHeaders)) {
+      // New custom property (onRequestHeaders properties do not reach the later hooks)
       this.customProperties.set(path, {
         createdIn: hook,
         value,
@@ -330,6 +358,23 @@ export class PropertyAccessControl {
       // Update existing custom property value
       this.customProperties.get(path)!.value = value;
     }
+  }
+
+  /**
+   * Start a hook of a request with exactly the custom properties its earlier hooks wrote,
+   * possibly on another app (on the edge they belong to the request). Drops any left from an
+   * earlier request.
+   */
+  setRequestCustomProperties(paths: string[]): void {
+    this.customProperties.clear();
+    for (const path of paths) {
+      this.customProperties.set(path, { createdIn: HookContext.OnRequestBody, value: new Uint8Array() });
+    }
+  }
+
+  /** The custom properties later hooks may read (not those created in onRequestHeaders). */
+  readableCustomProperties(): string[] {
+    return [...this.customProperties].filter(([, data]) => data.createdIn !== HookContext.OnRequestHeaders).map(([path]) => path);
   }
 
   /**
@@ -428,25 +473,10 @@ export class PropertyAccessControl {
   }
 
   /**
-   * Check if custom property can be written in current hook
+   * Custom property writes always succeed: the edge never fails one. A later hook's write to a
+   * property created in onRequestHeaders makes a new property there (registerCustomProperty).
    */
-  private canSetCustomProperty(path: string, currentHook: HookContext): AccessCheckResult {
-    const custom = this.customProperties.get(path);
-
-    if (custom) {
-      // Existing custom property
-      if (custom.createdIn === HookContext.OnRequestHeaders) {
-        // Properties created in onRequestHeaders can only be modified in onRequestHeaders
-        if (currentHook !== HookContext.OnRequestHeaders) {
-          return {
-            allowed: false,
-            reason: `Custom property '${path}' was created in onRequestHeaders and cannot be modified in ${currentHook}`,
-          };
-        }
-      }
-    }
-
-    // New custom property or valid modification
+  private canSetCustomProperty(_path: string, _currentHook: HookContext): AccessCheckResult {
     return { allowed: true };
   }
 

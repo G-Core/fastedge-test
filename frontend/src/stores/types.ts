@@ -1,4 +1,4 @@
-import type { HookResult, FinalResponse, WebSocketStatus } from "../types";
+import type { HookResult, FinalResponse, WebSocketStatus, StoreCall } from "../types";
 
 // ============================================================================
 // STORE SLICE STATE INTERFACES
@@ -92,7 +92,53 @@ export interface ConfigState {
    * config file the user loaded (default or via picker).
    */
   httpPort: number | null;
+  /** Cache and Edge KV on/off (`stores` in the config file); null = the default (on). */
+  stores: boolean | null;
+  /** Cache bucket (`dc` in the config file); null = the default (`local`). */
+  dc: string | null;
+  /** Where the client is (`client` in the config file); null = none (properties and headers only). */
+  client: ClientContext | null;
+  /** Which edge POP runs the app (`edge` in the config file); null = none. */
+  edge: EdgeContext | null;
+  /** CDN apps: where the response comes from (`origin` in the config file); null = the request URL. */
+  origin: Origin | null;
 }
+
+/** The built-in responder declared in a config: a fixed response, or a folder served by path. */
+export type BuiltInOrigin = { status?: number; headers?: Record<string, string>; body?: string; bodyFile?: string; files?: string };
+/** Where a CDN request's response comes from ("built-in" URL = the echo responder). */
+export type Origin = { url: string } | { builtIn: BuiltInOrigin };
+
+export type Preset = "de" | "nl" | "us";
+
+export type ClientContext = {
+  preset?: Preset;
+  ip?: string;
+  asn?: string;
+  country?: string;
+  countryName?: string;
+  city?: string;
+  region?: string;
+  continent?: string;
+  lat?: string;
+  long?: string;
+};
+
+export type EdgeContext = {
+  preset?: Preset;
+  dc?: string;
+  region?: string;
+  country?: string;
+  city?: string;
+  hostname?: string;
+  popLat?: string;
+  popLong?: string;
+  popReg?: string;
+  popCity?: string;
+  popContinent?: string;
+  popCountryCode?: string;
+  popCountryName?: string;
+};
 
 export interface ConfigActions {
   setProperties: (properties: Record<string, string>) => void;
@@ -103,6 +149,9 @@ export interface ConfigActions {
   setDotenvPath: (path: string | null) => Promise<void>;
   setLogLevel: (level: number) => void;
   setCalculatedProperties: (properties: Record<string, string>) => void;
+  setClient: (client: ClientContext | null) => void;
+  setEdge: (edge: EdgeContext | null) => void;
+  setOrigin: (origin: Origin | null) => void;
   loadFromConfig: (config: TestConfig) => void;
   exportConfig: () => TestConfig;
   resetConfig: () => void;
@@ -148,6 +197,8 @@ export interface HttpWasmState {
     body: string;
     contentType: string;
     isBase64?: boolean;
+    /** The request's cache / Edge KV calls (stores on, a forwarding fastedge-run). */
+    storeCalls?: StoreCall[];
   } | null;
 
   // Logs
@@ -222,10 +273,15 @@ export interface TestConfig {
     path?: string;
   };
   httpPort?: number;
+  stores?: boolean;
+  dc?: string;
+  client?: ClientContext;
+  edge?: EdgeContext;
+  origin?: Origin;
 }
 
 export interface PersistConfig {
   request: RequestState;
-  config: ConfigState;
+  config: Pick<ConfigState, "properties" | "dotenv" | "logLevel">;
   ui: Pick<UIState, "expandedPanels">;
 }

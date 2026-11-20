@@ -46,6 +46,16 @@ The flag accepts `--project-dir <path>`, `--project-dir=<path>`, and the short a
 
 When the flag is omitted, the positional argument (if any) or the current working directory is used as the starting point.
 
+### `--allow <dir>` (repeatable)
+
+Lets the debugger read a folder outside the workspace, for example a folder of prebuilt wasm files or a website used as an origin:
+
+```bash
+npx fastedge-debug --allow ~/apps/wasm --allow ~/sites/my-site
+```
+
+The first time a load reads from an allowed folder, the debugger asks in this terminal whether to allow it for the session (the page shows a notice while it waits, and the request fails after 2 minutes without an answer); without a terminal it refuses. Allowed folders are read-only: saves stay inside the workspace. The flag accepts `--allow <dir>` and `--allow=<dir>`; a folder that does not exist is ignored with a warning. See [SECURITY.md](SECURITY.md#allowed-folders).
+
 ## Programmatic Usage
 
 The `./server` export is the server bundle. Importing it starts the server automatically, using the `PORT` environment variable or the default port. Set environment variables before the import:
@@ -89,7 +99,7 @@ PORT=8080 npx fastedge-debug
 
 `PORT` (or the `startServer` argument) sets the preferred starting port. If that port is already in use, the server tries the next port sequentially, up to 50 ports in total (for example, `5179` through `5228` by default), and logs each skipped port to stderr. If no free port is found in that range, the server exits with an error. Read the port file or the stderr output to find the port that was actually bound.
 
-The server writes the bound port to `.fastedge-debug/.debug-port` under `WORKSPACE_PATH` (if set) or the current working directory, and deletes the file on shutdown. Use this file for programmatic port discovery when starting the server as a subprocess.
+The server writes the bound port to `.fastedge-debug/.debug-port` under the app root (`FASTEDGE_APP_ROOT`, else `WORKSPACE_PATH`, else the current working directory), and deletes the file on shutdown. Use this file for programmatic port discovery when starting the server as a subprocess.
 
 The file format is `PORT:SHA256_HASH` — the decimal port number, a colon, then the hex-encoded SHA-256 of the session token (used by the VS Code extension to verify server identity before reuse). To extract just the port:
 
@@ -131,7 +141,8 @@ curl http://127.0.0.1:5179/health
 | `PORT`               | `number` | `5179`        | Preferred port for the HTTP server. See Port Configuration.                               |
 | `PROXY_RUNNER_DEBUG` | `"1"`    | unset         | Set to `1` to enable verbose debug logging for WebSocket and runner activity.             |
 | `VSCODE_INTEGRATION` | `"true"` | unset         | Set to `true` when running inside the VSCode extension; enables workspace WASM detection. |
-| `WORKSPACE_PATH`     | `string` | unset         | Workspace root; base for `.fastedge-debug/` files and dotenv paths. Set by the CLI.       |
+| `WORKSPACE_PATH`     | `string` | unset         | Workspace root: the limit on every path the server reads, and where resource files live. Set by the CLI. |
+| `FASTEDGE_APP_ROOT`  | `string` | the workspace root | App root inside the workspace: `.fastedge-debug/` (port file, `app.wasm`, the single-app config), `<workspace>` paths and the default dotenv folder. Set by the VS Code extension; ignored when outside `WORKSPACE_PATH`. |
 | `FASTEDGE_RUN_PATH`  | `string` | unset         | Override the path to the `fastedge-run` binary used to execute WASM modules.              |
 | `FASTEDGE_BIND_HOST` | `string` | `"127.0.0.1"` | Interface the server binds to. Non-loopback values require explicit opt-in.               |
 
@@ -158,11 +169,12 @@ npx fastedge-debug --project-dir /home/user/myproject
 The server handles `SIGTERM` and `SIGINT`:
 
 1. Logs the received signal.
-2. Cleans up the active WASM runner (frees memory, closes child processes).
-3. Closes all WebSocket connections.
-4. Deletes the `.fastedge-debug/.debug-port` file.
-5. Closes the HTTP server.
-6. Exits with code `0`.
+2. Cleans up the loaded WASM app, or every app of a loaded resource (frees memory, stops `fastedge-run` child processes).
+3. Releases the shared storage service connection, so an unused storage service can exit without waiting for its lease to expire.
+4. Closes all WebSocket connections.
+5. Deletes the `.fastedge-debug/.debug-port` file.
+6. Closes the HTTP server.
+7. Exits with code `0`.
 
 The `.fastedge-debug/.debug-port` file is also deleted on the Node.js `exit` event, which covers Windows environments where `SIGTERM` is not delivered.
 

@@ -26,6 +26,14 @@ export function ConfigButtons() {
           `file://${event.data.configDir}/`,
         ).pathname;
       }
+      // The origin's files too (the debugger otherwise reads them against the workspace).
+      const builtIn = config.origin && 'builtIn' in config.origin ? config.origin.builtIn : null;
+      for (const key of ['files', 'bodyFile'] as const) {
+        const value = builtIn?.[key];
+        if (builtIn && value && event.data.configDir && !value.startsWith('/')) {
+          builtIn[key] = decodeURIComponent(new URL(value, `file://${event.data.configDir}/`).pathname);
+        }
+      }
 
       loadFromConfig(config);
 
@@ -33,7 +41,7 @@ export function ConfigButtons() {
         const configDotenvEnabled = config.dotenv?.enabled ?? false;
         const configDotenvPath = config.dotenv?.path ?? null;
         loadWasm(config.wasm.path, configDotenvEnabled, configDotenvPath)
-          .then(() => alert(`✅ Configuration loaded from ${event.data.fileName}\n🚀 WASM auto-loaded: ${config.wasm.path}`))
+          .then(() => alert(`✅ Configuration loaded from ${event.data.fileName}\n🚀 WASM auto-loaded: ${config.wasm?.path}`))
           .catch((wasmError: unknown) => {
             const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
             alert(`✅ Configuration loaded from ${event.data.fileName}\n⚠️ Failed to auto-load WASM: ${wasmMsg}`);
@@ -83,6 +91,10 @@ export function ConfigButtons() {
         if (config.dotenv?.path && !config.dotenv.path.startsWith('/')) {
           console.warn(`Config contains relative dotenv path "${config.dotenv.path}" — will resolve against server workspace root, not the config file location.`);
         }
+        const builtIn = config.origin && 'builtIn' in config.origin ? config.origin.builtIn : null;
+        if ([builtIn?.files, builtIn?.bodyFile].some((p) => p && !p.startsWith('/'))) {
+          console.warn('Config contains relative origin paths — they resolve against the server workspace root, not the config file location.');
+        }
 
         loadFromConfig(config);
 
@@ -92,7 +104,7 @@ export function ConfigButtons() {
             const configDotenvEnabled = config.dotenv?.enabled ?? false;
             const configDotenvPath = config.dotenv?.path ?? null;
             await loadWasm(config.wasm.path, configDotenvEnabled, configDotenvPath);
-            alert(`✅ Configuration loaded from ${file.name}\n🚀 WASM auto-loaded: ${config.wasm.path}`);
+            alert(`✅ Configuration loaded from ${file.name}\n🚀 WASM auto-loaded: ${config.wasm?.path}`);
           } catch (wasmError) {
             const wasmMsg = wasmError instanceof Error ? wasmError.message : 'Unknown error';
             alert(`✅ Configuration loaded from ${file.name}\n⚠️ Failed to auto-load WASM: ${wasmMsg}`);

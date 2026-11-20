@@ -13,6 +13,8 @@ import {
   runHttpRequest,
   loadConfigFile,
   mockOrigins,
+  createStores,
+  createResource,
   assertRequestHeader,
   assertNoRequestHeader,
   assertResponseHeader,
@@ -40,6 +42,8 @@ import {
 import type {
   TestSuite,
   TestCase,
+  ResourceTestSuite,
+  ResourceTestCase,
   TestResult,
   SuiteResult,
   FlowOptions,
@@ -47,8 +51,15 @@ import type {
   RunnerConfig,
   MockOriginsHandle,
   MockOriginsOptions,
+  TestStores,
+  CreateStoresOptions,
+  Resource,
+  ResourceRequest,
+  ResourceResult,
 } from "@gcoredev/fastedge-test/test";
 ```
+
+The vitest fixtures are exported from a separate sub-path, `@gcoredev/fastedge-test/vitest` (see [Vitest Fixtures](#vitest-fixtures)).
 
 ## Types
 
@@ -78,14 +89,47 @@ type TestSuite =
 
 ### TestCase
 
-A single test case. The `run` function receives a fully loaded `IWasmRunner` instance. Throw an error (or use assertion helpers) to fail the test.
+A single test case. The `run` function receives a fully loaded `IWasmRunner` instance and a `context` object. Throw an error (or use assertion helpers) to fail the test.
 
 ```typescript
 interface TestCase {
   name: string;
-  run: (runner: IWasmRunner) => Promise<void>;
+  run: (runner: IWasmRunner, context: { stores: TestStores | null }) => Promise<void>;
 }
 ```
+
+`context.stores` is this test's own cache and Edge KV (a fresh instance per test, seeded from `fixtures/stores/`), or the instance given in `runnerConfig.stores`. It is `null` when `runnerConfig.stores` is `false`. See [TestStores](#teststores--createstoresoptions).
+
+### ResourceTestSuite & ResourceTestCase
+
+A suite over a resource (several apps on one request, one app per hook). Each test receives a fresh, loaded resource on its own stores.
+
+```typescript
+/** A test case of a ResourceTestSuite: receives a fresh, loaded resource. */
+interface ResourceTestCase {
+  name: string;
+  run: (resource: Resource, context: { stores: TestStores | null }) => Promise<void>;
+}
+
+/**
+ * A suite over a resource (several apps, one per hook): a config file (paths relative to it) or
+ * object. Each test gets a fresh resource on its own stores.
+ */
+interface ResourceTestSuite {
+  resource: string | ResourceConfigInput;
+  /** Default: this test's own stores; false = off; or an instance shared by every test. */
+  stores?: false | TestStores;
+  tests: ResourceTestCase[];
+}
+```
+
+| Field      | Type                            | Required | Description                                                                                          |
+| ---------- | ------------------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `resource` | `string \| ResourceConfigInput` | Yes      | Path to a resource config file (app paths are relative to it), or an equivalent config object        |
+| `stores`   | `false \| TestStores`           | No       | Default: each test gets its own stores. `false` disables stores; an instance is shared by every test |
+| `tests`    | `ResourceTestCase[]`            | Yes      | Test cases to execute; must be non-empty                                                             |
+
+Resource suites are defined with `defineTestSuite` and run with `runTestSuite` or `runAndExit`, the same as runner suites. `Resource`, `ResourceRequest` and `ResourceResult` are exported as types; `Resource` is created with [createResource](#createresource).
 
 ### TestResult & SuiteResult
 
@@ -120,8 +164,13 @@ interface FlowOptions {
   requestHeaders?: Record<string, string>;
   requestBody?: string;
   properties?: Record<string, unknown>;
-  /** Default: true — matches production FastEdge behaviour */
+  /** @deprecated Ignored: the production property rules always apply. Will be removed in the next major version. */
   enforceProductionPropertyRules?: boolean;
+  /**
+   * Where the response comes from instead of `url` (a config's `origin`; loadConfigFile makes
+   * its paths absolute). `url` is then only what the client asked for.
+   */
+  origin?: Origin;
 }
 ```
 
@@ -132,9 +181,10 @@ interface FlowOptions {
 | `requestHeaders`                 | `{}`    | Additional request headers; pseudo-headers here override derived values     |
 | `requestBody`                    | `""`    | Request body string                                                         |
 | `properties`                     | `{}`    | Proxy-wasm properties to inject                                             |
-| `enforceProductionPropertyRules` | `true`  | When true, denies access to properties not available in production FastEdge |
+| `enforceProductionPropertyRules` | `true`  | Deprecated and ignored: the production property rules always apply         |
+| `origin`                         | —       | Response source used instead of `url`; see [TEST_CONFIG.md](TEST_CONFIG.md) |
 
-The upstream response is generated at runtime by a real fetch against `url`, or by the built-in responder when `url === "built-in"`. See the [Origin Mocking](#origin-mocking) section for controlling responses in tests.
+Without `origin`, the upstream response is generated at runtime by a real fetch against `url`, or by the built-in responder when `url === "built-in"`. With `origin` (the `origin` of a config returned by [loadConfigFile](#loadconfigfile)), the response comes from that origin and `url` is only what the client asked for. The `Origin` shape is described in [TEST_CONFIG.md](TEST_CONFIG.md). See the [Origin Mocking](#origin-mocking) section for controlling responses in tests.
 
 ### MockOriginsHandle & MockOriginsOptions
 
@@ -192,6 +242,53 @@ interface MockOriginsHandle {
 | `handle.close()`           | Restore the previous global dispatcher and close the agent; idempotent                                                 |
 | `handle.assertAllCalled()` | Throw if any registered interceptor was never matched by a real request                                                |
 
+### TestStores & CreateStoresOptions
+
+Returned by `createStores()`. An isolated, in-memory storage service (local cache and Edge KV) for tests, seeded from `fixtures/stores/`. Pass it as `runnerConfig.stores` to give runners this instance; runners given the same instance share its data.
+
+```typescript
+type CreateStoresOptions = {
+  /** Where `fixtures/stores/` is looked up (default: the stores root of the cwd); `false` = none. */
+  fixtures?: string | false;
+  /** Default cache bucket for runners and the `cache` helpers (default `local`). */
+  dc?: string;
+};
+
+interface TestStores {
+  /** Service address; runners use it when given this instance as `RunnerConfig.stores`. */
+  readonly url: string;
+  readonly token: string;
+  /** Default cache bucket. */
+  readonly dc: string;
+  /** Read and write the cache directly (string values are UTF-8). */
+  readonly cache: {
+    get(key: string, options?: { dc?: string }): string | null;
+    set(key: string, value: string | Uint8Array, options?: { ttlMs?: number; dc?: string }): void;
+    delete(key: string, options?: { dc?: string }): void;
+  };
+  /** Add data in the fixture formats: named KV stores are replaced, cache keys overwritten. */
+  seed(data: StoresSeed): void;
+  /** Move the service clock (cache expiry) for every runner on these stores. */
+  advanceClock(ms: number): void;
+  /** Back to the fixtures: cache emptied, KV re-seeded. */
+  reset(): void;
+  /** Stop the service; its data is gone. */
+  close(): Promise<void>;
+}
+```
+
+| Member                    | Description                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| `options.fixtures`        | Directory to load `fixtures/stores/` from; `false` starts with empty stores           |
+| `options.dc`              | Default cache bucket; runners with the same `dc` share cache entries                  |
+| `stores.cache`            | Read, write, and delete cache entries directly; string values are UTF-8               |
+| `stores.seed(data)`       | Add data in the fixture formats; named KV stores are replaced, cache keys overwritten |
+| `stores.advanceClock(ms)` | Move the service clock for cache expiry, for every runner on these stores             |
+| `stores.reset()`          | Return to the fixtures: cache emptied, KV re-seeded                                   |
+| `stores.close()`          | Stop the service and drop its data                                                    |
+
+`StoresSeed` is the seed data shape, matching the fixture file formats described in [TEST_CONFIG.md](TEST_CONFIG.md).
+
 ### HttpRequestOptions
 
 Object-based options for `runHttpRequest()`. Used with HTTP WASM apps (as opposed to CDN proxy-wasm filter apps tested with `runFlow`).
@@ -225,34 +322,42 @@ import type { RunnerConfig } from "@gcoredev/fastedge-test/test";
 ```
 
 ```typescript
+type WasmType = "http-wasm" | "proxy-wasm";
+
 interface RunnerConfig {
   dotenv?: {
     enabled?: boolean;
     path?: string;
   };
   enforceProductionPropertyRules?: boolean;
-  runnerType?: "http-wasm" | "proxy-wasm";
+  runnerType?: WasmType;
   httpPort?: number;
+  stores?: boolean | TestStores;
+  dc?: string;
 }
 ```
 
-| Field                            | Type                          | Description                                                               |
-| -------------------------------- | ----------------------------- | ------------------------------------------------------------------------- |
-| `dotenv.enabled`                 | `boolean`                     | Enable dotenv loading                                                     |
-| `dotenv.path`                    | `string`                      | Directory to load dotenv files from; defaults to process CWD when omitted |
-| `enforceProductionPropertyRules` | `boolean`                     | Override production property enforcement for the runner; default `true`   |
-| `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                    |
-| `httpPort`                       | `number`                      | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use) |
+| Field                            | Type                          | Description                                                                                                                                    |
+| -------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotenv.enabled`                 | `boolean`                     | Enable dotenv loading                                                                                                                          |
+| `dotenv.path`                    | `string`                      | Directory to load dotenv files from; defaults to process CWD when omitted                                                                      |
+| `enforceProductionPropertyRules` | `boolean`                     | Deprecated and ignored: the production property rules always apply                                                                             |
+| `runnerType`                     | `"http-wasm" \| "proxy-wasm"` | Override automatic WASM type detection                                                                                                         |
+| `httpPort`                       | `number`                      | Pin the HTTP server to a specific port (HTTP WASM only; throws if in use)                                                                      |
+| `stores`                         | `boolean \| TestStores`       | Local cache and Edge KV. Default `true`. `false` makes CDN apps' cache and KV calls return `InternalFailure`. A `TestStores` instance isolates |
+| `dc`                             | `string`                      | Cache bucket (edge location); runners with the same `dc` share cache entries. Default `"local"`                                                |
+
+Within `runTestSuite`, `runnerConfig.stores` is handled per test: when omitted or `true`, each test gets its own fresh `TestStores`; when a `TestStores` instance, every test uses that instance (the suite does not close it); when `false`, stores are disabled.
 
 ## Functions
 
 ### defineTestSuite
 
 ```typescript
-function defineTestSuite(suite: TestSuite): TestSuite
+function defineTestSuite<T extends TestSuite | ResourceTestSuite>(config: T): T
 ```
 
-Validates and returns a typed `TestSuite` definition. Throws if neither `wasmPath` nor `wasmBuffer` is provided, or if `tests` is empty.
+Validates and returns a typed suite definition. For a `TestSuite`, throws if neither `wasmPath` nor `wasmBuffer` is provided. For both suite kinds, throws if `tests` is empty.
 
 ```typescript
 import {
@@ -280,10 +385,10 @@ const suite = defineTestSuite({
 ### runTestSuite
 
 ```typescript
-function runTestSuite(suite: TestSuite): Promise<SuiteResult>
+function runTestSuite(suite: TestSuite | ResourceTestSuite): Promise<SuiteResult>
 ```
 
-Executes all test cases in the suite sequentially. Each test receives a **fresh runner instance** — tests are fully isolated. A thrown error or failed assertion marks that test as failed; remaining tests still execute.
+Executes all test cases in the suite sequentially. Each test receives a **fresh runner instance** (or a fresh resource, for a `ResourceTestSuite`) and its own stores (cache and Edge KV, seeded from `fixtures/stores/`), so tests are fully isolated. A thrown error or failed assertion marks that test as failed; remaining tests still execute.
 
 ```typescript
 import { defineTestSuite, runTestSuite } from "@gcoredev/fastedge-test/test";
@@ -308,7 +413,7 @@ for (const r of result.results) {
 ### runAndExit
 
 ```typescript
-function runAndExit(suite: TestSuite): Promise<never>
+function runAndExit(suite: TestSuite | ResourceTestSuite): Promise<never>
 ```
 
 Runs the suite, prints a summary to stdout, then calls `process.exit(0)` if all tests pass or `process.exit(1)` if any fail. Intended for standalone Node.js test scripts run in CI.
@@ -345,7 +450,7 @@ Output format:
 function runFlow(runner: IWasmRunner, options: FlowOptions): Promise<FullFlowResult>
 ```
 
-Executes a complete request/response flow through the WASM filter. Object-based wrapper around the runner's low-level `callFullFlow` method — callers do not need to construct pseudo-headers manually. Throws if `url` is not a full URL and is not `"built-in"`.
+Executes a complete request/response flow through the WASM filter. Object-based wrapper around the runner's low-level `callFullFlow` method — callers do not need to construct pseudo-headers manually. Throws if `url` is not a full URL and is not `"built-in"`. When `options.origin` is set, it is passed to the runner as the response source (see [FlowOptions](#flowoptions)).
 
 The returned `FullFlowResult` has this shape:
 
@@ -435,7 +540,7 @@ const body = assertHttpJson(response);
 function loadConfigFile(configPath: string): Promise<TestConfig>
 ```
 
-Reads and validates a `fastedge-config.test.json` file. Returns the parsed `TestConfig` or throws with a descriptive error. A relative `dotenv.path` in the file is resolved against the config file's directory. See [TEST_CONFIG.md](TEST_CONFIG.md) for the full config schema.
+Reads and validates a `fastedge-config.test.json` file. Returns the parsed `TestConfig` or throws with a descriptive error. A relative `dotenv.path` in the file is resolved against the config file's directory, as are the file paths of a proxy-wasm config's `origin`. See [TEST_CONFIG.md](TEST_CONFIG.md) for the full config schema.
 
 ```typescript
 import { loadConfigFile } from "@gcoredev/fastedge-test/test";
@@ -460,6 +565,117 @@ const mocks = mockOrigins();
 mocks.origin("https://api.example.com").intercept({ path: "/users" }).reply(200, "[]");
 // ... run your test ...
 await mocks.close();
+```
+
+### createStores
+
+```typescript
+function createStores(options?: CreateStoresOptions): Promise<TestStores>
+```
+
+Starts an isolated, in-memory storage service for tests, seeded from `fixtures/stores/`. Pass the returned instance as `runnerConfig.stores` so that runners share its data, and call `close()` when finished. `runTestSuite` creates one per test automatically; use `createStores` directly when composing runners outside a suite or when several runners must share state.
+
+```typescript
+import {
+  createStores,
+  defineTestSuite,
+  runTestSuite,
+} from "@gcoredev/fastedge-test/test";
+
+const stores = await createStores({ dc: "test-dc" });
+stores.cache.set("greeting", "hello", { ttlMs: 60_000 });
+
+const suite = defineTestSuite({
+  wasmPath: "./build/cdn-filter.wasm",
+  runnerConfig: { stores },
+  tests: [
+    {
+      name: "cache entry is visible to the app",
+      async run(_runner, context) {
+        if (context.stores?.cache.get("greeting") !== "hello") {
+          throw new Error("expected seeded cache entry");
+        }
+      },
+    },
+  ],
+});
+
+try {
+  const result = await runTestSuite(suite);
+  console.log(`${result.passed}/${result.total} passed`);
+} finally {
+  await stores.close();
+}
+```
+
+### createResource
+
+```typescript
+function createResource(
+  resource: string | ResourceConfigInput,
+  options?: { stores?: false | TestStores },
+): Promise<Resource>
+```
+
+Loads a resource: several apps handling one request, one app per hook. `resource` is a path to a resource config file (app paths are resolved relative to it) or an equivalent config object. The returned `Resource` is released with `cleanup()`. `runTestSuite` creates and cleans up a resource for every test of a `ResourceTestSuite`; call `createResource` directly when composing a resource outside a suite. Request and result shapes are exported as the `ResourceRequest` and `ResourceResult` types.
+
+```typescript
+import {
+  defineTestSuite,
+  runAndExit,
+} from "@gcoredev/fastedge-test/test";
+
+const suite = defineTestSuite({
+  resource: "./fastedge-resource.json",
+  tests: [
+    {
+      name: "resource loads on its own stores",
+      async run(_resource, context) {
+        if (context.stores === null) {
+          throw new Error("expected per-test stores");
+        }
+      },
+    },
+  ],
+});
+
+await runAndExit(suite);
+```
+
+## Vitest Fixtures
+
+The `@gcoredev/fastedge-test/vitest` sub-path exports a vitest `test` function extended with three fixtures: `stores`, `runner` and `resource`. Use it when writing tests with vitest instead of `defineTestSuite`. `vitest` must be installed in the consuming project.
+
+```typescript
+import { test, createStores } from "@gcoredev/fastedge-test/vitest";
+import type { FastEdgeFixtures, TestStores } from "@gcoredev/fastedge-test/vitest";
+
+type FastEdgeFixtures = {
+  stores: TestStores;
+  runner: (wasm: string | Buffer, config?: RunnerConfig) => Promise<IWasmRunner>;
+  resource: (config: string | ResourceConfigInput) => Promise<Resource>;
+};
+```
+
+| Fixture    | Type                                                                      | Description                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `stores`   | `TestStores`                                                              | This test's own in-memory cache and Edge KV, seeded from `fixtures/stores/`; closed when the test ends                              |
+| `runner`   | `(wasm: string \| Buffer, config?: RunnerConfig) => Promise<IWasmRunner>` | Loads a runner from a `.wasm` path or buffer on this test's `stores` (unless `config.stores` is set); cleaned up when the test ends |
+| `resource` | `(config: string \| ResourceConfigInput) => Promise<Resource>`            | Loads a resource (several apps, one per hook) on this test's `stores`; cleaned up when the test ends                                |
+
+CDN and HTTP runners and resources created within one test share that test's stores. To share stores across several tests on purpose (an ordered journey), call `createStores()` in `beforeAll`, pass the instance as `RunnerConfig.stores`, and close it in `afterAll`.
+
+```typescript
+import { expect } from "vitest";
+import { test } from "@gcoredev/fastedge-test/vitest";
+import { runFlow, assertFinalStatus } from "@gcoredev/fastedge-test/test";
+
+test("counts requests", async ({ runner, stores }) => {
+  const app = await runner("./build/cdn-filter.wasm");
+  const result = await runFlow(app, { url: "built-in" });
+  assertFinalStatus(result, 200);
+  expect(stores.cache.get("hits")).toBe("1");
+});
 ```
 
 ## Assertion Helpers

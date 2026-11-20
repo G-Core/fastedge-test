@@ -22,8 +22,7 @@
           },
           "required": [
             "path"
-          ],
-          "additionalProperties": false
+          ]
         },
         "properties": {
           "default": {},
@@ -40,6 +39,103 @@
               "type": "boolean"
             },
             "path": {
+              "type": "string"
+            }
+          }
+        },
+        "stores": {
+          "type": "boolean"
+        },
+        "dc": {
+          "type": "string",
+          "minLength": 1
+        },
+        "client": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "string",
+              "enum": [
+                "de",
+                "nl",
+                "us"
+              ]
+            },
+            "ip": {
+              "type": "string"
+            },
+            "asn": {
+              "type": "string"
+            },
+            "country": {
+              "type": "string"
+            },
+            "countryName": {
+              "type": "string"
+            },
+            "city": {
+              "type": "string"
+            },
+            "region": {
+              "type": "string"
+            },
+            "continent": {
+              "type": "string"
+            },
+            "lat": {
+              "type": "string"
+            },
+            "long": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "edge": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "string",
+              "enum": [
+                "de",
+                "nl",
+                "us"
+              ]
+            },
+            "dc": {
+              "type": "string"
+            },
+            "region": {
+              "type": "string"
+            },
+            "country": {
+              "type": "string"
+            },
+            "city": {
+              "type": "string"
+            },
+            "hostname": {
+              "type": "string"
+            },
+            "popLat": {
+              "type": "string"
+            },
+            "popLong": {
+              "type": "string"
+            },
+            "popReg": {
+              "type": "string"
+            },
+            "popCity": {
+              "type": "string"
+            },
+            "popContinent": {
+              "type": "string"
+            },
+            "popCountryCode": {
+              "type": "string"
+            },
+            "popCountryName": {
               "type": "string"
             }
           },
@@ -80,20 +176,14 @@
             }
           },
           "required": [
-            "method",
-            "path",
-            "headers",
-            "body"
-          ],
-          "additionalProperties": false
+            "path"
+          ]
         }
       },
       "required": [
-        "properties",
         "appType",
         "request"
-      ],
-      "additionalProperties": false
+      ]
     },
     {
       "type": "object",
@@ -116,8 +206,7 @@
           },
           "required": [
             "path"
-          ],
-          "additionalProperties": false
+          ]
         },
         "properties": {
           "default": {},
@@ -134,6 +223,103 @@
               "type": "boolean"
             },
             "path": {
+              "type": "string"
+            }
+          }
+        },
+        "stores": {
+          "type": "boolean"
+        },
+        "dc": {
+          "type": "string",
+          "minLength": 1
+        },
+        "client": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "string",
+              "enum": [
+                "de",
+                "nl",
+                "us"
+              ]
+            },
+            "ip": {
+              "type": "string"
+            },
+            "asn": {
+              "type": "string"
+            },
+            "country": {
+              "type": "string"
+            },
+            "countryName": {
+              "type": "string"
+            },
+            "city": {
+              "type": "string"
+            },
+            "region": {
+              "type": "string"
+            },
+            "continent": {
+              "type": "string"
+            },
+            "lat": {
+              "type": "string"
+            },
+            "long": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "edge": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "string",
+              "enum": [
+                "de",
+                "nl",
+                "us"
+              ]
+            },
+            "dc": {
+              "type": "string"
+            },
+            "region": {
+              "type": "string"
+            },
+            "country": {
+              "type": "string"
+            },
+            "city": {
+              "type": "string"
+            },
+            "hostname": {
+              "type": "string"
+            },
+            "popLat": {
+              "type": "string"
+            },
+            "popLong": {
+              "type": "string"
+            },
+            "popReg": {
+              "type": "string"
+            },
+            "popCity": {
+              "type": "string"
+            },
+            "popContinent": {
+              "type": "string"
+            },
+            "popCountryCode": {
+              "type": "string"
+            },
+            "popCountryName": {
               "type": "string"
             }
           },
@@ -170,20 +356,99 @@
             }
           },
           "required": [
-            "method",
-            "url",
-            "headers",
-            "body"
-          ],
-          "additionalProperties": false
+            "url"
+          ]
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "builtIn": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "integer",
+                      "minimum": 100,
+                      "maximum": 599
+                    },
+                    "headers": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+                      },
+                      "additionalProperties": {
+                        "type": "string",
+                        "pattern": "^[^\\r\\n\\0]*$"
+                      }
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "bodyFile": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "files": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false,
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "body",
+                          "bodyFile"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "body",
+                          "files"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "bodyFile",
+                          "files"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "files",
+                          "status"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "builtIn"
+              ],
+              "additionalProperties": false
+            }
+          ]
         }
       },
       "required": [
-        "properties",
-        "appType",
         "request"
-      ],
-      "additionalProperties": false
+      ]
     }
   ]
 }

@@ -9,12 +9,34 @@ import { ConfigButtons } from "./components/common/ConfigButtons";
 import { DragDropZone } from "./components/common/DragDropZone";
 import { HttpWasmView } from "./views/HttpWasmView";
 import { ProxyWasmView } from "./views/ProxyWasmView";
-import { getEnvironment, type EnvironmentInfo } from "./api";
+import { StorageExplorerView } from "./views/StorageExplorerView";
+import { ResourceView } from "./views/ResourceView";
+import { Tabs } from "./components/common/Tabs";
+import { Toggle } from "./components/common/Toggle";
+import { STORES_CHANGED } from "./components/common/StoresPanel/StoresPanel";
+import { AllowedFolders } from "./components/common/AllowedFolders";
+import { getEnvironment, type AllowedFolder, type EnvironmentInfo, type ResourceLoaded, type ResourceResult } from "./api";
 import "./App.css";
 
 function App() {
   // Environment detection state
   const [_environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
+  // Page: the Debugger or the Storage Explorer. With multi-app on, the Debugger page shows the CDN
+  // resource editor instead of the single-app debugger (both stay mounted, one hidden).
+  type Page = "debugger" | "storage";
+  const [page, setPage] = useState<Page>("debugger");
+  const [multiApp, setMultiApp] = useState(false);
+  // The loaded resource (several apps) and its last request; a resource replaces the loaded app.
+  const [resourceLoaded, setResourceLoaded] = useState<ResourceLoaded | null>(null);
+  const [resourceResult, setResourceResult] = useState<ResourceResult | null>(null);
+  // The last resource file saved through the API (by this page or anyone else).
+  const [resourceSaved, setResourceSaved] = useState<{ configPath: string; version: string } | null>(null);
+  const [resourceFailed, setResourceFailed] = useState<{ configPath: string; error: string } | null>(null);
+  // Allowed folders outside the workspace approved this session: shown so such reads are visible.
+  const [allowedFolders, setAllowedFolders] = useState<AllowedFolder[]>([]);
+  const setFolderState = (folder: string, state: AllowedFolder["state"]) =>
+    setAllowedFolders((list) => list.map((f) => (f.folder === folder ? { folder, state } : f)));
+  const [awaitingApproval, setAwaitingApproval] = useState<{ folder: string; askedIn: "vscode" | "terminal" }[]>([]);
 
   // Get state and actions from stores
   const {
@@ -27,6 +49,7 @@ function App() {
     loadWasm,
     reloadWasm,
     setWasmLoaded,
+    clearWasm,
     loadingMode,
     loadTime,
     fileSize,
@@ -38,7 +61,6 @@ function App() {
     setHookResults,
     setFinalResponse,
     hookResults,
-    properties,
     mergeProperties,
     setCalculatedProperties,
 
@@ -49,6 +71,7 @@ function App() {
 
     // Config state
     dotenv,
+    edge,
     loadFromConfig,
 
     // UI state
@@ -56,6 +79,24 @@ function App() {
     setWsStatus,
     setWorkspaceRoot,
   } = useAppStore();
+
+  // fastedge-run reads the KV store list when it starts: after the explorer creates or deletes a
+  // store, a loaded HTTP app reloads on the way back to the debugger.
+  const storeListChanged = useRef(false);
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      if ((e as CustomEvent<{ storeList?: boolean }>).detail?.storeList) storeListChanged.current = true;
+    };
+    window.addEventListener(STORES_CHANGED, onChange);
+    return () => window.removeEventListener(STORES_CHANGED, onChange);
+  }, []);
+  const showPage = (next: Page) => {
+    if (next === "debugger" && storeListChanged.current && wasmType === "http-wasm" && wasmPath && !loading) {
+      storeListChanged.current = false;
+      void reloadWasm(dotenv.enabled);
+    }
+    setPage(next);
+  };
 
   // WebSocket connection for real-time updates
   const { status } = useWebSocket({
@@ -79,6 +120,7 @@ function App() {
         const envInfo = await getEnvironment();
         setEnvironment(envInfo);
         setWorkspaceRoot(envInfo.workspaceRoot ?? null);
+        setAllowedFolders(envInfo.allowedFolders ?? []);
         console.log(`[App] Detected environment: ${envInfo.environment}`);
       } catch (error) {
         console.error("[App] Failed to initialize environment:", error);
@@ -110,6 +152,24 @@ function App() {
     }
   }, [dotenv.enabled, wasmFile, wasmPath, reloadWasm]);
 
+  // The edge's dc is the cache bucket, fixed when the app loads: reload when it changes (the
+  // dc field applies on blur / Enter). Everything else in the context goes with each request.
+  const edgeKey = edge ? `${edge.dc ?? ""}|${edge.preset ?? ""}` : "";
+  const loadedEdgeKey = useRef(edgeKey);
+  const startedEdgeKey = useRef(edgeKey);
+  useEffect(() => {
+    // A load reads the edge when it starts; one changed during the load still needs a reload.
+    if (loading) startedEdgeKey.current = edgeKey;
+    else loadedEdgeKey.current = startedEdgeKey.current;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+  useEffect(() => {
+    // A load in progress (e.g. a config load, which sets the edge first) uses the new edge itself.
+    if (loading || edgeKey === loadedEdgeKey.current || !(wasmFile || wasmPath)) return;
+    loadedEdgeKey.current = edgeKey; // one reload per change
+    void reloadWasm(dotenv.enabled);
+  }, [edgeKey, loading, wasmFile, wasmPath, dotenv.enabled, reloadWasm]);
+
   /**
    * Handle WebSocket events from server
    * This keeps UI in sync with server state regardless of source (UI, AI agent, API)
@@ -122,6 +182,10 @@ function App() {
         console.log(
           `WASM loaded: ${event.data.filename} (${event.data.size} bytes)`,
         );
+        // An app replaces a loaded resource.
+        setResourceLoaded(null);
+        setResourceResult(null);
+        setMultiApp(false);
         // Store runner port so ResponsePanel can build the live preview URL
         setHttpRunnerPort(event.data.runnerPort ?? null);
         // Sync store when loaded externally (e.g. VSCode extension) so the
@@ -216,6 +280,41 @@ function App() {
         loadWasm(event.data.path, dotenv.enabled);
         break;
 
+      case "resource_loaded":
+        // A resource replaces the loaded app.
+        clearWasm();
+        setResourceLoaded(event.data);
+        setMultiApp(true);
+        setResourceResult(null);
+        break;
+
+      case "allowed_folder_approved":
+        setFolderState(event.data.folder, "approved");
+        break;
+
+      case "allowed_folder_approval_pending": {
+        const { folder, askedIn, waiting } = event.data;
+        setAwaitingApproval((list) => [...list.filter((a) => a.folder !== folder), ...(waiting ? [{ folder, askedIn }] : [])]);
+        break;
+      }
+
+      case "resource_load_failed":
+        // The server unloaded what was loaded before trying: show the file and its error.
+        clearWasm();
+        setResourceLoaded(null);
+        setResourceResult(null);
+        setMultiApp(true);
+        setResourceFailed(event.data);
+        break;
+
+      case "resource_saved":
+        setResourceSaved(event.data);
+        break;
+
+      case "resource_request_completed":
+        setResourceResult(event.data.result);
+        break;
+
       case "connection_status":
         // Connection status update - handled by useWebSocket
         break;
@@ -290,10 +389,39 @@ function App() {
           </h1>
           <ConnectionStatus status={wsStatus} />
         </header>
+        <div className="page-tabs">
+          <Tabs
+            tabs={[
+              { id: "debugger", label: "Debugger" },
+              { id: "storage", label: "Storage Explorer" },
+            ]}
+            active={page}
+            onChange={showPage}
+          />
+          {page === "debugger" &&
+            (wasmType === "http-wasm" && wasmPath && !multiApp ? (
+              <span className="multi-app-note">Multi-app (CDN resource) runs several CDN apps on one resource: unload this HTTP app to use it.</span>
+            ) : (
+              <Toggle label="Multi-app (CDN resource)" checked={multiApp} onChange={setMultiApp} compact />
+            ))}
+        </div>
 
+        {awaitingApproval.map(({ folder, askedIn }) => (
+          <div key={folder} className="notice">
+            Waiting for you to approve reading {folder} (outside the workspace): answer{" "}
+            {askedIn === "vscode" ? "the FastEdge dialog in VS Code" : "the prompt in the terminal that started the debugger"}.
+          </div>
+        ))}
+        <AllowedFolders folders={allowedFolders} onState={setFolderState} />
         {wsStatus.error?.startsWith("Missing session token") && (
           <div className="error">{wsStatus.error}</div>
         )}
+        {page === "storage" && <StorageExplorerView />}
+        <div hidden={page !== "debugger" || !multiApp}>
+          <ResourceView loaded={resourceLoaded} result={resourceResult} onResult={setResourceResult} appLoaded={!!wasmPath} saved={resourceSaved} failed={resourceFailed} />
+        </div>
+
+        <div hidden={page !== "debugger" || multiApp}>
         {error && <div className="error">{error}</div>}
 
         <WasmLoader
@@ -318,11 +446,14 @@ function App() {
         {!loading && !wasmPath && (
           <div className="empty-state">
             <p>👆 Load a WASM binary to get started</p>
+            {resourceLoaded && <p>A multi-app resource is loaded: loading an app here unloads it.</p>}
           </div>
         )}
 
-        {!loading && wasmPath && wasmType === 'http-wasm' && <HttpWasmView />}
-        {!loading && wasmPath && wasmType === 'proxy-wasm' && <ProxyWasmView />}
+        {/* A reload (dotenv, edge dc) keeps the view and its open panels on screen. */}
+        {wasmPath && wasmType === 'http-wasm' && <HttpWasmView />}
+        {wasmPath && wasmType === 'proxy-wasm' && <ProxyWasmView />}
+        </div>
       </div>
     </DragDropZone>
   );

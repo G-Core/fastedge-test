@@ -1,0 +1,13 @@
+[package]
+name = "serve-assets"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wstd = { workspace = true }
+anyhow = { workspace = true }
+include_dir = "0.7"
+mime_guess = "2"

@@ -1,19 +1,23 @@
 import { readFile } from "fs/promises";
+import { resolveOrigin } from "../runner/origin.js";
 import path from "path";
 import { createRunner, createRunnerFromBuffer } from "../runner/standalone.js";
+import { createStores, type TestStores } from "../stores/testStores.js";
+import { edgeDc } from "../runner/requestContext.js";
 import { BUILTIN_SHORTHAND, BUILTIN_URL } from "../runner/ProxyWasmRunner.js";
 import { TestConfigSchema } from "../schemas/config.js";
 import type { TestConfig } from "../schemas/config.js";
 import type { IWasmRunner, HttpResponse } from "../runner/IWasmRunner.js";
 import type { FullFlowResult } from "../runner/types.js";
-import type { TestSuite, SuiteResult, TestResult, FlowOptions, HttpRequestOptions } from "./types.js";
+import type { TestSuite, ResourceTestSuite, SuiteResult, TestResult, FlowOptions, HttpRequestOptions } from "./types.js";
+import { createResource } from "../runner/resource.js";
 
 /**
  * Validate and return a typed TestSuite definition.
  * Throws if neither wasmPath nor wasmBuffer is provided, or if tests is empty.
  */
-export function defineTestSuite(config: TestSuite): TestSuite {
-  if (!config.wasmPath && !config.wasmBuffer) {
+export function defineTestSuite<T extends TestSuite | ResourceTestSuite>(config: T): T {
+  if (!("resource" in config) && !config.wasmPath && !config.wasmBuffer) {
     throw new Error("TestSuite requires either wasmPath or wasmBuffer");
   }
   if (!config.tests || config.tests.length === 0) {
@@ -48,6 +52,10 @@ export async function loadConfigFile(configPath: string): Promise<TestConfig> {
     const configDir = path.dirname(path.resolve(configPath));
     result.data.dotenv.path = path.resolve(configDir, result.data.dotenv.path);
   }
+  // And the origin's files
+  if (result.data.appType === "proxy-wasm" && result.data.origin) {
+    result.data.origin = resolveOrigin(result.data.origin, path.dirname(path.resolve(configPath)));
+  }
 
   return result.data;
 }
@@ -55,22 +63,41 @@ export async function loadConfigFile(configPath: string): Promise<TestConfig> {
 /**
  * Execute all test cases in a TestSuite.
  *
- * Each test gets a **fresh runner instance** so tests are fully isolated.
+ * Each test gets a **fresh runner instance** and its own stores (cache and Edge KV, seeded
+ * from `fixtures/stores/`), so tests are fully isolated.
  * Tests run sequentially. A thrown error (or failed assertion) marks the test as failed.
  */
-export async function runTestSuite(suite: TestSuite): Promise<SuiteResult> {
+export async function runTestSuite(suite: TestSuite | ResourceTestSuite): Promise<SuiteResult> {
   const suiteStart = Date.now();
   const results: TestResult[] = [];
 
   for (const test of suite.tests) {
     const testStart = Date.now();
+    // Each test gets its own isolated stores, unless the suite gives an instance or turns them off.
+    const configured = "resource" in suite ? suite.stores : suite.runnerConfig?.stores;
+    let own: TestStores | null = null;
     try {
-      const runner = suite.wasmBuffer
-        ? await createRunnerFromBuffer(suite.wasmBuffer, suite.runnerConfig)
-        : await createRunner(suite.wasmPath!, suite.runnerConfig);
+      if (configured !== false && typeof configured !== "object") {
+        // The app's (or the resource's) bucket; inside the try, so a bad resource file fails the test.
+        const context = "resource" in suite
+          ? ((typeof suite.resource === "string" ? JSON.parse(await readFile(suite.resource, "utf8")) : suite.resource) as { dc?: string; edge?: Parameters<typeof edgeDc>[0] })
+          : suite.runnerConfig;
+        own = await createStores({ dc: context?.dc ?? edgeDc(context?.edge) });
+      }
+      const stores = own ?? (typeof configured === "object" ? configured : null);
+      let runner: { cleanup(): Promise<void> };
+      if ("resource" in suite) {
+        runner = await createResource(suite.resource, { stores: stores ?? false });
+      } else {
+        const runnerConfig = { ...suite.runnerConfig, stores: stores ?? false };
+        runner = suite.wasmBuffer
+          ? await createRunnerFromBuffer(suite.wasmBuffer, runnerConfig)
+          : await createRunner(suite.wasmPath!, runnerConfig);
+      }
 
       try {
-        await test.run(runner);
+        // The suite's own test type matches what was created above.
+        await test.run(runner as never, { stores });
         results.push({
           name: test.name,
           passed: true,
@@ -86,6 +113,8 @@ export async function runTestSuite(suite: TestSuite): Promise<SuiteResult> {
         error: err instanceof Error ? err.message : String(err),
         durationMs: Date.now() - testStart,
       });
+    } finally {
+      await own?.close();
     }
   }
 
@@ -118,6 +147,7 @@ export async function runFlow(
     requestBody = "",
     properties = {},
     enforceProductionPropertyRules = true,
+    origin,
   } = options;
 
   // Normalise "built-in" shorthand so pseudo-header derivation works.
@@ -139,14 +169,9 @@ export async function runFlow(
 
   const requestHeaders = { ...pseudoDefaults, ...(options.requestHeaders ?? {}) };
 
-  return runner.callFullFlow(
-    url,
-    method,
-    requestHeaders,
-    requestBody,
-    properties,
-    enforceProductionPropertyRules,
-  );
+  const args = [url, method, requestHeaders, requestBody, properties, enforceProductionPropertyRules] as const;
+  // The origin only when given: the six-argument call stays as it was.
+  return origin ? runner.callFullFlow(...args, undefined, origin) : runner.callFullFlow(...args);
 }
 
 /**
@@ -193,7 +218,7 @@ export async function runHttpRequest(
  * Exits with code 0 if all tests pass, code 1 if any fail.
  * Intended for standalone Node.js test scripts (CI pipelines, Makefile targets).
  */
-export async function runAndExit(suite: TestSuite): Promise<never> {
+export async function runAndExit(suite: TestSuite | ResourceTestSuite): Promise<never> {
   const results = await runTestSuite(suite);
 
   console.log("");

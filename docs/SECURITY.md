@@ -14,6 +14,9 @@ is an attacker who can reach the server over the network — via the LAN, a
 browser page the developer visits (DNS-rebinding), or another local process —
 and issue requests that execute WASM, read secrets, or write files.
 
+A second threat is the app itself: a repository you cloned can ship a hostile
+`.wasm`, config files or fixtures. See [Running apps you didn't write](#running-apps-you-didnt-write).
+
 ---
 
 ## Mitigations in place
@@ -49,13 +52,56 @@ band:
 loopback origins, `vscode-webview://`, or `FASTEDGE_EXPECTED_HOST`. The token
 check runs first; origin is a secondary guard.
 
-### Path containment for WASM and dotenv
+### Path containment for config paths
 
-All file paths accepted by `/api/load` and `/api/dotenv` are confined to
-`WORKSPACE_PATH` (set by the CLI and the VSCode extension) using both lexical
-and `realpathSync`-based checks. Symlinks inside the workspace that point
-outside are rejected. Absolute paths are allowed if they resolve within the
-workspace root.
+Every file path the server reads from a request or a config file is confined
+to the workspace root (`WORKSPACE_PATH`: the CLI's resolved root, or the folder
+open in VS Code) using both
+lexical and `realpathSync`-based checks: the WASM path, dotenv files, resource
+files, the built-in origin's `files` folder and `bodyFile`, and the default config
+file (`.fastedge-debug/fastedge-config.test.json`, read and saved). Symlinks inside
+the workspace that point outside are rejected, including dangling ones (writing
+one would create its target). Absolute paths are allowed if
+they resolve within the workspace root. The built-in origin also refuses
+dotfiles and `..` segments in request paths.
+
+Store fixtures (`fixtures/stores/`) are read only when they resolve inside the
+stores root, both when the stores load and in the Storage Explorer's diff. The
+Storage Explorer writes only the fixture files listed in its diff, after you
+approve them, and refuses to write through a symlink.
+
+### Allowed folders
+
+Folders outside the workspace you let the debugger **read**, for example a folder of
+prebuilt wasm files or a website used as an origin. Only you configure them:
+`fastedge-debug --allow <dir>`, or the FastEdge for VS Code user setting, which
+the extension passes as `FASTEDGE_ALLOWED_FOLDERS`. Workspace settings, config
+files, dotenv files and fixtures never add a folder. A folder passed by an npm
+script's `--allow` is yours only if you wrote the script.
+
+- **Approved per session, by you, outside the API.** The first time a load reads
+  from an allowed folder, you are asked: in VS Code by a dialog the extension
+  shows (it answers the server over its private IPC channel), on the command
+  line by a prompt in the terminal. With neither, the read is refused. No HTTP
+  or WebSocket call can approve a folder, so the page and agents can only cause
+  the question to be asked. While the question waits, the page says where to
+  answer it. An answer lasts until the server stops; a refusal is not asked
+  again; no answer within 2 minutes fails the read, and the next read asks
+  again.
+- **Read-only.** Resource files, configs and store fixtures are only written
+  inside the workspace.
+- **The same checks as the workspace.** A path must be in the allowed folder
+  both as written and through symlinks, so a link from the workspace into an
+  allowed folder, or from an allowed folder out of it, is refused.
+- **Visible.** The page lists the allowed folders and whether each is approved
+  this session. Its **Ask to read it** button asks for approval up front (it
+  only asks, like a load does); an approved folder's files are then offered in
+  the path fields, as absolute paths.
+
+The risk that remains: an approved folder is readable by every config loaded in
+that session, and a loaded app can send what it reads over the network. A
+malicious repository can use a folder you approved for something else in the
+same session. Keep secrets out of allowed folders.
 
 ### Save-as write capability
 
@@ -81,6 +127,10 @@ the request is sent:
 - All IP addresses a hostname resolves to are checked; a single blocked
   address is enough to block the request.
 
+The policy covers CDN (proxy-wasm) apps, whose requests the debugger makes.
+An HTTP app's outbound requests are made by `fastedge-run` itself and are
+**not** checked.
+
 Hostnames are resolved via DNS before the check, and all returned addresses
 are checked. **DNS rebinding between the policy check and the actual
 connect is not mitigated** — an attacker who controls DNS TTL could
@@ -96,27 +146,68 @@ parameter is not possible.
 
 ## Accepted limitations
 
-### Synchronous WASM execution can block the event loop
+### Path checks are not atomic with the read or write
 
-Loaded WASM runs synchronously on Node's main event loop. A WASM module
-containing an infinite loop will hang the debugger server until the process
-is restarted.
+The server checks a path (containment, symlinks) and then opens it. A process
+that can change the workspace between the two could swap a checked folder or
+file for a symlink. Loaded apps have no file access, so only a program already
+running as you could do this, and such a program can read and write your files
+directly. The stores root (`FASTEDGE_STORES_ROOT`, else the nearest git root
+from the app root) is trusted as configured.
 
-**Why this is not mitigated further:** Node.js provides no mechanism to
-interrupt a synchronous loop from the same thread. The correct fix is moving
-WASM execution to a `worker_threads` Worker with a hard deadline, but the
-added complexity is not warranted for a developer tool given that:
+The stores database holds cache and Edge KV values unencrypted. On Linux and
+macOS its folder (`.fastedge-debug/stores/`) is made readable by you only. On
+Windows it keeps the permissions it inherits from its parent folder.
 
-1. The remote attack vector is closed (loopback bind + session token means
-   only the authenticated local developer can load WASM).
-2. The only realistic path to a hang is the developer loading their own
-   buggy or malicious WASM.
-3. Recovery is a process restart (`fastedge-debug` re-launches in seconds).
+### No time limit on a CDN hook
 
-If your threat model requires protection against this (e.g. running the
-debugger in a shared environment where untrusted WASM can be submitted),
-move WASM execution to a dedicated `worker_threads` Worker and call
-`worker.terminate()` on deadline.
+Each CDN app runs in its own worker thread, so the server stays responsive
+while a hook runs. There is no time limit on a hook, though: an app with an
+infinite loop hangs that request. Loading another app (or restarting the
+server) terminates the worker. HTTP apps are limited by `fastedge-run`, which
+stops an app after 10 minutes by default.
+
+On the edge, every app has an execution-time budget set by its plan.
+
+### Network access for apps
+
+Loopback and LAN addresses are reachable from apps on purpose (see the egress
+policy above), so an app can send requests to services on your machine or
+network.
+
+---
+
+## Running apps you didn't write
+
+Running an app in the debugger is safer than running its repository's code,
+but it is not isolated from your network.
+
+**Code that runs natively, with your user's rights** (the same for any
+repository you clone):
+
+- Building: `cargo build` runs `build.rs`, procedural macros and settings from
+  `.cargo/config.toml`; `npm install` runs package scripts.
+- Tests: a test suite such as `fastedge-test/app.test.mjs` is plain Node.js.
+- The FastEdge VSCode extension builds the app when you start debugging, but
+  only in a folder VSCode trusts: it is disabled in Restricted Mode.
+
+**What a loaded app can reach:**
+
+| | CDN (proxy-wasm) app | HTTP app |
+|---|---|---|
+| Runs in | Node's WebAssembly sandbox, in a worker thread | `fastedge-run` (wasmtime), a separate process |
+| Your files | None: WASI is given no directories; the debugger reads the workspace, and [allowed folders](#allowed-folders) you approve | None; the same for the debugger |
+| Environment | Its own dotenv values only | Its own dotenv values only |
+| Network | Internet, loopback and LAN; cloud-metadata and link-local ranges blocked | Not filtered |
+| Data it sees | The request, its stores, the origin's response | The request, its stores |
+
+So a hostile app cannot read your files or start programs. It can send what it
+sees to the internet, and it can call unauthenticated services on your machine
+or LAN (for example a Docker daemon exposed over TCP, or a development
+database).
+
+**Advice:** build, test and debug only repositories you trust. To examine one
+you don't, use a container or a VM.
 
 ---
 
@@ -128,3 +219,5 @@ move WASM execution to a dedicated `worker_threads` Worker and call
 | `FASTEDGE_DEBUG_TOKEN` | Inject a pre-generated session token (VSCode extension sets this) |
 | `FASTEDGE_EXPECTED_HOST` | Add an extra allowed `Host` / WebSocket origin (Codespaces forwarded hostname) |
 | `WORKSPACE_PATH` | Workspace root for path containment (set by CLI and VSCode extension) |
+| `FASTEDGE_APP_ROOT` | App root inside the workspace (set by the VSCode extension); does not widen containment |
+| `FASTEDGE_ALLOWED_FOLDERS` | JSON array of allowed folders (set by `--allow` and the VSCode extension); each read from one needs your approval |

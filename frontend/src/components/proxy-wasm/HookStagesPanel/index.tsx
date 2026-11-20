@@ -1,1 +1,1 @@
-export { HookStagesPanel } from "./HookStagesPanel";
+export { HookStagesPanel, HookDetail } from "./HookStagesPanel";

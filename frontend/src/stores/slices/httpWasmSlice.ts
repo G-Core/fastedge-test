@@ -173,7 +173,8 @@ export const createHttpWasmSlice: StateCreator<
         state.httpUrl,
         state.httpMethod,
         state.httpRequestHeaders,
-        state.httpRequestBody
+        state.httpRequestBody,
+        { client: state.client, edge: state.edge },
       );
 
       // Update response and logs
@@ -186,6 +187,7 @@ export const createHttpWasmSlice: StateCreator<
             body: result.body,
             contentType: result.contentType,
             isBase64: result.isBase64,
+            storeCalls: result.storeCalls,
           };
           state.httpLogs = result.logs;
           state.httpIsExecuting = false;

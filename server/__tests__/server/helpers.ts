@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -10,6 +10,8 @@ export interface TestServer {
   base: string;
   token: string;
   workspacePath: string;
+  /** FASTEDGE_APP_ROOT when started with an app folder, else the workspace path. */
+  appPath: string;
   close: () => Promise<void>;
 }
 
@@ -22,9 +24,18 @@ export interface TestServer {
  * Parses stderr to discover the actual port (the server auto-increments from
  * 5179 if needed, so we can't assume a fixed port).
  */
-export async function startTestServer(): Promise<TestServer> {
+export async function startTestServer(
+  options: {
+    appFolder?: string;
+    env?: Record<string, string>;
+    /** Fork with an IPC channel, as FastEdge for VS Code does; called with each message the server sends. */
+    onMessage?: (message: unknown, reply: (answer: unknown) => void) => void;
+  } = {},
+): Promise<TestServer> {
   const token = randomBytes(16).toString("hex");
   const workspacePath = mkdtempSync(join(tmpdir(), "fastedge-test-"));
+  const appPath = options.appFolder ? join(workspacePath, options.appFolder) : workspacePath;
+  mkdirSync(appPath, { recursive: true });
   const serverBundle = resolve(process.cwd(), "dist/server.js");
 
   const proc = spawn("node", [serverBundle], {
@@ -33,9 +44,15 @@ export async function startTestServer(): Promise<TestServer> {
       FASTEDGE_DEBUG_TOKEN: token,
       FASTEDGE_BIND_HOST: "127.0.0.1",
       WORKSPACE_PATH: workspacePath,
+      ...(options.appFolder ? { FASTEDGE_APP_ROOT: appPath } : {}),
+      ...options.env,
     },
-    stdio: ["ignore", "ignore", "pipe"],
+    stdio: options.onMessage ? ["ignore", "ignore", "pipe", "ipc"] : ["ignore", "ignore", "pipe"],
   });
+  if (options.onMessage) {
+    const onMessage = options.onMessage;
+    proc.on("message", (message) => onMessage(message, (answer) => proc.send(answer as never)));
+  }
 
   const port = await new Promise<number>((resolve, reject) => {
     const timeout = setTimeout(
@@ -67,6 +84,7 @@ export async function startTestServer(): Promise<TestServer> {
     base: `http://127.0.0.1:${port}`,
     token,
     workspacePath,
+    appPath,
     close: () =>
       new Promise<void>((res) => {
         proc.once("exit", () => {

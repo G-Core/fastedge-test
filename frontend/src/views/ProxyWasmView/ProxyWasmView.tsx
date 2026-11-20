@@ -1,8 +1,12 @@
 import { DotenvPanel } from "../../components/common/DotenvPanel";
 import { RequestPanel } from "../../components/common/RequestPanel";
-import { ServerPropertiesPanel } from "../../components/proxy-wasm/ServerPropertiesPanel";
+import { RequestContextPanel } from "../../components/common/RequestContextPanel";
+import { OriginSection } from "../../components/proxy-wasm/OriginSection";
+import { DictionaryInput } from "../../components/common/DictionaryInput";
+import contextStyles from "../../components/common/RequestContextPanel/RequestContextPanel.module.css";
 import { HookStagesPanel } from "../../components/proxy-wasm/HookStagesPanel";
 import { ResponsePanel } from "../../components/common/ResponsePanel";
+import { StoresPanel } from "../../components/common/StoresPanel";
 import { useAppStore } from "../../stores";
 import { applyDefaultContentType } from "../../utils/contentType";
 import styles from "./ProxyWasmView.module.css";
@@ -33,10 +37,15 @@ export function ProxyWasmView() {
 
     // Config state
     properties,
-    calculatedProperties,
+    origin,
+    setOrigin,
+    client,
+    edge,
     dotenv,
     logLevel,
     setProperties,
+    setClient,
+    setEdge,
     setCalculatedProperties,
     setDotenvEnabled,
     setDotenvPath,
@@ -46,6 +55,7 @@ export function ProxyWasmView() {
 
     // WASM state
     wasmPath,
+    loading, // Send waits for a reload: the runner is being replaced
   } = useAppStore();
 
   // Response state (request_headers/body from slice; response seed is empty —
@@ -73,7 +83,7 @@ export function ProxyWasmView() {
         ...hookCall,
         request_headers: finalHeaders,
         logLevel,
-      });
+      }, { client, edge }, origin);
 
       // Update hook results and final response
       setHookResults(newHookResults);
@@ -111,7 +121,7 @@ export function ProxyWasmView() {
       <RequestPanel
         method={method}
         url={url}
-        wasmLoaded={wasmPath !== null}
+        wasmLoaded={wasmPath !== null && !loading}
         onMethodChange={setMethod}
         onUrlChange={setUrl}
         onSend={handleSend}
@@ -158,16 +168,6 @@ export function ProxyWasmView() {
             enabled: false,
             placeholder: "Bearer <token>",
           },
-          "x-debugger-status": {
-            value: "",
-            enabled: false,
-            placeholder: "HTTP status code for built-in responder",
-          },
-          "x-debugger-content": {
-            value: "",
-            enabled: false,
-            placeholder: "body-only | status-only for built-in responder",
-          },
         }}
         headersLabel="Request Headers"
         bodyLabel="Request Body"
@@ -184,11 +184,28 @@ export function ProxyWasmView() {
         onExpandedChange={(expanded) => setPanelExpanded("dotenv", expanded)}
       />
 
-      <ServerPropertiesPanel
-        properties={properties}
-        calculatedProperties={calculatedProperties}
-        onPropertiesChange={setProperties}
-      />
+      <RequestContextPanel
+        appType="proxy-wasm"
+        client={client}
+        edge={edge}
+        onClientChange={setClient}
+        onEdgeChange={setEdge}
+      >
+        <OriginSection url={url} headers={requestHeaders} onHeadersChange={setRequestHeaders} origin={origin} onOriginChange={setOrigin} />
+        <div className={contextStyles.section}>
+          <h4 className={contextStyles.sectionTitle}>Properties</h4>
+          <p className={contextStyles.hint}>
+            Explicit properties win over the client settings. Calculated <code>request.*</code> values
+            are in each hook's Inputs.
+          </p>
+          <DictionaryInput
+            value={properties}
+            onChange={setProperties}
+            keyPlaceholder="Property path"
+            valuePlaceholder="Property value"
+          />
+        </div>
+      </RequestContextPanel>
 
       <HookStagesPanel
         results={hookResults}
@@ -196,6 +213,8 @@ export function ProxyWasmView() {
         logLevel={logLevel}
         onLogLevelChange={setLogLevel}
       />
+
+      <StoresPanel refreshKey={hookResults} />
 
       <ResponsePanel response={finalResponse} />
     </div>

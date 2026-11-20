@@ -1,3 +1,4 @@
+import type { ResourceLoaded, ResourceResult } from "../api";
 /**
  * WebSocket Event Types (Frontend)
  *
@@ -117,6 +118,40 @@ export interface ReloadWorkspaceWasmEvent extends BaseEvent {
   };
 }
 
+export interface ResourceLoadedEvent extends BaseEvent {
+  type: "resource_loaded";
+  data: ResourceLoaded;
+}
+
+/** The user approved reading an allowed folder (outside the workspace) for this session. */
+export interface AllowedFolderApprovedEvent extends BaseEvent {
+  type: "allowed_folder_approved";
+  data: { folder: string };
+}
+
+/** Waiting for the user to approve an allowed folder (`waiting: true`), or no longer waiting. */
+export interface AllowedFolderApprovalPendingEvent extends BaseEvent {
+  type: "allowed_folder_approval_pending";
+  data: { folder: string; askedIn: "vscode" | "terminal"; waiting: boolean };
+}
+
+/** Loading a resource file failed: the file and the error. */
+export interface ResourceLoadFailedEvent extends BaseEvent {
+  type: "resource_load_failed";
+  data: { configPath: string; error: string };
+}
+
+/** A resource file was saved through the API: its full path and new content version. */
+export interface ResourceSavedEvent extends BaseEvent {
+  type: "resource_saved";
+  data: { configPath: string; version: string };
+}
+
+export interface ResourceRequestCompletedEvent extends BaseEvent {
+  type: "resource_request_completed";
+  data: { result: ResourceResult };
+}
+
 export type ServerEvent =
   | WasmLoadedEvent
   | RequestStartedEvent
@@ -127,4 +162,10 @@ export type ServerEvent =
   | ConnectionStatusEvent
   | HttpWasmRequestCompletedEvent
   | HttpWasmLogEvent
-  | ReloadWorkspaceWasmEvent;
+  | ReloadWorkspaceWasmEvent
+  | ResourceLoadedEvent
+  | ResourceSavedEvent
+  | ResourceLoadFailedEvent
+  | AllowedFolderApprovedEvent
+  | AllowedFolderApprovalPendingEvent
+  | ResourceRequestCompletedEvent;

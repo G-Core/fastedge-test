@@ -1,9 +1,13 @@
+import { Tabs } from "../../components/common/Tabs";
 import { useRef, useState } from "react";
 import { CollapsiblePanel } from "../../components/common/CollapsiblePanel";
 import { DotenvPanel } from "../../components/common/DotenvPanel";
+import { RequestContextPanel } from "../../components/common/RequestContextPanel";
 import { RequestPanel } from "../../components/common/RequestPanel";
 import { ResponsePanel } from "../../components/common/ResponsePanel";
+import { StoresPanel } from "../../components/common/StoresPanel";
 import { LogsViewer } from "../../components/common/LogsViewer";
+import { StoreCallsList } from "../../components/common/StoreCallsList";
 import { LogLevelSelector } from "../../components/common/LogLevelSelector";
 import { useAppStore } from "../../stores";
 import { HTTP_WASM_HOST } from "../../stores/slices/httpWasmSlice";
@@ -12,6 +16,7 @@ import styles from "./HttpWasmView.module.css";
 export function HttpWasmView() {
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [logLevel, setLogLevel] = useState<number>(0);
+  const [logView, setLogView] = useState<"logs" | "storage">("logs");
 
   // Get state from store
   const {
@@ -23,7 +28,12 @@ export function HttpWasmView() {
     httpResponse,
     httpLogs,
     wasmPath,
+    loading, // Send waits for a reload: the runner is being replaced
     dotenv,
+    client,
+    edge,
+    setClient,
+    setEdge,
     setHttpMethod,
     setHttpUrl,
     setHttpRequestHeaders,
@@ -41,6 +51,8 @@ export function HttpWasmView() {
     setHttpUrl(HTTP_WASM_HOST + newPath);
   };
 
+  const storageCount = httpResponse?.storeCalls?.length ?? 0;
+
   const handleSend = () => {
     executeHttpRequest();
   };
@@ -52,7 +64,7 @@ export function HttpWasmView() {
         <RequestPanel
           method={httpMethod}
           url={httpUrl}
-          wasmLoaded={wasmPath !== null}
+          wasmLoaded={wasmPath !== null && !loading}
           onMethodChange={setHttpMethod}
           onUrlChange={handleUrlChange}
           onSend={handleSend}
@@ -87,13 +99,28 @@ export function HttpWasmView() {
           onExpandedChange={(expanded) => setPanelExpanded('dotenv', expanded)}
         />
 
-        {/* Logging Panel */}
+        <RequestContextPanel
+          appType="http-wasm"
+          client={client}
+          edge={edge}
+          onClientChange={setClient}
+          onEdgeChange={setEdge}
+        />
+
+        {/* Logging Panel: app logs, and the cache / Edge KV calls of the last request */}
         <CollapsiblePanel title="Logging" defaultExpanded={httpLogs.length > 0}>
           <div className={styles.loggingContent}>
             <div className={styles.loggingHeader}>
-              <div className={styles.logTab}>
-                <span className={styles.tabLabel}>Logs</span>
-                {httpLogs.length > 0 && (
+              <div className={styles.logTabs}>
+                <Tabs
+                  tabs={[
+                    { id: "logs", label: "Logs" },
+                    { id: "storage", label: `Storage${storageCount ? ` (${storageCount})` : ""}` },
+                  ]}
+                  active={logView}
+                  onChange={setLogView}
+                />
+                {logView === "logs" && httpLogs.length > 0 && (
                   <button
                     className={styles.clearLogsButton}
                     onClick={() => setHttpLogs([])}
@@ -103,16 +130,24 @@ export function HttpWasmView() {
                   </button>
                 )}
               </div>
-              <div className={styles.loggingControls}>
-                <LogLevelSelector
-                  logLevel={logLevel}
-                  onLogLevelChange={setLogLevel}
-                />
-              </div>
+              {logView === "logs" && (
+                <div className={styles.loggingControls}>
+                  <LogLevelSelector
+                    logLevel={logLevel}
+                    onLogLevelChange={setLogLevel}
+                  />
+                </div>
+              )}
             </div>
-            <LogsViewer logs={httpLogs} logLevel={logLevel} />
+            {logView === "logs" ? (
+              <LogsViewer logs={httpLogs} logLevel={logLevel} />
+            ) : (
+              <StoreCallsList calls={httpResponse?.storeCalls} source="request" />
+            )}
           </div>
         </CollapsiblePanel>
+
+        <StoresPanel refreshKey={httpResponse} />
 
         {/* Response Panel */}
         <ResponsePanel response={httpResponse} />
