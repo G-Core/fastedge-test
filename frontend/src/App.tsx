@@ -383,9 +383,8 @@ function App() {
       <div className="container">
         <header>
           <h1>
-            {wasmType === 'http-wasm' ? 'HTTP WASM Debugger' :
-             wasmType === 'proxy-wasm' ? 'Proxy-WASM Test Runner' :
-             'FastEdge WASM Debugger'}
+            FastEdge WASM Debugger
+            {wasmPath && !multiApp && ` - ${wasmPath.split(/[\\/]/).pop()!.replace(/\.wasm$/, '')}`}
           </h1>
           <ConnectionStatus status={wsStatus} />
         </header>

@@ -1,463 +1,104 @@
 # @gcoredev/fastedge-test
 
-Test FastEdge WASM binaries programmatically — no server required. Use it in CI pipelines, agent scripts, or alongside your existing test runner (vitest, jest, etc.). 
+Run and test FastEdge apps on your machine, as they run on the edge. One package gives you:
 
-Supports both FastEdge binary types:
-- **CDN (proxy-wasm)** — request/response filter binaries
-- **HTTP-WASM** — component model HTTP handler binaries
+- a **test runner** for CI and scripts: load a built `.wasm`, send requests, assert on the result;
+- a **visual debugger** in the browser (and inside VS Code): send requests, inspect every hook,
+  browse the cache and Edge KV.
 
-The WASM type is detected automatically from the binary.
+Both handle CDN apps (proxy-wasm) and HTTP apps; the type is detected from the binary.
 
-## Installation
+![The debugger running three CDN apps on one resource](https://raw.githubusercontent.com/G-Core/fastedge-test/main/docs/images/debugger-resource.png)
 
-```bash
-npm install @gcoredev/fastedge-test
-# or
-pnpm add @gcoredev/fastedge-test
-```
-
-**Requirements**: Node.js 22.13+ (the local cache and Edge KV use `node:sqlite`)
-
-## Two Ways to Use This Package
-
-### 1. Headless test framework (CI / scripts)
-
-Import the test framework to test WASM binaries programmatically — no server, no browser:
-
-| Import | Purpose |
-|--------|---------|
-| `@gcoredev/fastedge-test` | Low-level runner — load and execute WASM directly |
-| `@gcoredev/fastedge-test/test` | High-level test framework — define and run structured test suites |
-
-Start with `@gcoredev/fastedge-test/test` unless you need direct runner control.
-
-### 2. Local visual debugger (browser UI)
-
-Run a local server with a browser UI, REST API, and WebSocket log streaming — useful for interactive debugging without VSCode:
+## Install
 
 ```bash
-npx @gcoredev/fastedge-test
-# Opens http://localhost:5179
+npm install --save-dev @gcoredev/fastedge-test
 ```
 
-If port 5179 is already in use, the server automatically tries the next port sequentially (up to 10 attempts, e.g. 5179–5188). The bound port is written to `.fastedge-debug/.debug-port` and deleted on shutdown. Set `PORT` to bypass auto-increment when a predictable port is required:
+Requires Node.js 22.13 or later.
 
-```bash
-PORT=8080 npx @gcoredev/fastedge-test
-```
-
-See **[Local Debugger Server](docs/DEBUGGER.md)** for the full guide including programmatic usage, REST API access, and WebSocket log streaming.
-
----
-
-## Quick Start
-
-### CDN (proxy-wasm)
+## Test runner
 
 ```typescript
-import { defineTestSuite, runAndExit, runFlow } from '@gcoredev/fastedge-test/test';
-import { assertRequestHeader, assertFinalStatus } from '@gcoredev/fastedge-test/test';
-
-const suite = defineTestSuite({
-  wasmPath: './build/my-cdn-app.wasm',
-  tests: [
-    {
-      name: 'injects x-custom header',
-      run: async (runner) => {
-        const result = await runFlow(runner, {
-          url: 'https://example.com/page',
-          method: 'GET',
-          requestHeaders: { 'user-agent': 'Mozilla/5.0' },
-          responseStatus: 200,
-        });
-
-        assertRequestHeader(result.hookResults.onRequestHeaders, 'x-custom', 'expected-value');
-      },
-    },
-    {
-      name: 'blocks /admin with 403',
-      run: async (runner) => {
-        const result = await runFlow(runner, { url: 'https://example.com/admin' });
-        assertFinalStatus(result, 403);
-      },
-    },
-  ],
-});
-
-await runAndExit(suite);
-// Output:
-//   ✓ injects x-custom header (12ms)
-//   ✓ blocks /admin with 403 (5ms)
-//   2/2 passed in 17ms
-```
-
-### HTTP-WASM (component model)
-
-```typescript
-import { defineTestSuite, runAndExit } from '@gcoredev/fastedge-test/test';
-
-const suite = defineTestSuite({
-  wasmPath: './build/my-http-app.wasm',
-  tests: [
-    {
-      name: 'responds with 200 OK',
-      run: async (runner) => {
-        const response = await runner.execute({
-          path: '/api/hello',
-          method: 'GET',
-          headers: { 'content-type': 'application/json' },
-        });
-
-        if (response.status !== 200) {
-          throw new Error(`Expected 200, got ${response.status}`);
-        }
-      },
-    },
-  ],
-});
-
-await runAndExit(suite);
-```
-
----
-
-## Test Suite API
-
-### `defineTestSuite(config)`
-
-Validates and returns a typed suite definition.
-
-```typescript
-type TestSuite =
-  | { wasmPath: string;   runnerConfig?: RunnerConfig; tests: TestCase[] }
-  | { wasmBuffer: Buffer; runnerConfig?: RunnerConfig; tests: TestCase[] }
-```
-
-Exactly one of `wasmPath` or `wasmBuffer` is required — TypeScript enforces this at compile time.
-
-```typescript
-interface RunnerConfig {
-  dotenv?: {
-    enabled?: boolean;                      // Load .env files (default: false)
-    path?: string;                          // Directory to load them from (default: process cwd)
-  };
-  enforceProductionPropertyRules?: boolean; // CDN property access control (default: true)
-  stores?: boolean | TestStores;            // Local cache and Edge KV (default: true; isolated per test in runTestSuite)
-  dc?: string;                              // Cache bucket shared by runners (default: "local")
-}
-```
-
-### `runTestSuite(suite)` → `SuiteResult`
-
-Runs all tests sequentially. Each test gets a fresh, isolated runner instance.
-
-```typescript
-interface SuiteResult {
-  passed: number;
-  failed: number;
-  total: number;
-  durationMs: number;
-  results: TestResult[];
-}
-
-interface TestResult {
-  name: string;
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-```
-
-### `runAndExit(suite)`
-
-Runs the suite, prints a summary to stdout, and exits with code `0` (all passed) or `1` (any failures). Designed for CI scripts and Makefile targets.
-
-### `runFlow(runner, options)` — CDN helper
-
-Convenience wrapper around the full CDN request/response flow. Accepts named options and derives HTTP/2 pseudo-headers from the URL automatically.
-
-```typescript
-interface FlowOptions {
-  url: string;
-  method?: string;                           // Default: 'GET'
-  requestHeaders?: Record<string, string>;
-  requestBody?: string;
-  responseStatus?: number;                   // Default: 200
-  responseStatusText?: string;
-  responseHeaders?: Record<string, string>;
-  responseBody?: string;
-  properties?: Record<string, unknown>;
-  enforceProductionPropertyRules?: boolean;  // Default: true
-}
-```
-
-Returns a `FullFlowResult` containing `hookResults`, `finalResponse`, and `calculatedProperties`.
-
-### `loadConfigFile(path)` — Reuse `fastedge-config.test.json`
-
-Load and validate a `fastedge-config.test.json` file, returning a typed `TestConfig`.
-
-```typescript
-import { loadConfigFile, defineTestSuite, runAndExit } from '@gcoredev/fastedge-test/test';
-
-const config = await loadConfigFile('./fastedge-config.test.json');
-
-const suite = defineTestSuite({
-  wasmPath: './build/app.wasm',
-  tests: [
-    {
-      name: 'uses config properties',
-      run: async (runner) => {
-        const result = await runFlow(runner, {
-          url: 'https://example.com',
-          properties: config.properties,
-        });
-      },
-    },
-  ],
-});
-```
-
----
-
-## Assertion Helpers
-
-All helpers throw a descriptive `Error` on failure — compatible with any test framework or plain try/catch.
-
-### Request / Response Headers (CDN)
-
-```typescript
-assertRequestHeader(hookResult, 'x-custom')               // header exists
-assertRequestHeader(hookResult, 'x-custom', 'value')      // header equals value
-assertNoRequestHeader(hookResult, 'x-should-not-exist')
-
-assertResponseHeader(hookResult, 'cache-control', 'no-store')
-assertNoResponseHeader(hookResult, 'x-sensitive')
-```
-
-### Final Response (CDN full flow)
-
-```typescript
-assertFinalStatus(fullFlowResult, 200)
-assertFinalHeader(fullFlowResult, 'content-type', 'application/json')
-```
-
-### Hook Return Code
-
-```typescript
-assertReturnCode(hookResult, 0)   // 0 = Ok, 1 = Pause
-```
-
-### Logs
-
-```typescript
-assertLog(hookResult, 'cache hit')          // at least one log contains substring
-assertNoLog(hookResult, 'error')            // no log contains substring
-const found = logsContain(hookResult, 'x')  // boolean — for conditional logic
-```
-
-### CDN Property Access
-
-```typescript
-assertPropertyAllowed(hookResult, 'client.ip')    // access was permitted
-assertPropertyDenied(hookResult, 'internal.key')  // access was denied
-const violated = hasPropertyAccessViolation(hookResult)
-```
-
----
-
-## Integrating with Vitest / Jest
-
-The assertion helpers throw plain `Error` instances, so they work inside any test framework:
-
-```typescript
-import { describe, it } from 'vitest';
-import { createRunner } from '@gcoredev/fastedge-test';
-import { runFlow, assertFinalStatus } from '@gcoredev/fastedge-test/test';
-
-describe('my CDN app', () => {
-  it('returns 200 for homepage', async () => {
-    const runner = await createRunner('./build/app.wasm');
-    try {
-      const result = await runFlow(runner, { url: 'https://example.com/' });
-      assertFinalStatus(result, 200);
-    } finally {
-      await runner.cleanup();
-    }
-  });
-});
-```
-
-Or let `defineTestSuite` manage lifecycle and inspect `SuiteResult` inside your test:
-
-```typescript
-it('all flows pass', async () => {
-  const suite = defineTestSuite({ wasmPath: './build/app.wasm', tests: [...] });
-  const results = await runTestSuite(suite);
-  expect(results.failed).toBe(0);
-});
-```
-
----
-
-## Low-Level Runner API
-
-For cases needing direct runner control:
-
-```typescript
-import { createRunner, createRunnerFromBuffer } from '@gcoredev/fastedge-test';
-
-// From file path (preferred — faster startup, less memory)
-const runner = await createRunner('./build/app.wasm');
-
-// From buffer (e.g. fetched from URL or built in-memory)
-const buffer = await fs.readFile('./build/app.wasm');
-const runner = await createRunnerFromBuffer(buffer);
-
-// CDN: run full request/response flow
-const result = await runner.callFullFlow(
-  'https://example.com', 'GET',
-  {}, '',          // request headers, body
-  {}, '',          // response headers, body
-  200, 'OK',       // response status
-  {},              // properties
-  true,            // enforce production property rules
-);
-
-// HTTP-WASM: execute a request
-const response = await runner.execute({
-  path: '/api/hello',
-  method: 'GET',
-  headers: {},
-});
-
-// Always clean up when done
-await runner.cleanup();
-```
-
----
-
-## Cache and Edge KV
-
-CDN and HTTP apps get a local cache and Edge KV, on by default (`stores: false` in
-`RunnerConfig` or `fastedge-config.test.json` turns them off). Every runner, test process and
-debugger in one git repository shares them; runners with the same `dc` share cache entries.
-Data lives in `.fastedge-debug/stores/` (git-ignored). Edge KV is read-only to apps, as on the
-edge; seed it from fixtures:
-
-```
-fixtures/stores/kv/<store>.json   { "strings": { "key": "value" }, "zsets": { "key": [["member", 1.5]] }, "bloom": { "key": ["item"] } }
-fixtures/stores/cache/<dc>.json   { "key": { "value": "text", "ttl_ms": 60000 } }
-```
-
-A value can be `{ "base64": "..." }` for binary data. Only stores with a fixture are attached.
-
-**In tests, every test gets its own stores** (in memory, seeded from the fixtures, gone after the
-test), so tests never see each other's data:
-
-```typescript
-import { test } from '@gcoredev/fastedge-test/vitest';
-import { expect } from 'vitest';
-
-test('counts hits', async ({ runner, stores }) => {
-  const app = await runner('./build/app.wasm');   // CDN or HTTP; cleaned up after the test
-  await app.callFullFlow('built-in', 'GET', {}, '', {}, true);
-  expect(stores.cache.get('hits')).toBe('1');
-  stores.advanceClock(60_000);                    // cache expiry for every runner on these stores
-});
-```
-
-`runTestSuite` does the same per test (`run: async (runner, { stores }) => ...`). Elsewhere, use
-`createStores()` and pass it as `RunnerConfig.stores`; runners given one instance share it.
-
----
-
-## Client and Edge Location
-
-`client` (where the request comes from) and `edge` (which POP runs the app) are presets
-(`de`, `nl`, `us`) plus field overrides, in `fastedge-config.test.json` or `RunnerConfig`:
-
-```ts
-const runner = await createRunner('dist/app.wasm', {
-  client: { preset: 'nl' },                 // request.* geo properties / geoip-* headers
-  edge: { preset: 'de', city: 'Frankfurt' }, // dictionary dc, region, country, city, hostname
-});
-```
-
-- CDN apps get `request.*` properties, `GeoIP-*` / `X-Real-IP` headers, the edge dictionary keys
-  and `X-ID`. HTTP apps get `geoip-*`, `x-real-ip`, `dc` and `pop-*` headers.
-- Explicit properties, request headers and dotenv dictionary entries win over them.
-- The edge's `dc` is the cache bucket (the top-level `dc` wins). Leave both out to keep the old
-  behaviour. `runner.setRequestContext({ client, edge })` changes them between requests.
-
-## Resources
-
-A resource runs one request through several CDN apps, one per hook, with rules and an origin,
-as a CDN resource does on the edge. Describe it in `.fastedge-debug/fastedge-cdn-resource.test.json`,
-open it in the debugger, or test it with `createResource()` or `runTestSuite({ resource, tests })`.
-See **[Resources](docs/RESOURCES.md)**.
-
-## JSON Schemas
-
-The package ships JSON Schema files for `fastedge-config.test.json` and all API request/response bodies, enabling IDE autocomplete and validation.
-
-Reference from `fastedge-config.test.json` for VS Code autocomplete:
-
-```json
-{
-  "$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json",
-  "envVars": {},
-  "secrets": {},
-  "properties": {}
-}
-```
-
----
-
-## CI / GitHub Actions Example
-
-```yaml
-- name: Test FastEdge WASM
-  run: node test/my-suite.js
-```
-
-Where `test/my-suite.js`:
-
-```typescript
-import { defineTestSuite, runAndExit, runFlow } from '@gcoredev/fastedge-test/test';
-import { assertFinalStatus } from '@gcoredev/fastedge-test/test';
+import { defineTestSuite, runAndExit, runFlow, assertFinalStatus, assertRequestHeader } from '@gcoredev/fastedge-test/test';
 
 await runAndExit(defineTestSuite({
   wasmPath: './build/app.wasm',
   tests: [
     {
-      name: 'homepage returns 200',
+      name: 'adds x-custom to the request',
       run: async (runner) => {
-        assertFinalStatus(await runFlow(runner, { url: 'https://example.com/' }), 200);
+        const result = await runFlow(runner, { url: 'https://example.com/page' });
+        assertRequestHeader(result.hookResults.onRequestHeaders, 'x-custom', 'expected-value');
       },
+    },
+    {
+      name: 'blocks /admin',
+      run: async (runner) => assertFinalStatus(await runFlow(runner, { url: 'https://example.com/admin' }), 403),
     },
   ],
 }));
 ```
 
----
+Run it with `node`, or use the test framework inside vitest or jest. Start with the
+[Quickstart](docs/quickstart.md); the full API is in the [Test Framework](docs/TEST_FRAMEWORK.md)
+guide, and the low-level runner in [Runner API](docs/RUNNER.md).
+
+## Debugger
+
+```bash
+npx fastedge-debug
+```
+
+It prints a URL (`http://127.0.0.1:5179/#token=...`); open it, load a `.wasm` and send a request.
+In VS Code, the [FastEdge Launcher](https://github.com/G-Core/FastEdge-vscode) extension builds your
+app and opens the same debugger on F5.
+
+![The debugger with a CDN app reading Edge KV](https://raw.githubusercontent.com/G-Core/fastedge-test/main/docs/images/debugger-single-app.png)
+
+- **Using it:** the [Debugger Guide](docs/DEBUGGER_GUIDE.md) walks through every panel.
+- **Running it:** [Debugger Server](docs/DEBUGGER.md) covers the CLI, ports, environment variables
+  and starting it from code.
+
+## A local edge
+
+- **Cache and Edge KV** work locally: seeded from fixture files, shared by every debugger and
+  runner in a repository (each test gets fresh stores), and browsable in the Storage Explorer. See [Cache and Edge KV](docs/STORES.md).
+- **Client and edge location:** pick where the request comes from and which POP runs the app; geo
+  properties and headers follow. See [Test Config](docs/TEST_CONFIG.md#client-and-edge-context).
+- **Resources:** run several CDN apps on one resource, one per hook, with rules and an origin. See
+  [Resources](docs/RESOURCES.md).
+- **Origins:** a built-in origin (echo, fixed response, a folder of files), a real URL, an HTTP app,
+  or mocked origins in tests. See [Test Config](docs/TEST_CONFIG.md#origin-cdn) and
+  [mockOrigins](docs/TEST_FRAMEWORK.md#mockorigins).
+
+![The Storage Explorer](https://raw.githubusercontent.com/G-Core/fastedge-test/main/docs/images/storage-explorer.png)
+
+What an app you load can reach on your machine, and which folders the debugger reads, is in
+[Security](docs/SECURITY.md).
 
 ## Documentation
 
-- **[Quickstart](docs/quickstart.md)** — the debugger, a test suite and the low-level runner in a few steps
-- **[Local Debugger Server](docs/DEBUGGER.md)** — running the visual debugger UI, npx usage, programmatic `startServer()`, REST API quickstart
-- **[Test Framework Guide](docs/TEST_FRAMEWORK.md)** — full API reference, all assertion helpers, examples
-- **[Runner API](docs/RUNNER.md)** — the low-level runner: `createRunner`, `RunnerConfig`, client and edge location
-- **[Test Config](docs/TEST_CONFIG.md)** — `fastedge-config.test.json`, origins and dotenv
-- **[Cache and Edge KV](docs/STORES.md)** — fixtures, the Storage Explorer, stores in tests
-- **[Resources](docs/RESOURCES.md)** — several apps on one CDN resource: hooks, rules and origins
-- **[Security](docs/SECURITY.md)** — the workspace boundary, allowed folders and what a loaded app can reach
-- **[REST API Reference](docs/API.md)** — HTTP endpoints for server-based testing (UI / WebSocket)
-- **[WebSocket Protocol](docs/WEBSOCKET.md)** — real-time events from the debugger server
-- **[Repository](https://github.com/G-Core/fastedge-test)** — source code, issues, contributing
+| Doc | What it covers |
+|---|---|
+| [Quickstart](docs/quickstart.md) | The debugger, a test suite and the low-level runner, in a few steps |
+| [Debugger Guide](docs/DEBUGGER_GUIDE.md) | Using the debugger UI, panel by panel |
+| [Debugger Server](docs/DEBUGGER.md) | CLI, ports, environment variables, `startServer()` |
+| [Test Framework](docs/TEST_FRAMEWORK.md) | Test suites, assertions, vitest/jest, origin mocking |
+| [Runner API](docs/RUNNER.md) | The low-level runner: `createRunner`, `createResource`, request context |
+| [Test Config](docs/TEST_CONFIG.md) | `fastedge-config.test.json`: properties, dotenv, client and edge, origins |
+| [Cache and Edge KV](docs/STORES.md) | Fixtures, the Storage Explorer, stores in tests |
+| [Resources](docs/RESOURCES.md) | Several apps on one CDN resource: hooks, rules and origins |
+| [Security](docs/SECURITY.md) | The workspace boundary, allowed folders, what a loaded app can reach |
+| [REST API](docs/API.md) | The debugger server's HTTP endpoints |
+| [WebSocket](docs/WEBSOCKET.md) | The debugger server's real-time events |
+| [Index](docs/INDEX.md) | Every doc and every package export |
 
----
+JSON Schemas for `fastedge-config.test.json` and the resource file ship in `schemas/`; reference one
+with `"$schema": "./node_modules/@gcoredev/fastedge-test/schemas/fastedge-config.test.schema.json"`
+for editor autocomplete.
 
 ## License
 
-MIT
+[Apache-2.0](LICENSE)
