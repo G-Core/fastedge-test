@@ -38,6 +38,7 @@
     "dist/fastedge-cli/",
     "schemas/",
     "docs/",
+    "!docs/images/",
     "llms.txt"
   ],
   "scripts": {

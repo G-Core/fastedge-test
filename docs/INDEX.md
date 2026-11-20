@@ -12,6 +12,7 @@
 | [STORES.md](STORES.md)                 | Test authors          | Seeding and inspecting the cache and Edge KV stores in tests                                     |
 | [RESOURCES.md](RESOURCES.md)           | Test authors          | Testing several apps on one CDN resource: rules, hooks and the built-in origin                   |
 | [RUNNER.md](RUNNER.md)                 | Advanced / CI tooling | Low-level programmatic API for direct runner lifecycle control                                   |
+| [DEBUGGER_GUIDE.md](DEBUGGER_GUIDE.md) | All users             | Using the debugger UI, panel by panel                                                            |
 | [DEBUGGER.md](DEBUGGER.md)             | All users             | `fastedge-debug` CLI — starting the interactive debugger server                                  |
 | [API.md](API.md)                       | Tooling integrators   | HTTP REST API exposed by the debugger server                                                     |
 | [WEBSOCKET.md](WEBSOCKET.md)           | Tooling integrators   | WebSocket event stream API for real-time server events                                           |

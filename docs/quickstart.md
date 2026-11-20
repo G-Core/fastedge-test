@@ -36,7 +36,7 @@ Use the `PORT` environment variable to override the default starting port:
 PORT=8080 npx fastedge-debug
 ```
 
-See [DEBUGGER.md](DEBUGGER.md) for full usage details.
+See [DEBUGGER_GUIDE.md](DEBUGGER_GUIDE.md) for using the UI, and [DEBUGGER.md](DEBUGGER.md) for running the server.
 
 ## Option 2: Programmatic Test Suite
 

@@ -194,10 +194,11 @@ When the server starts, it serves a browser-based UI at the root URL. In CLI mod
 Open: http://127.0.0.1:5179/#token=<hex>
 ```
 
-Open that URL directly — the frontend reads the `#token=` fragment and includes it as an `x-fastedge-token` header on every API request. The UI provides a graphical interface for loading WASM modules, configuring requests, and inspecting results. All UI interactions use the same REST and WebSocket endpoints available to API consumers; see [API.md](API.md) for the REST endpoints.
+Open that URL directly — the frontend reads the `#token=` fragment and includes it as an `x-fastedge-token` header on every API request. The UI provides a graphical interface for loading WASM modules, configuring requests, and inspecting results; [DEBUGGER_GUIDE.md](DEBUGGER_GUIDE.md) walks through it. All UI interactions use the same REST and WebSocket endpoints available to API consumers; see [API.md](API.md) for the REST endpoints.
 
 ## See Also
 
+- [DEBUGGER_GUIDE.md](DEBUGGER_GUIDE.md) — Using the debugger UI, panel by panel
 - [API.md](API.md) — REST endpoint reference for loading WASM, sending requests, and managing configuration
 - [WEBSOCKET.md](WEBSOCKET.md) — WebSocket protocol, event types, and real-time state updates
 - [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) — Programmatic test framework for writing automated WASM tests
