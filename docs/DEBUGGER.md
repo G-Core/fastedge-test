@@ -26,7 +26,7 @@ Open: http://127.0.0.1:5179/#token=<hex>
 
 Use that URL to open the web UI, or copy the token for API and WebSocket access. See [Authentication in API.md](./API.md#authentication) for the full details, including the `x-fastedge-token` header, WebSocket token parameter, and auth-related environment variables.
 
-The CLI discovers the workspace root by walking up from the current directory, looking first for an existing `.fastedge-debug/` directory, then for a `package.json` or `Cargo.toml`. If neither is found, the starting directory is used. The resolved root becomes `WORKSPACE_PATH`, which is the base for the port file and configuration file placement. Pass a path as the first argument to anchor discovery to a specific starting location (if the path is a file, its parent directory is used):
+The CLI discovers the workspace root by walking up from the current directory to the nearest folder that holds a `.fastedge-debug/` directory, a `package.json` or a `Cargo.toml`, whichever is nearest: each marks an app of its own, so a `.fastedge-debug/` in a parent folder does not capture a project below it. If none is found, the starting directory is used. The resolved root becomes `WORKSPACE_PATH`, which is the base for the port file and configuration file placement. Pass a path as the first argument to anchor discovery to a specific starting location (if the path is a file, its parent directory is used):
 
 ```bash
 npx fastedge-debug /path/to/my-app

@@ -63,7 +63,7 @@ manager: the server gives runners a WebSocket-backed `StateManager`; headless ru
 
 | Entry | What runs | Starts a server? |
 |---|---|---|
-| `bin/fastedge-debug.js` (`fastedge-debug` bin, `pnpm start`) | resolves the app root, sets `WORKSPACE_PATH`, then `import("../dist/server.js")` | yes |
+| `bin/fastedge-debug.js` (`fastedge-debug` bin, `pnpm start`) | resolves the app root (`bin/app-root.mjs`: the nearest folder with `.fastedge-debug/`, `package.json` or `Cargo.toml`, as the VS Code extension does), sets `WORKSPACE_PATH`, then `import("../dist/server.js")` | yes |
 | VS Code extension | `fork()`s its copy of `dist/server.js` with `WORKSPACE_PATH`, `VSCODE_INTEGRATION=true`, `FASTEDGE_DEBUG_TOKEN` | yes |
 | Library (`.`, `./test`, `./vitest` exports) | `dist/lib/*` built from `server/runner/index.ts` and `server/test-framework/` | never |
 
