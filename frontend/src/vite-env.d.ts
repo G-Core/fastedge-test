@@ -6,5 +6,5 @@ declare module "*.module.css" {
   export default classes;
 }
 
-/** package.json version, set at build time (vite.config.ts). */
-declare const __APP_VERSION__: string;
+/** The git ref the Help links open: the release's tag, or main for an unreleased build (vite.config.ts). */
+declare const __DOCS_REF__: string;

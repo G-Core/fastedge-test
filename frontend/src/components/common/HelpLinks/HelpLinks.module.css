@@ -58,7 +58,16 @@
     inset: auto;
     top: calc(anchor(bottom) + 6px);
     right: anchor(right);
+    position-try-fallbacks: --help-fit;
   }
+}
+
+/* A panel too narrow for the menu left of the button: span it instead. */
+@position-try --help-fit {
+  inset: auto;
+  top: calc(anchor(bottom) + 6px);
+  left: 8px;
+  right: 8px;
 }
 
 .popover ul {

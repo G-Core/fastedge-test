@@ -1,8 +1,9 @@
 import { openExternal } from "../../../utils/environment";
 import styles from "./HelpLinks.module.css";
 
-// Docs of the release that is running, so they describe the features this build has.
-const docs = `https://github.com/G-Core/fastedge-test/blob/v${__APP_VERSION__}/docs/`;
+// Docs of the release that is running (main for an unreleased build), so they describe the
+// features this build has.
+const docs = `https://github.com/G-Core/fastedge-test/blob/${__DOCS_REF__}/docs/`;
 const guide = `${docs}DEBUGGER_GUIDE.md`;
 
 const topics: [string, string][] = [
@@ -61,7 +62,7 @@ export function HelpLinks() {
           {footer.map(([label, url]) => (
             <Link key={label} label={label} url={url} />
           ))}
-          <span>v{__APP_VERSION__}</span>
+          <span>{__DOCS_REF__}</span>
         </div>
       </div>
     </>
