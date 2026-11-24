@@ -21,7 +21,7 @@ import {
   Dictionary,
   type FastEdgeConfig,
 } from "../fastedge-host/index.js";
-import { loadDotenvFiles } from "../utils/dotenv-loader.js";
+import { loadDotenvFiles, SecretSlotError } from "../utils/dotenv-loader.js";
 import { storesImports } from "./StoresHost.js";
 import type { SyncStores } from "./storesBridge.js";
 import { randomUUID } from "node:crypto";
@@ -36,6 +36,11 @@ export { BUILTIN_URL, BUILTIN_SHORTHAND };
 
 export class ProxyWasmRunner implements IWasmRunner {
   private module: WebAssembly.Module | null = null; // Compiled module (reused)
+  // The last dotenv apply's bad secret slot: hooks fail with it until an apply succeeds, as a bad
+  // slot stops fastedge-run. The module stays, so correcting the files is enough.
+  private dotenvFailure: Error | null = null;
+  // load() and applyDotenv() run one at a time, so an older apply cannot land after a newer one.
+  private mutations: Promise<unknown> = Promise.resolve();
   private instance: WebAssembly.Instance | null = null; // Current instance (transient per hook)
   private memory: MemoryManager;
   private propertyResolver: PropertyResolver;
@@ -130,12 +135,15 @@ export class ProxyWasmRunner implements IWasmRunner {
    */
   private async loadDotenvIfEnabled(): Promise<void> {
     if (!this.dotenvEnabled) {
+      this.dotenvFailure = null;
       this.logDebug("Dotenv disabled, skipping file loading");
       return;
     }
 
     try {
       const dotenvConfig = await loadDotenvFiles(this.dotenvPath);
+      // Only now: a hook during the read still sees the last failure.
+      this.dotenvFailure = null;
 
       // Merge dotenv secrets with existing secrets
       if (
@@ -176,8 +184,14 @@ export class ProxyWasmRunner implements IWasmRunner {
         this.dictionary,
       );
     } catch (error) {
+      // A bad secret slot fails the load, as it stops fastedge-run for HTTP apps.
+      if (error instanceof SecretSlotError) {
+        this.dotenvFailure = error;
+        throw error;
+      }
       console.error("Failed to load dotenv files:", error);
-      // Don't throw - continue with empty secrets/dictionary
+      // Don't throw - continue with empty secrets/dictionary, as before a bad slot
+      this.dotenvFailure = null;
     }
   }
 
@@ -186,7 +200,17 @@ export class ProxyWasmRunner implements IWasmRunner {
    * Resets SecretStore/Dictionary to empty, then re-loads dotenv files
    * using the new settings. The compiled WASM module is untouched.
    */
-  async applyDotenv(enabled: boolean, dotenvPath?: string): Promise<void> {
+  applyDotenv(enabled: boolean, dotenvPath?: string): Promise<void> {
+    return this.oneAtATime(() => this.applyDotenvNow(enabled, dotenvPath));
+  }
+
+  private oneAtATime<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.mutations.then(work, work);
+    this.mutations = run.catch(() => {});
+    return run;
+  }
+
+  private async applyDotenvNow(enabled: boolean, dotenvPath?: string): Promise<void> {
     this.dotenvEnabled = enabled;
     if (dotenvPath !== undefined) {
       this.dotenvPath = dotenvPath;
@@ -250,7 +274,11 @@ export class ProxyWasmRunner implements IWasmRunner {
     return Object.fromEntries(Object.entries(headers).filter(([k]) => !Object.hasOwn(ctx.headers, k) || Object.hasOwn(caller, k)));
   }
 
-  async load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void> {
+  load(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void> {
+    return this.oneAtATime(() => this.loadNow(bufferOrPath, config));
+  }
+
+  private async loadNow(bufferOrPath: Buffer | string, config?: RunnerConfig): Promise<void> {
     if (config?.client || config?.edge) await this.setRequestContext({ client: config.client, edge: config.edge });
     // Update config if provided
     if (config?.dotenv?.enabled !== undefined) {
@@ -332,6 +360,7 @@ export class ProxyWasmRunner implements IWasmRunner {
     if (!this.module) {
       throw new Error("WASM module not loaded");
     }
+    if (this.dotenvFailure) throw this.dotenvFailure;
 
     // Set current hook context for property access control
     this.currentHook = this.getHookContext(call.hook);

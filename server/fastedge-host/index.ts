@@ -12,6 +12,7 @@
  * - proxy_get_secret - Get current secret value
  * - proxy_get_effective_at_secret - Get secret value at specific timestamp
  * - proxy_secret_get - Alias for proxy_get_secret
+ * - proxy_secret_get_effective_at - Alias for proxy_get_effective_at_secret
  *
  * ### Configuration Dictionary
  * - proxy_dictionary_get - Get configuration value

@@ -20,7 +20,7 @@ export function createFastEdgeHostFunctions(
   dictionary: Dictionary,
   logDebug: (message: string) => void,
 ) {
-  return {
+  const functions = {
     /**
      * Get a secret value by key
      *
@@ -86,7 +86,8 @@ export function createFastEdgeHostFunctions(
         logDebug(`proxy_get_effective_at_secret key="${key}" at=${timestamp}`);
 
         // Lookup secret at specific time
-        const value = secretStore.getEffectiveAt(key, timestamp);
+        // `at` is a u32 on the edge; WebAssembly hands an i32 to JavaScript, so read it unsigned.
+        const value = secretStore.getEffectiveAt(key, timestamp >>> 0);
         if (value === null) {
           logDebug(
             `proxy_get_effective_at_secret key="${key}" not found at timestamp ${timestamp}`,
@@ -108,28 +109,6 @@ export function createFastEdgeHostFunctions(
         );
         return ProxyStatus.InternalFailure;
       }
-    },
-
-    /**
-     * Alternative secret getter (alias for proxy_get_secret)
-     *
-     * Signature: proxy_secret_get(key_data: i32, key_size: i32,
-     *                              return_value_data: i32, return_value_size: i32) -> i32
-     */
-    proxy_secret_get: (
-      keyPtr: number,
-      keyLen: number,
-      returnValuePtr: number,
-      returnSizePtr: number,
-    ): number => {
-      // Same implementation as proxy_get_secret
-      logDebug("proxy_secret_get (aliased to proxy_get_secret)");
-      return createFastEdgeHostFunctions(
-        memory,
-        secretStore,
-        dictionary,
-        logDebug,
-      ).proxy_get_secret(keyPtr, keyLen, returnValuePtr, returnSizePtr);
     },
 
     /**
@@ -175,5 +154,12 @@ export function createFastEdgeHostFunctions(
         return ProxyStatus.InternalFailure;
       }
     },
+  };
+  // The edge registers both secret APIs under a second name each, with the same behaviour; the
+  // FastEdge Rust SDK imports proxy_secret_get and proxy_secret_get_effective_at.
+  return {
+    ...functions,
+    proxy_secret_get: functions.proxy_get_secret,
+    proxy_secret_get_effective_at: functions.proxy_get_effective_at_secret,
   };
 }

@@ -2,7 +2,7 @@ import fs from "fs/promises";
 import { realpathSync } from "fs";
 import { ApprovalNeeded, checkAllowedRead } from "./allowedFolders.js";
 import path from "path";
-import type { FastEdgeConfig } from "../fastedge-host/types.js";
+import type { FastEdgeConfig, SecretWithTimestamp } from "../fastedge-host/types.js";
 
 /**
  * Parse a .env file content into key-value pairs
@@ -49,6 +49,7 @@ function parseDotenv(content: string): Record<string, string> {
  *   prefix is stripped in full, like Rust's trim_start_matches
  * - .env.secrets / .env.variables: no prefix; FASTEDGE_VAR_ keys are skipped
  * - .env is read first; later files only fill keys that are not set yet
+ * - secret keys `NAME@SLOT` are slots of secret NAME (see secretSlots)
  */
 function setIfAbsent(target: Record<string, string>, key: string, value: string): void {
   if (!Object.hasOwn(target, key)) target[key] = value;
@@ -124,7 +125,41 @@ export async function loadDotenvFiles(
     }
   }
 
-  return { secrets, dictionary };
+  return { secrets: secretSlots(secrets), dictionary };
+}
+
+/** A secret key that is not a valid slot: the app does not load, as fastedge-run does not start. */
+export class SecretSlotError extends Error {}
+
+const MAX_SLOT = 2n ** 64n - 1n;
+
+/**
+ * Secret slots, as on the edge (`secret_slots` in the API) and in fastedge-run: `NAME@SLOT` is slot
+ * SLOT of secret NAME, a positive integer in plain digits; a bare `NAME` is slot 0. Each slot has
+ * one spelling (no `@0`, no leading zeros), so the files' per-key precedence is per-slot
+ * precedence; any other form throws. A name without slots stays a plain value (slot 0 is
+ * effective at every time).
+ */
+export function secretSlots(raw: Record<string, string>): Record<string, string | SecretWithTimestamp[]> {
+  // No prototype: a secret may be called "constructor" or "toString".
+  const slots: Record<string, SecretWithTimestamp[]> = Object.create(null);
+  for (const [key, value] of Object.entries(raw)) {
+    const at = key.indexOf("@");
+    const name = at === -1 ? key : key.slice(0, at);
+    const digits = at === -1 ? "0" : key.slice(at + 1);
+    if (!name) throw new SecretSlotError(`secret ${key}: no name before '@'`);
+    if (at !== -1 && !(/^[1-9][0-9]*$/.test(digits) && BigInt(digits) <= MAX_SLOT)) {
+      throw new SecretSlotError(
+        `secret ${key}: write slot 0 as a bare \`${name}\`, and other slots as \`${name}@N\` with N a positive integer`,
+      );
+    }
+    // ponytail: Number() rounds slots above 2^53, but a lookup's time is a u32, so such a slot is
+    // never effective anyway; keep them as BigInt if slots ever become readable by the app.
+    (slots[name] ??= []).push({ value, effectiveAt: Number(digits) });
+  }
+  return Object.fromEntries(
+    Object.entries(slots).map(([name, list]) => [name, list.length === 1 && list[0].effectiveAt === 0 ? list[0].value : list]),
+  );
 }
 
 /**

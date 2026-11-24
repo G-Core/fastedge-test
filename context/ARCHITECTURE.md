@@ -333,7 +333,7 @@ dictionary is applied); standalone (`/api/call`: apply the context to properties
 | `HeaderManager.ts` | Header conversions and the proxy-wasm binary map format (section 9). |
 | `PropertyResolver.ts` | Resolves property paths (`.`, `/` and `\0` separators all accepted): explicit properties over URL-derived `request.*` values over request/response metadata. |
 | `PropertyAccessControl.ts` | Per-hook read/write rules for built-in properties and the request's custom properties (rules: [BEHAVIOUR.md](BEHAVIOUR.md#properties-cdn-apps)). |
-| `server/fastedge-host/` | `SecretStore` (values with optional `effectiveAt` rotation), `Dictionary` (with a defaults layer for the edge context), and the factory for `proxy_get_secret`, `proxy_get_effective_at_secret`, `proxy_secret_get`, `proxy_dictionary_get`. |
+| `server/fastedge-host/` | `SecretStore` (values with optional `effectiveAt` rotation), `Dictionary` (with a defaults layer for the edge context), and the factory for `proxy_get_secret`, `proxy_get_effective_at_secret`, `proxy_secret_get`, `proxy_secret_get_effective_at`, `proxy_dictionary_get`. |
 | `StoresHost.ts` | Cache and Edge KV host functions over a `SyncStores`; with stores off they still link and return `InternalFailure`, logging once per hook. |
 | `egressPolicy.ts` | `checkEgressAllowed(url)` before every origin fetch and `proxy_http_call`: resolves the host and refuses link-local, cloud-metadata and ULA addresses (loopback and RFC 1918 stay allowed for local mock origins). Redirects are never followed (`redirect: "manual"`), since a target would not be checked. |
 

@@ -24,7 +24,8 @@ export class SecretStore implements ISecretStore {
    */
   get(key: string): string | null {
     const value = this.secrets.get(key);
-    if (!value) return null;
+    // An empty value is a value: the edge returns it (0 bytes), only a missing name is NotFound.
+    if (value === undefined) return null;
 
     // Simple string value
     if (typeof value === "string") {
@@ -42,7 +43,7 @@ export class SecretStore implements ISecretStore {
    */
   getEffectiveAt(key: string, timestamp: number): string | null {
     const value = this.secrets.get(key);
-    if (!value) return null;
+    if (value === undefined) return null;
 
     // Simple string value - always effective
     if (typeof value === "string") {
