@@ -34,8 +34,25 @@ describeFn("CDN secret slots from dotenv", () => {
     await expect(
       runner.load(await readFile(wasm), { dotenv: { path: await dotenv("PASSWORD@0=x\n") } }),
     ).rejects.toThrow("write slot 0 as a bare `PASSWORD`");
-    // Nothing runs on half-applied stores: the app is unloaded until a load succeeds.
-    await expect(runner.callHook(createHookCall("onRequestHeaders"))).rejects.toThrow("not loaded");
+    // Nothing runs on half-applied stores: hooks fail with the slot error...
+    await expect(runner.callHook(createHookCall("onRequestHeaders"))).rejects.toThrow("write slot 0");
+    // ...until a corrected dotenv applies; the app does not need loading again.
+    await runner.applyDotenv(true, await dotenv("PASSWORD=fixed\n"));
+    const result = await runner.callHook(createHookCall("onRequestHeaders"));
+    expect(logsContain(result, "PASSWORD: fixed")).toBe(true);
+    await runner.cleanup();
+  }, 30000);
+
+  it("an older failing dotenv apply cannot undo a newer load", async () => {
+    const runner = createTestRunnerWithDotenv();
+    const bad = await dotenv("PASSWORD@0=x\n");
+    const good = await dotenv("PASSWORD=ok\n");
+    const applying = runner.applyDotenv(true, bad);
+    const loading = runner.load(await readFile(wasm), { dotenv: { enabled: true, path: good } });
+    await expect(applying).rejects.toThrow("write slot 0");
+    await loading;
+    const result = await runner.callHook(createHookCall("onRequestHeaders"));
+    expect(logsContain(result, "PASSWORD: ok")).toBe(true);
     await runner.cleanup();
   }, 30000);
 });
