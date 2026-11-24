@@ -7,8 +7,10 @@ describe("HelpLinks", () => {
     const open = vi.spyOn(window, "open").mockImplementation(() => null);
     render(<HelpLinks />);
     const links = screen.getAllByRole("link", { hidden: true });
-    for (const link of links.filter((a) => a.getAttribute("href")!.includes("github.com"))) {
-      expect(link.getAttribute("href")).toContain("/fastedge-test/blob/v1.2.3/docs/");
+    const docs = links.filter((a) => !a.getAttribute("href")!.startsWith("https://marketplace.visualstudio.com/"));
+    expect(docs.length).toBe(links.length - 1);
+    for (const link of docs) {
+      expect(link.getAttribute("href")!.startsWith("https://github.com/G-Core/fastedge-test/blob/v1.2.3/docs/")).toBe(true);
     }
     expect(screen.getByText("v1.2.3")).toBeTruthy();
 

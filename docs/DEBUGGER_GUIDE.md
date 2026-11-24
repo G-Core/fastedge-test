@@ -36,8 +36,8 @@ The debugger works from one folder, the **app root**:
 
 In the app root:
 
-- `.fastedge-debug/` is the debugger's own folder (its port file, the loaded app and the default
-  resource file). Add it to `.gitignore`.
+- `.fastedge-debug/` is the debugger's own folder (its port file and the loaded app). Add it to
+  `.gitignore`.
 - The dotenv files (`.env`, `.env.secrets`, `.env.variables`) are read from here, unless
   [Dotenv path](#dotenv) names another folder.
 - `<workspace>` in a path means this folder.
@@ -144,8 +144,8 @@ Turn on **Multi-app (CDN resource)** to run one request through several CDN apps
 as a CDN resource does on the edge. The view edits a resource file; its format is in
 [RESOURCES.md](RESOURCES.md).
 
-- **File:** the resource file, `.fastedge-debug/fastedge-cdn-resource.test.json` by default.
-  **Open** reads it into the editor, **Save** writes it, **Load** loads its apps.
+- **File:** the resource file, `.fastedge-debug/fastedge-cdn-resource.test.json` in the workspace by
+  default (in VS Code, the folder you opened, not the app root). **Open** reads it into the editor, **Save** writes it, **Load** loads its apps.
 - **Apps:** a name, then a `.wasm`, an app's `fastedge-config.test.json`, or both, and an optional
   dotenv folder. Paths are relative to the resource file.
 - **Rules:** `main` sets which app runs each hook and the origin. A rule matches the request path
