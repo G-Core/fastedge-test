@@ -56,7 +56,8 @@ Each panel collapses; open the ones you need.
 
 Off by default. Turn it on to load the app's environment variables and secrets from `.env` files
 (`.env`, `.env.variables`, `.env.secrets`). **Dotenv path** is the folder they are in; empty means
-the app's root folder. Turning it on or off reloads the app.
+the app's root folder. Turning it on or off reloads the app. A secret with several slots (rotation)
+is written `NAME@SLOT=value`; the file rules are in [TEST_CONFIG.md](TEST_CONFIG.md#dotenv-configuration).
 
 ### Request Context
 

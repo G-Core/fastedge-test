@@ -151,6 +151,13 @@ When `dotenv.enabled` is `true`, the runner loads dotenv files and supplies thei
 
 Missing files are skipped.
 
+**Secret slots:** a secret can hold several values, one per slot, as on the edge (`secret_slots` in the API). `NAME@SLOT=value` in `.env.secrets` (or `FASTEDGE_VAR_SECRET_NAME@SLOT=value` in `.env`) sets slot `SLOT`, a positive integer in plain digits; a bare `NAME=value` is slot 0. The app's effective-at secret read returns the highest slot not above the time it asks for, and a plain secret read returns the slot effective now. Each slot has one spelling: `NAME@0`, leading zeros or any other `@` form stop the app from loading. CDN apps support slots; HTTP-WASM apps need a `fastedge-run` release with secret slots (older releases read `NAME@SLOT` as a secret of that literal name).
+
+```
+TOKEN=original_password
+TOKEN@1741790697=new_password
+```
+
 **Path resolution:**
 
 1. If `dotenv.path` is relative, `loadConfigFile` resolves it against the directory containing the config file. An absolute path is used as-is.

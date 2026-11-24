@@ -21,7 +21,7 @@ import {
   Dictionary,
   type FastEdgeConfig,
 } from "../fastedge-host/index.js";
-import { loadDotenvFiles } from "../utils/dotenv-loader.js";
+import { loadDotenvFiles, SecretSlotError } from "../utils/dotenv-loader.js";
 import { storesImports } from "./StoresHost.js";
 import type { SyncStores } from "./storesBridge.js";
 import { randomUUID } from "node:crypto";
@@ -176,6 +176,8 @@ export class ProxyWasmRunner implements IWasmRunner {
         this.dictionary,
       );
     } catch (error) {
+      // A bad secret slot fails the load, as it stops fastedge-run for HTTP apps.
+      if (error instanceof SecretSlotError) throw error;
       console.error("Failed to load dotenv files:", error);
       // Don't throw - continue with empty secrets/dictionary
     }

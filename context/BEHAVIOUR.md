@@ -402,8 +402,13 @@ them. Off unless `dotenv.enabled` is true. Config shape:
 | effective-at secret read | `proxy_get_effective_at_secret` / `proxy_secret_get_effective_at` | the secret value effective at `t` |
 
 - A missing name (or an empty secret) is `NotFound`.
-- Secrets may hold a rotation list `[{ value, effectiveAt }]`: the value with the latest
-  `effectiveAt` not after the time asked (now, for `proxy_get_secret`) wins; none → `NotFound`.
+- Secrets may hold slots, as on the edge (`secret_slots`): the value of the highest slot not after
+  the time asked (now, for `proxy_get_secret`) wins; none → `NotFound`. Dotenv sets them with
+  `NAME@SLOT` keys (`.env.secrets`, or `FASTEDGE_VAR_SECRET_NAME@SLOT` in `.env`): SLOT is a
+  positive integer in plain digits and a bare `NAME` is slot 0, one spelling per slot as in
+  `fastedge-run`. Any other `@` form fails the app's load (`SecretSlotError`), as it stops
+  `fastedge-run`. HTTP apps get slots from `fastedge-run` itself, once a release supports them;
+  older releases read `NAME@SLOT` as a secret of that literal name.
 - The edge always provides a WASI env table; Node's WASI rejects an empty one, which breaks the
   AssemblyScript shim mid-init. So when the dictionary is empty the runner sets
   `__FASTEDGE_RUNNER__=1` **[D16]**.
