@@ -24,6 +24,8 @@ same debugger for you: see [In VS Code](#in-vs-code).
 The page has two tabs: **Debugger** (one app, or a resource of several) and **Storage Explorer**.
 **Help** (top right) lists links into these docs, for the version you are running.
 
+![The Help menu: links to common tasks in the docs](https://raw.githubusercontent.com/G-Core/fastedge-test/main/docs/images/debugger-help.png)
+
 ## Where your files go
 
 The debugger works from one folder, the **app root**:
