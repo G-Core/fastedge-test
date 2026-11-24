@@ -399,7 +399,7 @@ them. Off unless `dotenv.enabled` is true. Config shape:
 | `getEnv(name)` (WASI env) | `environ_get` | the dictionary's own entries |
 | `getDictionary(name)` | `proxy_dictionary_get` | dictionary entries, then edge context keys |
 | `getSecret(name)` | `proxy_get_secret` / `proxy_secret_get` | secret store |
-| effective-at secret read | `proxy_get_effective_at_secret` | the secret value effective at `t` |
+| effective-at secret read | `proxy_get_effective_at_secret` / `proxy_secret_get_effective_at` | the secret value effective at `t` |
 
 - A missing name (or an empty secret) is `NotFound`.
 - Secrets may hold a rotation list `[{ value, effectiveAt }]`: the value with the latest
