@@ -54,7 +54,7 @@ function parse(value: string | undefined): Folder[] {
   return folders;
 }
 
-function inside(root: string, candidate: string): boolean {
+export function inside(root: string, candidate: string): boolean {
   const rel = path.relative(root, candidate);
   return !(rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel));
 }
