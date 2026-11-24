@@ -106,7 +106,7 @@ The final response: status, content type, **Body** and **Headers**. HTML and ima
 
 **Save Config** writes the current app's path, the request, properties, dotenv, request context,
 origin and log level to a `fastedge-config.test.json`; **Load Config** reads one back and loads its `.wasm`. The same file
-drives tests (`loadConfigFile()`); its format is in [TEST_CONFIG.md](TEST_CONFIG.md). An app loaded
+drives tests (`runConfig()` runs it as the debugger does); its format is in [TEST_CONFIG.md](TEST_CONFIG.md). An app loaded
 with **Upload File** is saved by its file name only, which Load Config looks for in the workspace:
 load the app by path when you want the config to find it again.
 

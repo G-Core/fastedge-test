@@ -12,6 +12,7 @@ import {
   runFlow,
   runHttpRequest,
   loadConfigFile,
+  runConfig,
   mockOrigins,
   createStores,
   createResource,
@@ -547,6 +548,43 @@ import { loadConfigFile } from "@gcoredev/fastedge-test/test";
 
 const config = await loadConfigFile("./fastedge-config.test.json");
 ```
+
+### runConfig
+
+```typescript
+interface RunConfigOptions {
+  stores?: false | TestStores;
+  appType?: "proxy-wasm" | "http-wasm";
+}
+
+function runConfig(configPath: string, options: RunConfigOptions & { appType: "proxy-wasm" }): Promise<FullFlowResult>;
+function runConfig(configPath: string, options: RunConfigOptions & { appType: "http-wasm" }): Promise<HttpResponse>;
+function runConfig(configPath: string, options?: RunConfigOptions): Promise<FullFlowResult | HttpResponse>;
+```
+
+Runs a config file (a debugger fixture) as the debugger does, and cleans up before it returns. The runner comes from the file's own `wasm.path` (relative to the app root, the nearest folder with `.fastedge-debug/`, a `Cargo.toml` or a `package.json`, as the debugger finds it; `<workspace>` means that root), `dotenv`, `client`, `edge` and `dc`. A CDN config's request runs through `runFlow` with its `properties` and `origin`, and the result is a `FullFlowResult`; an HTTP config's runs through `runHttpRequest`, and the result is an `HttpResponse`. Throws if the file has no `wasm.path`, or if its wasm is not the kind of app the file describes.
+
+`options.appType` states which kind of app the test expects. The result is then typed for it (no cast in TypeScript), and a file of the other kind throws: `Config 'fixtures/x.test.json' is http-wasm, expected proxy-wasm`. Without it, the result is the union.
+
+Stores follow the file's `stores`: by default a fresh instance seeded from `fixtures/stores/`, closed after the run. `options.stores` passes an instance instead, or `false` to turn them off.
+
+Each fixture carries its own settings, so tests of different fixtures need no shared runner. Any test runner works; with Node's built-in one:
+
+```javascript
+// fastedge-test/app.test.mjs, run with `node --test`
+import test from "node:test";
+import { runConfig, assertFinalStatus, assertFinalHeader } from "@gcoredev/fastedge-test/test";
+
+const fixture = (name) => new URL(`../fixtures/${name}.test.json`, import.meta.url).pathname;
+
+test("png is converted", async () => {
+  const result = await runConfig(fixture("png-converted"), { appType: "proxy-wasm" });
+  assertFinalStatus(result, 200);
+  assertFinalHeader(result, "content-type", "image/avif");
+});
+```
+
+Use `defineTestSuite` for tests written in code without fixture files.
 
 ### mockOrigins
 

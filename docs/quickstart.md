@@ -88,6 +88,19 @@ Each test runs against a fresh runner instance with its own isolated stores, and
 
 See [TEST_FRAMEWORK.md](TEST_FRAMEWORK.md) for the full API reference including `runTestSuite`, `loadConfigFile`, and all `FlowOptions` fields.
 
+### Testing fixture files
+
+To test the debugger's fixture files (`fixtures/*.test.json`), run each with `runConfig`: it uses the file's own wasm, dotenv, client and edge, so a fixture that stops doing what it says fails the test. Any test runner works, for example Node's built-in one (`node --test`):
+
+```javascript
+import test from "node:test";
+import { runConfig, assertFinalStatus } from "@gcoredev/fastedge-test/test";
+
+test("bot is not redirected", async () => {
+  assertFinalStatus(await runConfig("./fixtures/bot.test.json"), 200);
+});
+```
+
 ## Option 3: Low-Level Runner
 
 Use `createRunner` directly when you need full control over the runner lifecycle, or when integrating with an existing test framework such as Vitest or Jest.

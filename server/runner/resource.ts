@@ -297,12 +297,8 @@ async function resolveApp(name: string, entry: ResourceConfig["apps"][string], b
     if (raw && typeof raw === "object" && "apps" in raw) throw new Error(`app "${name}": ${entry.config} is a resource (resources cannot be nested)`);
     const referenced = TestConfigSchema.parse(raw);
     const dir = path.dirname(file);
-    // As the debugger reads a config: wasm.path is relative to the app's project root, and
-    // "<workspace>" is that root (dotenv.path stays relative to the config file).
-    if (!wasm && referenced.wasm) {
-      const root = projectRoot(dir);
-      wasm = path.resolve(root, referenced.wasm.path.replace(/^<workspace>[\\/]?/, ""));
-    }
+    // dotenv.path stays relative to the config file.
+    if (!wasm && referenced.wasm) wasm = configWasmPath(referenced.wasm.path, dir);
     dotenv ??= referenced.dotenv && { ...referenced.dotenv, path: path.resolve(dir, referenced.dotenv.path ?? ".") };
   }
   if (!wasm) throw new Error(`app "${name}": no wasm (set "wasm" or "config")`);
@@ -321,10 +317,21 @@ async function resolveApp(name: string, entry: ResourceConfig["apps"][string], b
   return { wasm, dotenv };
 }
 
-/** The nearest folder at or above `dir` with a Cargo.toml or package.json; else `dir`. */
+/**
+ * A config's `wasm.path`, as the debugger reads it: relative to the app root, and "<workspace>"
+ * is that root.
+ */
+export function configWasmPath(wasmPath: string, configDir: string): string {
+  return path.resolve(projectRoot(configDir), wasmPath.replace(/^<workspace>[\\/]?/, ""));
+}
+
+/**
+ * The app root of `dir`, as the debugger finds it: the nearest folder at or above `dir` with
+ * `.fastedge-debug/`, a Cargo.toml or a package.json; else `dir`.
+ */
 function projectRoot(dir: string): string {
   for (let at = dir; ; at = path.dirname(at)) {
-    if (existsSync(path.join(at, "Cargo.toml")) || existsSync(path.join(at, "package.json"))) return at;
+    if (["Cargo.toml", "package.json", ".fastedge-debug"].some((marker) => existsSync(path.join(at, marker)))) return at;
     if (path.dirname(at) === at) return dir;
   }
 }
