@@ -195,8 +195,8 @@ not added **[D19]**: set them by hand if an app reads them.
 ### Pseudo-headers
 
 - `runFlow` (test framework) adds `:method`, `:path`, `:authority`, `:scheme` to the request
-  headers, derived from the URL; explicit request headers win. The debugger and resources send
-  only the headers given.
+  headers, derived from the URL; explicit request headers win. The debugger, `runConfig` and resources
+  send only the headers given.
 - Pseudo-headers are stripped before any outgoing HTTP/1.1 call: the origin fetch, an HTTP-app
   origin and `proxy_http_call`.
 

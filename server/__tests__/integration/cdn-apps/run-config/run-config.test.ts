@@ -76,6 +76,17 @@ describe("runConfig (CDN)", () => {
     expect(result.finalResponse.status).toBe(200);
   }, 30000);
 
+  it("sends only the fixture's headers, as the debugger does (no pseudo-headers added)", async () => {
+    const file = await fixture("headers", {
+      wasm: { path: "env.wasm" },
+      request: { url: "built-in", headers: { "x-test": "1" } },
+    });
+    const result = await runConfig(file, { appType: "proxy-wasm" });
+    const headers = result.hookResults.onRequestHeaders.input.request.headers;
+    expect(headers["x-test"]).toBe("1");
+    expect(Object.keys(headers).filter((name) => name.startsWith(":"))).toEqual([]);
+  }, 30000);
+
   it("applies the fixture's client and edge", async () => {
     const file = await fixture("geo", {
       wasm: { path: wasm("as/properties/valid-readonly-read.wasm") },

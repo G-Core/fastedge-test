@@ -275,14 +275,17 @@ export async function runConfig(
           body: request.body,
         });
       }
-      return await runFlow(runner, {
-        url: config.request.url,
-        method: request.method,
-        requestHeaders: request.headers,
-        requestBody: request.body,
-        properties: config.properties,
-        origin: config.origin,
-      });
+      // As the debugger calls it: the fixture's headers only (runFlow would add pseudo-headers).
+      return await runner.callFullFlow(
+        config.request.url,
+        request.method ?? "GET",
+        request.headers ?? {},
+        request.body ?? "",
+        config.properties ?? {},
+        true,
+        undefined,
+        config.origin,
+      );
     } finally {
       await runner.cleanup();
     }
