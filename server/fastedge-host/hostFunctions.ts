@@ -86,7 +86,8 @@ export function createFastEdgeHostFunctions(
         logDebug(`proxy_get_effective_at_secret key="${key}" at=${timestamp}`);
 
         // Lookup secret at specific time
-        const value = secretStore.getEffectiveAt(key, timestamp);
+        // `at` is a u32 on the edge; WebAssembly hands an i32 to JavaScript, so read it unsigned.
+        const value = secretStore.getEffectiveAt(key, timestamp >>> 0);
         if (value === null) {
           logDebug(
             `proxy_get_effective_at_secret key="${key}" not found at timestamp ${timestamp}`,

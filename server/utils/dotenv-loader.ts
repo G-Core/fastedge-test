@@ -141,7 +141,8 @@ const MAX_SLOT = 2n ** 64n - 1n;
  * effective at every time).
  */
 export function secretSlots(raw: Record<string, string>): Record<string, string | SecretWithTimestamp[]> {
-  const slots: Record<string, SecretWithTimestamp[]> = {};
+  // No prototype: a secret may be called "constructor" or "toString".
+  const slots: Record<string, SecretWithTimestamp[]> = Object.create(null);
   for (const [key, value] of Object.entries(raw)) {
     const at = key.indexOf("@");
     const name = at === -1 ? key : key.slice(0, at);

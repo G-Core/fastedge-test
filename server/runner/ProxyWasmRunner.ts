@@ -176,8 +176,12 @@ export class ProxyWasmRunner implements IWasmRunner {
         this.dictionary,
       );
     } catch (error) {
-      // A bad secret slot fails the load, as it stops fastedge-run for HTTP apps.
-      if (error instanceof SecretSlotError) throw error;
+      // A bad secret slot fails the load, as it stops fastedge-run for HTTP apps. Drop the module
+      // too, so nothing runs on half-applied stores until a load (or dotenv apply) succeeds.
+      if (error instanceof SecretSlotError) {
+        this.module = null;
+        throw error;
+      }
       console.error("Failed to load dotenv files:", error);
       // Don't throw - continue with empty secrets/dictionary
     }

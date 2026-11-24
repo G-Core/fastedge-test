@@ -401,7 +401,8 @@ them. Off unless `dotenv.enabled` is true. Config shape:
 | `getSecret(name)` | `proxy_get_secret` / `proxy_secret_get` | secret store |
 | effective-at secret read | `proxy_get_effective_at_secret` / `proxy_secret_get_effective_at` | the secret value effective at `t` |
 
-- A missing name (or an empty secret) is `NotFound`.
+- A missing name is `NotFound`. An empty value is `Ok` with 0 bytes, as on the edge, which returns
+  whatever value the matching slot holds.
 - Secrets may hold slots, as on the edge (`secret_slots`): the value of the highest slot not after
   the time asked (now, for `proxy_get_secret`) wins; none → `NotFound`. Dotenv sets them with
   `NAME@SLOT` keys (`.env.secrets`, or `FASTEDGE_VAR_SECRET_NAME@SLOT` in `.env`): SLOT is a
