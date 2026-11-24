@@ -86,7 +86,22 @@ jobs:
       - name: Setup FastEdge CLI binaries
         uses: ./.github/setup-fastedge-binaries
 
+      # The build bakes the version into the debugger page (its Help links point at that release's
+      # docs). semantic-release sets the version only when it publishes, after the build, so ask it
+      # for the next version first. Empty when there is nothing to release; then nothing is published.
+      - name: Next release version
+        id: next_version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+          CI: true
+        run: |
+          out=$(pnpm dlx semantic-release@25 --dry-run --plugins @semantic-release/commit-analyzer 2>&1) || { echo "$out"; exit 1; }
+          echo "$out"
+          echo "version=$(echo "$out" | sed -n 's/.*The next release version is \([0-9][0-9A-Za-z.+-]*\).*/\1/p' | tail -1)" >> "$GITHUB_OUTPUT"
+
       - name: Build
+        env:
+          FASTEDGE_TEST_VERSION: ${{ steps.next_version.outputs.version }}
         run: pnpm run build
 
       - name: Verify build output

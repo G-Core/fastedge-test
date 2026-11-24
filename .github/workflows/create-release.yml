@@ -69,8 +69,9 @@ jobs:
         uses: ./.github/setup-fastedge-binaries
 
       - name: Build Debugger code
+        # The tag's package.json is not bumped (semantic-release publishes the version to npm only).
         run: |
-          pnpm run build
+          FASTEDGE_TEST_VERSION="${GITHUB_REF_NAME#v}" pnpm run build
 
       - name: Zip Debugger distribution
         run: |

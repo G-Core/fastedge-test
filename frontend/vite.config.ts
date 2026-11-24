@@ -2,7 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
 
-const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8"));
+// Release builds pass the version being released: package.json is not bumped in the repository.
+const version =
+  process.env.FASTEDGE_TEST_VERSION ||
+  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")).version;
 
 export default defineConfig({
   plugins: [react()],
