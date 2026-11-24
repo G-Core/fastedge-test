@@ -235,7 +235,8 @@ export class HttpWasmRunner implements IWasmRunner {
       }
 
       // Forward request to local fastedge-run server
-      const url = `http://localhost:${this.port}${request.path}`;
+      // A path without its leading "/" (as a fixture may have it) is still a path, as in the debugger UI.
+      const url = `http://localhost:${this.port}${request.path.startsWith("/") ? "" : "/"}${request.path}`;
       const response = await fetch(url, {
         method: request.method,
         headers,

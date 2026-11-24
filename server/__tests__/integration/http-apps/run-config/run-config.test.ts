@@ -23,4 +23,14 @@ describe("runConfig (HTTP)", () => {
     assertHttpStatus(response, 200);
     assertHttpBody(response, "Username: u1, Password: p1");
   }, 30000);
+
+  it("a path without its leading slash still reaches the app, as in the debugger", async () => {
+    const file = path.join(dir, "no-slash.test.json");
+    await writeFile(file, JSON.stringify({
+      appType: "http-wasm",
+      wasm: { path: path.resolve("wasm/http-apps/rust/wasi/variables-and-secrets.wasm") },
+      request: { path: "hello" },
+    }));
+    assertHttpStatus(await runConfig(file, { appType: "http-wasm" }), 200);
+  }, 30000);
 });
