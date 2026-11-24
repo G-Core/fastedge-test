@@ -3,6 +3,7 @@ import { resolveOrigin } from "../runner/origin.js";
 import path from "path";
 import { createRunner, createRunnerFromBuffer } from "../runner/standalone.js";
 import { createStores, type TestStores } from "../stores/testStores.js";
+import { resolveStoresRoot } from "../stores/StoresManager.js";
 import { edgeDc } from "../runner/requestContext.js";
 import { BUILTIN_SHORTHAND, BUILTIN_URL } from "../runner/ProxyWasmRunner.js";
 import { TestConfigSchema } from "../schemas/config.js";
@@ -10,7 +11,7 @@ import type { TestConfig } from "../schemas/config.js";
 import type { IWasmRunner, HttpResponse } from "../runner/IWasmRunner.js";
 import type { FullFlowResult } from "../runner/types.js";
 import type { TestSuite, ResourceTestSuite, SuiteResult, TestResult, FlowOptions, HttpRequestOptions } from "./types.js";
-import { createResource, configWasmPath } from "../runner/resource.js";
+import { createResource, configWasmPath, projectRoot } from "../runner/resource.js";
 
 /**
  * Validate and return a typed TestSuite definition.
@@ -222,9 +223,10 @@ export interface RunConfigOptions {
 
 /**
  * Run a config file (a debugger fixture) as the debugger does: a runner from its own wasm
- * (`wasm.path` relative to the app's project root), dotenv, client, edge and `dc`; its request
- * through its origin. Stores: the config's `stores` (default a fresh instance seeded from
- * `fixtures/stores/`, closed after the run), or `options.stores` (an instance, or false).
+ * (`wasm.path` relative to the app's project root), dotenv (without a `path`: the app root),
+ * client, edge and `dc`; its request through its origin. Stores: the config's `stores` (default a
+ * fresh instance seeded from the fixture project's `fixtures/stores/`, closed after the run), or
+ * `options.stores` (an instance, or false).
  * The runner is cleaned up before this returns.
  *
  * Returns a `FullFlowResult` for a CDN (proxy-wasm) config, an `HttpResponse` for an HTTP one.
@@ -243,13 +245,17 @@ export async function runConfig(
   if (options.appType && options.appType !== config.appType) {
     throw new Error(`Config '${configPath}' is ${config.appType}, expected ${options.appType}`);
   }
-  const wasm = configWasmPath(config.wasm.path, path.dirname(path.resolve(configPath)));
+  // The fixture's app root, as the debugger finds it: its wasm, default dotenv folder and stores.
+  const appRoot = projectRoot(path.dirname(path.resolve(configPath)));
+  const wasm = configWasmPath(config.wasm.path, appRoot);
 
   const wanted = options.stores ?? (config.stores === false ? false : undefined);
-  const own = wanted === undefined ? await createStores({ dc: config.dc ?? edgeDc(config.edge) }) : null;
+  const own = wanted === undefined
+    ? await createStores({ dc: config.dc ?? edgeDc(config.edge), fixtures: resolveStoresRoot(appRoot) })
+    : null;
   try {
     const runner = await createRunner(wasm, {
-      dotenv: config.dotenv,
+      dotenv: config.dotenv && { ...config.dotenv, path: config.dotenv.path ?? appRoot },
       stores: own ?? wanted ?? false,
       dc: config.dc,
       client: config.client,

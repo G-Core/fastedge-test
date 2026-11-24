@@ -330,7 +330,7 @@ export function configWasmPath(wasmPath: string, configDir: string, workspace?: 
  * `.fastedge-debug/`, a Cargo.toml or a package.json; else `dir`. A `dir` inside `workspace` is
  * searched no higher than it, as VS Code searches no higher than the folder you opened.
  */
-function projectRoot(dir: string, workspace?: string): string {
+export function projectRoot(dir: string, workspace?: string): string {
   const inWorkspace = workspace !== undefined && inside(workspace, dir);
   for (let at = dir; ; at = path.dirname(at)) {
     if (["Cargo.toml", "package.json", ".fastedge-debug"].some((marker) => existsSync(path.join(at, marker)))) return at;

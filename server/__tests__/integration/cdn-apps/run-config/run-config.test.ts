@@ -37,6 +37,29 @@ describe("runConfig (CDN)", () => {
     expect(logsContain(result.hookResults.onRequestHeaders, "USERNAME: from-fixture")).toBe(true);
   }, 30000);
 
+  it("a dotenv without a path reads the app root, as in the debugger", async () => {
+    await writeFile(path.join(project, ".env"), "FASTEDGE_VAR_ENV_USERNAME=from-root\n");
+    try {
+      const file = await fixture("env-root", { wasm: { path: "env.wasm" }, request: { url: "built-in" }, dotenv: { enabled: true } });
+      const result = await runConfig(file, { appType: "proxy-wasm" });
+      expect(logsContain(result.hookResults.onRequestHeaders, "USERNAME: from-root")).toBe(true);
+    } finally {
+      await rm(path.join(project, ".env"));
+    }
+  }, 30000);
+
+  it("seeds the stores from the fixture's project, not the current directory", async () => {
+    await mkdir(path.join(project, "fixtures", "stores", "kv"), { recursive: true });
+    await writeFile(path.join(project, "fixtures", "stores", "kv", "users.json"), JSON.stringify({ strings: { "user:1": "alice" } }));
+    await copyFile(wasm("rust/stores/stores.wasm"), path.join(project, "stores.wasm"));
+    const file = await fixture("kv", {
+      wasm: { path: "stores.wasm" },
+      request: { url: "built-in", headers: { "x-op": "kv-get", "x-store": "users", "x-key": "user:1" } },
+    });
+    const result = await runConfig(file, { appType: "proxy-wasm" });
+    expect(result.finalResponse.body).toBe("alice");
+  }, 30000);
+
   it("reads <workspace> as the project root; no dotenv means no variables", async () => {
     const file = await fixture("no-env", { wasm: { path: "<workspace>/env.wasm" }, request: { url: "built-in" } });
     const result = await runConfig(file, { appType: "proxy-wasm" });
