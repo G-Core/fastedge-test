@@ -148,3 +148,15 @@ export function logEnvironmentInfo(): void {
     console.log("🌍 Environment Detection:", info);
   }
 }
+
+/**
+ * Open a URL in the system browser. Inside the VS Code panel (an iframe) the extension opens it,
+ * as a webview cannot; elsewhere a new tab.
+ */
+export function openExternal(url: string): void {
+  if (window !== window.top) {
+    window.parent.postMessage({ command: "openExternal", url }, "*");
+  } else {
+    window.open(url, "_blank", "noopener");
+  }
+}

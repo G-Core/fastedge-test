@@ -30,6 +30,14 @@ header {
   align-items: center;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap; /* a narrow panel: the status goes under Help rather than off the edge */
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px 24px;
+}
+
 h1 {
   margin: 0;
   color: #ff6c37;

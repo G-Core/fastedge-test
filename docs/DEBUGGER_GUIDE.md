@@ -22,6 +22,25 @@ In VS Code, the [FastEdge Launcher](https://github.com/G-Core/FastEdge-vscode) e
 same debugger for you: see [In VS Code](#in-vs-code).
 
 The page has two tabs: **Debugger** (one app, or a resource of several) and **Storage Explorer**.
+**Help** (top right) lists links into these docs, for the version you are running.
+
+![The Help menu: links to common tasks in the docs](https://raw.githubusercontent.com/G-Core/fastedge-test/main/docs/images/debugger-help.png)
+
+## Where your files go
+
+The debugger works from one folder, the **app root**:
+
+- **Command line:** the workspace (see above).
+- **VS Code:** the nearest folder above your file that holds `.fastedge-debug/`, `package.json` or
+  `Cargo.toml`, searching no higher than the folder you opened.
+
+In the app root:
+
+- `.fastedge-debug/` is the debugger's own folder (its port file and the loaded app). Add it to
+  `.gitignore`.
+- The dotenv files (`.env`, `.env.secrets`, `.env.variables`) are read from here, unless
+  [Dotenv path](#dotenv) names another folder.
+- `<workspace>` in a path means this folder.
 
 ## Load an app
 
@@ -37,7 +56,8 @@ HTTP view. The title shows the app's name.
 ## Send a request
 
 The bar under the loader holds the method, the URL and **Send**. Below it, the **Request** panel
-has the headers (tick a row to send it) and the body.
+has the headers (tick a row to send it) and the body. HTTP apps can also take fixed request and
+response headers from `.env.req_headers` and `.env.rsp_headers` (see [Dotenv](#dotenv)).
 
 - **CDN apps** start on `http://fastedge-builtin.debug`, the built-in origin: no network, it answers
   with a JSON echo of the request it received. With no origin set in
@@ -57,7 +77,9 @@ Each panel collapses; open the ones you need.
 Off by default. Turn it on to load the app's environment variables and secrets from `.env` files
 (`.env`, `.env.variables`, `.env.secrets`). **Dotenv path** is the folder they are in; empty means
 the app's root folder. Turning it on or off reloads the app. A secret with several slots (rotation)
-is written `NAME@SLOT=value`; the file rules are in [TEST_CONFIG.md](TEST_CONFIG.md#dotenv-configuration).
+is written `NAME@SLOT=value`. HTTP apps also read fixed request and response headers from
+`.env.req_headers` and `.env.rsp_headers`; CDN apps take request headers from the **Request** panel
+only. The file rules are in [TEST_CONFIG.md](TEST_CONFIG.md#dotenv-configuration).
 
 ### Request Context
 
@@ -122,8 +144,8 @@ Turn on **Multi-app (CDN resource)** to run one request through several CDN apps
 as a CDN resource does on the edge. The view edits a resource file; its format is in
 [RESOURCES.md](RESOURCES.md).
 
-- **File:** the resource file, `.fastedge-debug/fastedge-cdn-resource.test.json` by default.
-  **Open** reads it into the editor, **Save** writes it, **Load** loads its apps.
+- **File:** the resource file, `.fastedge-debug/fastedge-cdn-resource.test.json` in the workspace by
+  default (in VS Code, the folder you opened, not the app root). **Open** reads it into the editor, **Save** writes it, **Load** loads its apps.
 - **Apps:** a name, then a `.wasm`, an app's `fastedge-config.test.json`, or both, and an optional
   dotenv folder. Paths are relative to the resource file.
 - **Rules:** `main` sets which app runs each hook and the origin. A rule matches the request path
@@ -182,6 +204,9 @@ The FastEdge Launcher extension runs this debugger in a VS Code panel:
   the debugger with it loaded.
 - **FastEdge: Load in Debugger** on a `.wasm` file, and **FastEdge: Load Config in Debugger** on a
   `*test.json` file, load them into the debugger.
+- **F5** and **Load in Debugger** load the app with [Dotenv](#dotenv) on, reading the dotenv files
+  in the app root (see [Where your files go](#where-your-files-go)); a loaded config keeps its own
+  dotenv setting.
 - Load Config and Save Config use VS Code's file dialogs, starting in your app's folder.
 - Approvals for folders outside the workspace come as VS Code dialogs.
 

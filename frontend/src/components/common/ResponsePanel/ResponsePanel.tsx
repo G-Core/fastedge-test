@@ -4,6 +4,7 @@ import { CollapsiblePanel } from "../CollapsiblePanel";
 import { JsonDisplay, CollapsiblePre, textSize } from "../JsonDisplay";
 import { useAppStore } from "../../../stores";
 import styles from "./ResponsePanel.module.css";
+import { openExternal } from "../../../utils/environment";
 
 interface ResponsePanelProps {
   response: {
@@ -346,14 +347,7 @@ export function ResponsePanel({ response }: ResponsePanelProps) {
               </button>
               <button
                 className={styles.toolbarButton}
-                onClick={() => {
-                  const url = `http://localhost:${httpRunnerPort}/`;
-                  if (window !== window.top) {
-                    window.parent.postMessage({ command: "openExternal", url }, "*");
-                  } else {
-                    window.open(url, "_blank");
-                  }
-                }}
+                onClick={() => openExternal(`http://localhost:${httpRunnerPort}/`)}
                 disabled={!httpRunnerPort}
                 title={httpRunnerPort ? "Open in system browser" : "No HTTP WASM runner active"}
               >

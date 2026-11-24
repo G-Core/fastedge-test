@@ -57,7 +57,8 @@ app and opens the same debugger on F5.
 
 ![The debugger with a CDN app reading Edge KV](https://raw.githubusercontent.com/G-Core/fastedge-test/main/docs/images/debugger-single-app.png)
 
-- **Using it:** the [Debugger Guide](docs/DEBUGGER_GUIDE.md) walks through every panel.
+- **Using it:** the [Debugger Guide](docs/DEBUGGER_GUIDE.md) walks through every panel; **Help** in
+  the debugger's header links to common tasks.
 - **Running it:** [Debugger Server](docs/DEBUGGER.md) covers the CLI, ports, environment variables
   and starting it from code.
 
