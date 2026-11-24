@@ -4,6 +4,7 @@ import { useWebSocket } from "./hooks/useWebSocket";
 import type { ServerEvent } from "./hooks/websocket-types";
 import { WasmLoader } from "./components/common/WasmLoader";
 import { ConnectionStatus } from "./components/common/ConnectionStatus";
+import { HelpLinks } from "./components/common/HelpLinks";
 import { LoadingSpinner } from "./components/common/LoadingSpinner";
 import { ConfigButtons } from "./components/common/ConfigButtons";
 import { DragDropZone } from "./components/common/DragDropZone";
@@ -386,7 +387,10 @@ function App() {
             FastEdge WASM Debugger
             {wasmPath && !multiApp && ` - ${wasmPath.split(/[\\/]/).pop()!.replace(/\.wasm$/, '')}`}
           </h1>
-          <ConnectionStatus status={wsStatus} />
+          <div className="header-actions">
+            <HelpLinks />
+            <ConnectionStatus status={wsStatus} />
+          </div>
         </header>
         <div className="page-tabs">
           <Tabs

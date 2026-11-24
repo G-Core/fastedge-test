@@ -22,6 +22,23 @@ In VS Code, the [FastEdge Launcher](https://github.com/G-Core/FastEdge-vscode) e
 same debugger for you: see [In VS Code](#in-vs-code).
 
 The page has two tabs: **Debugger** (one app, or a resource of several) and **Storage Explorer**.
+**Help** (top right) lists links into these docs, for the version you are running.
+
+## Where your files go
+
+The debugger works from one folder, the **app root**:
+
+- **Command line:** the workspace (see above).
+- **VS Code:** the nearest folder above your file that holds `.fastedge-debug/`, `package.json` or
+  `Cargo.toml`, searching no higher than the folder you opened.
+
+In the app root:
+
+- `.fastedge-debug/` is the debugger's own folder (its port file, the loaded app and the default
+  resource file). Add it to `.gitignore`.
+- The dotenv files (`.env`, `.env.secrets`, `.env.variables`) are read from here, unless
+  [Dotenv path](#dotenv) names another folder.
+- `<workspace>` in a path means this folder.
 
 ## Load an app
 
@@ -37,7 +54,8 @@ HTTP view. The title shows the app's name.
 ## Send a request
 
 The bar under the loader holds the method, the URL and **Send**. Below it, the **Request** panel
-has the headers (tick a row to send it) and the body.
+has the headers (tick a row to send it) and the body. HTTP apps can also take fixed request and
+response headers from `.env.req_headers` and `.env.rsp_headers` (see [Dotenv](#dotenv)).
 
 - **CDN apps** start on `http://fastedge-builtin.debug`, the built-in origin: no network, it answers
   with a JSON echo of the request it received. With no origin set in
@@ -57,7 +75,9 @@ Each panel collapses; open the ones you need.
 Off by default. Turn it on to load the app's environment variables and secrets from `.env` files
 (`.env`, `.env.variables`, `.env.secrets`). **Dotenv path** is the folder they are in; empty means
 the app's root folder. Turning it on or off reloads the app. A secret with several slots (rotation)
-is written `NAME@SLOT=value`; the file rules are in [TEST_CONFIG.md](TEST_CONFIG.md#dotenv-configuration).
+is written `NAME@SLOT=value`. HTTP apps also read fixed request and response headers from
+`.env.req_headers` and `.env.rsp_headers`; CDN apps take request headers from the **Request** panel
+only. The file rules are in [TEST_CONFIG.md](TEST_CONFIG.md#dotenv-configuration).
 
 ### Request Context
 

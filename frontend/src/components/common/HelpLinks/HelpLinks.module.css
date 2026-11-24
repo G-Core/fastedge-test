@@ -1,0 +1,106 @@
+/* :not(:disabled) matches the global button:hover rule, which would otherwise win. */
+.button,
+.button:hover:not(:disabled) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 16px;
+  border: 1px solid #ff6c37;
+  border-radius: 14px;
+  background: none;
+  color: #ff6c37;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.button:hover:not(:disabled),
+.button:focus-visible {
+  background: rgb(255 108 55 / 15%);
+}
+
+.icon {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ff6c37;
+  color: #1e1e1e;
+  font-size: 12px;
+}
+
+.popover {
+  position: fixed;
+  inset: 52px 20px auto auto;
+  margin: 0;
+  max-width: calc(100vw - 40px);
+  padding: 8px 0;
+  background: #252525;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 40%);
+  color: #ccc;
+  font-size: 13px;
+}
+
+/* Under the button, right edges aligned, so it opens toward the centre. Without anchor
+   positioning it stays at the page's top right. */
+@supports (anchor-name: --help) {
+  .button {
+    anchor-name: --help-button;
+  }
+
+  .popover {
+    position-anchor: --help-button;
+    inset: auto;
+    top: calc(anchor(bottom) + 6px);
+    right: anchor(right);
+  }
+}
+
+.popover ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.popover a {
+  color: #ccc;
+  text-decoration: none;
+}
+
+.popover li a {
+  display: block;
+  padding: 6px 16px;
+}
+
+.popover li a:hover,
+.popover li a:focus-visible {
+  background: #2d2d2d;
+  color: #ff6c37;
+}
+
+.footer {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+  margin-top: 6px;
+  padding: 8px 16px 2px;
+  border-top: 1px solid #3d3d3d;
+  font-size: 12px;
+}
+
+.footer a + a::before {
+  content: "•";
+  margin-right: 8px;
+  color: #aaa;
+}
+
+.footer a:hover {
+  color: #ff6c37;
+}
+
+.footer span {
+  margin-left: auto;
+  color: #888;
+}
