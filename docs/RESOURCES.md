@@ -29,7 +29,7 @@ A resource is described by one JSON file. The debugger looks for `.fastedge-debu
 An app entry takes these fields:
 
 - `wasm`: the built binary, relative to the resource file. It overrides the wasm of a referenced config.
-- `config`: another project's `fastedge-config.test.json`. The app takes its wasm and dotenv from it. That config's `wasm.path` is relative to that app's project root (the nearest folder with a `Cargo.toml` or `package.json`, and `<workspace>` means that root). Its `dotenv.path` is relative to the config file. Fields set in the resource file win.
+- `config`: another project's `fastedge-config.test.json`. The app takes its wasm and dotenv from it. That config's `wasm.path` is relative to that app's root (the nearest folder with `.fastedge-debug/`, a `Cargo.toml` or a `package.json`, and `<workspace>` means that root). Its `dotenv.path` is relative to the config file. Fields set in the resource file win.
 - `dotenv`: `{ enabled, path }`, overriding the referenced config's dotenv. `path` is relative to the resource file and defaults to the resource file's folder.
 
 The full field-by-field schema is in [TEST_CONFIG.md](TEST_CONFIG.md#resource-configuration).

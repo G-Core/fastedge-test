@@ -5,7 +5,8 @@
  * Import via: import { defineTestSuite, runTestSuite } from '@gcoredev/fastedge-test/test'
  */
 
-export { defineTestSuite, runTestSuite, runAndExit, runFlow, runHttpRequest, loadConfigFile } from "./suite-runner.js";
+export { defineTestSuite, runTestSuite, runAndExit, runFlow, runHttpRequest, loadConfigFile, runConfig } from "./suite-runner.js";
+export type { RunConfigOptions } from "./suite-runner.js";
 
 export { mockOrigins } from "./mock-origins.js";
 export { createStores } from "../stores/testStores.js";

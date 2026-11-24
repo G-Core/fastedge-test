@@ -9,7 +9,7 @@
  */
 import { existsSync } from "node:fs";
 import vm from "node:vm";
-import { ApprovalNeeded } from "../utils/allowedFolders.js";
+import { ApprovalNeeded, inside } from "../utils/allowedFolders.js";
 import { readFile, stat } from "fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -95,7 +95,7 @@ export async function createResource(fileOrObject: string | ResourceConfigInput,
   const builds = new Map<string, { wasm: string; dotenv?: { enabled?: boolean; path: string }; mtimeMs: number }>();
   try {
     for (const [name, entry] of Object.entries(config.apps)) {
-      const app = await resolveApp(name, entry, baseDir, confine);
+      const app = await resolveApp(name, entry, baseDir, confine, options.root);
       const { mtimeMs } = await stat(app.wasm);
       apps.set(name, await createRunner(app.wasm, {
         dotenv: app.dotenv,
@@ -288,7 +288,7 @@ function confinement(root: string | undefined, allowedFolders = false): Confine 
   };
 }
 
-async function resolveApp(name: string, entry: ResourceConfig["apps"][string], baseDir: string, confine: Confine) {
+async function resolveApp(name: string, entry: ResourceConfig["apps"][string], baseDir: string, confine: Confine, root?: string) {
   let wasm = entry.wasm && path.resolve(baseDir, entry.wasm);
   let dotenv = entry.dotenv && { ...entry.dotenv, path: path.resolve(baseDir, entry.dotenv.path ?? ".") };
   if (entry.config) {
@@ -297,12 +297,8 @@ async function resolveApp(name: string, entry: ResourceConfig["apps"][string], b
     if (raw && typeof raw === "object" && "apps" in raw) throw new Error(`app "${name}": ${entry.config} is a resource (resources cannot be nested)`);
     const referenced = TestConfigSchema.parse(raw);
     const dir = path.dirname(file);
-    // As the debugger reads a config: wasm.path is relative to the app's project root, and
-    // "<workspace>" is that root (dotenv.path stays relative to the config file).
-    if (!wasm && referenced.wasm) {
-      const root = projectRoot(dir);
-      wasm = path.resolve(root, referenced.wasm.path.replace(/^<workspace>[\\/]?/, ""));
-    }
+    // dotenv.path stays relative to the config file.
+    if (!wasm && referenced.wasm) wasm = configWasmPath(referenced.wasm.path, dir, root);
     dotenv ??= referenced.dotenv && { ...referenced.dotenv, path: path.resolve(dir, referenced.dotenv.path ?? ".") };
   }
   if (!wasm) throw new Error(`app "${name}": no wasm (set "wasm" or "config")`);
@@ -321,11 +317,24 @@ async function resolveApp(name: string, entry: ResourceConfig["apps"][string], b
   return { wasm, dotenv };
 }
 
-/** The nearest folder at or above `dir` with a Cargo.toml or package.json; else `dir`. */
-function projectRoot(dir: string): string {
+/**
+ * A config's `wasm.path`, as the debugger reads it: relative to the app root, and "<workspace>"
+ * is that root.
+ */
+export function configWasmPath(wasmPath: string, configDir: string, workspace?: string): string {
+  return path.resolve(projectRoot(configDir, workspace), wasmPath.replace(/^<workspace>[\\/]?/, ""));
+}
+
+/**
+ * The app root of `dir`, as the debugger finds it: the nearest folder at or above `dir` with
+ * `.fastedge-debug/`, a Cargo.toml or a package.json; else `dir`. A `dir` inside `workspace` is
+ * searched no higher than it, as VS Code searches no higher than the folder you opened.
+ */
+export function projectRoot(dir: string, workspace?: string): string {
+  const inWorkspace = workspace !== undefined && inside(workspace, dir);
   for (let at = dir; ; at = path.dirname(at)) {
-    if (existsSync(path.join(at, "Cargo.toml")) || existsSync(path.join(at, "package.json"))) return at;
-    if (path.dirname(at) === at) return dir;
+    if (["Cargo.toml", "package.json", ".fastedge-debug"].some((marker) => existsSync(path.join(at, marker)))) return at;
+    if (path.dirname(at) === at || (inWorkspace && path.relative(workspace, at) === "")) return dir;
   }
 }
 

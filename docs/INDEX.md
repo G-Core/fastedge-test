@@ -108,6 +108,7 @@ import { defineTestSuite, runAndExit } from "@gcoredev/fastedge-test/test";
 | `runFlow`                    | function | Executes a single request flow directly                              |
 | `runHttpRequest`             | function | Executes a single HTTP request directly                              |
 | `loadConfigFile`             | function | Loads and validates a `fastedge-config.test.json` file               |
+| `runConfig`                  | function | Runs a config file (debugger fixture) with its own wasm, dotenv and context |
 | `mockOrigins`                | function | Creates mock HTTP origins that respond to outgoing HTTP calls        |
 | `createStores`               | function | Creates in-memory cache and Edge KV stores for a test                |
 | `createResource`             | function | Loads a resource: several apps, one per hook                         |

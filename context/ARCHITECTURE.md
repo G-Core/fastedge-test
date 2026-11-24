@@ -640,8 +640,9 @@ edge rules it models: [BEHAVIOUR.md](BEHAVIOUR.md#resources).
 
 1. Parse with `ResourceConfigSchema`; check app references and rule regexes; resolve origins.
 2. For each app, resolve its wasm and dotenv (from `wasm`, or from a referenced
-   `fastedge-config.test.json`, whose `wasm.path` is relative to its project root: the nearest
-   folder with `Cargo.toml` or `package.json`), confine paths to `root` when given, and
+   `fastedge-config.test.json`, whose `wasm.path` is relative to its app root: the nearest
+   folder with `.fastedge-debug/`, `Cargo.toml` or `package.json`, `configWasmPath`, shared with
+   the test framework's `runConfig`), confine paths to `root` when given, and
    `createRunner()` it with the resource's stores, `dc`, client and edge.
 3. Check types: hooks need CDN apps, an app origin an HTTP app. On error, clean up all runners.
 

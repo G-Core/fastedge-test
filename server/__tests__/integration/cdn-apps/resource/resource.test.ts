@@ -302,4 +302,23 @@ describe("an app from its project's config", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("searches for the project root no higher than the workspace", async () => {
+    // A package.json above the workspace must not become the app's root.
+    const dir = mkdtempSync(path.join(tmpdir(), "resource-bound-"));
+    try {
+      writeFileSync(path.join(dir, "package.json"), "{}");
+      const app = path.join(dir, "workspace", "app");
+      mkdirSync(app, { recursive: true });
+      copyFileSync(wasm, path.join(app, "app.wasm"));
+      writeFileSync(path.join(app, "app.test.json"), JSON.stringify({ wasm: { path: "<workspace>/app.wasm" }, request: { url: "built-in" } }));
+      const r = await createResource({
+        apps: { a: { config: "app/app.test.json" } },
+        main: { hooks: { onRequestHeaders: "a" }, origin: { url: "built-in" } },
+      }, { stores: false, root: path.join(dir, "workspace") });
+      await r.cleanup();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
