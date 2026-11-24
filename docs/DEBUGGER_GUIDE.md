@@ -202,6 +202,8 @@ The FastEdge Launcher extension runs this debugger in a VS Code panel:
   the debugger with it loaded.
 - **FastEdge: Load in Debugger** on a `.wasm` file, and **FastEdge: Load Config in Debugger** on a
   `*test.json` file, load them into the debugger.
+- Apps load with [Dotenv](#dotenv) on, reading the dotenv files in the app root (see
+  [Where your files go](#where-your-files-go)).
 - Load Config and Save Config use VS Code's file dialogs, starting in your app's folder.
 - Approvals for folders outside the workspace come as VS Code dialogs.
 
